@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — citation metadata
+cff-version: 1.2.0
+message: >-
+  If you reference this repository, cite it as below. No release, version or
+  DOI exists yet; cite the commit you inspected.
+type: software
+title: Loop Timing Witness
+abstract: >-
+  Measurement instrument, in design, for hardware-timestamped latency,
+  deadline, fault and energy evidence of real-time control loops and fabric
+  accelerators on PolarFire SoC. The repository is architecture-only: it holds
+  the measurement contracts, the boundary, the measurement protocol and the
+  validation tooling, with no implemented instrument and no measured result.
+authors:
+  - family-names: Šotek
+    given-names: Miroslav
+    orcid: https://orcid.org/0009-0009-3560-0851
+    affiliation: ANULUM, Marbach SG, Switzerland
+license: AGPL-3.0-or-later
+contact:
+  - email: protoscience@anulum.li
+    family-names: Šotek
+    given-names: Miroslav
+keywords:
+  - real-time control
+  - latency measurement
+  - hardware timestamping
+  - deadline monitoring
+  - FPGA
+  - PolarFire SoC
+  - RISC-V

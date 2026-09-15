@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — static analysis and repository policy (reusable)
+
+name: Static analysis and repository policy
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  run:
+    name: Lint, typing, manifest, inventory and repository guards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # read the repository for analysis
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+      - name: Install the hashed development lock
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+      - name: Ruff lint
+        run: .venv/bin/ruff check .
+      - name: Ruff format
+        run: .venv/bin/ruff format --check .
+      - name: Mypy strict
+        run: .venv/bin/mypy
+      - name: Measurement-domain manifest
+        run: .venv/bin/python tools/validate_measurement_domain.py
+      - name: Capability inventory drift
+        run: .venv/bin/python tools/generate_capability_inventory.py --check
+      - name: Provenance headers
+        run: .venv/bin/python tools/check_provenance_headers.py
+      - name: Development dependency licences
+        run: .venv/bin/python tools/check_dependency_licences.py
+      - name: Workflow policy
+        run: .venv/bin/python tools/audit_workflows.py

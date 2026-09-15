@@ -1,0 +1,173 @@
+{
+  "canonical_path": "03_CODE/SC-NEUROMORPHIC-COMPUTING-SYSTEMS/repositories/LOOP-TIMING-WITNESS",
+  "capabilities": [],
+  "claims": [],
+  "design_contracts": {
+    "controller_placements": [
+      {
+        "description": "User-space task on the U54 application cores under Linux, memory-mapped register access and interrupt delivery through UIO, SCHED_FIFO with CPU affinity.",
+        "identifier": "linux_user_space"
+      },
+      {
+        "description": "Bare-metal interrupt-driven loop on one dedicated U54 core in asymmetric multiprocessing, with Linux on the remaining cores for logging.",
+        "identifier": "bare_metal_amp"
+      },
+      {
+        "description": "Fixed-point controller in FPGA fabric selected by a placement register; the processors only log.",
+        "identifier": "fabric_logic"
+      }
+    ],
+    "event_fifo": {
+      "depth_records": 16384,
+      "minimum_drain_rate_hz": 20
+    },
+    "event_profiles": {
+      "COMPUTE": {
+        "intervals": [
+          {
+            "end_event": "COMPUTE_START",
+            "name": "input_write_to_compute_start",
+            "start_event": "INPUT_WRITE"
+          },
+          {
+            "end_event": "COMPUTE_DONE",
+            "name": "compute_duration",
+            "start_event": "COMPUTE_START"
+          },
+          {
+            "end_event": "INTERRUPT_ENTRY",
+            "name": "compute_done_to_interrupt_entry",
+            "start_event": "COMPUTE_DONE"
+          },
+          {
+            "end_event": "OUTPUT_READ",
+            "name": "input_write_to_output_read",
+            "start_event": "INPUT_WRITE"
+          }
+        ],
+        "occasional_events": [],
+        "periodic_events": [
+          "INPUT_WRITE",
+          "COMPUTE_START",
+          "COMPUTE_DONE",
+          "OUTPUT_READ",
+          "INTERRUPT_ENTRY"
+        ],
+        "sample_rate_hz": null
+      },
+      "CONTROL": {
+        "intervals": [
+          {
+            "end_event": "SAMPLE_READ",
+            "name": "scheduling_latency",
+            "start_event": "SAMPLE_READY"
+          },
+          {
+            "end_event": "ACT_WRITE",
+            "name": "compute_time",
+            "start_event": "SAMPLE_READ"
+          },
+          {
+            "end_event": "ACT_WRITE",
+            "name": "loop_latency",
+            "start_event": "SAMPLE_READY"
+          },
+          {
+            "end_event": "SAFE_STATE",
+            "name": "time_to_safe_state",
+            "start_event": "DEADLINE"
+          }
+        ],
+        "occasional_events": [
+          "SAFE_STATE",
+          "FAULT_INJECTED"
+        ],
+        "periodic_events": [
+          "SAMPLE_READY",
+          "SAMPLE_READ",
+          "ACT_WRITE",
+          "DEADLINE"
+        ],
+        "sample_rate_hz": {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 100
+        }
+      }
+    },
+    "event_record": {
+      "byte_order": "little",
+      "fields": [
+        {
+          "name": "event_type",
+          "offset_bytes": 0,
+          "type": "u8"
+        },
+        {
+          "name": "reserved_byte",
+          "offset_bytes": 1,
+          "type": "u8"
+        },
+        {
+          "name": "reserved_word",
+          "offset_bytes": 2,
+          "type": "u16"
+        },
+        {
+          "name": "cycle",
+          "offset_bytes": 4,
+          "type": "u32"
+        },
+        {
+          "name": "timebase_ticks",
+          "offset_bytes": 8,
+          "type": "u64"
+        }
+      ],
+      "record_size_bytes": 16
+    },
+    "run_plan": {
+      "cycles_per_repeat": 1000000,
+      "repeats": 5
+    },
+    "status": "planned",
+    "timebase": {
+      "clock_hz": 100000000,
+      "counter_bits": 64,
+      "reference_oscillator_hz": 50000000,
+      "resolution_ns": 10
+    }
+  },
+  "evidence_maturity": "architecture_only",
+  "excluded_content": [
+    "SC-NeuroCore source code, generated neuron peripherals, models or adapters; adapters that place SC-NeuroCore peripherals in the device-under-test slot belong to the SC-NeuroCore repository.",
+    "Controllers, plant models or physics from other portfolio projects; only textbook PID and discrete LQR controllers are in scope.",
+    "Microchip Libero SoC binaries, licensed or encrypted IP cores, and redistributed vendor reference designs; they are generated or fetched at a pinned revision, never committed.",
+    "Board measurement results, datasets or benchmark numbers before a measured run with its manifest and hashes exists."
+  ],
+  "group": "SC-NEUROMORPHIC-COMPUTING-SYSTEMS",
+  "license": "AGPL-3.0-or-later",
+  "non_claims": [
+    "No latency, jitter, deadline, energy or control-quality number has been measured.",
+    "No statement about PolarFire SoC performance is made before a measured run exists.",
+    "Hardware timing measurement from FPGA fabric is established prior work; this repository does not claim it as new.",
+    "No comparison with other vendors or platforms is part of the project.",
+    "No SC-NeuroCore latency or energy on PolarFire SoC has been measured."
+  ],
+  "project": "LOOP-TIMING-WITNESS",
+  "purpose": "Open, hardware-timestamped latency, deadline, fault and energy measurement instrument for real-time control loops and fabric accelerators on PolarFire SoC.",
+  "related_projects": [
+    {
+      "project": "SC-NEUROCORE",
+      "relation": "The COMPUTE event profile is designed to measure memory-mapped write, compute, read and interrupt paths of fabric accelerators such as SC-NeuroCore neuron peripherals; the adapters live in SC-NeuroCore."
+    }
+  ],
+  "schema": "loop-timing-witness.measurement-domain.v1",
+  "schema_version": "1.0.0",
+  "target_platform": {
+    "board": "PolarFire SoC Icicle Kit",
+    "device": "MPFS250T-FCVG484E",
+    "reference_document": "Microchip DS60001679E, PolarFire SoC Icicle Kit User Guide",
+    "verified_on_hardware": false
+  }
+}

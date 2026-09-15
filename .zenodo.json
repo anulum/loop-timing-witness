@@ -1,0 +1,23 @@
+{
+  "access_right": "open",
+  "creators": [
+    {
+      "affiliation": "ANULUM, Marbach SG, Switzerland",
+      "name": "Šotek, Miroslav",
+      "orcid": "0009-0009-3560-0851"
+    }
+  ],
+  "description": "Measurement instrument, in design, for hardware-timestamped latency, deadline, fault and energy evidence of real-time control loops and fabric accelerators on PolarFire SoC. The repository is architecture-only: it holds the measurement contracts, the boundary, the measurement protocol and the validation tooling, with no implemented instrument and no measured result.",
+  "keywords": [
+    "real-time control",
+    "latency measurement",
+    "hardware timestamping",
+    "deadline monitoring",
+    "FPGA",
+    "PolarFire SoC",
+    "RISC-V"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "title": "Loop Timing Witness",
+  "upload_type": "software"
+}

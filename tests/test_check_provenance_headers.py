@@ -1,0 +1,174 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — tests of the provenance header guard
+
+"""Contract tests for the provenance header and rendered-Markdown guard."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pytest
+
+from check_provenance_headers import HEADER_LINES, TITLE_PREFIX, audit, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from conftest import MakeGitTree, RunTool
+
+
+def hash_header(title: str = "test file") -> str:
+    """Build a complete hash-comment header.
+
+    Parameters
+    ----------
+    title
+        Description after the project prefix.
+
+    Returns
+    -------
+    str
+        Seven header lines with a trailing newline.
+    """
+    return "".join(f"# {line}\n" for line in (*HEADER_LINES, f"{TITLE_PREFIX}{title}"))
+
+
+def markdown_header(title: str = "test page") -> str:
+    """Build a complete Markdown header comment.
+
+    Parameters
+    ----------
+    title
+        Description after the project prefix.
+
+    Returns
+    -------
+    str
+        The HTML comment holding the seven lines, with a trailing newline.
+    """
+    return (
+        "<!--\n"
+        + "".join(f"{line}\n" for line in (*HEADER_LINES, f"{TITLE_PREFIX}{title}"))
+        + "-->\n"
+    )
+
+
+def test_repository_passes_in_a_subprocess(run_tool: RunTool) -> None:
+    """Every publishable file of this repository carries its header."""
+    completed = run_tool("check_provenance_headers")
+    assert completed.returncode == 0, completed.stdout
+    assert completed.stdout.strip() == "provenance-headers: PASS"
+
+
+def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
+    """Hash-comment, shebang, Markdown, JSON and licence files all comply."""
+    root = make_git_tree(
+        {
+            "tool.py": hash_header() + "\nprint('x')\n",
+            "script.py": "#!/usr/bin/env python3\n" + hash_header() + "\n",
+            "Makefile": hash_header() + "all:\n",
+            ".github/CODEOWNERS": hash_header() + "* @owner\n",
+            "config.yml": hash_header() + "key: value\n",
+            "README.md": markdown_header() + "\n# Title\n",
+            "data.json": "{}\n",
+            "LICENSE": "licence text\n",
+            "LICENSES/AGPL-3.0-or-later.txt": "licence text\n",
+        }
+    )
+    assert audit(root) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "content", "expected"),
+    [
+        (
+            "tool.py",
+            "print('x')\n",
+            "tool.py: must start with the seven-line '# ' provenance header",
+        ),
+        (
+            "short.toml",
+            "".join(f"# {line}\n" for line in HEADER_LINES),
+            "short.toml: must start with the seven-line '# ' provenance header",
+        ),
+        (
+            "wrong.yml",
+            hash_header().replace("Loop Timing Witness — test file", "Other Project — file"),
+            "wrong.yml: header line 7 must read 'Loop Timing Witness — <description>'",
+        ),
+        (
+            "blank.cfg.in",
+            hash_header("   "),
+            "blank.cfg.in: header line 7 must read 'Loop Timing Witness — <description>'",
+        ),
+        (
+            "shebang.sh.txt",
+            "#!/bin/sh\n" + hash_header(),
+            "shebang.sh.txt: must start with the seven-line '# ' provenance header",
+        ),
+        (
+            "page.md",
+            "# Title\n",
+            "page.md: must start with the provenance header inside '<!--' and '-->'",
+        ),
+        (
+            "unclosed.md",
+            markdown_header().replace("-->\n", "\n"),
+            "unclosed.md: must start with the provenance header inside '<!--' and '-->'",
+        ),
+        (
+            "titled.md",
+            markdown_header("").replace("— \n", "—\n"),
+            "titled.md: header line 7 must read 'Loop Timing Witness — <description>'",
+        ),
+        (
+            "empty.md",
+            markdown_header() + "\n\n",
+            "empty.md: no rendered content follows the provenance comment",
+        ),
+        ("image.png", "binary-looking", "image.png: no provenance rule for this file type"),
+    ],
+)
+def test_each_violation_is_reported(
+    make_git_tree: MakeGitTree, relative: str, content: str, expected: str
+) -> None:
+    """Every rule reports its own finding for the offending file."""
+    assert audit(make_git_tree({relative: content})) == [expected]
+
+
+def test_undecodable_file_is_a_finding(make_git_tree: MakeGitTree) -> None:
+    """A file that is not UTF-8 is reported rather than skipped."""
+    findings = audit(make_git_tree({"notes.txt": b"\xff\xfe\x00"}))
+    assert len(findings) == 1
+    assert findings[0].startswith("notes.txt: unreadable as UTF-8 text:")
+
+
+def test_ignored_files_are_not_checked(make_git_tree: MakeGitTree) -> None:
+    """Content ignored by Git is outside the publishable set."""
+    root = make_git_tree(
+        {".gitignore": hash_header() + "private/\n", "private/notes.md": "no header"}
+    )
+    assert audit(root) == []
+
+
+def test_command_line_reports_findings_for_a_given_root(
+    make_git_tree: MakeGitTree, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The root argument selects the work tree and findings exit 1."""
+    root = make_git_tree({"tool.py": "print('x')\n"})
+    assert main([str(root)]) == 1
+    assert capsys.readouterr().out.strip() == (
+        "provenance-headers: FAIL tool.py: must start with the seven-line '# ' provenance header"
+    )
+
+
+def test_directory_outside_git_is_a_finding(tmp_path: Path) -> None:
+    """Without a work tree the guard reports the listing failure."""
+    findings = audit(tmp_path)
+    assert len(findings) == 1
+    assert "git ls-files failed" in findings[0]

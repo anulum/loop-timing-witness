@@ -1,0 +1,128 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — pre-commit, commit-message and pre-push hooks
+
+# Upstream hook repositories are pinned to verified commit objects; the tag
+# each commit carries is recorded beside it. Local hooks run the repository's
+# own tools from `.venv`; apart from the two ruff hooks, which check only the
+# staged files, they call `tools/preflight.py --only`, so each such hook and
+# its preflight gate run the same command.
+
+minimum_pre_commit_version: "4.6.2"
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=256"]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+        exclude: ^(LICENSE|LICENSES/)
+      - id: mixed-line-ending
+        args: ["--fix=no"]
+      - id: trailing-whitespace
+        exclude: ^(LICENSE|LICENSES/)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: a1bb792acda6fd0724936b4ebbdbc8eceb9c0459 # frozen: v6.2.0
+    hooks:
+      - id: reuse
+  - repo: https://github.com/crate-ci/typos
+    rev: d43b6c087ac471e2ea7b8af622ff15f05c0c365b # frozen: v1.50.1
+    hooks:
+      - id: typos
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: .venv/bin/ruff check --force-exclude
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format check
+        entry: .venv/bin/ruff format --check --force-exclude
+        language: system
+        types: [python]
+      - id: mypy-strict
+        name: mypy strict
+        entry: .venv/bin/python tools/preflight.py --only mypy
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: measurement-domain
+        name: measurement-domain manifest
+        entry: .venv/bin/python tools/preflight.py --only measurement-domain
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: capability-inventory
+        name: capability inventory drift
+        entry: .venv/bin/python tools/preflight.py --only capability-inventory
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: provenance-headers
+        name: provenance headers and rendered Markdown
+        entry: .venv/bin/python tools/preflight.py --only provenance-headers
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: documentation
+        name: documentation links and anchors
+        entry: .venv/bin/python tools/preflight.py --only documentation
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: dependency-licences
+        name: development dependency licences
+        entry: .venv/bin/python tools/preflight.py --only dependency-licences
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: workflow-policy
+        name: workflow ownership, privilege and pinning policy
+        entry: .venv/bin/python tools/preflight.py --only workflows
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: zizmor
+        name: workflow security analysis
+        entry: .venv/bin/python tools/preflight.py --only zizmor
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: actionlint
+        name: actionlint (pinned build)
+        entry: .venv/bin/python tools/preflight.py --only actionlint
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: commit-message
+        name: commit-message policy
+        entry: .venv/bin/python tools/check_commit_trailers.py
+        language: system
+        stages: [commit-msg]
+      - id: preflight
+        name: complete preflight before push
+        entry: .venv/bin/python tools/preflight.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

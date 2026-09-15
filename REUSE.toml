@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — REUSE 3.x licensing metadata
+
+version = 1
+
+# JSON cannot carry comments, so the repository's JSON documents are annotated
+# here. Every other file carries its licence in its own provenance header.
+[[annotations]]
+path = [
+    ".github/workflow-inventory.json",
+    ".zenodo.json",
+    "capability-inventory.json",
+    "development-dependency-licences.json",
+    "measurement-domain.json",
+    "measurement-domain.schema.json",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = [
+    "Concepts 1996-2026 Miroslav Šotek. All rights reserved.",
+    "Code 2020-2026 Miroslav Šotek. All rights reserved.",
+]
+SPDX-License-Identifier = "AGPL-3.0-or-later"

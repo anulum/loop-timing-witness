@@ -1,0 +1,13 @@
+{
+  "capabilities": [],
+  "claims": [],
+  "evidence_maturity": "architecture_only",
+  "implemented_capability_count": 0,
+  "project": "LOOP-TIMING-WITNESS",
+  "schema": "loop-timing-witness.capability-inventory.v1",
+  "schema_version": "1.0.0",
+  "source": {
+    "manifest_path": "measurement-domain.json",
+    "manifest_sha256": "250727ea5771ebeb50136d6af817408c7d95b4b465fce4c4fac668fa8b3314ab"
+  }
+}

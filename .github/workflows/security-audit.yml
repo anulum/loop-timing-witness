@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — secrets, dependency, licence and workflow security audit
+
+name: Security audit
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Secrets, vulnerabilities, licences and workflow security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read # read the repository and its history for the scans
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.1"
+          cache: false
+      - name: Install the hashed development lock
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+      - name: Build pinned Go scanners (module checksums verified by the Go checksum database)
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Secret scan of the complete history
+        run: '"$(go env GOPATH)/bin/gitleaks" git --no-banner --redact .'
+      - name: Known vulnerabilities in the development lock
+        run: .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
+      - name: Development dependency licences
+        run: .venv/bin/python tools/check_dependency_licences.py
+      - name: REUSE licensing compliance
+        run: .venv/bin/reuse lint
+      - name: Workflow lint
+        run: '"$(go env GOPATH)/bin/actionlint"'
+      - name: Workflow security analysis
+        run: .venv/bin/zizmor --offline --persona pedantic --strict-collection .

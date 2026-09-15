@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — code ownership
+
+# Default: every change requires owner review
+* @anulum
+
+# Measurement contracts, boundary and security surfaces
+measurement-domain.json @anulum
+measurement-domain.schema.json @anulum
+docs/MEASUREMENT_PROTOCOL.md @anulum
+docs/THREAT_MODEL.md @anulum
+docs/adr/ @anulum
+
+# Supply chain, validation tooling and workflow definitions
+requirements-dev.in @anulum
+requirements-dev.txt @anulum
+development-dependency-licences.json @anulum
+tools/ @anulum
+.github/ @anulum

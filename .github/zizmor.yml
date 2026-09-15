@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — workflow security analysis configuration
+
+# Every audit runs with the pedantic persona except the one below.
+rules:
+  # self-repository suggests the `$/` form for same-repository reusable
+  # workflow calls. The pinned actionlint v1.7.12 rejects that form as an
+  # invalid reusable workflow reference, while the `./.github/workflows/` form
+  # is valid for both tools and for the hosted runner. Re-enable this audit
+  # when the pinned actionlint accepts `$/`.
+  self-repository:
+    disable: true

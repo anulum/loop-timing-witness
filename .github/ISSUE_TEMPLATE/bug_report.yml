@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — bug report form
+
+name: Bug report
+description: A reproducible defect in the validation tooling, manifests or documentation
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        The repository is architecture-only: it holds measurement contracts and
+        validation tooling, not an implemented instrument. Report vulnerabilities
+        privately as described in SECURITY.md, never in a public issue.
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behaviour
+      description: The exact command and its complete output.
+      placeholder: .venv/bin/python tools/validate_measurement_domain.py
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction from a clean checkout
+      description: Every step, starting from `make venv`.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse HEAD`.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and `.venv/bin/python --version`.
+    validations:
+      required: true

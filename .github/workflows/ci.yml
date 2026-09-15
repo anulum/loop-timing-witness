@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — coordinator and stable required gate
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-policy:
+    name: Static analysis and repository policy
+    uses: ./.github/workflows/reusable-static-policy.yml
+    permissions:
+      contents: read # read the repository for analysis
+  tests:
+    name: Tests with complete coverage
+    uses: ./.github/workflows/reusable-tests.yml
+    permissions:
+      contents: read # read the repository for the test run
+  gate:
+    name: Required gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [static-policy, tests]
+    if: always()
+    permissions: {}
+    steps:
+      - name: Fail unless every category succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            echo "category result: $result"
+            if [ "$result" != "success" ]; then
+              echo "required gate: a category did not succeed"
+              exit 1
+            fi
+          done

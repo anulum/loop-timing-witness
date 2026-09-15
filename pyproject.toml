@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — validation tooling configuration
+
+# This file configures the repository's validation tooling. It declares no
+# distributable package: none exists at architecture-only maturity.
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["docs/internal"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+# The provenance header uses an en dash in the copyright ranges and an em dash
+# in the title line; both are the mandated header text.
+allowed-confusables = ["–", "—"]
+# Every rule is enabled. Each rule below is off for a stated reason that holds
+# for this repository, not for convenience.
+ignore = [
+    # COM812 conflicts with the formatter's trailing-comma handling; the
+    # formatter is authoritative.
+    "COM812",
+    # TRY003 asks for short exception messages defined on exception classes.
+    # Every refusal here names the offending field, file or value, and that
+    # message is the evidence the caller acts on.
+    "TRY003",
+    # T201 forbids print. The tools are command-line programs whose contract
+    # is their standard output and error streams.
+    "T201",
+    # TRY004 asks for TypeError when a decoded document has the wrong shape.
+    # Such a document is invalid data supplied by a file, not a programming
+    # error in the caller, so the tools report it as ValueError.
+    "TRY004",
+    # ERA001 reads line 6 of the mandated provenance header ("Contact: ...")
+    # as commented-out code in every file, and a rule cannot be scoped to one
+    # line without a suppression comment, which the repository forbids.
+    "ERA001",
+    # INP001 asks for __init__.py files. tools/ holds stand-alone scripts run
+    # as `python tools/<name>.py` and tests/ is collected by pytest; neither is
+    # an importable package, and making them packages would change how the
+    # scripts resolve their sibling modules.
+    "INP001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is the pytest contract surface; tests run the repository's own
+# command-line tools and Git with fixed argument vectors and no shell; the
+# literal numbers in assertions (exit statuses, counts) are the specification
+# under test, and naming each one would hide it from the assertion.
+"tests/*" = ["S101", "S603", "S607", "PLR2004"]
+# The shared fixtures start the repository's tools and `git init` with fixed
+# argument vectors and no shell.
+"conftest.py" = ["S603", "S607"]
+# The gate runner and the publishable-file listing execute fixed argument
+# vectors of repository tools and Git without a shell and without untrusted
+# input.
+"tools/preflight.py" = ["S603", "S607"]
+"tools/repository_files.py" = ["S603", "S607"]
+
+[tool.ruff.lint.flake8-copyright]
+# The mandated provenance header states both copyright lines this way.
+notice-rgx = "© (Concepts|Code) \\d{4}–\\d{4} Miroslav Šotek\\. All rights reserved\\."
+min-file-size = 0
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "audit_workflows",
+    "check_commit_trailers",
+    "check_dependency_licences",
+    "check_documentation",
+    "check_provenance_headers",
+    "generate_capability_inventory",
+    "manifest_io",
+    "preflight",
+    "repository_files",
+    "validate_measurement_domain",
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+warn_unreachable = true
+extra_checks = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "possibly-undefined",
+    "unused-awaitable",
+]
+mypy_path = ["tools"]
+files = ["tools", "tests", "conftest.py"]
+pretty = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["tools"]
+patch = ["subprocess"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false

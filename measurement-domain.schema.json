@@ -1,0 +1,383 @@
+{
+  "$defs": {
+    "event_name": {
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "type": "string"
+    },
+    "event_profile": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "end_event": {
+                "$ref": "#/$defs/event_name"
+              },
+              "name": {
+                "$ref": "#/$defs/identifier"
+              },
+              "start_event": {
+                "$ref": "#/$defs/event_name"
+              }
+            },
+            "required": [
+              "end_event",
+              "name",
+              "start_event"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "occasional_events": {
+          "items": {
+            "$ref": "#/$defs/event_name"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "periodic_events": {
+          "items": {
+            "$ref": "#/$defs/event_name"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "sample_rate_hz": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "default": {
+                  "$ref": "#/$defs/positive_integer"
+                },
+                "maximum": {
+                  "$ref": "#/$defs/positive_integer"
+                },
+                "minimum": {
+                  "$ref": "#/$defs/positive_integer"
+                }
+              },
+              "required": [
+                "default",
+                "maximum",
+                "minimum"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "required": [
+        "intervals",
+        "occasional_events",
+        "periodic_events",
+        "sample_rate_hz"
+      ],
+      "type": "object"
+    },
+    "identifier": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "type": "string"
+    },
+    "non_empty_text": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "type": "string"
+    },
+    "positive_integer": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "project_identity": {
+      "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:loop-timing-witness:schema:measurement-domain:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Identity, boundary and planned measurement contracts of the Loop Timing Witness repository. Structural rules live here; cross-field rules are enforced by tools/validate_measurement_domain.py.",
+  "properties": {
+    "canonical_path": {
+      "pattern": "^03_CODE/[A-Z0-9-]+/repositories/[A-Z0-9-]+$",
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array"
+    },
+    "claims": {
+      "type": "array"
+    },
+    "design_contracts": {
+      "additionalProperties": false,
+      "properties": {
+        "controller_placements": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "$ref": "#/$defs/non_empty_text"
+              },
+              "identifier": {
+                "$ref": "#/$defs/identifier"
+              }
+            },
+            "required": [
+              "description",
+              "identifier"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "event_fifo": {
+          "additionalProperties": false,
+          "properties": {
+            "depth_records": {
+              "$ref": "#/$defs/positive_integer"
+            },
+            "minimum_drain_rate_hz": {
+              "$ref": "#/$defs/positive_integer"
+            }
+          },
+          "required": [
+            "depth_records",
+            "minimum_drain_rate_hz"
+          ],
+          "type": "object"
+        },
+        "event_profiles": {
+          "additionalProperties": false,
+          "properties": {
+            "COMPUTE": {
+              "$ref": "#/$defs/event_profile"
+            },
+            "CONTROL": {
+              "$ref": "#/$defs/event_profile"
+            }
+          },
+          "required": [
+            "COMPUTE",
+            "CONTROL"
+          ],
+          "type": "object"
+        },
+        "event_record": {
+          "additionalProperties": false,
+          "properties": {
+            "byte_order": {
+              "enum": [
+                "little"
+              ]
+            },
+            "fields": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/identifier"
+                  },
+                  "offset_bytes": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": {
+                    "enum": [
+                      "u8",
+                      "u16",
+                      "u32",
+                      "u64"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "offset_bytes",
+                  "type"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "record_size_bytes": {
+              "$ref": "#/$defs/positive_integer"
+            }
+          },
+          "required": [
+            "byte_order",
+            "fields",
+            "record_size_bytes"
+          ],
+          "type": "object"
+        },
+        "run_plan": {
+          "additionalProperties": false,
+          "properties": {
+            "cycles_per_repeat": {
+              "$ref": "#/$defs/positive_integer"
+            },
+            "repeats": {
+              "$ref": "#/$defs/positive_integer"
+            }
+          },
+          "required": [
+            "cycles_per_repeat",
+            "repeats"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "enum": [
+            "planned"
+          ]
+        },
+        "timebase": {
+          "additionalProperties": false,
+          "properties": {
+            "clock_hz": {
+              "$ref": "#/$defs/positive_integer"
+            },
+            "counter_bits": {
+              "maximum": 64,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "reference_oscillator_hz": {
+              "$ref": "#/$defs/positive_integer"
+            },
+            "resolution_ns": {
+              "$ref": "#/$defs/positive_integer"
+            }
+          },
+          "required": [
+            "clock_hz",
+            "counter_bits",
+            "reference_oscillator_hz",
+            "resolution_ns"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "controller_placements",
+        "event_fifo",
+        "event_profiles",
+        "event_record",
+        "run_plan",
+        "status",
+        "timebase"
+      ],
+      "type": "object"
+    },
+    "evidence_maturity": {
+      "enum": [
+        "architecture_only"
+      ]
+    },
+    "excluded_content": {
+      "items": {
+        "$ref": "#/$defs/non_empty_text"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "group": {
+      "$ref": "#/$defs/project_identity"
+    },
+    "license": {
+      "const": "AGPL-3.0-or-later"
+    },
+    "non_claims": {
+      "items": {
+        "$ref": "#/$defs/non_empty_text"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "project": {
+      "$ref": "#/$defs/project_identity"
+    },
+    "purpose": {
+      "$ref": "#/$defs/non_empty_text"
+    },
+    "related_projects": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "$ref": "#/$defs/project_identity"
+          },
+          "relation": {
+            "$ref": "#/$defs/non_empty_text"
+          }
+        },
+        "required": [
+          "project",
+          "relation"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "const": "loop-timing-witness.measurement-domain.v1"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "target_platform": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "$ref": "#/$defs/non_empty_text"
+        },
+        "device": {
+          "$ref": "#/$defs/non_empty_text"
+        },
+        "reference_document": {
+          "$ref": "#/$defs/non_empty_text"
+        },
+        "verified_on_hardware": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "board",
+        "device",
+        "reference_document",
+        "verified_on_hardware"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "canonical_path",
+    "capabilities",
+    "claims",
+    "design_contracts",
+    "evidence_maturity",
+    "excluded_content",
+    "group",
+    "license",
+    "non_claims",
+    "project",
+    "purpose",
+    "related_projects",
+    "schema",
+    "schema_version",
+    "target_platform"
+  ],
+  "title": "Loop Timing Witness measurement-domain manifest",
+  "type": "object"
+}

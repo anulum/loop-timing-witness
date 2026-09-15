@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — feature request form
+
+name: Feature request
+description: A proposal inside the measurement-instrument boundary
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Proposals must stay inside the boundary in docs/adr/0001-repository-boundary.md:
+        timing, deadline, fault and energy measurement of control loops and fabric
+        accelerators. Adapters for a specific accelerator library belong to that
+        library's repository.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Measurement problem
+      description: What cannot be measured today, for whom, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: >-
+        The contract, event, fabric block, software or analysis change you propose,
+        and how its correctness would be verified (simulation, known-period test,
+        injected delay, external cross-check).
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Boundary statement
+      description: Why this belongs in this repository rather than a neighbouring project.
+    validations:
+      required: true

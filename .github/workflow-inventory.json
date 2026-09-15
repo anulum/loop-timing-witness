@@ -1,0 +1,79 @@
+{
+  "aggregate_gate": {
+    "job": "gate",
+    "workflow": "ci.yml"
+  },
+  "coordinator": "ci.yml",
+  "omitted_categories": [3, 5, 6, 7, 10, 11],
+  "schema": "loop-timing-witness.workflow-inventory.v1",
+  "schema_version": "1.0.0",
+  "size_limits": {
+    "max_bytes": 102400,
+    "max_lines": 1000
+  },
+  "workflows": [
+    {
+      "category": 1,
+      "file": "ci.yml",
+      "jobs": ["gate", "static-policy", "tests"],
+      "kind": "coordinator",
+      "owner": "coordinator and stable required gate"
+    },
+    {
+      "category": 2,
+      "file": "reusable-static-policy.yml",
+      "jobs": ["run"],
+      "kind": "reusable",
+      "owner": "static analysis, manifest, inventory and repository policy"
+    },
+    {
+      "category": 4,
+      "file": "reusable-tests.yml",
+      "jobs": ["run"],
+      "kind": "reusable",
+      "owner": "tests with complete statement and branch coverage"
+    },
+    {
+      "category": 2,
+      "file": "pre-commit.yml",
+      "jobs": ["pre-commit"],
+      "kind": "standalone",
+      "owner": "parity with the local pre-commit hooks"
+    },
+    {
+      "category": 8,
+      "file": "codeql.yml",
+      "jobs": ["analyse"],
+      "kind": "standalone",
+      "owner": "code scanning of Python tooling and workflow definitions"
+    },
+    {
+      "category": 8,
+      "file": "security-audit.yml",
+      "jobs": ["audit"],
+      "kind": "standalone",
+      "owner": "secrets, vulnerabilities, licences and workflow security"
+    },
+    {
+      "category": 8,
+      "file": "scorecard.yml",
+      "jobs": ["analysis"],
+      "kind": "standalone",
+      "owner": "supply-chain analysis without published results"
+    },
+    {
+      "category": 8,
+      "file": "sbom.yml",
+      "jobs": ["inventory"],
+      "kind": "standalone",
+      "owner": "software inventory of the development lock"
+    },
+    {
+      "category": 9,
+      "file": "docs.yml",
+      "jobs": ["validate"],
+      "kind": "standalone",
+      "owner": "documentation links, anchors and rendered headers"
+    }
+  ]
+}

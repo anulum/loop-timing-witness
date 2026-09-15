@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — Git ignore rules
+
+# Defence in depth: backup, archive and coordination trees never enter the repository
+/BACKUP/
+/ARCHIVE/
+/.coordination/
+/04_ARCANE_SAPIENCE/
+
+# Private operational content and stored reference papers
+docs/internal/
+docs/internal/**
+
+# Local environment
+.venv/
+.envrc
+.env
+.env.*
+
+# Python tooling caches and reports
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Generated software inventory (produced by the SBOM workflow, never committed)
+sbom.cdx.json
+
+# Build residues (no build exists; defence in depth)
+build/
+dist/
+*.egg-info/
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store

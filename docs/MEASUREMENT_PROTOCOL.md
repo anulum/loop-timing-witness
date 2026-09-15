@@ -1,0 +1,72 @@
+<!--
+SPDX-License-Identifier: AGPL-3.0-or-later
+Commercial license available
+© Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+© Code 2020–2026 Miroslav Šotek. All rights reserved.
+ORCID: 0009-0009-3560-0851
+Contact: www.anulum.li | protoscience@anulum.li
+Loop Timing Witness — measurement protocol
+-->
+
+# Measurement protocol
+
+This document fixes how measurements will be taken and reported. It contains no results: none
+exist. The numeric parameters that the validator can check live in `measurement-domain.json`
+under `design_contracts`; a change to either place must change both.
+
+## Configuration space
+
+One configuration is one combination of:
+
+- controller placement: `linux_user_space`, `bare_metal_amp` or `fabric_logic`;
+- load case: idle, CPU stress, memory and cache stress, network stress, storage stress;
+- sample rate: from 100 Hz to 20 kHz, 1 kHz by default;
+- controller (PID with anti-windup or discrete LQR) with its coefficients, and plant
+  (second-order mechanical or first-order thermal) with its fixed-point format;
+- fault schedule, empty for timing runs.
+
+## Procedure
+
+1. The board is powered from its own supply only. Room temperature is recorded.
+2. The same bitstream serves every placement; the placement changes through a register only.
+3. Each repeat starts after a reboot.
+4. A fixed warm-up period is discarded; its length is recorded in the run manifest.
+5. Each repeat runs 1 000 000 control cycles (about 17 minutes at 1 kHz).
+6. Each configuration is repeated five times.
+7. Every repeat writes its event file, power file and run manifest with SHA-256 of each file, the
+   bitstream, firmware, operating-system images and controller binary, and the tool versions.
+8. A repeat with any event-buffer overflow is invalid and is reported as invalid, not dropped.
+
+## Reporting
+
+- Latency and jitter are reported as distributions — median, 95th, 99th and 99.9th percentile and
+  maximum — per repeat and pooled, with the spread between repeats.
+- Every statistic states its sample count and run duration. No single-run number is presented
+  without its distribution.
+- Deadline misses are reported as counts and rates from the hardware monitor.
+- Control quality is the tracking error of the emulated plant, RMS and peak.
+- Energy is reported as mean energy per control cycle over windows of many cycles, per rail and
+  for the four rails together.
+- Fault runs report detection latency and time to safe state per injected fault.
+- The instrument floor from the bus-offset calibration is reported with every latency table.
+
+## Stated limits
+
+These limits are part of every report:
+
+- The PAC1934 rails do not separate processor cores from fabric: the core rail supplies both.
+  Placement energy is whole-rail energy, not per-core energy.
+- The power monitor samples far more slowly than a control cycle. Energy per cycle is a window
+  mean, not a per-cycle measurement.
+- Timestamps resolve 10 ns. Bus access inside the interconnect adds a fixed offset that is
+  calibrated and reported.
+- The plant is emulated. Results describe controller timing and its effect on the emulated plant,
+  not a physical machine.
+- A PREEMPT_RT comparison is included only if a matching kernel builds for the board support
+  package.
+
+## Acceptance of the instrument before any result
+
+A result may be reported only after the instrument has passed, on the same bitstream, the
+known-period test, the injected-delay test, the overflow test and the bus-offset calibration
+described in [`ARCHITECTURE.md`](ARCHITECTURE.md). Their records are kept with the run records.

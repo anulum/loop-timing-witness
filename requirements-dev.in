@@ -13,7 +13,7 @@
 # Hook orchestration
 pre-commit==4.6.2
 # Lint, format, strict typing
-ruff==0.16.7
+ruff==0.16.8
 mypy==2.3.1
 types-PyYAML==6.0.12.20260906
 types-jsonschema==4.26.0.20260518

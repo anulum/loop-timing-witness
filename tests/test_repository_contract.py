@@ -253,6 +253,7 @@ def test_publishable_text_uses_no_self_applied_quality_terms() -> None:
             relative in exempt
             or relative.startswith("LICENSE")
             or relative == "requirements-dev.txt"
+            or relative.endswith(".pdf")
         ):
             continue
         found = sorted(

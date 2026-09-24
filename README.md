@@ -113,6 +113,9 @@ and the verification of the instrument itself are described in
 procedure and its stated limits by [`docs/MEASUREMENT_PROTOCOL.md`](docs/MEASUREMENT_PROTOCOL.md),
 and the threat model by [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
 
+The [system block diagram](docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf)
+illustrates the proposed PolarFire SoC Icicle Kit design for the 2026 contest.
+
 The planned contracts are machine-readable in [`measurement-domain.json`](measurement-domain.json)
 (schema [`measurement-domain.schema.json`](measurement-domain.schema.json)): timebase, event
 record layout, event profiles and the intervals derived from them, event buffer sizing, controller

@@ -17,7 +17,7 @@ has exactly one rule:
   each prefixed by ``# ``; Python files may carry a shebang line first;
 - Markdown files start with an HTML comment that holds the seven lines, so the
   rendered page starts with content and never shows a code-style header;
-- JSON files and the licence texts cannot carry comments and are exempt; their
+- JSON, PDF and licence files cannot carry the text header and are exempt; their
   licensing is declared in ``REUSE.toml`` and verified by ``reuse lint``.
 
 A file type without a rule is itself a finding: the guard never skips a file
@@ -50,7 +50,7 @@ HASH_COMMENT_SUFFIXES: Final = frozenset({".cff", ".in", ".py", ".toml", ".txt",
 HASH_COMMENT_NAMES: Final = frozenset(
     {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile"}
 )
-EXEMPT_SUFFIXES: Final = frozenset({".json"})
+EXEMPT_SUFFIXES: Final = frozenset({".json", ".pdf"})
 EXEMPT_PATHS: Final = frozenset({"LICENSE"})
 EXEMPT_DIRECTORIES: Final = frozenset({"LICENSES"})
 

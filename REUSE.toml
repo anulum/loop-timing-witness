@@ -16,6 +16,7 @@ path = [
     ".zenodo.json",
     "capability-inventory.json",
     "development-dependency-licences.json",
+    "docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf",
     "measurement-domain.json",
     "measurement-domain.schema.json",
 ]

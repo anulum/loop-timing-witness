@@ -25,7 +25,7 @@ coverage==7.16.1
 jsonschema==4.26.0
 PyYAML==6.0.3
 # Spelling
-typos==1.50.1
+typos==1.50.2
 # Licensing, workflow security, dependency audit, software inventory
 reuse==6.2.0
 zizmor==1.30.1

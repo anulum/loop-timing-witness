@@ -12,6 +12,11 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Fixed
+
+- Install the pinned Ubuntu Icarus package in the test workflow so RTL-to-host tests do not
+  depend on an undeclared runner tool.
+
 ### Added
 
 - Versioned run manifest and host analysis for hash-bound RTL-simulation event streams,

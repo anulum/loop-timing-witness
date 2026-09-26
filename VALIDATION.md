@@ -19,9 +19,11 @@ truthfulness of the `architecture_only` state.
 
 - Python 3.13 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
-- Icarus Verilog (`iverilog` and `vvp`) to compile the synthesizable event capture module and
-  produce binary event files consumed by the host CLI tests. A missing simulator fails those
-  tests; simulation is not evidence of board acceptance.
+- Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu noble package `12.0-2build2`, to compile the
+  synthesizable event capture module and produce binary event files consumed by the host CLI
+  tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
+  repositories and prints both tool versions. A missing simulator fails the tests; simulation
+  is not evidence of board acceptance.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
   preflight runner reads each binary's recorded module version and checksum with
   `go version -m` and refuses any other build.

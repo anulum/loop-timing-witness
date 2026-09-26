@@ -31,6 +31,12 @@ jobs:
         with:
           go-version: "1.27.1"
           cache: false
+      - name: Install the pinned Ubuntu RTL simulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2
+          iverilog -V
+          vvp -V
       - name: Install the hashed development lock
         run: |
           python -m venv .venv

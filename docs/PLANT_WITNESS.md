@@ -13,7 +13,9 @@ Loop Timing Witness — plant monitor and injector RTL
 `rtl/control_plant_witness.sv` is the vendor-neutral fabric entry point. Both sampled plants,
 reference generator, strict deadline monitor, fault injector and simultaneous-event capture
 feed the real dual-clock record FIFO. Tests drain binary records into the public host analyzer.
-This is simulation evidence. Bus adapters, processor controllers, vendor timing constraints,
+This is simulation evidence; no physical board is available. C/Rust/RTL controllers and the
+closed fabric feedback path are specified in [`CONTROLLERS.md`](CONTROLLERS.md). Native CLI
+commands replay through simulated actuator transactions; bus adapters, board processor service, vendor timing constraints,
 power readings and physical safe-state acceptance remain planned.
 
 ## Ports and configuration

@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — controllers/rust/Cargo.toml
+
+[package]
+name = "witness-controller"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+publish = false
+license = "AGPL-3.0-or-later"
+description = "Bit-exact Q8.24 PID and discrete LQR for Loop Timing Witness"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[lints.clippy]
+all = "deny"
+
+[profile.release]
+overflow-checks = true
+opt-level = 3
+lto = "fat"
+codegen-units = 1

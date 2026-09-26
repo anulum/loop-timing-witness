@@ -15,7 +15,9 @@ Loop Timing Witness — architecture
 The full board instrument remains planned and no measured result exists. Synthesizable
 timestamp capture, a dual-clock record buffer, numeric event codes, a run-manifest schema and
 host analysis exist. Both sampled plants, references, deadline/safe-state monitor, fault injector
-and simultaneous-event capture feed the drain stream and host CLI in simulation. Bus adapters
+and simultaneous-event capture feed the drain stream and host CLI in simulation. C, Rust and
+RTL PID/LQR kernels have bit-exact parity, with an integrated fabric feedback loop and native
+command replay through simulated actuator transactions. No physical board is available. Bus adapters
 and processor software remain planned. The
 machine-readable design contract is `measurement-domain.json`, validated by
 `tools/validate_measurement_domain.py`; changes to that contract also update its schema, this
@@ -141,8 +143,12 @@ event on the same timebase, so detection latency comes from the same clock as ev
 
 ### Fabric controller
 
-Fixed-point PID with anti-windup and discrete LQR in fabric logic, with the same coefficients as
-the software controllers, selected by a placement register and using the same strobes.
+`fixed_point_controller.sv` implements PID with conditional integration and discrete LQR.
+`fabric_control_witness.sv` connects it to the sampled plant and existing independent monitor,
+record capture and drain. In simulation the first read follows sample-ready by one tick and
+the timely actuator write follows by another tick. This is a registered RTL schedule, not
+physical timing closure. Arithmetic, reset, coefficients and native counterparts are specified
+in [`CONTROLLERS.md`](CONTROLLERS.md). A board placement register remains planned.
 
 ### Device-under-test slot and the `COMPUTE` profile
 
@@ -161,8 +167,9 @@ written for the purpose; accelerator-specific adapters live in the accelerator's
 | `bare_metal_amp` | one dedicated U54 core | interrupt-driven bare-metal loop; Linux on the remaining cores for logging |
 | `fabric_logic` | FPGA fabric | fixed-point controller; the processors only log |
 
-Controllers are textbook PID with anti-windup and discrete LQR, with identical coefficients in C
-and in fabric logic and bit-exact fixed-point parity checked in simulation. A Linux load
+Controllers are textbook PID with anti-windup and discrete LQR, with identical coefficients in C,
+Rust and fabric logic and bit-exact fixed-point parity checked in simulation. Native streaming
+CLIs are functional adapters; Linux UIO and bare-metal service remain planned. A Linux load
 generator provides idle, CPU, memory and cache, network and storage load cases. A Linux run
 controller configures the fabric registers, starts and stops runs, drains the buffer, reads the
 power monitor and writes the run files.
@@ -199,8 +206,8 @@ reports tied to sample counts and observation duration. Inputs and limits are sp
 ## Verification of the instrument
 
 1. **Simulation** before hardware: witness, buffer, plant, monitor and fabric controller with a
-   vendor-neutral simulator, directed and randomised tests, bit-exact parity of the fabric and C
-   controllers.
+   vendor-neutral simulator, directed and randomised tests, bit-exact parity of fabric, C and
+   Rust controllers, including complete 64,000-sample trajectories per plant/controller.
 2. **Known-period test:** a period generated from the same timebase must appear as an exact
    interval; any deviation is a witness defect.
 3. **Injected-delay test:** a delay of k periods must measure as k periods within one tick.
@@ -219,6 +226,8 @@ reports tied to sample counts and observation duration. Inputs and limits are sp
 | `run-manifest.schema.json` | versioned schema for a hash-bound run package |
 | `capability-inventory.json` | generated from the manifest, embeds its SHA-256, empty at `architecture_only` |
 | `rtl/` | plants, references, monitor, injector, simultaneous capture and dual-clock event stream exercised in simulation |
+| `controllers/`, `benchmarks/` | native kernels, streaming interfaces and local regression records |
+| `docs/CONTROLLERS.md` | common arithmetic, PID/LQR design, parity and simulation boundaries |
 | `docs/PLANT_WITNESS.md` | fixed-point models, event and injection semantics, fabric entry point |
 | `docs/FABRIC_WITNESS.md` | RTL port, reset, overflow and CDC contracts |
 | `docs/HOST_ANALYSIS.md` | host command, file formats, calculations and report limits |

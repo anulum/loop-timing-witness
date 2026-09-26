@@ -56,6 +56,8 @@ ignore = [
 # The shared fixtures start the repository's tools and `git init` with fixed
 # argument vectors and no shell.
 "conftest.py" = ["S603", "S607"]
+# Native test builds use trusted compiler/Cargo argument vectors without a shell.
+"controller_test_support.py" = ["S603", "S607"]
 # The gate runner and the publishable-file listing execute fixed argument
 # vectors of repository tools and Git without a shell and without untrusted
 # input.
@@ -74,6 +76,7 @@ convention = "numpy"
 known-first-party = [
     "audit_workflows",
     "check_commit_trailers",
+    "controller_test_support",
     "check_dependency_licences",
     "check_documentation",
     "check_provenance_headers",
@@ -100,7 +103,7 @@ enable_error_code = [
     "unused-awaitable",
 ]
 mypy_path = ["tools"]
-files = ["tools", "tests", "conftest.py"]
+files = ["tools", "tests", "conftest.py", "controller_test_support.py"]
 pretty = true
 
 [tool.pytest.ini_options]
@@ -111,7 +114,7 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["tools"]
+source = ["tools", "controller_test_support"]
 patch = ["subprocess"]
 
 [tool.coverage.report]

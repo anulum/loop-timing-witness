@@ -24,6 +24,9 @@ truthfulness of the `architecture_only` state.
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
   is not evidence of board acceptance.
+- Rust 1.98.1 (Cargo, rustfmt and Clippy), installed explicitly with rustup in native CI jobs;
+  C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
+  Tool versions are printed by the jobs. No third-party native dependencies exist.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
   preflight runner reads each binary's recorded module version and checksum with
   `go version -m` and refuses any other build.
@@ -41,8 +44,10 @@ is missing; `--only NAME` runs one gate and `--list` prints the plan.
 |---|---|---|
 | `ruff-check` | `ruff check .` | every Python file; all rule groups enabled, exclusions listed with reasons in `pyproject.toml` |
 | `ruff-format` | `ruff format --check .` | every Python file |
-| `mypy` | `mypy` | `tools/`, `tests/` and `conftest.py` in strict mode |
-| `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `tools/`, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
+| `mypy` | `mypy` | `tools/`, `tests/`, `conftest.py` and native build support in strict mode |
+| `controller-build` | `make controller-build` | strict C build, Rust format/Clippy, dependency-free release build and native API documentation |
+| `controller-tests` | `make controller-tests` | public C APIs under undefined-behaviour sanitization and Rust public state/refusal tests |
+| `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `tools/` and native build support, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
 | `measurement-domain` | `python tools/validate_measurement_domain.py` | repeated-key rejection, JSON Schema, cross-field rules, and — where the canonical project registry is present — group and project identity |
 | `capability-inventory` | `python tools/generate_capability_inventory.py --check` | committed inventory byte-identical to a fresh generation from a valid manifest |
 | `provenance-headers` | `python tools/check_provenance_headers.py` | seven-line provenance header in every publishable file with a comment syntax; Markdown header inside an HTML comment with rendered content after it |
@@ -63,7 +68,9 @@ network access to the vulnerability database and is therefore not part of the of
 
 Dedicated RTL tests are `tests/test_clock_reset_release.py`, `tests/test_event_record_fifo.py`
 `tests/test_event_witness.py`, `tests/test_control_plant_witness.py` and
-`tests/test_control_faults.py`. They compile the actual modules with Icarus and check public
+`tests/test_control_faults.py`. Controller parity, design, 64,000-sample trajectories and
+closed fabric/native replay are exercised by `tests/test_controller_*.py` and
+`tests/test_fabric_controller*.py`. They compile the actual modules with Icarus and check public
 ports with scoreboards, including the default 16,384-record capacity, clock ratios, queued-data
 reset, wrap, overflow and saturation. Buffered binary drain output reaches the host report CLI.
 The CI test workflow runs these with the same pinned simulator as the capture tests.
@@ -71,7 +78,8 @@ The CI test workflow runs these with the same pinned simulator as the capture te
 Local RTL review also runs Verilator 5.020 strict `--lint-only --Wall`, and Yosys 0.33 preparation,
 memory inference checks and post-optimisation equivalence at a four-record configuration. The
 plant integration additionally runs component optimization proofs with
-`rtl/check_control_equivalence.ys`; monolithic technology-mapped system equivalence remains
+`rtl/check_control_equivalence.ys`; the controller uses
+`rtl/check_controller_equivalence.ys` (2,246 proven cells, zero unproven). Monolithic technology-mapped system equivalence remains
 unqualified. The
 Yosys proof normalises asynchronous resets with `async2sync` before synthesis; it does not
 qualify metastability, Gray-bus physical timing or a board bitstream. See
@@ -106,7 +114,7 @@ Every action is pinned to a verified commit object.
 | `reusable-static-policy.yml` | lint, format, typing, manifest, inventory, headers, licences, workflow policy | static analysis and policy |
 | `reusable-tests.yml` | tests with 100 % statement and branch coverage | unit and component quality |
 | `pre-commit.yml` | every pre-commit stage hook on all files | static analysis and policy |
-| `codeql.yml` | code scanning of Python and of the workflow definitions | security and supply chain |
+| `codeql.yml` | code scanning of C, Rust, Python and the workflow definitions | security and supply chain |
 | `security-audit.yml` | secret scan of the full history, vulnerability audit, licence guard, REUSE, actionlint, zizmor | security and supply chain |
 | `scorecard.yml` | OpenSSF Scorecard analysis; results are not published | security and supply chain |
 | `sbom.yml` | CycloneDX inventory of the development lock, kept as a 30-day artefact | security and supply chain |
@@ -114,3 +122,18 @@ Every action is pinned to a verified commit object.
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.
+
+## Native controller coverage and regression
+
+[`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md) reproduces GCC line/branch
+and LLVM line/region/function/branch analysis of the kernels and streaming CLIs.
+[`benchmarks/controller_coverage.json`](benchmarks/controller_coverage.json) retains
+source and raw-report hashes. Coverage is host execution evidence; no numeric RTL
+coverage or physical timing qualification is inferred. The production Rust compiler
+remains 1.98.1; the separate branch analysis pins nightly-2026-08-21.
+
+`make controller-benchmarks` executes matching million-sample native workloads.
+[`benchmarks/controller_regression.json`](benchmarks/controller_regression.json)
+records five repeats per language/controller with compiler, source/binary hashes,
+load, affinity and governor. Non-isolated timings are local regression evidence only.
+C/Rust command checksums must agree; host wall time cannot establish fabric speedup.

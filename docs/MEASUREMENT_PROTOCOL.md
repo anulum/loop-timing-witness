@@ -11,7 +11,9 @@ Loop Timing Witness — measurement protocol
 # Measurement protocol
 
 This document fixes how measurements will be taken and reported. It contains no board results:
-none exist. The numeric parameters that the validator can check live in
+none exist, and no physical board is currently available. Functional controller simulation
+is specified in [`CONTROLLERS.md`](CONTROLLERS.md); native CLI wall times are local regression
+evidence, not processor placement measurements. The numeric parameters that the validator can check live in
 `measurement-domain.json` under `design_contracts`; a change to either place must change both.
 The implemented host file formats and calculations are specified in
 [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md), with the input structure in

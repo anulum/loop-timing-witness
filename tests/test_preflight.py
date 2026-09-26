@@ -46,6 +46,8 @@ PLAN = [
     "ruff-check",
     "ruff-format",
     "mypy",
+    "controller-build",
+    "controller-tests",
     "tests",
     "measurement-domain",
     "capability-inventory",

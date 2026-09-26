@@ -27,10 +27,21 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13.15"
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.98.1
+      - name: Native toolchain versions
+        run: |
+          gcc --version
+          rustc --version
+          cargo --version
       - name: Install the hashed development lock
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+      - name: Native controller build and strict checks
+        run: make controller-build
       - name: Ruff lint
         run: .venv/bin/ruff check .
       - name: Ruff format

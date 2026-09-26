@@ -51,3 +51,27 @@ inventory:
 
 preflight:
 	$(PREFLIGHT)
+
+# Native kernels have no third-party dependencies. All build files stay here.
+CONTROLLER_WARNINGS := -Wall -Wextra -Werror -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes
+CONTROLLER_CRATE := controllers/rust/Cargo.toml
+
+.PHONY: controller-build controller-tests controller-benchmarks
+
+controller-build:
+	mkdir -p build
+	gcc -std=gnu11 -O3 -flto $(CONTROLLER_WARNINGS) controllers/c/witness_controller.c controllers/c/controller_cli.c -o build/controller_cli
+	gcc -std=gnu11 -O2 $(CONTROLLER_WARNINGS) -fsanitize=undefined -fno-sanitize-recover=all -Icontrollers/c controllers/c/witness_controller.c tests/native/controller_api_test.c -o build/controller_api_test
+	gcc -std=gnu11 -O3 -flto $(CONTROLLER_WARNINGS) -Icontrollers/c controllers/c/witness_controller.c benchmarks/controller_benchmark.c -o build/controller_benchmark
+	cargo fmt --check --manifest-path $(CONTROLLER_CRATE)
+	cargo clippy --offline --locked --all-targets --manifest-path $(CONTROLLER_CRATE) -- -D warnings
+	cargo build --release --offline --locked --manifest-path $(CONTROLLER_CRATE)
+	cargo doc --no-deps --offline --locked --manifest-path $(CONTROLLER_CRATE)
+
+controller-tests: controller-build
+	build/controller_api_test
+	cargo test --offline --locked --manifest-path $(CONTROLLER_CRATE)
+
+controller-benchmarks: controller-build
+	build/controller_benchmark
+	controllers/rust/target/release/controller_benchmark

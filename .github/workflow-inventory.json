@@ -45,7 +45,7 @@
       "file": "codeql.yml",
       "jobs": ["analyse"],
       "kind": "standalone",
-      "owner": "code scanning of Python tooling and workflow definitions"
+      "owner": "code scanning of native controllers, Python tooling and workflow definitions"
     },
     {
       "category": 8,

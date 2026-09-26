@@ -1,0 +1,126 @@
+{
+  "schema": "loop-timing-witness.controller-coverage.v1",
+  "recorded_utc": "2026-09-26T19:55:55.656229+00:00",
+  "evidence_status": "host_native_execution_only",
+  "board_qualification": false,
+  "source_sha256": {
+    "controllers/c/witness_controller.c": "366a0afb15946fa2c1903f88a7f353780266ab05ec64702dc4d3f6fb40032fa2",
+    "controllers/c/controller_cli.c": "7c2187ba7a12754d36cad69c47b1213d440f9e3f6c01add0cca256d75e59e602",
+    "controllers/rust/src/lib.rs": "e42106f6808ae284bea18fc5de39f22fc5c8878a21eeacbb21a7ac4a9d7a3f8f",
+    "controllers/rust/src/main.rs": "4a321155fd330bc5cdb31a755bec2be57d62d6ad0ff6cb5443af0a59033a51ed"
+  },
+  "c": {
+    "witness_controller.c": {
+      "lines": 60,
+      "lines_covered": 60,
+      "branches": 54,
+      "branches_covered": 54,
+      "raw_report": "build/controller-coverage/kernel.gcov.json.gz",
+      "raw_sha256": "f55fc7978e63cd0a94661c93a855fb83ce05f7058ba7cb9c9a61a4a888b9db49",
+      "compiler": "GCC 13.3.0",
+      "flags": "-std=gnu11 -O0 --coverage"
+    },
+    "controller_cli.c": {
+      "lines": 73,
+      "lines_covered": 73,
+      "branches": 74,
+      "branches_covered": 74,
+      "raw_report": "build/controller-coverage/controller_cli-controller_cli.gcov.json.gz",
+      "raw_sha256": "6545ad5c167eb0db66dadbd916fe4cd843cfb86f5fc64e8f55a41a21bc37c20d",
+      "compiler": "GCC 13.3.0",
+      "flags": "-std=gnu11 -O0 --coverage"
+    }
+  },
+  "rust": {
+    "lib.rs": {
+      "summary": {
+        "lines": {
+          "count": 85,
+          "covered": 85,
+          "percent": 100
+        },
+        "functions": {
+          "count": 6,
+          "covered": 6,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 6,
+          "covered": 6,
+          "percent": 100
+        },
+        "regions": {
+          "count": 123,
+          "covered": 123,
+          "notcovered": 0,
+          "percent": 100
+        },
+        "branches": {
+          "count": 36,
+          "covered": 36,
+          "notcovered": 0,
+          "percent": 100
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      },
+      "compiler": "rustc 1.100.0-nightly (8925ea358 2026-08-20)",
+      "toolchain": "nightly-2026-08-21",
+      "flags": "-C instrument-coverage -Z coverage-options=branch -C opt-level=0",
+      "raw_report": "build/controller-coverage/rust-coverage.json",
+      "raw_sha256": "437784143aa80c5898787553cc8f48c41f69f6269032a0039363d071e3c11974"
+    },
+    "main.rs": {
+      "summary": {
+        "lines": {
+          "count": 82,
+          "covered": 82,
+          "percent": 100
+        },
+        "functions": {
+          "count": 9,
+          "covered": 9,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 9,
+          "covered": 9,
+          "percent": 100
+        },
+        "regions": {
+          "count": 150,
+          "covered": 150,
+          "notcovered": 0,
+          "percent": 100
+        },
+        "branches": {
+          "count": 14,
+          "covered": 14,
+          "notcovered": 0,
+          "percent": 100
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      },
+      "compiler": "rustc 1.100.0-nightly (8925ea358 2026-08-20)",
+      "toolchain": "nightly-2026-08-21",
+      "flags": "-C instrument-coverage -Z coverage-options=branch -C opt-level=0",
+      "raw_report": "build/controller-coverage/rust-coverage.json",
+      "raw_sha256": "437784143aa80c5898787553cc8f48c41f69f6269032a0039363d071e3c11974"
+    }
+  },
+  "notes": [
+    "Counts cover controller kernels and streaming CLIs, not benchmark timing harnesses or numeric RTL coverage.",
+    "Rust production builds use 1.98.1; branch analysis uses separately pinned nightly-2026-08-21 with unoptimized branch instrumentation.",
+    "Coverage is exercised through actual native APIs, full-range commands, malformed inputs and real OS I/O failures; no mocks, exclusions or disabled branches."
+  ],
+  "reproduction": "docs/CONTROLLER_COVERAGE.md"
+}

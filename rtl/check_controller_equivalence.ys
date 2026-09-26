@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — controller post-optimization equivalence
+
+design -reset
+read_verilog -sv rtl/fixed_point_controller.sv
+hierarchy -top fixed_point_controller
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename fixed_point_controller gate
+design -stash gate
+design -copy-from gold -as gold fixed_point_controller
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert

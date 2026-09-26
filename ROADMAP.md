@@ -41,15 +41,22 @@ evidence.
   simultaneous event capture and the buffered host report path. Injected delay is verified
   in simulation; processor overload execution and physical acceptance remain unqualified.
 
+- C, Rust and RTL Q8.24 PID with conditional integration and discrete LQR, integrated
+  fabric feedback and native command replay through the drained host report path.
+  Full-range arithmetic, reset/refusal, 64,000-sample trajectories and independent
+  fault handling are verified in simulation. Native kernels and streaming CLIs
+  have complete line/branch coverage; matching native benchmark records establish
+  local regression evidence only. See [`docs/CONTROLLERS.md`](docs/CONTROLLERS.md).
+  Completed locally on 2026-09-26; the atomic controller commit records the implementation.
+
 ## Planned — in implementation order, without dates
 
-1. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
-   tests.
-2. Vendor tool project generation scripts and constraints.
-3. Linux run controller, UIO access and power-monitor logger.
-4. Bare-metal controller on a dedicated application core.
-5. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
+1. Vendor tool project generation scripts and constraints.
+2. Linux run controller, UIO access and power-monitor logger.
+3. Bare-metal controller on a dedicated application core.
+4. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.
+   Blocked: no physical board is available; simulation does not close this item.
 
 ## Not planned in this repository
 

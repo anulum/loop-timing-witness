@@ -46,3 +46,8 @@ dist/
 .vscode/
 *.swp
 .DS_Store
+
+# Native controller build outputs
+/controllers/rust/target/
+*.gcda
+*.gcno

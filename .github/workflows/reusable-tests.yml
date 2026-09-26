@@ -37,6 +37,15 @@ jobs:
           sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2
           iverilog -V
           vvp -V
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.98.1
+      - name: Native toolchain versions
+        run: |
+          gcc --version
+          rustc --version
+          cargo --version
       - name: Install the hashed development lock
         run: |
           python -m venv .venv
@@ -45,6 +54,8 @@ jobs:
         run: |
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Native controller public API tests
+        run: make controller-tests
       - name: Tests with coverage
         run: |
           PATH="$(go env GOPATH)/bin:${PATH}" .venv/bin/pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100

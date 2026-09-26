@@ -66,6 +66,12 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+      - id: controller-build
+        name: native controller build and strict checks
+        entry: .venv/bin/python tools/preflight.py --only controller-build
+        language: system
+        pass_filenames: false
+        files: ^(controllers/|benchmarks/|tests/native/|Makefile)
       - id: measurement-domain
         name: measurement-domain manifest
         entry: .venv/bin/python tools/preflight.py --only measurement-domain

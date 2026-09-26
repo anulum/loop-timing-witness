@@ -27,6 +27,8 @@ from typing import Any
 
 import pytest
 
+pytest_plugins = ("controller_test_support",)
+
 REPOSITORY_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPOSITORY_ROOT / "tools"))
 
@@ -252,6 +254,7 @@ def run_rtl(tmp_path: Path) -> RunRtl:
             "rtl/event_record_fifo.sv",
             "rtl/event_witness.sv",
             "rtl/fixed_point_math.sv",
+            "rtl/fixed_point_controller.sv",
             "rtl/sampled_plant.sv",
             "rtl/reference_generator.sv",
             "rtl/deadline_monitor.sv",
@@ -259,6 +262,7 @@ def run_rtl(tmp_path: Path) -> RunRtl:
             "rtl/control_event_capture.sv",
             "rtl/control_cycle.sv",
             "rtl/control_plant_witness.sv",
+            "rtl/fabric_control_witness.sv",
             f"tests/rtl/{top}.sv",
         ]
         subprocess.run(

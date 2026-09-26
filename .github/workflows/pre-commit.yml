@@ -37,6 +37,15 @@ jobs:
         with:
           go-version: "1.27.1"
           cache: false
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.98.1
+      - name: Native toolchain versions
+        run: |
+          gcc --version
+          rustc --version
+          cargo --version
       - name: Install the hashed development lock
         run: |
           python -m venv .venv

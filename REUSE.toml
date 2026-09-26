@@ -14,6 +14,8 @@ version = 1
 path = [
     ".github/workflow-inventory.json",
     ".zenodo.json",
+    "benchmarks/controller_regression.json",
+    "benchmarks/controller_coverage.json",
     "capability-inventory.json",
     "development-dependency-licences.json",
     "docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf",

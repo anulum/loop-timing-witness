@@ -36,16 +36,19 @@ evidence.
   pointer-wrap and configured-capacity simulations; the drain stream reaches the host reports.
   Physical CDC timing, RAM mapping and board acceptance remain unqualified.
 
+- Mechanical and thermal Q8.24 plants, step/ramp/sine references, strict deadline monitor,
+  latched safe actuator and drop/delay/freeze/overload-request injector, integrated with
+  simultaneous event capture and the buffered host report path. Injected delay is verified
+  in simulation; processor overload execution and physical acceptance remain unqualified.
+
 ## Planned — in implementation order, without dates
 
-1. Plant emulator, deadline and safe-state monitor and fault injector, with simulation tests
-   including the injected-delay test.
-2. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
+1. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
    tests.
-3. Vendor tool project generation scripts and constraints.
-4. Linux run controller, UIO access and power-monitor logger.
-5. Bare-metal controller on a dedicated application core.
-6. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
+2. Vendor tool project generation scripts and constraints.
+3. Linux run controller, UIO access and power-monitor logger.
+4. Bare-metal controller on a dedicated application core.
+5. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.
 
 ## Not planned in this repository

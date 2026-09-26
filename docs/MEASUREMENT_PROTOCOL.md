@@ -91,3 +91,14 @@ These limits are part of every report:
 A result may be reported only after the instrument has passed, on the same bitstream, the
 known-period test, the injected-delay test, the overflow test and the bus-offset calibration
 described in [`ARCHITECTURE.md`](ARCHITECTURE.md). Their records are kept with the run records.
+
+## Plant simulation prerequisite
+
+[`PLANT_WITNESS.md`](PLANT_WITNESS.md) specifies the implemented Q8.24 models, reference
+quantisation, strict deadline and safe-state priority, simultaneous event capture and fault
+injection. `ACT_WRITE` denotes the first timely command; `ACT_LATE` is the first accepted
+late command in its observation cycle and does not satisfy a deadline. Late-command counts
+come from the hardware status counter, not the number of `ACT_LATE` records. Preserve clipping
+flags with sample output and include all coefficient values in source/configuration provenance.
+The injected-delay simulation checks an exact k-period fabric delay; processor execution,
+power-monitor energy and physical safe-state behaviour need separate board acceptance.

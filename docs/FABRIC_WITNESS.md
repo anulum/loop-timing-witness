@@ -106,3 +106,10 @@ Post-optimisation equivalence uses a small FIFO configuration with memory mappin
 checks logic transformations under the normalised model; it does not prove physical CDC safety.
 Board acceptance still requires the same-bitstream tests in
 [`MEASUREMENT_PROTOCOL.md`](MEASUREMENT_PROTOCOL.md).
+
+## Simultaneous control strobes
+
+The one-event input remains the generic stream contract. The plant entry point instead uses
+`control_event_capture.sv` to snapshot simultaneous strobes before serialization and feeds this
+same dual-clock FIFO. Its group-queue and combined loss semantics are specified in
+[`PLANT_WITNESS.md`](PLANT_WITNESS.md).

@@ -16,8 +16,9 @@ control cycle on a PolarFire SoC board — independently of the processor whose 
 measured.
 
 **Evidence maturity: `architecture_only`.** No board instrument has been built or measured. The
-repository contains measurement contracts, fabric timestamp capture and a dual-clock buffer
-tested in RTL simulation, and a host analysis command that reports simulation provenance separately from
+repository contains measurement contracts, fabric timestamp capture, a dual-clock buffer, plants,
+references, a deadline monitor and fault injector tested in RTL simulation, and a host analysis
+command that reports simulation provenance separately from
 board evidence. The capability and claim inventories remain empty and checked by the manifest
 validator.
 
@@ -125,7 +126,8 @@ validator checks their internal consistency, for example that
 the event buffer outlasts the slowest permitted drain at the highest sample rate and that the
 timebase counter cannot wrap during a repeat.
 
-The RTL stream contract is described in [`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md).
+The RTL stream contract is described in [`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md); the
+integrated plant, monitor and injector are in [`docs/PLANT_WITNESS.md`](docs/PLANT_WITNESS.md).
 
 ## Repository layout
 
@@ -137,7 +139,7 @@ The RTL stream contract is described in [`docs/FABRIC_WITNESS.md`](docs/FABRIC_W
 | `development-dependency-licences.json` | reviewed licence of every pinned development tool |
 | `docs/` | architecture, measurement protocol, threat model, decision records |
 | `papers/` | manuscript collection; no manuscript exists yet |
-| `rtl/` | synthesizable timestamp capture, dual-clock buffer, reset release and event codes |
+| `rtl/` | synthesizable plants, references, monitor, injector, timestamp capture and dual-clock stream |
 | `tools/` | host analysis, validators, inventory generator, repository guards and preflight runner |
 | `tests/` | command-line, file and RTL-simulation tests |
 | `.github/` | workflow definitions, workflow inventory and contribution metadata |

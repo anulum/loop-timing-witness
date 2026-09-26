@@ -62,13 +62,17 @@ network access to the vulnerability database and is therefore not part of the of
 ## Fabric simulation and synthesis
 
 Dedicated RTL tests are `tests/test_clock_reset_release.py`, `tests/test_event_record_fifo.py`
-and `tests/test_event_witness.py`. They compile the actual modules with Icarus and check public
+`tests/test_event_witness.py`, `tests/test_control_plant_witness.py` and
+`tests/test_control_faults.py`. They compile the actual modules with Icarus and check public
 ports with scoreboards, including the default 16,384-record capacity, clock ratios, queued-data
 reset, wrap, overflow and saturation. Buffered binary drain output reaches the host report CLI.
 The CI test workflow runs these with the same pinned simulator as the capture tests.
 
 Local RTL review also runs Verilator 5.020 strict `--lint-only --Wall`, and Yosys 0.33 preparation,
 memory inference checks and post-optimisation equivalence at a four-record configuration. The
+plant integration additionally runs component optimization proofs with
+`rtl/check_control_equivalence.ys`; monolithic technology-mapped system equivalence remains
+unqualified. The
 Yosys proof normalises asynchronous resets with `async2sync` before synthesis; it does not
 qualify metastability, Gray-bus physical timing or a board bitstream. See
 [`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md) for ports and remaining board gates. Python

@@ -19,4 +19,5 @@ package event_codes_pkg;
     localparam logic [7:0] COMPUTE_DONE = 8'd10;
     localparam logic [7:0] OUTPUT_READ = 8'd11;
     localparam logic [7:0] INTERRUPT_ENTRY = 8'd12;
+    localparam logic [7:0] ACT_LATE = 8'd13;
 endpackage

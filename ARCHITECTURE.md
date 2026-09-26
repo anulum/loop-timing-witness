@@ -12,7 +12,8 @@ Loop Timing Witness — architecture summary
 
 Loop Timing Witness is a measurement instrument for real-time control loops and fabric
 accelerators on PolarFire SoC. The repository is `architecture_only`: timestamp capture, a
-dual-clock buffer and a host analysis command exist and are exercised in RTL simulation, but the complete
+dual-clock buffer, sampled plants, references, deadline monitor, fault injector and a host analysis
+command exist and are exercised in RTL simulation, but the complete
 fabric instrument, processor software and board measurements do not exist yet.
 
 The authoritative architecture record is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); the

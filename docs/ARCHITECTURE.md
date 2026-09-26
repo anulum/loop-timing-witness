@@ -14,8 +14,9 @@ Loop Timing Witness — architecture
 
 The full board instrument remains planned and no measured result exists. Synthesizable
 timestamp capture, a dual-clock record buffer, numeric event codes, a run-manifest schema and
-host analysis exist. Simulation drains binary records into the host CLI. The plant, monitor,
-peripheral event arbitration and processor software remain planned. The
+host analysis exist. Both sampled plants, references, deadline/safe-state monitor, fault injector
+and simultaneous-event capture feed the drain stream and host CLI in simulation. Bus adapters
+and processor software remain planned. The
 machine-readable design contract is `measurement-domain.json`, validated by
 `tools/validate_measurement_domain.py`; changes to that contract also update its schema, this
 document and the measurement protocol.
@@ -74,7 +75,8 @@ A discrete-time second-order plant (mass, spring, damper) and a first-order ther
 signed fixed point with a documented Q format per plant. The plant updates once per sample period
 (100 Hz to 20 kHz, 1 kHz by default) with the most recent actuator value that arrived before the
 update; a late command is applied one period later and counted. A reference generator (step,
-ramp, sine) provides the tracking target.
+ramp, sine) provides the tracking target. Implemented Q8.24 equations, coefficients and ports
+are specified in [`PLANT_WITNESS.md`](PLANT_WITNESS.md).
 
 ### Controller input/output register and strobes
 
@@ -85,7 +87,8 @@ register and the cycle counter. It raises the `CONTROL` profile strobes:
 |---|---|
 | `SAMPLE_READY` | plant update complete |
 | `SAMPLE_READ` | first bus read of the sample register in the cycle |
-| `ACT_WRITE` | bus write of the actuator register |
+| `ACT_WRITE` | first timely actuator command in the cycle |
+| `ACT_LATE` | first accepted out-of-cycle or deadline-edge command, tagged with its observation cycle |
 | `DEADLINE` | next sample instant |
 | `SAFE_STATE` | safe actuator value applied by the monitor |
 | `FAULT_INJECTED` | fault injector action |
@@ -98,8 +101,9 @@ FIFO and separate reset-release synchronisers. It accepts one event-code/cycle t
 capture-clock edge without stalling the measured source. The original timestamp is retained
 through the capture pipeline and drain. Event codes are declared in `measurement-domain.json`
 and `rtl/event_codes_pkg.sv`. Public ports and reset/overflow behaviour are specified in
-[`FABRIC_WITNESS.md`](FABRIC_WITNESS.md). Peripheral arbitration and the AXI board interface
-remain planned; simultaneous source strobes need preservation before this serial event input.
+[`FABRIC_WITNESS.md`](FABRIC_WITNESS.md). The integrated plant entry point uses `control_event_capture.sv` to preserve simultaneous
+strobes before serialization; its ports are in [`PLANT_WITNESS.md`](PLANT_WITNESS.md). The AXI
+board interface remains planned.
 
 The default buffer holds 16 384 records. A full buffer drops the newest record, pulses
 `event_dropped`, latches `overflowed` and increments a saturating 32-bit count. Reset starts a
@@ -214,7 +218,8 @@ reports tied to sample counts and observation duration. Inputs and limits are sp
 | `measurement-domain.schema.json` | structural schema (JSON Schema 2020-12) |
 | `run-manifest.schema.json` | versioned schema for a hash-bound run package |
 | `capability-inventory.json` | generated from the manifest, embeds its SHA-256, empty at `architecture_only` |
-| `rtl/` | timestamp capture, dual-clock buffer, reset release and event codes exercised in simulation |
+| `rtl/` | plants, references, monitor, injector, simultaneous capture and dual-clock event stream exercised in simulation |
+| `docs/PLANT_WITNESS.md` | fixed-point models, event and injection semantics, fabric entry point |
 | `docs/FABRIC_WITNESS.md` | RTL port, reset, overflow and CDC contracts |
 | `docs/HOST_ANALYSIS.md` | host command, file formats, calculations and report limits |
 | `docs/MEASUREMENT_PROTOCOL.md` | measurement procedure and stated limits |

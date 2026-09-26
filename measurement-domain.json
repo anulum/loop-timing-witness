@@ -4,6 +4,7 @@
   "claims": [],
   "design_contracts": {
     "event_codes": {
+      "ACT_LATE": 13,
       "ACT_WRITE": 3,
       "COMPUTE_DONE": 10,
       "COMPUTE_START": 9,
@@ -99,7 +100,8 @@
         "occasional_events": [
           "SAFE_STATE",
           "FAULT_INJECTED",
-          "FAULT_DETECTED"
+          "FAULT_DETECTED",
+          "ACT_LATE"
         ],
         "periodic_events": [
           "SAMPLE_READY",

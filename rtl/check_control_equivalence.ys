@@ -1,0 +1,186 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — plant system post-optimisation equivalence
+
+# Component proofs keep arithmetic and queue state in separate SAT cones.
+# The integrated wrapper is exercised by the public-port RTL-to-host tests.
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top fixed_point_math -chparam A 16777216 -chparam B 32'hff000000 -chparam C 16777216
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename fixed_point_math gate
+design -stash gate
+design -copy-from gold -as gold fixed_point_math
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top sampled_plant
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename sampled_plant gate
+design -stash gate
+design -copy-from gold -as gold sampled_plant
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top sampled_plant -chparam THERMAL 1
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename sampled_plant gate
+design -stash gate
+design -copy-from gold -as gold sampled_plant
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top reference_generator
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename reference_generator gate
+design -stash gate
+design -copy-from gold -as gold reference_generator
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top deadline_monitor
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename deadline_monitor gate
+design -stash gate
+design -copy-from gold -as gold deadline_monitor
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top fault_injector
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename fault_injector gate
+design -stash gate
+design -copy-from gold -as gold fault_injector
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top control_cycle
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename control_cycle gate
+design -stash gate
+design -copy-from gold -as gold control_cycle
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert
+
+design -reset
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top control_event_capture -chparam GROUP_ADDRESS_BITS 1
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+opt -full
+check -assert
+rename control_event_capture gate
+design -stash gate
+design -copy-from gold -as gold control_event_capture
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple -short
+equiv_induct -seq 8
+equiv_status -assert

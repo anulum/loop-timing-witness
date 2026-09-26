@@ -251,6 +251,14 @@ def run_rtl(tmp_path: Path) -> RunRtl:
             "rtl/event_record_capture.sv",
             "rtl/event_record_fifo.sv",
             "rtl/event_witness.sv",
+            "rtl/fixed_point_math.sv",
+            "rtl/sampled_plant.sv",
+            "rtl/reference_generator.sv",
+            "rtl/deadline_monitor.sv",
+            "rtl/fault_injector.sv",
+            "rtl/control_event_capture.sv",
+            "rtl/control_cycle.sv",
+            "rtl/control_plant_witness.sv",
             f"tests/rtl/{top}.sv",
         ]
         subprocess.run(

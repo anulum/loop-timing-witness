@@ -53,8 +53,48 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def parse_json_object(raw: bytes, source: str) -> dict[str, Any]:
+    """Decode hash-bound UTF-8 JSON whose top level must be an object.
+
+    Parameters
+    ----------
+    raw
+        Complete bytes already read from one source.
+    source
+        Source label for refusal messages.
+
+    Returns
+    -------
+    dict[str, Any]
+        The decoded top-level object.
+
+    Raises
+    ------
+    ValueError
+        If the bytes are not UTF-8, the document is not valid JSON, a member
+        name repeats inside one object, or the top level is not an object.
+    """
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        message = f"{source}: not UTF-8: {exc}"
+        raise ValueError(message) from exc
+    try:
+        value = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    except json.JSONDecodeError as exc:
+        message = f"{source}: invalid JSON: {exc}"
+        raise ValueError(message) from exc
+    except ValueError as exc:
+        message = f"{source}: {exc}"
+        raise ValueError(message) from exc
+    if not isinstance(value, dict):
+        message = f"{source}: top-level JSON value must be an object"
+        raise ValueError(message)
+    return value
+
+
 def load_json_object(path: Path) -> dict[str, Any]:
-    """Load a UTF-8 JSON document whose top level must be an object.
+    """Read a strict JSON object from a filesystem path.
 
     Parameters
     ----------
@@ -64,34 +104,16 @@ def load_json_object(path: Path) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        The decoded top-level object.
+        Decoded top-level object.
 
     Raises
     ------
     OSError
         If the file cannot be read.
     ValueError
-        If the bytes are not UTF-8, the document is not valid JSON, a member
-        name repeats inside one object, or the top level is not an object.
+        If the bytes violate the strict JSON contract.
     """
-    raw = path.read_bytes()
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        message = f"{path}: not UTF-8: {exc}"
-        raise ValueError(message) from exc
-    try:
-        value = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
-    except json.JSONDecodeError as exc:
-        message = f"{path}: invalid JSON: {exc}"
-        raise ValueError(message) from exc
-    except ValueError as exc:
-        message = f"{path}: {exc}"
-        raise ValueError(message) from exc
-    if not isinstance(value, dict):
-        message = f"{path}: top-level JSON value must be an object"
-        raise ValueError(message)
-    return value
+    return parse_json_object(path.read_bytes(), str(path))
 
 
 def canonical_json_bytes(value: dict[str, Any]) -> bytes:

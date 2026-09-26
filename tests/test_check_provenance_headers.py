@@ -38,6 +38,22 @@ def hash_header(title: str = "test file") -> str:
     return "".join(f"# {line}\n" for line in (*HEADER_LINES, f"{TITLE_PREFIX}{title}"))
 
 
+def slash_header(title: str = "test RTL") -> str:
+    """Build a complete SystemVerilog line-comment header.
+
+    Parameters
+    ----------
+    title
+        Description after the project prefix.
+
+    Returns
+    -------
+    str
+        Seven slash-comment lines with a trailing newline.
+    """
+    return "".join(f"// {line}\n" for line in (*HEADER_LINES, f"{TITLE_PREFIX}{title}"))
+
+
 def markdown_header(title: str = "test page") -> str:
     """Build a complete Markdown header comment.
 
@@ -74,6 +90,8 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
             "Makefile": hash_header() + "all:\n",
             ".github/CODEOWNERS": hash_header() + "* @owner\n",
             "config.yml": hash_header() + "key: value\n",
+            "rtl/witness.sv": slash_header() + "module witness; endmodule\n",
+            "rtl/codes.svh": slash_header() + "`define EVENT 1\n",
             "README.md": markdown_header() + "\n# Title\n",
             "data.json": "{}\n",
             "LICENSE": "licence text\n",
@@ -90,6 +108,11 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
             "tool.py",
             "print('x')\n",
             "tool.py: must start with the seven-line '# ' provenance header",
+        ),
+        (
+            "rtl/witness.sv",
+            "module witness; endmodule\n",
+            "rtl/witness.sv: must start with the seven-line '// ' provenance header",
         ),
         (
             "short.toml",

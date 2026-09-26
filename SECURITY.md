@@ -17,9 +17,10 @@ Loop Timing Witness — security policy
 | `main` at its current commit | yes — the only supported state |
 | Released versions | none exist |
 
-The repository is `architecture_only`. Its executable surface is the validation tooling under
-`tools/` and the workflow definitions under `.github/workflows/`. There is no network service, no
-daemon, no fabric logic, no processor software and no path to hardware.
+The repository is `architecture_only`. Its executable surfaces are the validation and host
+analysis tooling under `tools/`, a timestamp-record capture module exercised in RTL simulation,
+and the workflow definitions under `.github/workflows/`. There is no network service, daemon,
+complete fabric instrument, processor software or path to hardware.
 
 ## Reporting a vulnerability
 
@@ -32,20 +33,23 @@ statement. Good-faith research within the scope below is welcome.
 
 In scope:
 
-- the validation tooling and its handling of manifests, inventories, workflow definitions, lock
-  files and repository files;
+- the validation and host analysis tooling and its handling of manifests, hash-bound event and
+  series files, inventories, workflow definitions, lock files and repository files;
 - the workflow definitions, including permissions, triggers and action pinning;
 - the development dependency lock and licence record;
 - any way the repository could state more than its evidence supports, for example a path that lets
   the capability inventory report a capability the manifest does not hold.
 
-Out of scope: measurement results and the planned instrument (neither exists yet), third-party
-services, and the vendor tools the planned instrument will use.
+Out of scope: board measurement results and the planned full instrument (neither exists yet),
+third-party services, and the vendor tools the planned instrument will use.
 
 ## Controls in place
 
 - Every JSON reader rejects repeated member names; workflow YAML is parsed with repeated-key
   rejection; unknown schema identifiers fail.
+- The host tool checks every referenced source, input and hardware artefact digest before
+  reporting; run file paths stay inside the run directory. An RTL simulation report is labelled
+  `simulation_only` even when its data files are internally valid.
 - Development dependencies are pinned with hashes and installed with `--require-hashes`; every
   pinned package has a reviewed licence record.
 - Workflows have empty top-level permissions, per-job least privilege, commit-pinned actions,

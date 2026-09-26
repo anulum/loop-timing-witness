@@ -25,23 +25,25 @@ evidence.
   coverage, provenance headers, documentation links and anchors, workflow policy, REUSE licensing,
   workflow security analysis, workflow lint, typographical check and secret scan.
 - Workflow definitions for correctness, pre-commit parity, code scanning, security audit,
-  documentation, software inventory and supply-chain analysis; none has run on a hosted platform.
+  documentation, software inventory and supply-chain analysis. Hosted runs exist; their live
+  conclusions must be checked at the exact commit being assessed.
 - Architecture, measurement protocol, threat model and repository-boundary decision record.
+- Versioned run manifest, hash-bound measurement-domain snapshot, simulation event capture and
+  host analysis with JSON, CSV and SVG reports exercised from RTL-produced event files. This
+  establishes a simulation tool path; it does not qualify a board instrument.
 
 ## Planned — in implementation order, without dates
 
-1. Run manifest schema and the host analysis tool, tested against event files produced by fabric
-   simulation.
-2. Timebase and event witness in fabric logic, with simulation tests including the known-period
+1. Timebase and event witness in fabric logic, with simulation tests including the known-period
    and overflow tests.
-3. Plant emulator, deadline and safe-state monitor and fault injector, with simulation tests
+2. Plant emulator, deadline and safe-state monitor and fault injector, with simulation tests
    including the injected-delay test.
-4. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
+3. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
    tests.
-5. Vendor tool project generation scripts and constraints.
-6. Linux run controller, UIO access and power-monitor logger.
-7. Bare-metal controller on a dedicated application core.
-8. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
+4. Vendor tool project generation scripts and constraints.
+5. Linux run controller, UIO access and power-monitor logger.
+6. Bare-metal controller on a dedicated application core.
+7. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.
 
 ## Not planned in this repository

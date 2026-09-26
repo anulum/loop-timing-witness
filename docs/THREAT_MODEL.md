@@ -10,8 +10,9 @@ Loop Timing Witness — threat model
 
 # Threat model
 
-The model has two parts. The first covers what exists today: validation tooling, contracts and
-workflow definitions. The second covers the planned instrument, so that its design carries the
+The model has two parts. The first covers what exists today: validation and host analysis
+tooling, timestamp-record capture RTL, contracts and workflow definitions. The second covers
+the planned instrument, so that its design carries the
 controls from the start. The model is revised whenever an implemented surface is added.
 
 ## Part 1 — current repository
@@ -21,7 +22,8 @@ controls from the start. The model is revised whenever an implemented surface is
 | Asset | Why it matters |
 |---|---|
 | `measurement-domain.json` and its schema | define what a future measurement means; a silent change would change every later result |
-| `capability-inventory.json` | the public statement that nothing is implemented or measured |
+| `run-manifest.schema.json` and the host analysis tool | bind run files to provenance and calculations; accepting an invented source or silently dropped event would falsify a result |
+| `capability-inventory.json` | the public statement that no board capability is implemented or measured |
 | Non-claims in the manifest and README | prevent the repository from being cited for results that do not exist |
 | `requirements-dev.txt` and `development-dependency-licences.json` | the only third-party code executed by the tooling |
 | Workflow definitions | will execute with hosted credentials once a remote exists |
@@ -46,7 +48,9 @@ controls from the start. The model is revised whenever an implemented surface is
 | Adding a capability, claim or hardware verification without evidence | validator refuses non-empty capabilities or claims and `verified_on_hardware: true` at `architecture_only`; the inventory is generated and drift-checked |
 | Editing the inventory by hand to imply capability | the inventory embeds the manifest SHA-256 and must equal a fresh generation byte for byte |
 | Shadowing a manifest field with a repeated key | every JSON reader rejects repeated member names; workflow YAML is parsed with repeated-key rejection |
-| Changing the event record or buffer so that data is silently lost | validator checks record contiguity and size, field widths against event count, cycle count and counter width, and buffer fill time against the slowest drain |
+| Changing the event record or buffer so that data is silently lost | validator checks record contiguity and size, unique numeric event codes, cycle count and counter width, and buffer fill time against the slowest drain |
+| Supplying malformed or substituted run data | the host rejects duplicate-key JSON, invalid schema versions, escaping paths, missing or mismatched source/artefact/input hashes, malformed binary records and inconsistent CSV series |
+| Presenting RTL simulation as board measurement | run manifests label source kind; reports preserve `simulation_only` independently of internal series validity; board input requires declared acceptance state and complete artefacts |
 | Substituting a development dependency | `pip install --require-hashes` refuses any file whose hash is not in the lock; the licence guard refuses a package or version without a reviewed record |
 | Tampering with a workflow towards write authority | top-level permissions must be empty, the only allowed write scope is code-scanning upload, write-authority workflows are refused, actions must be commit-pinned, privileged triggers are refused |
 | Leaking a secret through a commit | secret scan of the publishable file set locally and of the whole history in CI; private-key detection hook |

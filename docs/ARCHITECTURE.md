@@ -12,11 +12,13 @@ Loop Timing Witness — architecture
 
 ## Evidence state
 
-Everything in this document is planned architecture. No fabric logic, processor software, host
-analysis code or measured result exists. The machine-readable parts of the design are the
-contracts in `measurement-domain.json`, validated by `tools/validate_measurement_domain.py`;
-the prose parts are fixed here and change only together with the manifest, the schema and the
-measurement protocol.
+The full board instrument remains planned and no measured result exists. A synthesizable
+timestamp-record capture module, numeric event-code package, run-manifest schema and host
+analysis command now exist; a simulation testbench writes their binary event file. The module
+does not yet include the planned dual-clock buffer, plant, monitor or processor software. The
+machine-readable design contract is `measurement-domain.json`, validated by
+`tools/validate_measurement_domain.py`; changes to that contract also update its schema, this
+document and the measurement protocol.
 
 ## Target platform
 
@@ -87,8 +89,15 @@ register and the cycle counter. It raises the `CONTROL` profile strobes:
 | `DEADLINE` | next sample instant |
 | `SAFE_STATE` | safe actuator value applied by the monitor |
 | `FAULT_INJECTED` | fault injector action |
+| `FAULT_DETECTED` | monitor detects the injected fault |
 
 ### Event witness and buffer
+
+`rtl/event_record_capture.sv` currently captures an event code and cycle number with its own
+free-running counter into the 16-byte record layout below. Icarus simulation writes those
+records to a binary file and the host CLI analyses that file. Event codes are declared in
+`measurement-domain.json` and `rtl/event_codes_pkg.sv`. The buffer and board interface below
+remain planned.
 
 On each strobe the witness captures event type, cycle number and counter value into a dual-clock
 buffer of 16 384 records in fabric RAM. Linux drains the buffer at least 20 times per second. At
@@ -162,17 +171,19 @@ four rails together, per placement and load case, with the limits stated in
 |---|---|
 | event file | little-endian 16-byte records: `event_type` u8, `reserved_byte` u8, `reserved_word` u16, `cycle` u32, `timebase_ticks` u64; SHA-256 recorded |
 | power file | timestamped rail voltage, current and energy samples; SHA-256 recorded |
-| run manifest | run identifier, UTC start, placement, controller and coefficients, plant, sample period, load case, fault schedule, bitstream and firmware and image hashes, controller binary hash, tool versions, buffer overflow count, operator notes; schema-validated |
+| run manifest | versioned schema with run identity, UTC start, source kind, a hash-bound measurement-domain snapshot, placement, controller, plant, period, load case, fault schedule, hash-bound inputs and artefacts, overflow count, acceptance fields and notes |
 
 No run is reported without its manifest and hashes.
 
 ## Host analysis
 
-A command-line tool validates the manifest and hashes, decodes events, computes the derived
-intervals and their distributions (median, 95th, 99th and 99.9th percentile, maximum), the
-deadline-miss rate, tracking error (RMS and peak), energy per cycle, fault detection and time to
-safe state, and writes a JSON report, CSV tables and plots. Every statistic states its sample
-count and run duration.
+`tools/analyze_run.py` validates the run manifest and referenced file hashes, interprets the
+verified measurement-domain snapshot, decodes events, computes derived intervals and their
+distributions (median, 95th, 99th and 99.9th percentile,
+maximum), deadline-miss rate, tracking error (RMS and peak), mean rail energy per cycle over
+power-sampling windows, fault detection and time to safe state. It writes JSON, CSV and SVG
+reports tied to sample counts and observation duration. Inputs and limits are specified in
+[`HOST_ANALYSIS.md`](HOST_ANALYSIS.md). Board qualification and measured results remain absent.
 
 ## Verification of the instrument
 
@@ -194,7 +205,10 @@ count and run duration.
 |---|---|
 | `measurement-domain.json` | identity, boundary, non-claims and planned measurement contracts |
 | `measurement-domain.schema.json` | structural schema (JSON Schema 2020-12) |
+| `run-manifest.schema.json` | versioned schema for a hash-bound run package |
 | `capability-inventory.json` | generated from the manifest, embeds its SHA-256, empty at `architecture_only` |
+| `rtl/event_record_capture.sv`, `rtl/event_codes_pkg.sv` | timestamp capture and event codes exercised in simulation |
+| `docs/HOST_ANALYSIS.md` | host command, file formats, calculations and report limits |
 | `docs/MEASUREMENT_PROTOCOL.md` | measurement procedure and stated limits |
 | `docs/THREAT_MODEL.md` | assets, trust boundaries, misuse paths, residual risks |
 | `docs/adr/` | decision records |

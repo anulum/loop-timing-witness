@@ -138,6 +138,18 @@
           "minItems": 1,
           "type": "array"
         },
+        "event_codes": {
+          "additionalProperties": {
+            "maximum": 255,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "type": "object"
+        },
         "event_fifo": {
           "additionalProperties": false,
           "properties": {
@@ -219,6 +231,15 @@
           ],
           "type": "object"
         },
+        "power_rails": {
+          "items": {
+            "pattern": "^[A-Z][A-Z0-9]*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
         "run_plan": {
           "additionalProperties": false,
           "properties": {
@@ -269,9 +290,11 @@
       },
       "required": [
         "controller_placements",
+        "event_codes",
         "event_fifo",
         "event_profiles",
         "event_record",
+        "power_rails",
         "run_plan",
         "status",
         "timebase"

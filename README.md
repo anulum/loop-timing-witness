@@ -15,10 +15,11 @@ loop in FPGA fabric and reports latency, jitter, deadline misses, fault response
 control cycle on a PolarFire SoC board — independently of the processor whose software is being
 measured.
 
-**Evidence maturity: `architecture_only`.** Nothing is implemented and nothing has been measured.
-This repository currently holds the measurement contracts, the repository boundary, the
-measurement protocol and the validation tooling that keeps that state truthful. The capability
-and claim inventories are empty and checked by the manifest validator.
+**Evidence maturity: `architecture_only`.** No board instrument has been built or measured. The
+repository contains measurement contracts, a fabric timestamp-record capture module tested in
+RTL simulation, and a host analysis command that reports simulation provenance separately from
+board evidence. The capability and claim inventories remain empty and checked by the manifest
+validator.
 
 ## The measurement problem
 
@@ -106,12 +107,12 @@ interface. No SC-NeuroCore latency or energy on PolarFire SoC has been measured.
 
 ## Architecture
 
-The planned fabric, processor-subsystem and host-analysis architecture, the event record format
-and the verification of the instrument itself are described in
+The instrument architecture, event record format and verification plan are described in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The repository boundary is fixed by
 [`docs/adr/0001-repository-boundary.md`](docs/adr/0001-repository-boundary.md), the measurement
 procedure and its stated limits by [`docs/MEASUREMENT_PROTOCOL.md`](docs/MEASUREMENT_PROTOCOL.md),
-and the threat model by [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+and the threat model by [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md). The implemented simulation
+and host file contract is in [`docs/HOST_ANALYSIS.md`](docs/HOST_ANALYSIS.md).
 
 The [system block diagram](docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf)
 illustrates the proposed PolarFire SoC Icicle Kit design for the 2026 contest.
@@ -119,7 +120,8 @@ illustrates the proposed PolarFire SoC Icicle Kit design for the 2026 contest.
 The planned contracts are machine-readable in [`measurement-domain.json`](measurement-domain.json)
 (schema [`measurement-domain.schema.json`](measurement-domain.schema.json)): timebase, event
 record layout, event profiles and the intervals derived from them, event buffer sizing, controller
-placements and the run plan. The validator checks their internal consistency, for example that
+placements and the run plan. Each run manifest binds a snapshot of this file by SHA-256. The
+validator checks their internal consistency, for example that
 the event buffer outlasts the slowest permitted drain at the highest sample rate and that the
 timebase counter cannot wrap during a repeat.
 
@@ -128,12 +130,14 @@ timebase counter cannot wrap during a repeat.
 | Path | Content |
 |---|---|
 | `measurement-domain.json`, `measurement-domain.schema.json` | identity, boundary and planned measurement contracts |
+| `run-manifest.schema.json` | versioned, provenance-bound run input contract |
 | `capability-inventory.json` | generated public inventory, empty at `architecture_only` |
 | `development-dependency-licences.json` | reviewed licence of every pinned development tool |
 | `docs/` | architecture, measurement protocol, threat model, decision records |
 | `papers/` | manuscript collection; no manuscript exists yet |
-| `tools/` | validators, inventory generator, repository guards and the preflight runner |
-| `tests/` | tests of every tool through its command-line and file surfaces |
+| `rtl/` | synthesizable timestamp-record capture and numeric event codes |
+| `tools/` | host analysis, validators, inventory generator, repository guards and preflight runner |
+| `tests/` | command-line, file and RTL-simulation tests |
 | `.github/` | workflow definitions, workflow inventory and contribution metadata |
 
 ## Validation

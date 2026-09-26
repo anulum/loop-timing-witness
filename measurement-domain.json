@@ -3,6 +3,20 @@
   "capabilities": [],
   "claims": [],
   "design_contracts": {
+    "event_codes": {
+      "ACT_WRITE": 3,
+      "COMPUTE_DONE": 10,
+      "COMPUTE_START": 9,
+      "DEADLINE": 4,
+      "FAULT_DETECTED": 7,
+      "FAULT_INJECTED": 6,
+      "INPUT_WRITE": 8,
+      "INTERRUPT_ENTRY": 12,
+      "OUTPUT_READ": 11,
+      "SAFE_STATE": 5,
+      "SAMPLE_READ": 2,
+      "SAMPLE_READY": 1
+    },
     "controller_placements": [
       {
         "description": "User-space task on the U54 application cores under Linux, memory-mapped register access and interrupt delivery through UIO, SCHED_FIFO with CPU affinity.",
@@ -80,7 +94,8 @@
         ],
         "occasional_events": [
           "SAFE_STATE",
-          "FAULT_INJECTED"
+          "FAULT_INJECTED",
+          "FAULT_DETECTED"
         ],
         "periodic_events": [
           "SAMPLE_READY",
@@ -126,6 +141,12 @@
       ],
       "record_size_bytes": 16
     },
+    "power_rails": [
+      "VDD",
+      "VDD25",
+      "VDDA25",
+      "VDDA"
+    ],
     "run_plan": {
       "cycles_per_repeat": 1000000,
       "repeats": 5

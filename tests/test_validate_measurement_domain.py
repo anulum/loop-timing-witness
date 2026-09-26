@@ -327,15 +327,14 @@ def test_record_fields_must_be_contiguous_and_fill_the_record(tmp_path: Path) ->
 
 
 def test_event_type_width_must_hold_every_event(tmp_path: Path) -> None:
-    """More than 256 event names cannot be encoded in a one-byte event type."""
+    """The schema refuses an event code that cannot fit the u8 wire field."""
 
     def mutate(manifest: dict[str, Any]) -> None:
-        profile = contracts(manifest)["event_profiles"]["COMPUTE"]
-        profile["occasional_events"] = [f"SPARE_{index}" for index in range(250)]
+        contracts(manifest)["event_codes"]["SAMPLE_READY"] = 256
 
-    assert findings_after(tmp_path, mutate) == [
-        "event_record.fields.event_type: 261 event types do not fit its width"
-    ]
+    assert any(
+        "greater than the maximum of 255" in finding for finding in findings_after(tmp_path, mutate)
+    )
 
 
 def test_cycle_width_must_hold_the_run_plan(tmp_path: Path) -> None:
@@ -408,6 +407,35 @@ def test_event_names_must_be_unique_across_profiles(tmp_path: Path) -> None:
     assert findings_after(tmp_path, mutate) == [
         "event_profiles: event names must be unique across profiles: ['DEADLINE']"
     ]
+
+
+def test_event_codes_must_cover_declared_names(tmp_path: Path) -> None:
+    """A newly declared strobe cannot arrive without a numeric wire code."""
+
+    def mutate(manifest: dict[str, Any]) -> None:
+        contracts(manifest)["event_codes"].pop("SAMPLE_READY")
+
+    assert findings_after(tmp_path, mutate) == [
+        "event_codes: names must match the declared profile events exactly"
+    ]
+
+
+def test_event_codes_must_be_unique(tmp_path: Path) -> None:
+    """Two names cannot decode from the same binary event byte."""
+
+    def mutate(manifest: dict[str, Any]) -> None:
+        contracts(manifest)["event_codes"]["SAMPLE_READ"] = 1
+
+    assert findings_after(tmp_path, mutate) == ["event_codes: numeric codes must be unique"]
+
+
+def test_power_rails_must_be_unique(tmp_path: Path) -> None:
+    """A duplicated rail cannot make a cumulative-energy window complete."""
+
+    def mutate(manifest: dict[str, Any]) -> None:
+        contracts(manifest)["power_rails"][1] = "VDD"
+
+    assert any("has non-unique elements" in finding for finding in findings_after(tmp_path, mutate))
 
 
 def test_interval_rules(tmp_path: Path) -> None:

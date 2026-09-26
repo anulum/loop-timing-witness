@@ -19,6 +19,7 @@ path = [
     "docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf",
     "measurement-domain.json",
     "measurement-domain.schema.json",
+    "run-manifest.schema.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = [

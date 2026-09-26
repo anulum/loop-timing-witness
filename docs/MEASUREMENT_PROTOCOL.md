@@ -10,9 +10,12 @@ Loop Timing Witness — measurement protocol
 
 # Measurement protocol
 
-This document fixes how measurements will be taken and reported. It contains no results: none
-exist. The numeric parameters that the validator can check live in `measurement-domain.json`
-under `design_contracts`; a change to either place must change both.
+This document fixes how measurements will be taken and reported. It contains no board results:
+none exist. The numeric parameters that the validator can check live in
+`measurement-domain.json` under `design_contracts`; a change to either place must change both.
+The implemented host file formats and calculations are specified in
+[`HOST_ANALYSIS.md`](HOST_ANALYSIS.md), with the input structure in
+[`run-manifest.schema.json`](../run-manifest.schema.json).
 
 ## Configuration space
 
@@ -33,9 +36,17 @@ One configuration is one combination of:
 4. A fixed warm-up period is discarded; its length is recorded in the run manifest.
 5. Each repeat runs 1 000 000 control cycles (about 17 minutes at 1 kHz).
 6. Each configuration is repeated five times.
-7. Every repeat writes its event file, power file and run manifest with SHA-256 of each file, the
-   bitstream, firmware, operating-system images and controller binary, and the tool versions.
+7. Every repeat writes its event file, power file, measurement-domain snapshot and run manifest
+   with SHA-256 of each referenced file, the bitstream, firmware, operating-system images and
+   controller binary, and the tool versions.
 8. A repeat with any event-buffer overflow is invalid and is reported as invalid, not dropped.
+
+The current RTL testbench can produce event files for host-tool verification. Those runs declare
+`source.kind: rtl_simulation` and remain simulation evidence even when the input series are
+internally valid. A board run declares the source, all input and build artefact paths and their
+SHA-256 values; the host checks the referenced bytes. The board acceptance flags in the run
+manifest are operator declarations, not a replacement for the separate same-bitstream acceptance
+records required below.
 
 ## Reporting
 
@@ -49,6 +60,9 @@ One configuration is one combination of:
   for the four rails together.
 - Fault runs report detection latency and time to safe state per injected fault.
 - The instrument floor from the bus-offset calibration is reported with every latency table.
+- The host report retains the observation duration in timebase ticks and the contributing sample
+  count for each metric. Missing tracking or power input is reported as unavailable, not filled
+  with a simulation substitute.
 
 ## Stated limits
 

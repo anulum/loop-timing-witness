@@ -23,8 +23,8 @@ must then hold:
 - timebase: the resolution equals one clock period, and the counter cannot
   wrap during the longest planned run;
 - event profiles: event names are unique across profiles, every interval
-  joins two distinct events of its own profile, and sample-rate bounds are
-  ordered;
+  joins two distinct events of its own profile, event codes cover each event
+  exactly once, and sample-rate bounds are ordered;
 - event buffer: at the highest sample rate the buffer takes longer to fill
   than the slowest permitted drain interval.
 
@@ -226,11 +226,6 @@ def _record_findings(contracts: dict[str, Any]) -> list[str]:
             f"{record['record_size_bytes']}"
         )
     widths = {item["name"]: TYPE_WIDTH_BYTES[item["type"]] for item in fields}
-    event_count = len(set(_all_event_names(contracts["event_profiles"])))
-    if "event_type" in widths and event_count > 2 ** (8 * widths["event_type"]):
-        findings.append(
-            f"event_record.fields.event_type: {event_count} event types do not fit its width"
-        )
     cycles = contracts["run_plan"]["cycles_per_repeat"]
     if "cycle" in widths and cycles > 2 ** (8 * widths["cycle"]):
         findings.append(
@@ -287,6 +282,11 @@ def _profile_findings(contracts: dict[str, Any]) -> list[str]:
     profiles = contracts["event_profiles"]
     findings = []
     all_names = _all_event_names(profiles)
+    event_codes = contracts["event_codes"]
+    if set(event_codes) != set(all_names):
+        findings.append("event_codes: names must match the declared profile events exactly")
+    if len(set(event_codes.values())) != len(event_codes):
+        findings.append("event_codes: numeric codes must be unique")
     duplicated = sorted({name for name in all_names if all_names.count(name) > 1})
     if duplicated:
         findings.append(f"event_profiles: event names must be unique across profiles: {duplicated}")

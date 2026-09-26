@@ -10,8 +10,8 @@ Loop Timing Witness — contributing
 
 # Contributing
 
-The repository has no public hosting yet. Contributions are coordinated directly with the owner
-at protoscience@anulum.li; the process below applies to every change, including the owner's.
+Contributions are coordinated directly with the owner at protoscience@anulum.li; the process
+below applies to every change, including the owner's.
 
 ## Ground rules
 

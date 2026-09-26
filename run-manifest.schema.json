@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.anulum.li/schemas/loop-timing-witness/run-manifest-v1.json",
+  "title": "Loop Timing Witness run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "loop-timing-witness.run-manifest.v1"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
+    },
+    "started_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["rtl_simulation", "board"]
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/file"}
+        }
+      },
+      "required": ["kind", "tool", "version", "files"]
+    },
+    "measurement_domain": {"$ref": "#/$defs/file"},
+    "profile": {
+      "enum": ["CONTROL", "COMPUTE"]
+    },
+    "placement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sample_period_ticks": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "cycle_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warmup_cycles": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "load_case": {
+      "type": "string",
+      "minLength": 1
+    },
+    "controller": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "coefficients": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      },
+      "required": ["name", "coefficients"]
+    },
+    "plant": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fixed_point_format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tracking_unit": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["name", "fixed_point_format", "tracking_unit"]
+    },
+    "fault_schedule": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cycle": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "kind": {
+            "enum": ["drop", "delay", "freeze", "overload_request"]
+          },
+          "delay_periods": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["cycle", "kind", "delay_periods"]
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "$ref": "#/$defs/file"
+        },
+        "tracking": {
+          "anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]
+        },
+        "power": {
+          "anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]
+        }
+      },
+      "required": ["events", "tracking", "power"]
+    },
+    "hardware_artifacts": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "bitstream": {"$ref": "#/$defs/file"},
+        "firmware": {"$ref": "#/$defs/file"},
+        "linux_image": {"$ref": "#/$defs/file"},
+        "controller_binary": {"$ref": "#/$defs/file"},
+        "libero_version": {"type": "string", "minLength": 1},
+        "toolchain_version": {"type": "string", "minLength": 1}
+      },
+      "required": ["bitstream", "firmware", "linux_image", "controller_binary", "libero_version", "toolchain_version"]
+    },
+    "instrument": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fifo_overflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "floor_ticks": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "known_period_pass": {"type": "boolean"},
+        "injected_delay_pass": {"type": "boolean"},
+        "overflow_pass": {"type": "boolean"},
+        "bus_offset_pass": {"type": "boolean"}
+      },
+      "required": ["fifo_overflow_count", "floor_ticks", "known_period_pass", "injected_delay_pass", "overflow_pass", "bus_offset_pass"]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "room_temperature_c": {
+          "type": ["number", "null"]
+        },
+        "board_supply_only": {
+          "type": "boolean"
+        }
+      },
+      "required": ["room_temperature_c", "board_supply_only"]
+    },
+    "operator_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema", "run_id", "started_utc", "source", "measurement_domain", "profile", "placement",
+    "sample_period_ticks", "cycle_count", "warmup_cycles", "load_case",
+    "controller", "plant", "fault_schedule", "files", "hardware_artifacts",
+    "instrument", "environment", "operator_notes"
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": ["path", "sha256"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"source": {"properties": {"kind": {"const": "board"}}}}
+      },
+      "then": {
+        "properties": {
+          "hardware_artifacts": {"type": "object"},
+          "files": {"properties": {"power": {"type": "object"}}},
+          "instrument": {
+            "properties": {
+              "floor_ticks": {"type": "integer"},
+              "known_period_pass": {"const": true},
+              "injected_delay_pass": {"const": true},
+              "overflow_pass": {"const": true},
+              "bus_offset_pass": {"const": true}
+            }
+          },
+          "environment": {
+            "properties": {"room_temperature_c": {"type": "number"}, "board_supply_only": {"const": true}}
+          }
+        }
+      },
+      "else": {
+        "properties": {"hardware_artifacts": {"type": "null"}}
+      }
+    },
+    {
+      "if": {"properties": {"profile": {"const": "CONTROL"}}},
+      "then": {
+        "properties": {
+          "controller": {"type": "object"},
+          "plant": {"type": "object"},
+          "sample_period_ticks": {"type": "integer"}
+        }
+      },
+      "else": {
+        "properties": {
+          "controller": {"type": "null"},
+          "plant": {"type": "null"},
+          "sample_period_ticks": {"type": "null"},
+          "files": {"properties": {"tracking": {"type": "null"}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {"const": "CONTROL"},
+          "source": {"properties": {"kind": {"const": "board"}}}
+        }
+      },
+      "then": {"properties": {"files": {"properties": {"tracking": {"type": "object"}}}}}
+    }
+  ]
+}

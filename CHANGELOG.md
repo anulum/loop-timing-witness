@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Versioned run manifest and host analysis for hash-bound RTL-simulation event streams,
+  measurement-domain snapshots, tracking and rail-energy series; deterministic JSON, CSV and SVG
+  reports keep simulation provenance visible.
+- Synthesizable timestamp-record capture and a CONTROL/COMPUTE Icarus testbench used by the
+  host-tool tests. Board instrument acceptance and measured results remain pending.
 - Measurement-domain manifest and JSON Schema with the planned timebase, event record, event
   profiles and derived intervals, event buffer, controller placements and run plan; validator
   for repeated keys, schema, cross-field consistency and registry identity.

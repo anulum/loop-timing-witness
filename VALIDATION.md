@@ -10,15 +10,18 @@ Loop Timing Witness — validation
 
 # Validation
 
-Every gate that exists in this repository, with its exact scope. No instrument exists, so no
-measurement is validated; these gates validate the repository infrastructure, the internal
-consistency of the planned measurement contracts and the truthfulness of the
-`architecture_only` state.
+Every gate that exists in this repository, with its exact scope. No board instrument exists, so no
+board measurement is validated; these gates validate repository infrastructure, the internal
+consistency of the measurement contracts, the RTL-simulation-to-host-analysis path and the
+truthfulness of the `architecture_only` state.
 
 ## Environment
 
 - Python 3.13 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
+- Icarus Verilog (`iverilog` and `vvp`) to compile the synthesizable event capture module and
+  produce binary event files consumed by the host CLI tests. A missing simulator fails those
+  tests; simulation is not evidence of board acceptance.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
   preflight runner reads each binary's recorded module version and checksum with
   `go version -m` and refuses any other build.
@@ -37,7 +40,7 @@ is missing; `--only NAME` runs one gate and `--list` prints the plan.
 | `ruff-check` | `ruff check .` | every Python file; all rule groups enabled, exclusions listed with reasons in `pyproject.toml` |
 | `ruff-format` | `ruff format --check .` | every Python file |
 | `mypy` | `mypy` | `tools/`, `tests/` and `conftest.py` in strict mode |
-| `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `tools/`, including subprocess runs of every tool's command-line entry point |
+| `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `tools/`, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
 | `measurement-domain` | `python tools/validate_measurement_domain.py` | repeated-key rejection, JSON Schema, cross-field rules, and — where the canonical project registry is present — group and project identity |
 | `capability-inventory` | `python tools/generate_capability_inventory.py --check` | committed inventory byte-identical to a fresh generation from a valid manifest |
 | `provenance-headers` | `python tools/check_provenance_headers.py` | seven-line provenance header in every publishable file with a comment syntax; Markdown header inside an HTML comment with rendered content after it |
@@ -71,8 +74,9 @@ Upstream hook repositories are pinned to verified commit objects.
 
 ## Workflow definitions
 
-The definitions exist in the repository; none has run on a hosted platform, and a workflow that
-has not run is no evidence. Every action is pinned to a verified commit object.
+The definitions have run on a hosted platform. This table describes their intended checks, not a
+current success verdict: a workflow that has not run on the exact assessed commit is no evidence.
+Every action is pinned to a verified commit object.
 
 | Workflow | Purpose | Category |
 |---|---|---|

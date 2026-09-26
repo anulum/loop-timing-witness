@@ -15,6 +15,7 @@ has exactly one rule:
 - hash-comment files (Python, TOML, YAML, requirements, citation metadata,
   Makefile and Git/editor configuration) start with the seven header lines,
   each prefixed by ``# ``; Python files may carry a shebang line first;
+- SystemVerilog files start with the same seven lines prefixed by ``// ``;
 - Markdown files start with an HTML comment that holds the seven lines, so the
   rendered page starts with content and never shows a code-style header;
 - JSON, PDF and licence files cannot carry the text header and are exempt; their
@@ -50,6 +51,7 @@ HASH_COMMENT_SUFFIXES: Final = frozenset({".cff", ".in", ".py", ".toml", ".txt",
 HASH_COMMENT_NAMES: Final = frozenset(
     {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile"}
 )
+SLASH_COMMENT_SUFFIXES: Final = frozenset({".sv", ".svh"})
 EXEMPT_SUFFIXES: Final = frozenset({".json", ".pdf"})
 EXEMPT_PATHS: Final = frozenset({"LICENSE"})
 EXEMPT_DIRECTORIES: Final = frozenset({"LICENSES"})
@@ -76,8 +78,8 @@ def _title_finding(relative: str, line: str) -> str | None:
     return None
 
 
-def _hash_comment_finding(relative: str, lines: list[str]) -> str | None:
-    """Check a hash-comment header.
+def _line_comment_finding(relative: str, lines: list[str], marker: str) -> str | None:
+    """Check a hash- or slash-comment provenance header.
 
     Parameters
     ----------
@@ -85,6 +87,8 @@ def _hash_comment_finding(relative: str, lines: list[str]) -> str | None:
         File path for the finding.
     lines
         File lines.
+    marker
+        ``#`` or ``//``.
 
     Returns
     -------
@@ -92,12 +96,14 @@ def _hash_comment_finding(relative: str, lines: list[str]) -> str | None:
         A finding, or ``None`` when the header is complete.
     """
     body = (
-        lines[1:] if relative.endswith(".py") and lines[:1] and lines[0].startswith("#!") else lines
+        lines[1:]
+        if marker == "#" and relative.endswith(".py") and lines[:1] and lines[0].startswith("#!")
+        else lines
     )
-    expected = [f"# {text}" for text in HEADER_LINES]
+    expected = [f"{marker} {text}" for text in HEADER_LINES]
     if body[: len(expected)] != expected or len(body) <= len(expected):
-        return f"{relative}: must start with the seven-line '# ' provenance header"
-    return _title_finding(relative, body[len(expected)].removeprefix("# "))
+        return f"{relative}: must start with the seven-line '{marker} ' provenance header"
+    return _title_finding(relative, body[len(expected)].removeprefix(f"{marker} "))
 
 
 def _markdown_finding(relative: str, lines: list[str]) -> str | None:
@@ -162,7 +168,9 @@ def file_finding(root: Path, relative: str) -> str | None:
     if path.suffix == ".md":
         return _markdown_finding(relative, lines)
     if path.suffix in HASH_COMMENT_SUFFIXES or path.name in HASH_COMMENT_NAMES:
-        return _hash_comment_finding(relative, lines)
+        return _line_comment_finding(relative, lines, "#")
+    if path.suffix in SLASH_COMMENT_SUFFIXES:
+        return _line_comment_finding(relative, lines, "//")
     return f"{relative}: no provenance rule for this file type"
 
 

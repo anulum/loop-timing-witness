@@ -8,6 +8,6 @@
   "schema_version": "1.0.0",
   "source": {
     "manifest_path": "measurement-domain.json",
-    "manifest_sha256": "a7d67eccfa91ad911e3c29e64bc306dabc200f086e8f5b443c2114f024200ff4"
+    "manifest_sha256": "7f57094bfa9e7f45933cfd16514d159024ca04d37d44373bc115e0fa7961b553"
   }
 }

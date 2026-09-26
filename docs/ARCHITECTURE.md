@@ -12,10 +12,10 @@ Loop Timing Witness — architecture
 
 ## Evidence state
 
-The full board instrument remains planned and no measured result exists. A synthesizable
-timestamp-record capture module, numeric event-code package, run-manifest schema and host
-analysis command now exist; a simulation testbench writes their binary event file. The module
-does not yet include the planned dual-clock buffer, plant, monitor or processor software. The
+The full board instrument remains planned and no measured result exists. Synthesizable
+timestamp capture, a dual-clock record buffer, numeric event codes, a run-manifest schema and
+host analysis exist. Simulation drains binary records into the host CLI. The plant, monitor,
+peripheral event arbitration and processor software remain planned. The
 machine-readable design contract is `measurement-domain.json`, validated by
 `tools/validate_measurement_domain.py`; changes to that contract also update its schema, this
 document and the measurement protocol.
@@ -93,17 +93,24 @@ register and the cycle counter. It raises the `CONTROL` profile strobes:
 
 ### Event witness and buffer
 
-`rtl/event_record_capture.sv` currently captures an event code and cycle number with its own
-free-running counter into the 16-byte record layout below. Icarus simulation writes those
-records to a binary file and the host CLI analyses that file. Event codes are declared in
-`measurement-domain.json` and `rtl/event_codes_pkg.sv`. The buffer and board interface below
-remain planned.
+`rtl/event_witness.sv` connects `rtl/event_record_capture.sv` to a Gray-pointer dual-clock
+FIFO and separate reset-release synchronisers. It accepts one event-code/cycle tuple per
+capture-clock edge without stalling the measured source. The original timestamp is retained
+through the capture pipeline and drain. Event codes are declared in `measurement-domain.json`
+and `rtl/event_codes_pkg.sv`. Public ports and reset/overflow behaviour are specified in
+[`FABRIC_WITNESS.md`](FABRIC_WITNESS.md). Peripheral arbitration and the AXI board interface
+remain planned; simultaneous source strobes need preservation before this serial event input.
 
-On each strobe the witness captures event type, cycle number and counter value into a dual-clock
-buffer of 16 384 records in fabric RAM. Linux drains the buffer at least 20 times per second. At
-20 kHz with four periodic events per cycle the buffer fills in about 205 ms, longer than the 50 ms
-slowest drain interval; the validator enforces this inequality from the manifest. Overflow is
-counted, flagged and marks the run invalid; it is never silent.
+The default buffer holds 16 384 records. A full buffer drops the newest record, pulses
+`event_dropped`, latches `overflowed` and increments a saturating 32-bit count. Reset starts a
+new run and flushes both clock domains; there is no independent-domain reset. Capture-domain
+status is not a coherent processor snapshot. A nonzero overflow count invalidates the host run.
+
+Linux is planned to drain at least 20 times per second. At 20 kHz with four periodic events per
+cycle the buffer fills in about 205 ms, longer than the 50 ms slowest drain interval; the
+validator checks that inequality and the declared Gray-pointer capacity. Drain frequency alone
+cannot establish sustained throughput or prevent loss during software stalls; board RAM sizing,
+drain bandwidth and physical CDC constraints still require qualification.
 
 Derived intervals per cycle:
 
@@ -207,7 +214,8 @@ reports tied to sample counts and observation duration. Inputs and limits are sp
 | `measurement-domain.schema.json` | structural schema (JSON Schema 2020-12) |
 | `run-manifest.schema.json` | versioned schema for a hash-bound run package |
 | `capability-inventory.json` | generated from the manifest, embeds its SHA-256, empty at `architecture_only` |
-| `rtl/event_record_capture.sv`, `rtl/event_codes_pkg.sv` | timestamp capture and event codes exercised in simulation |
+| `rtl/` | timestamp capture, dual-clock buffer, reset release and event codes exercised in simulation |
+| `docs/FABRIC_WITNESS.md` | RTL port, reset, overflow and CDC contracts |
 | `docs/HOST_ANALYSIS.md` | host command, file formats, calculations and report limits |
 | `docs/MEASUREMENT_PROTOCOL.md` | measurement procedure and stated limits |
 | `docs/THREAT_MODEL.md` | assets, trust boundaries, misuse paths, residual risks |

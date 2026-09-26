@@ -47,7 +47,9 @@ HEADER_LINES: Final = (
 )
 # REUSE-IgnoreEnd
 TITLE_PREFIX: Final = "Loop Timing Witness — "
-HASH_COMMENT_SUFFIXES: Final = frozenset({".cff", ".in", ".py", ".toml", ".txt", ".yaml", ".yml"})
+HASH_COMMENT_SUFFIXES: Final = frozenset(
+    {".cff", ".in", ".py", ".toml", ".txt", ".yaml", ".yml", ".ys"}
+)
 HASH_COMMENT_NAMES: Final = frozenset(
     {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile"}
 )

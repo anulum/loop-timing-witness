@@ -219,3 +219,62 @@ def make_rtl_run(tmp_path: Path) -> MakeRtlRun:
         return run, manifest
 
     return make
+
+
+RunRtl = Callable[[str, dict[str, int], list[str]], subprocess.CompletedProcess[str]]
+
+
+@pytest.fixture
+def run_rtl(tmp_path: Path) -> RunRtl:
+    """Compile and execute a public-port RTL testbench with a bounded lifetime.
+
+    Parameters
+    ----------
+    tmp_path
+        Pytest scratch directory for compiled simulation files.
+
+    Returns
+    -------
+    RunRtl
+        Runner taking a testbench name, integer parameter overrides and vvp
+        arguments. Compilation failure propagates; simulation output and exit
+        status are returned for behavioural assertions.
+    """
+
+    def run(
+        top: str, parameters: dict[str, int], arguments: list[str]
+    ) -> subprocess.CompletedProcess[str]:
+        simulation = tmp_path / f"{top}.vvp"
+        sources = [
+            "rtl/event_codes_pkg.sv",
+            "rtl/clock_reset_release.sv",
+            "rtl/event_record_capture.sv",
+            "rtl/event_record_fifo.sv",
+            "rtl/event_witness.sv",
+            f"tests/rtl/{top}.sv",
+        ]
+        subprocess.run(
+            [
+                "iverilog",
+                "-g2012",
+                "-s",
+                top,
+                "-o",
+                str(simulation),
+                *(f"-P{top}.{name}={value}" for name, value in parameters.items()),
+                *(str(REPOSITORY_ROOT / source) for source in sources),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return subprocess.run(
+            ["vvp", str(simulation), *arguments],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    return run

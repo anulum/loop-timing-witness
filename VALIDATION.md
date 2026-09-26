@@ -20,8 +20,8 @@ truthfulness of the `architecture_only` state.
 - Python 3.13 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
 - Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu noble package `12.0-2build2`, to compile the
-  synthesizable event capture module and produce binary event files consumed by the host CLI
-  tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
+  synthesizable capture and buffered witness modules and produce binary event files consumed by
+  the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
   is not evidence of board acceptance.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
@@ -58,6 +58,22 @@ is missing; `--only NAME` runs one gate and `--list` prints the plan.
 Dependency vulnerabilities are checked with
 `pip-audit --require-hashes --disable-pip -r requirements-dev.txt` (`make security`); it needs
 network access to the vulnerability database and is therefore not part of the offline preflight.
+
+## Fabric simulation and synthesis
+
+Dedicated RTL tests are `tests/test_clock_reset_release.py`, `tests/test_event_record_fifo.py`
+and `tests/test_event_witness.py`. They compile the actual modules with Icarus and check public
+ports with scoreboards, including the default 16,384-record capacity, clock ratios, queued-data
+reset, wrap, overflow and saturation. Buffered binary drain output reaches the host report CLI.
+The CI test workflow runs these with the same pinned simulator as the capture tests.
+
+Local RTL review also runs Verilator 5.020 strict `--lint-only --Wall`, and Yosys 0.33 preparation,
+memory inference checks and post-optimisation equivalence at a four-record configuration. The
+Yosys proof normalises asynchronous resets with `async2sync` before synthesis; it does not
+qualify metastability, Gray-bus physical timing or a board bitstream. See
+[`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md) for ports and remaining board gates. Python
+coverage measures tools, not SystemVerilog; the simulations do not provide a numeric RTL
+statement/branch coverage verdict.
 
 ## Hooks
 

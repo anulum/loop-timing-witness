@@ -33,7 +33,11 @@
     ],
     "event_fifo": {
       "depth_records": 16384,
-      "minimum_drain_rate_hz": 20
+      "implementation": "gray_pointer_dual_clock",
+      "minimum_drain_rate_hz": 20,
+      "overflow_counter_bits": 32,
+      "overflow_policy": "drop_newest",
+      "reset_policy": "common_async_assert_local_sync_release"
     },
     "event_profiles": {
       "COMPUTE": {

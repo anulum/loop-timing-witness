@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — prepared-to-synthesised witness equivalence
+
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_capture.sv rtl/event_record_fifo.sv rtl/event_witness.sv
+hierarchy -top event_witness -chparam ADDRESS_BITS 2
+proc
+flatten
+memory_map
+opt
+async2sync
+opt
+design -save gold
+synth -top event_witness
+rename event_witness gate
+design -stash gate
+design -copy-from gold -as gold event_witness
+design -copy-from gate -as gate gate
+equiv_make gold gate equiv
+hierarchy -top equiv
+equiv_simple
+equiv_induct -seq 8
+equiv_status -assert

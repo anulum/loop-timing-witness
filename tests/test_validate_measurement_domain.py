@@ -391,6 +391,7 @@ def test_control_profile_needs_sample_rate_bounds(tmp_path: Path) -> None:
 
     def mutate(manifest: dict[str, Any]) -> None:
         contracts(manifest)["event_profiles"]["CONTROL"]["sample_rate_hz"] = None
+        contracts(manifest)["event_fifo"].pop("implementation")
         contracts(manifest)["event_fifo"]["depth_records"] = 1
 
     assert findings_after(tmp_path, mutate) == [
@@ -479,6 +480,7 @@ def test_buffer_must_outlast_the_slowest_drain(tmp_path: Path) -> None:
     """A buffer of 4000 records fills in exactly 50 ms at 20 kHz and four events, which fails."""
 
     def mutate(manifest: dict[str, Any]) -> None:
+        contracts(manifest)["event_fifo"].pop("implementation")
         contracts(manifest)["event_fifo"]["depth_records"] = 4000
 
     assert findings_after(tmp_path, mutate) == [
@@ -490,6 +492,7 @@ def test_buffer_one_record_above_the_limit_passes(tmp_path: Path) -> None:
     """The comparison is strict and exact: 4001 records outlast a 50 ms drain."""
 
     def mutate(manifest: dict[str, Any]) -> None:
+        contracts(manifest)["event_fifo"].pop("implementation")
         contracts(manifest)["event_fifo"]["depth_records"] = 4001
 
     assert findings_after(tmp_path, mutate) == []
@@ -613,3 +616,44 @@ def test_defaults_point_at_the_committed_files() -> None:
     """The command-line defaults are the repository's own manifest and schema."""
     assert DEFAULT_MANIFEST == REPOSITORY_ROOT / "measurement-domain.json"
     assert DEFAULT_SCHEMA == REPOSITORY_ROOT / "measurement-domain.schema.json"
+
+
+@pytest.mark.parametrize("depth", [1, 16385, 32768, 8193])
+def test_gray_pointer_capacity_rejects_unsupported_depth(tmp_path: Path, depth: int) -> None:
+    """A declared RTL FIFO cannot claim a depth its pointer implementation lacks.
+
+    Parameters
+    ----------
+    tmp_path
+        Manifest test directory.
+    depth
+        Unsupported capacity, including bounds and non-power-of-two values.
+    """
+
+    def mutate(manifest: dict[str, Any]) -> None:
+        contracts(manifest)["event_fifo"]["depth_records"] = depth
+
+    assert "event_fifo: Gray-pointer depth must be a power of two in [2,16384]" in findings_after(
+        tmp_path, mutate
+    )
+
+
+@pytest.mark.parametrize("field", ["overflow_policy", "overflow_counter_bits", "reset_policy"])
+def test_declared_fifo_requires_its_policies(tmp_path: Path, field: str) -> None:
+    """Reject an implementation declaration without its loss and reset contract.
+
+    Parameters
+    ----------
+    tmp_path
+        Manifest test directory.
+    field
+        Policy field removed from the declaration.
+    """
+
+    def mutate(manifest: dict[str, Any]) -> None:
+        del contracts(manifest)["event_fifo"][field]
+
+    findings = findings_after(tmp_path, mutate)
+    assert len(findings) == 1
+    assert field in findings[0]
+    assert "dependency of 'implementation'" in findings[0]

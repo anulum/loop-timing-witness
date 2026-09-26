@@ -92,6 +92,7 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
             "config.yml": hash_header() + "key: value\n",
             "rtl/witness.sv": slash_header() + "module witness; endmodule\n",
             "rtl/codes.svh": slash_header() + "`define EVENT 1\n",
+            "rtl/verify.ys": hash_header() + "check -assert\n",
             "README.md": markdown_header() + "\n# Title\n",
             "data.json": "{}\n",
             "LICENSE": "licence text\n",
@@ -104,6 +105,11 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
 @pytest.mark.parametrize(
     ("relative", "content", "expected"),
     [
+        (
+            "rtl/verify.ys",
+            "check -assert\n",
+            "rtl/verify.ys: must start with the seven-line '# ' provenance header",
+        ),
         (
             "tool.py",
             "print('x')\n",

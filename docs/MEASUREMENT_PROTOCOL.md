@@ -41,7 +41,14 @@ One configuration is one combination of:
    controller binary, and the tool versions.
 8. A repeat with any event-buffer overflow is invalid and is reported as invalid, not dropped.
 
-The current RTL testbench can produce event files for host-tool verification. Those runs declare
+The buffered RTL witness produces event files for host-tool verification through its actual
+drain stream, including known-period and overflow simulations. Its drop-newest buffer retains
+accepted records, latches overflow and counts drops with a saturating 32-bit counter. The count
+is a lower bound after saturation, and `overflowed` remains set until common run reset. Record
+status before reset: reset flushes both domains and clears all run counters. A processor logger
+must implement a coherent capture-domain status snapshot before using it in a manifest; raw CDC
+sampling is insufficient. RTL ports and reset timing are specified in
+[`FABRIC_WITNESS.md`](FABRIC_WITNESS.md). Those runs declare
 `source.kind: rtl_simulation` and remain simulation evidence even when the input series are
 internally valid. A board run declares the source, all input and build artefact paths and their
 SHA-256 values; the host checks the referenced bytes. The board acceptance flags in the run

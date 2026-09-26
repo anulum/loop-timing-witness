@@ -57,6 +57,8 @@ TYPE_WIDTH_BYTES: Final = {"u8": 1, "u16": 2, "u32": 4, "u64": 8}
 REQUIRED_RECORD_FIELDS: Final = ("cycle", "event_type", "timebase_ticks")
 NANOSECONDS_PER_SECOND: Final = 1_000_000_000
 PERIODIC_PROFILE: Final = "CONTROL"
+MIN_GRAY_FIFO_DEPTH: Final = 2
+MAX_GRAY_FIFO_DEPTH: Final = 1 << 14
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,6 +343,8 @@ def _interval_findings(profile_name: str, profile: dict[str, Any]) -> list[str]:
 def _buffer_findings(contracts: dict[str, Any]) -> list[str]:
     """Check that the event buffer outlasts the slowest drain interval.
 
+    A declared Gray-pointer implementation requires a supported power-of-two
+    depth; archived contracts without that declaration retain the sizing rule.
     The buffer fills in ``depth / (maximum_rate * periodic_events)`` seconds
     at the highest sample rate; the drain interval is at most
     ``1 / minimum_drain_rate`` seconds. The comparison uses integers.
@@ -357,6 +361,11 @@ def _buffer_findings(contracts: dict[str, Any]) -> list[str]:
     """
     fifo = contracts["event_fifo"]
     findings = []
+    depth = fifo["depth_records"]
+    if fifo.get("implementation") == "gray_pointer_dual_clock" and (
+        depth < MIN_GRAY_FIFO_DEPTH or depth > MAX_GRAY_FIFO_DEPTH or depth & (depth - 1)
+    ):
+        findings.append("event_fifo: Gray-pointer depth must be a power of two in [2,16384]")
     for profile_name, profile in sorted(contracts["event_profiles"].items()):
         rate = profile["sample_rate_hz"]
         if rate is None:

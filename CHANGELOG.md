@@ -19,6 +19,9 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Dual-clock fabric event witness with Gray-pointer FIFO, common run reset, drop-newest overflow
+  accounting and real buffered RTL streams analysed by the host command.
+
 - Versioned run manifest and host analysis for hash-bound RTL-simulation event streams,
   measurement-domain snapshots, tracking and rail-energy series; deterministic JSON, CSV and SVG
   reports keep simulation provenance visible.

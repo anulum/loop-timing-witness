@@ -32,18 +32,20 @@ evidence.
   host analysis with JSON, CSV and SVG reports exercised from RTL-produced event files. This
   establishes a simulation tool path; it does not qualify a board instrument.
 
+- Fabric timebase and dual-clock event witness with known-period, overflow, saturation, reset,
+  pointer-wrap and configured-capacity simulations; the drain stream reaches the host reports.
+  Physical CDC timing, RAM mapping and board acceptance remain unqualified.
+
 ## Planned — in implementation order, without dates
 
-1. Timebase and event witness in fabric logic, with simulation tests including the known-period
-   and overflow tests.
-2. Plant emulator, deadline and safe-state monitor and fault injector, with simulation tests
+1. Plant emulator, deadline and safe-state monitor and fault injector, with simulation tests
    including the injected-delay test.
-3. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
+2. Fabric and C controllers (PID with anti-windup, discrete LQR) with bit-exact fixed-point parity
    tests.
-4. Vendor tool project generation scripts and constraints.
-5. Linux run controller, UIO access and power-monitor logger.
-6. Bare-metal controller on a dedicated application core.
-7. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
+3. Vendor tool project generation scripts and constraints.
+4. Linux run controller, UIO access and power-monitor logger.
+5. Bare-metal controller on a dedicated application core.
+6. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.
 
 ## Not planned in this repository

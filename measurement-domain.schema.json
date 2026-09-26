@@ -152,12 +152,31 @@
         },
         "event_fifo": {
           "additionalProperties": false,
+          "dependentRequired": {
+            "implementation": [
+              "overflow_policy",
+              "overflow_counter_bits",
+              "reset_policy"
+            ]
+          },
           "properties": {
             "depth_records": {
               "$ref": "#/$defs/positive_integer"
             },
+            "implementation": {
+              "const": "gray_pointer_dual_clock"
+            },
             "minimum_drain_rate_hz": {
               "$ref": "#/$defs/positive_integer"
+            },
+            "overflow_counter_bits": {
+              "const": 32
+            },
+            "overflow_policy": {
+              "const": "drop_newest"
+            },
+            "reset_policy": {
+              "const": "common_async_assert_local_sync_release"
             }
           },
           "required": [

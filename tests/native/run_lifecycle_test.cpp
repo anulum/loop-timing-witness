@@ -1,0 +1,195 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Commercial license available
+// © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+// © Code 2020–2026 Miroslav Šotek. All rights reserved.
+// ORCID: 0009-0009-3560-0851
+// Contact: www.anulum.li | protoscience@anulum.li
+// Loop Timing Witness — actual RTL lifecycle API tests
+
+#include "../../runtime/rtl/simulation.h"
+#include "../../runtime/run_control.h"
+#include <cassert>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include "output_limit.h"
+
+/** Require the actual production API to reject a real transport state precisely. */
+template<class Operation> void refusal(Operation operation, const char *message) {
+    bool rejected = false;
+    try { operation(); }
+    catch (const std::runtime_error &error) {
+        rejected = true;
+        assert(std::string(error.what()) == message);
+    }
+    assert(rejected);
+}
+
+#include "configuration_api.h"
+#include "metadata_api.h"
+
+/** Exercise repeated real samples and malformed public API configuration inputs. */
+void sample_refusal(witness::Simulation &device, witness::RunConfiguration configuration,
+                    const std::string &scenario, const char *events, const char *tracking) {
+    witness::configure_run(device, configuration);
+    witness::write_register(device, 0x38, 1);
+    assert(device.wait_interrupt(1000000));
+    const std::uint64_t low = witness::read_register(device, 0x9c);
+    const auto generation = low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
+    witness::RunOutput output(events, tracking);
+    witness_pid_state state{};
+    witness_pid_reset(&state);
+    witness::RunResult result;
+    std::uint32_t previous = 0;
+    bool observed = false;
+    const auto sample = [&] {
+        witness::control_sample(device, configuration, state, output, result, generation, previous, observed);
+    };
+    if (scenario == "duplicate") {
+        sample();
+        assert(result.samples == 1);
+        refusal(sample, "duplicate or out-of-order sample cycle");
+        assert(result.samples == 1);
+    } else if (scenario == "out_of_range") {
+        configuration.cycles = 0;
+        refusal(sample, "duplicate or out-of-order sample cycle");
+        assert(result.samples == 0 && !observed);
+    } else {
+        configuration.coefficients.kp = -1;
+        configuration.lqr = scenario == "invalid_lqr";
+        refusal(sample, "native controller refused validated coefficients");
+        assert(result.samples == 0);
+        assert(state.integral == 0 && state.derivative == 0 && !state.initialized);
+    }
+    output.finish();
+}
+
+/** Re-submit actual captured bytes and sample fields to the closed public output API. */
+void closed_output(witness::RunOutput &output, const char *events, const char *tracking) {
+    refusal([&] { output.finish(); }, "run output is closed");
+    std::ifstream binary(events, std::ios::binary);
+    std::array<unsigned char, 16> bytes{};
+    binary.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    assert(binary.gcount() == 16);
+    const auto copy_path = std::string(events) + ".copy";
+    witness::ExclusiveOutput copy(copy_path.c_str(), witness::OutputFormat::binary, "cannot create event copy");
+    assert(copy.is_open());
+    assert(std::fwrite(bytes.data(), 1, bytes.size(), copy.stream("event copy is closed")) == bytes.size());
+    assert(copy.close("event copy is closed") == 0);
+    assert(!copy.is_open());
+    refusal([&] { copy.close("event copy is closed"); }, "event copy is closed");
+    refusal([&] { copy.stream("event copy is closed"); }, "event copy is closed");
+    refusal([&] {
+        witness::ExclusiveOutput existing(copy_path.c_str(), witness::OutputFormat::binary, "cannot create event copy");
+    }, "cannot create event copy");
+    std::array<std::uint32_t, 4> words{};
+    for (std::size_t word = 0; word < 4; ++word)
+        for (unsigned byte = 0; byte < 4; ++byte)
+            words[word] |= static_cast<std::uint32_t>(bytes[word * 4 + byte]) << (byte * 8);
+    refusal([&] { output.event(words); }, "event output is closed");
+    std::ifstream trace(tracking);
+    std::string line;
+    std::getline(trace, line);
+    std::getline(trace, line);
+    std::replace(line.begin(), line.end(), ',', ' ');
+    std::istringstream fields(line);
+    witness_command command{};
+    std::int32_t reference = 0, position = 0, velocity = 0;
+    unsigned clipped = 0, held = 0, submitted = 0;
+    std::uint64_t ticks = 0, generation = 0, work = 0;
+    fields >> command.cycle >> reference >> position >> velocity >> command.command >> command.integral
+           >> command.derivative >> clipped >> held >> submitted >> ticks >> generation >> work;
+    assert(fields && submitted == 1);
+    command.clipped = clipped != 0;
+    command.integral_held = held != 0;
+    refusal([&] { output.sample(reference, position, velocity, command, submitted != 0, ticks, generation, work); },
+            "tracking output is closed");
+}
+
+/** Preserve real EFBIG failures while restoring the cap before profiling completion. */
+void output_limit(witness::Simulation &device, const witness::RunConfiguration &configuration,
+                  const std::string &scenario, const char *events, const char *tracking) {
+    const rlim_t maximum = scenario == "header_limit" ? 32 : scenario == "finish_limit" ? 192 : 512;
+    const char *message = scenario == "header_limit" ? "cannot write tracking header" :
+        scenario == "event_limit" ? "cannot write event record" :
+        scenario == "sample_limit" ? "cannot write tracking sample" : "cannot finish run output";
+    ScopedOutputLimit limit(maximum);
+    refusal([&] {
+        witness::RunOutput output(events, tracking);
+        if (scenario != "header_limit") witness::execute_run(device, configuration, output);
+    }, message);
+}
+
+/** Exercise lifecycle refusals and acquisition callbacks through production RTL. */
+int main(int argc, char **argv) {
+    if (argc != 5) return 1;
+    const auto configuration = witness::read_configuration(argv[2]);
+    witness::Simulation device;
+    const std::string scenario = argv[1];
+    if (scenario.compare(0, 7, "config_") == 0) {
+        configuration_refusal(device, configuration, scenario, argv[3], argv[4]);
+    } else if (scenario.compare(0, 9, "metadata_") == 0) {
+        metadata_refusal(device, configuration, scenario, argv[2], argv[3], argv[4]);
+    } else if (scenario == "read") {
+        refusal([&] { witness::read_register(device, 0xfc); }, "register read refused at 252");
+        assert(witness::read_register(device, 0x7c) == 1);
+    } else if (scenario == "write") {
+        refusal([&] { witness::write_register(device, 0x7c, 0); }, "register write refused at 124");
+        assert(witness::read_register(device, 0x7c) == 1);
+    } else if (scenario == "active" || scenario == "unread" || scenario == "recover") {
+        witness::configure_run(device, configuration);
+        witness::write_register(device, 0x38, 1);
+        if (scenario == "active") {
+            assert(!(witness::read_register(device, 0x98) & 8));
+            refusal([&] { witness::configure_run(device, configuration); }, "cannot reset an active run");
+        } else {
+            device.advance(static_cast<std::uint64_t>(configuration.period_ticks) * 10 * 3);
+            assert(witness::read_register(device, 4) & 4);
+            assert(witness::read_register(device, 0x98) & 8);
+            assert((witness::read_register(device, 0x90) & 7) != 4);
+            refusal([&] { witness::configure_run(device, configuration); }, "unread previous run records prevent reset");
+            assert(witness::read_register(device, 0x90) & 1);
+            if (scenario == "recover") {
+                witness::RunOutput output(argv[3], argv[4]);
+                witness::RunResult result;
+                while (!(witness::read_register(device, 0x90) & 8))
+                    witness::drain_available(device, output, result);
+                assert(result.records > 0);
+                output.finish();
+                witness::configure_run(device, configuration);
+                assert((witness::read_register(device, 0x98) & 7) == 7);
+                assert((witness::read_register(device, 0x90) & 7) == 4);
+            }
+        }
+    } else if (scenario == "duplicate" || scenario == "out_of_range" ||
+               scenario == "invalid_pid" || scenario == "invalid_lqr") {
+        sample_refusal(device, configuration, scenario, argv[3], argv[4]);
+    } else if (scenario == "header_limit" || scenario == "event_limit" ||
+               scenario == "sample_limit" || scenario == "finish_limit") {
+        output_limit(device, configuration, scenario, argv[3], argv[4]);
+    } else if (scenario == "hooks" || scenario == "closed" || scenario == "final_drain") {
+        witness::RunOutput output(argv[3], argv[4]);
+        unsigned starts = 0, checks = 0, finishes = 0;
+        const witness::RunHooks hooks{
+            [&] { assert(checks == 0 && finishes == 0); ++starts; },
+            [&] { assert(starts == 1 && finishes == 0); ++checks; },
+            [&] {
+                assert(starts == 1 && checks > 0);
+                assert(witness::read_register(device, 0x90) & 8);
+                ++finishes;
+            }};
+        const auto result = witness::execute_run(device, configuration, output, &hooks);
+        assert(starts == 1 && checks > 0 && finishes == 1);
+        if (scenario == "final_drain") {
+            assert(result.samples == 1 && result.records == 20);
+            assert(result.misses == 8 && result.overflow == 0 && result.safe);
+        } else {
+            assert(result.samples == configuration.cycles && result.records > 0);
+            assert(result.misses == 0 && result.overflow == 0 && !result.safe);
+        }
+        if (scenario == "closed")
+            closed_output(output, argv[3], argv[4]);
+    } else return 1;
+    std::cout << "verified " << scenario << '\n';
+}

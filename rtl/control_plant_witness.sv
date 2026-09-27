@@ -41,6 +41,7 @@ module control_plant_witness #(
     output logic signed [31:0] sample_value, velocity, reference_value, actuator_value,
     output logic plant_clipped, reference_clipped,
     output logic safe_interrupt, fault_ready, freeze_actuator, overload_request,
+    output logic run_finished, capture_quiescent,
     output logic [31:0] total_misses, consecutive_misses, late_commands, overflow_count,
     output logic [63:0] counter_ticks,
     input logic drain_request,
@@ -63,6 +64,8 @@ module control_plant_witness #(
         .clock(drain_clock), .run_reset_n(run_reset_n), .local_reset_n(drain_reset_n)
     );
     assign capture_active = reset_n;
+    assign run_finished = finished;
+    assign capture_quiescent = reset_n && finished && !record_valid && event_mask == 0;
     assign fault_ready = injector_ready && !safe_interrupt && !trip_now && !finished;
     control_cycle #(.PERIOD_TICKS(PERIOD_TICKS), .SAFE_VALUE(SAFE_VALUE)) cycle_registers (
         .capture_clock(capture_clock), .reset_n(reset_n), .enable(enable),

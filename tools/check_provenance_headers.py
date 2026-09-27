@@ -16,7 +16,7 @@ has exactly one rule:
   Makefile and Git/editor configuration) start with the seven header lines,
   each prefixed by ``# ``; Python files may carry a shebang line first;
   Cargo.lock carries Cargo's exact two-line generated preamble before the header;
-- C, Rust and SystemVerilog files start with the same seven lines prefixed by ``// ``;
+- C, C++, Rust and SystemVerilog files start with the same seven lines prefixed by ``// ``;
 - Markdown files start with an HTML comment that holds the seven lines, so the
   rendered page starts with content and never shows a code-style header;
 - JSON, PDF and licence files cannot carry the text header and are exempt; their
@@ -54,7 +54,7 @@ HASH_COMMENT_SUFFIXES: Final = frozenset(
 HASH_COMMENT_NAMES: Final = frozenset(
     {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile"}
 )
-SLASH_COMMENT_SUFFIXES: Final = frozenset({".c", ".h", ".rs", ".sv", ".svh"})
+SLASH_COMMENT_SUFFIXES: Final = frozenset({".c", ".cpp", ".h", ".rs", ".sv", ".svh"})
 EXEMPT_SUFFIXES: Final = frozenset({".json", ".pdf"})
 EXEMPT_PATHS: Final = frozenset({"LICENSE"})
 EXEMPT_DIRECTORIES: Final = frozenset({"LICENSES"})

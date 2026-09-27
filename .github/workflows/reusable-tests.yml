@@ -31,10 +31,13 @@ jobs:
         with:
           go-version: "1.27.1"
           cache: false
-      - name: Install the pinned Ubuntu RTL simulator
+      - name: Install pinned RTL, native receipt and syscall trace dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2
+          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2 verilator=5.020-1 libssl-dev=3.0.13-0ubuntu3.15 strace=6.8-0ubuntu2
+          dpkg-query -W iverilog verilator libssl-dev libssl3t64 strace
+          strace --version
+          verilator --version
           iverilog -V
           vvp -V
       - name: Install the pinned Rust toolchain
@@ -56,6 +59,8 @@ jobs:
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Native controller public API tests
         run: make controller-tests
+      - name: Native Linux UIO adapter build
+        run: make run-uio
       - name: Tests with coverage
         run: |
           PATH="$(go env GOPATH)/bin:${PATH}" .venv/bin/pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100

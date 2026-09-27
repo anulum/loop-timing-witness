@@ -15,6 +15,7 @@ path = [
     ".github/workflow-inventory.json",
     ".zenodo.json",
     "benchmarks/controller_regression.json",
+    "benchmarks/controller_comparison.local.json",
     "benchmarks/controller_coverage.json",
     "capability-inventory.json",
     "development-dependency-licences.json",
@@ -22,6 +23,8 @@ path = [
     "measurement-domain.json",
     "measurement-domain.schema.json",
     "run-manifest.schema.json",
+    "native-run.schema.json",
+    "host-load.schema.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = [

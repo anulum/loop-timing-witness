@@ -147,6 +147,8 @@ Controller arithmetic, design, native interfaces and simulation limits are in
 | `papers/` | manuscript collection; no manuscript exists yet |
 | `rtl/` | fixed-point controllers, plants, monitor, injector, timestamp capture and dual-clock stream |
 | `controllers/` | dependency-free C and Rust kernels, streaming CLIs and API documentation |
+| `runtime/rtl/` | native process transport through the actual production AXI simulation |
+| `runtime/linux/` | UIO transport, native run entry and bracketed PAC1934 IIO journal; hardware qualification pending |
 | `benchmarks/` | matching native workloads and labelled local regression records |
 | `tools/` | host analysis, validators, inventory generator, repository guards and preflight runner |
 | `tests/` | command-line, file and RTL-simulation tests |
@@ -175,3 +177,10 @@ AGPL-3.0-or-later, with a commercial licence available; see [`NOTICE.md`](NOTICE
 
 Citation metadata is in [`CITATION.cff`](CITATION.cff). No release, version or DOI exists yet;
 cite the commit you inspected.
+
+Native source-bound simulation capture is available through
+[`tools/capture_native_simulation.py`](tools/capture_native_simulation.py); see the
+[host analysis contract](docs/HOST_ANALYSIS.md#native-simulation-capture) for configuration,
+retained source/binary provenance and observed tracking coverage. Optional
+[Linux host load profiles](docs/HOST_ANALYSIS.md#linux-host-load-profiles) retain actual bounded
+worker activity and scheduling facts; all captures remain simulation-only.

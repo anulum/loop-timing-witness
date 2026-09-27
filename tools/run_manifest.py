@@ -306,6 +306,9 @@ def load_run(manifest_path: Path) -> RunInputs:
         for name in ("bitstream", "firmware", "linux_image", "controller_binary"):
             _verify_artifact(directory, manifest["hardware_artifacts"][name])
     files: dict[str, bytes] = {}
+    for name in ("native_metadata", "host_load"):
+        if name in manifest:
+            files[name] = _read_bound_file(directory, manifest[name])
     for name, item in manifest["files"].items():
         if item is not None:
             files[name] = _read_bound_file(directory, item)

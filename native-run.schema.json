@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.anulum.li/schemas/loop-timing-witness/native-run-v1.json",
+  "title": "Loop Timing Witness native run metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "loop-timing-witness.native-run.v1"
+    },
+    "source_kind": {
+      "enum": [
+        "rtl_simulation",
+        "uio_unqualified"
+      ]
+    },
+    "controller": {
+      "enum": [
+        "pid",
+        "lqr"
+      ]
+    },
+    "cycles": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "period_ticks": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "thermal": {
+      "type": "boolean"
+    },
+    "coefficients": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kp": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "ki_period": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "derivative_decay": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "derivative_gain": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "position_gain": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "velocity_gain": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "reference_gain": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "output_min": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "output_max": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "integral_min": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "integral_max": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "kp",
+        "ki_period",
+        "derivative_decay",
+        "derivative_gain",
+        "position_gain",
+        "velocity_gain",
+        "reference_gain",
+        "output_min",
+        "output_max",
+        "integral_min",
+        "integral_max"
+      ]
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "amplitude": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "ramp": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "phase": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        }
+      },
+      "required": [
+        "mode",
+        "amplitude",
+        "offset",
+        "ramp",
+        "phase"
+      ]
+    },
+    "fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "drop",
+            "delay",
+            "freeze",
+            "overload_request"
+          ]
+        },
+        "cycle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "duration_periods": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "kind",
+        "cycle",
+        "duration_periods"
+      ]
+    },
+    "overload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "iterations": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "modeled_nanoseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "iterations",
+        "modeled_nanoseconds"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "misses": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "overflow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "safe": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "samples",
+        "records",
+        "misses",
+        "overflow",
+        "safe"
+      ]
+    },
+    "host_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requested_cpu": {
+          "type": "integer",
+          "minimum": -1
+        },
+        "requested_scheduler": {
+          "enum": [
+            -1,
+            0,
+            1
+          ]
+        },
+        "requested_priority": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 99
+        },
+        "scheduler": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
+        },
+        "observed_cpu": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "affinity_cpus": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "nice": {
+          "type": "integer",
+          "minimum": -20,
+          "maximum": 19
+        }
+      },
+      "required": [
+        "requested_cpu",
+        "requested_scheduler",
+        "requested_priority",
+        "scheduler",
+        "priority",
+        "observed_cpu",
+        "affinity_cpus",
+        "nice"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ]
+        },
+        "events": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ]
+        },
+        "tracking_raw": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ]
+        },
+        "power_configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ]
+        },
+        "power_journal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "sha256",
+            "bytes"
+          ]
+        }
+      },
+      "required": [
+        "configuration",
+        "events",
+        "tracking_raw"
+      ],
+      "dependentRequired": {
+        "power_configuration": [
+          "power_journal"
+        ],
+        "power_journal": [
+          "power_configuration"
+        ]
+      }
+    },
+    "crypto_library": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "header_version_number": {
+          "type": "integer",
+          "minimum": 805306368
+        },
+        "runtime_version_number": {
+          "type": "integer",
+          "minimum": 805306368
+        }
+      },
+      "required": [
+        "algorithm",
+        "header_version_number",
+        "runtime_version_number"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "source_kind",
+    "controller",
+    "cycles",
+    "period_ticks",
+    "thermal",
+    "coefficients",
+    "reference",
+    "fault",
+    "overload",
+    "result",
+    "host_policy",
+    "artifacts",
+    "crypto_library"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_kind": {
+            "const": "rtl_simulation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "power_configuration"
+                  ]
+                },
+                {
+                  "required": [
+                    "power_journal"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

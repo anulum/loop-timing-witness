@@ -17,8 +17,9 @@ timestamp capture, a dual-clock record buffer, numeric event codes, a run-manife
 host analysis exist. Both sampled plants, references, deadline/safe-state monitor, fault injector
 and simultaneous-event capture feed the drain stream and host CLI in simulation. C, Rust and
 RTL PID/LQR kernels have bit-exact parity, with an integrated fabric feedback loop and native
-command replay through simulated actuator transactions. No physical board is available. Bus adapters
-and processor software remain planned. The
+command replay through simulated actuator transactions. Native AXI simulation and Linux UIO run
+software are implemented; physical I/O, power acquisition and processor timing remain unqualified.
+No physical board is available. The
 machine-readable design contract is `measurement-domain.json`, validated by
 `tools/validate_measurement_domain.py`; changes to that contract also update its schema, this
 document and the measurement protocol.
@@ -169,18 +170,35 @@ written for the purpose; accelerator-specific adapters live in the accelerator's
 
 Controllers are textbook PID with anti-windup and discrete LQR, with identical coefficients in C,
 Rust and fabric logic and bit-exact fixed-point parity checked in simulation. Native streaming
-CLIs are functional adapters; Linux UIO and bare-metal service remain planned. A Linux load
-generator provides idle, CPU, memory and cache, network and storage load cases. A Linux run
+CLIs and the in-process Linux UIO entry are implemented; physical UIO qualification and bare-metal
+service remain pending. The implemented host load generator covers idle, CPU arithmetic,
+memory/cache strides, private loopback UDP and owned-file storage/fsync profiles. Source-bound
+captures retain policy readback, actual operation counters and worker/native time brackets; see
+[host load profiles](HOST_ANALYSIS.md#linux-host-load-profiles). These do not qualify physical
+processor timing, NIC traffic or uncached block-device load. A Linux run
 controller configures the fabric registers, starts and stops runs, drains the buffer, reads the
 power monitor and writes the run files.
 
 ## Power and energy
 
-Linux reads the PAC1934 in energy-accumulator mode on all four rails, through the kernel `hwmon`
-driver where present and otherwise directly over I²C. Each power sample is paired with a counter
-value read from fabric at the moment of the read, so energy windows align with control cycles. The
-reported metric is mean energy per control cycle over windows of many cycles, per rail and for the
-four rails together, per placement and load case, with the limits stated in
+The selected Microchip [`pac1934` driver](https://raw.githubusercontent.com/linux4microchip/linux/linux-6.18-mchp/drivers/iio/adc/pac1934.c)
+uses the Linux IIO interface. The logger must bind the selected BSP/driver revision, channel-to-rail
+mapping, shunts, sampling configuration and accumulator units. An assumed `hwmon` interface or
+automatic direct-I²C fallback cannot establish that acquisition contract.
+
+The native UIO entry accepts `--power-config file --power-journal file` together. Its separate
+normal-policy worker validates the actual IIO node, kernel release, driver, enabled accumulators,
+labels, sample rate and unsigned shunt scales. It preserves each raw/scale attribute with its own
+host and fabric read brackets. The journal is acquisition evidence; it is not the analyzer's
+qualified `power.csv`. The current host has no PAC1934 device, so successful physical acquisition
+and energy-window qualification remain unverified. See [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md)
+for the explicit configuration and units.
+
+Fabric counter brackets around acquisition and the driver's cache/refresh timing must be retained.
+Sequential channel reads do not establish an atomic four-rail snapshot or an exact common fabric
+tick. Energy-window alignment remains unqualified until the acquisition timing contract is
+validated on the board. The reported metric is mean energy per control cycle over windows of many
+cycles, per rail and for the four rails together, with the limits stated in
 [`MEASUREMENT_PROTOCOL.md`](MEASUREMENT_PROTOCOL.md).
 
 ## Run records

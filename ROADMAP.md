@@ -10,9 +10,9 @@ Loop Timing Witness — roadmap
 
 # Roadmap
 
-Implemented work and planned work are kept apart. Nothing under "Planned" exists in this
-repository, and nothing is claimed for it until it appears in the capability inventory with its
-evidence.
+Completed work and open work are kept apart. Open items may contain an implementation under
+verification; they remain open until the whole item is verified and committed locally.
+Software implementation does not qualify a board capability or advance measurement maturity.
 
 ## Implemented — repository infrastructure, not instrument capability
 
@@ -49,12 +49,21 @@ evidence.
   local regression evidence only. See [`docs/CONTROLLERS.md`](docs/CONTROLLERS.md).
   Completed locally on 2026-09-26; the atomic controller commit records the implementation.
 
+- Native Linux PID/LQR run lifecycle, AXI register/IRQ transport, final event drain, UIO
+  adapter and raw PAC1934 IIO journal, with exclusive outputs, configuration custody and
+  scheduling metadata. Five owned host workload profiles feed source-bound simulation
+  captures and host reports with explicit observed tracking coverage and live completion
+  counters. Native and RV64 builds, simulation integration and actual host/device refusals
+  are verified; successful physical MMIO, IRQ, IIO acquisition and energy-window alignment
+  remain unqualified. See [`VALIDATION.md`](VALIDATION.md#native-linux-runtime-verification)
+  for verification scope and coverage limits. Completed locally on 2026-09-27; the atomic
+  Linux implementation commit records the software, with board acceptance still open below.
+
 ## Planned — in implementation order, without dates
 
 1. Vendor tool project generation scripts and constraints.
-2. Linux run controller, UIO access and power-monitor logger.
-3. Bare-metal controller on a dedicated application core.
-4. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
+2. Bare-metal controller on a dedicated application core.
+3. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.
    Blocked: no physical board is available; simulation does not close this item.
 

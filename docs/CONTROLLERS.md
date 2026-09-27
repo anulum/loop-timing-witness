@@ -152,8 +152,31 @@ is local regression evidence only; record affinity, host load, governor, toolcha
 CPU model. Never infer processor-to-fabric speedup from host wall time and simulated ticks.
 
 
-The recorded regression runs are in
-[`controller_regression.json`](../benchmarks/controller_regression.json). Native
+The current local comparison is in
+[`controller_comparison.local.json`](../benchmarks/controller_comparison.local.json).
+Build and record a new artifact with:
+
+```bash
+make controller-benchmarks CONTROLLER_BENCHMARK_CPU=0 \
+  CONTROLLER_BENCHMARK_OUTPUT=build/new-controller-comparison.local.json
+```
+
+Choose a CPU in the process's inherited allowed set. The recorder runs three warmup batches
+and twenty measured batches per native backend, interleaving C and Rust. Each batch executes
+both controllers on one million deterministic samples. Warmup batches are retained but excluded
+from statistics. P50/P95/P99, mean, min, max and throughput summarize batch-average step times;
+these percentiles do not describe individual-step latency tails. Source and executable hashes
+are checked before and after measurement; all command checksums must agree. Existing output
+paths are refused. `tools/benchmark_controllers.py` also accepts `--warmup`, `--repeats` and
+`--source-root` for measuring an actual separately built source snapshot.
+
+CPU pinning applies only to the native child processes and does not reserve the core. The
+artifact records actual toolchains, host load, frequency context and affinity. It explicitly
+declares nonisolated regression evidence, no production performance claim and no host-to-RTL
+timing comparison. Its `ci_evidence: not_attested` field requires separate hosted-run verification.
+The prior five-repeat record remains in
+[`controller_regression.json`](../benchmarks/controller_regression.json) as historical evidence;
+it has no discarded warmup or percentile summary and is not the current comparison. Native
 coverage scope, separate branch-analysis compiler and reproduction are in
 [`CONTROLLER_COVERAGE.md`](CONTROLLER_COVERAGE.md). The four default closed-loop
 trajectories run for 64,000 samples at a model period of 1 ms. Every C/Rust command
@@ -161,3 +184,10 @@ and PID state matches RTL; each final 1,000-sample error is below 4,000 raw unit
 (about 0.000239). This checks those emulator settings, not arbitrary gains or a
 physical plant. Freeze and invalid configuration trip the independent actuator
 monitor; IRQ drop/delay and overload requests leave the fabric service timely.
+
+The `Controller comparison` workflow defines weekly and manual measurement on `ubuntu-24.04`.
+It builds both kernels, runs the same recorder, and retains the CI JSON plus a runner receipt
+for 30 days. The receipt binds the JSON SHA-256 to the hosted commit, repository, run ID and
+attempt. Verify the actual hosted run and artifact digest before using it as CI evidence;
+no hosted result is included with the current local artifact. CPU pinning on that shared runner
+also provides no core reservation. A published CI/local comparison requires both real artifacts.

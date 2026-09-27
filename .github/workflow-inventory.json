@@ -4,7 +4,13 @@
     "workflow": "ci.yml"
   },
   "coordinator": "ci.yml",
-  "omitted_categories": [3, 5, 6, 7, 10, 11],
+  "omitted_categories": [
+    3,
+    5,
+    6,
+    10,
+    11
+  ],
   "schema": "loop-timing-witness.workflow-inventory.v1",
   "schema_version": "1.0.0",
   "size_limits": {
@@ -15,65 +21,94 @@
     {
       "category": 1,
       "file": "ci.yml",
-      "jobs": ["gate", "static-policy", "tests"],
+      "jobs": [
+        "gate",
+        "static-policy",
+        "tests"
+      ],
       "kind": "coordinator",
       "owner": "coordinator and stable required gate"
     },
     {
       "category": 2,
       "file": "reusable-static-policy.yml",
-      "jobs": ["run"],
+      "jobs": [
+        "run"
+      ],
       "kind": "reusable",
       "owner": "static analysis, manifest, inventory and repository policy"
     },
     {
       "category": 4,
       "file": "reusable-tests.yml",
-      "jobs": ["run"],
+      "jobs": [
+        "run"
+      ],
       "kind": "reusable",
       "owner": "tests with complete statement and branch coverage"
     },
     {
       "category": 2,
       "file": "pre-commit.yml",
-      "jobs": ["pre-commit"],
+      "jobs": [
+        "pre-commit"
+      ],
       "kind": "standalone",
       "owner": "parity with the local pre-commit hooks"
     },
     {
       "category": 8,
       "file": "codeql.yml",
-      "jobs": ["analyse"],
+      "jobs": [
+        "analyse"
+      ],
       "kind": "standalone",
       "owner": "code scanning of native controllers, Python tooling and workflow definitions"
     },
     {
       "category": 8,
       "file": "security-audit.yml",
-      "jobs": ["audit"],
+      "jobs": [
+        "audit"
+      ],
       "kind": "standalone",
       "owner": "secrets, vulnerabilities, licences and workflow security"
     },
     {
       "category": 8,
       "file": "scorecard.yml",
-      "jobs": ["analysis"],
+      "jobs": [
+        "analysis"
+      ],
       "kind": "standalone",
       "owner": "supply-chain analysis without published results"
     },
     {
       "category": 8,
       "file": "sbom.yml",
-      "jobs": ["inventory"],
+      "jobs": [
+        "inventory"
+      ],
       "kind": "standalone",
       "owner": "software inventory of the development lock"
     },
     {
       "category": 9,
       "file": "docs.yml",
-      "jobs": ["validate"],
+      "jobs": [
+        "validate"
+      ],
       "kind": "standalone",
       "owner": "documentation links, anchors and rendered headers"
+    },
+    {
+      "category": 7,
+      "file": "controller-comparison.yml",
+      "jobs": [
+        "measure"
+      ],
+      "kind": "standalone",
+      "owner": "native comparison measurement and retained runner provenance"
     }
   ]
 }

@@ -72,6 +72,60 @@ controller-tests: controller-build
 	build/controller_api_test
 	cargo test --offline --locked --manifest-path $(CONTROLLER_CRATE)
 
+CONTROLLER_BENCHMARK_OUTPUT ?= build/controller_comparison.local.json
+CONTROLLER_BENCHMARK_CPU ?= 0
+
 controller-benchmarks: controller-build
-	build/controller_benchmark
-	controllers/rust/target/release/controller_benchmark
+	$(VENV)/python tools/benchmark_controllers.py --output $(CONTROLLER_BENCHMARK_OUTPUT) --cpu $(CONTROLLER_BENCHMARK_CPU)
+
+# The simulator compiles the production top, including plant, clocks and FIFO.
+SIMULATION_THERMAL ?= 0
+SIMULATION_FIFO_ADDRESS_BITS ?= 8
+RUN_SIMULATION_DIRECTORY ?= build/run_simulation_$(SIMULATION_THERMAL)
+RUN_SIMULATION_CFLAGS ?= -std=c++17 -Wall -Wextra -Werror
+RUN_SIMULATION_LDFLAGS ?=
+SIMULATION_DIRECTORY := build/axi_simulator_$(SIMULATION_THERMAL)
+RTL_SOURCES := rtl/event_codes_pkg.sv $(filter-out rtl/event_codes_pkg.sv,$(wildcard rtl/*.sv))
+.PHONY: axi-simulator
+axi-simulator:
+	verilator --cc --exe --build --Wall --top-module axi_control_witness -j 2 \
+		-GPERIOD_TICKS=32768 -GADDRESS_BITS=8 -GGROUP_ADDRESS_BITS=4 \
+		"-GTHERMAL=1'b$(SIMULATION_THERMAL)" --Mdir $(SIMULATION_DIRECTORY) \
+		-CFLAGS "-std=c++17 -Wall -Wextra -Werror" \
+		$(RTL_SOURCES) $(abspath runtime/rtl/axi_simulator.cpp) -o axi_simulator
+
+LINUX_CC ?= gcc
+LINUX_CXX ?= g++
+LINUX_CPPFLAGS ?=
+LINUX_LDFLAGS ?=
+LINUX_BUILD_DIRECTORY ?= build
+
+.PHONY: uio-transport
+uio-transport:
+	mkdir -p "$(LINUX_BUILD_DIRECTORY)"
+	$(LINUX_CXX) $(LINUX_CPPFLAGS) -std=c++17 -O2 -Wall -Wextra -Werror -Wconversion -Wshadow \
+		runtime/linux/uio_device.cpp runtime/linux/uio_transport.cpp $(LINUX_LDFLAGS) \
+		-o "$(LINUX_BUILD_DIRECTORY)/uio_transport"
+
+.PHONY: run-simulation
+run-simulation:
+	mkdir -p build "$(RUN_SIMULATION_DIRECTORY)"
+	gcc -std=gnu11 -O2 $(CONTROLLER_WARNINGS) -c controllers/c/witness_controller.c -o build/run_controller_kernel.o
+	verilator --cc --exe --build --Wall --top-module axi_control_witness -j 2 \
+		-GPERIOD_TICKS=32768 -GADDRESS_BITS=$(SIMULATION_FIFO_ADDRESS_BITS) -GGROUP_ADDRESS_BITS=4 \
+		"-GTHERMAL=1'b$(SIMULATION_THERMAL)" --Mdir $(RUN_SIMULATION_DIRECTORY) \
+		-CFLAGS "$(RUN_SIMULATION_CFLAGS)" \
+		-LDFLAGS "$(abspath build/run_controller_kernel.o) -lcrypto $(RUN_SIMULATION_LDFLAGS)" \
+		$(RTL_SOURCES) $(abspath runtime/rtl/run_simulation.cpp) \
+		$(abspath runtime/run_configuration.cpp) $(abspath runtime/linux/file_digest.cpp) -o run_simulation
+
+.PHONY: run-uio
+run-uio:
+	mkdir -p "$(LINUX_BUILD_DIRECTORY)"
+	$(LINUX_CC) $(LINUX_CPPFLAGS) -std=gnu11 -O2 $(CONTROLLER_WARNINGS) \
+		-c controllers/c/witness_controller.c -o "$(LINUX_BUILD_DIRECTORY)/run_controller_kernel.o"
+	$(LINUX_CXX) $(LINUX_CPPFLAGS) -std=c++17 -O2 -Wall -Wextra -Werror -Wconversion -Wshadow \
+		runtime/linux/uio_device.cpp runtime/linux/run_uio.cpp runtime/run_configuration.cpp \
+		runtime/linux/power_configuration.cpp runtime/linux/pac1934_device.cpp runtime/linux/power_journal.cpp runtime/linux/file_digest.cpp \
+		"$(LINUX_BUILD_DIRECTORY)/run_controller_kernel.o" $(LINUX_LDFLAGS) \
+		-pthread -lcrypto -o "$(LINUX_BUILD_DIRECTORY)/run_uio"

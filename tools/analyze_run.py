@@ -16,10 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from event_stream import decode_events
+from host_load_receipt import attach_host_load
+from native_completion import attach_completion_statistics
 from report_outputs import write_report
 from run_analysis import analyse_events
 from run_manifest import RunInputs, load_run
 from run_series import energy_per_cycle, tracking_error
+from tracking_observations import observed_tracking_error
 
 REPORT_SCHEMA = "loop-timing-witness.analysis-report.v1"
 
@@ -58,7 +61,15 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
         manifest["cycle_count"],
         manifest["warmup_cycles"],
     )
-    if manifest["profile"] == "CONTROL":
+    if manifest.get("tracking_sampling") == "observed":
+        tracking = observed_tracking_error(
+            inputs.files["tracking"],
+            events,
+            manifest["cycle_count"],
+            manifest["warmup_cycles"],
+            manifest["plant"]["tracking_unit"],
+        )
+    elif manifest["profile"] == "CONTROL":
         tracking = tracking_error(
             inputs.files.get("tracking"),
             manifest["cycle_count"],
@@ -82,8 +93,7 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
         summary["control"]["duration_ticks"] = duration_ticks
     tracking["duration_ticks"] = duration_ticks
     energy["duration_ticks"] = duration_ticks
-    if tracking["status"] != "available":
-        tracking["sample_count"] = 0
+    tracking.setdefault("sample_count", 0)
     if energy["status"] == "unavailable":
         energy["sample_count"] = 0
     if manifest["profile"] == "CONTROL":
@@ -131,7 +141,13 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
         "invalid_reasons": [
             *(["event FIFO overflow"] if overflow else []),
             *(["missing cycle anchor events"] if not complete else []),
-            *(["tracking series unavailable"] if missing_tracking else []),
+            *(
+                ["tracking series incomplete"]
+                if tracking["status"] == "partial"
+                else ["tracking series unavailable"]
+                if missing_tracking
+                else []
+            ),
             *(["power series unavailable"] if missing_energy else []),
         ],
         "events": summary,
@@ -144,8 +160,20 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
             ),
             "The plant is emulated; these are not physical-machine control results.",
             "Power rails share processor and fabric consumption. Energy is a window mean.",
+            *(
+                [
+                    (
+                        "Tracking errors describe observed cycles only; "
+                        "missing samples may bias the metric."
+                    )
+                ]
+                if tracking.get("sampling") == "observed"
+                else []
+            ),
         ],
     }
+    attach_completion_statistics(inputs, report, events)
+    attach_host_load(inputs, report)
     return report, cycle_rows
 
 

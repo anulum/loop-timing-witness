@@ -62,6 +62,13 @@ ignore = [
 # vectors of repository tools and Git without a shell and without untrusted
 # input.
 "tools/preflight.py" = ["S603", "S607"]
+# Native capture builds trusted repository snapshots with fixed argv and no shell.
+"tools/capture_native_simulation.py" = ["S603", "S607"]
+# Host load executes an explicitly selected absolute executable and owned worker
+# with argument vectors, no shell, bounded lifetime and owned process groups.
+"tools/linux_load.py" = ["S603"]
+# Native comparisons execute trusted repository binaries and fixed tool argv without a shell.
+"tools/benchmark_controllers.py" = ["S603", "S607"]
 "tools/repository_files.py" = ["S603", "S607"]
 
 [tool.ruff.lint.flake8-copyright]

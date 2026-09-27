@@ -52,6 +52,7 @@ module fabric_control_witness #(
     output logic controller_config_valid, controller_clipped, controller_integral_held,
     output logic signed [31:0] controller_integral, controller_derivative,
     output logic safe_interrupt, fault_ready, freeze_actuator, overload_request,
+    output logic run_finished, capture_quiescent,
     output logic [31:0] total_misses, consecutive_misses, late_commands, overflow_count,
     output logic [63:0] counter_ticks,
     input logic drain_request,
@@ -130,7 +131,7 @@ module fabric_control_witness #(
         .counter_ticks(counter_ticks),
         .drain_request(drain_request),
         .drain_valid(drain_valid),
-        .drain_empty(drain_empty),
+        .drain_empty(drain_empty), .run_finished(run_finished), .capture_quiescent(capture_quiescent),
         .drain_record(drain_record),
         .sample_read(controller_read), .actuator_write(controller_write),
         .command_cycle(controller_cycle), .command_value(controller_command)

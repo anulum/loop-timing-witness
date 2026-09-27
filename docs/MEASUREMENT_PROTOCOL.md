@@ -73,6 +73,43 @@ records required below.
   count for each metric. Missing tracking or power input is reported as unavailable, not filled
   with a simulation substitute.
 
+## Native simulation observations
+
+The native capture path binds the executed source snapshot, configuration, executable, original
+event stream, raw tracking and completion metadata to the run manifest. It declares
+`source.kind: rtl_simulation`; its reports remain `simulation_only`, with physical acceptance
+flags false and no power series. These captures verify software and RTL behaviour; they do not
+satisfy the board procedure or instrument acceptance below.
+
+`tracking_sampling: observed` permits only the cycles actually read by the controller. Their
+tracking rows must match the captured `SAMPLE_READ` cycles exactly. After warm-up exclusion,
+the report states the expected cycle count, observed sample count, missing cycles and coverage
+fraction. RMS and peak describe observed samples only. Incomplete coverage is `partial` and
+invalidates the run; zero post-warm-up observations are `unavailable`. Neither missing samples
+nor their errors are interpolated. Omitting this option or selecting `complete` retains the
+complete-series contract in [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md).
+
+Optional hash-bound `native_metadata` preserves the final live miss, overflow, sample and record
+counts and safe-state status. Without FIFO loss, those counts must agree with the complete
+captured event stream. With loss, the report retains live counts separately: missing actuator
+records cannot establish controller deadline misses, and the completion receipt cannot repair
+lost events or make the run valid. Finalisation waits for the configured final deadline,
+capture quiescence and receiver drain, including events after safe state first latches.
+
+Optional hash-bound `host_load` identifies the idle, CPU, memory/cache, private loopback UDP or
+owned-file storage/fsync profile. Its worker interval must enclose the actual native interval;
+policy readback and complete operation counters describe the whole worker interval. Host
+monotonic time is separate from fabric event time. CPU affinity does not reserve a core,
+loopback traffic does not establish NIC load, and fsync does not establish uncached storage
+load. These receipts do not qualify board processor timing or energy.
+
+The Linux PAC1934 journal retains raw accumulator attributes, units and individual host/fabric
+read brackets. It is not a qualified `power.csv`: physical acquisition, rail calibration and
+energy-window alignment remain unverified. The journal cannot substitute for the power series
+required by the board procedure. Formats and validation are in
+[`HOST_ANALYSIS.md`](HOST_ANALYSIS.md); register snapshots, reset custody and final drain are in
+[`PLANT_WITNESS.md`](PLANT_WITNESS.md).
+
 ## Stated limits
 
 These limits are part of every report:

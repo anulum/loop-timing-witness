@@ -51,6 +51,7 @@ def snapshot_native_sources(root: Path, output: Path, *, host_load: bool = False
     """
     originals = [
         root / "Makefile",
+        root / "runtime/isa/spike_plugin.mk",
         *(root / "rtl").glob("*.sv"),
         *(root / "runtime").rglob("*.cpp"),
         *(root / "runtime").rglob("*.h"),

@@ -44,6 +44,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
       - name: Build pinned Go scanners (module checksums verified by the Go checksum database)
         run: |
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
@@ -51,7 +52,9 @@ jobs:
       - name: Secret scan of the complete history
         run: '"$(go env GOPATH)/bin/gitleaks" git --no-banner --redact .'
       - name: Known vulnerabilities in the development lock
-        run: .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
+        run: |
+          .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
+          .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt
       - name: Development dependency licences
         run: .venv/bin/python tools/check_dependency_licences.py
       - name: REUSE licensing compliance

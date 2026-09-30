@@ -40,6 +40,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
       - name: Native controller build and strict checks
         run: make controller-build
       - name: Ruff lint

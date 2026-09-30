@@ -112,6 +112,41 @@ region, function and branch covered counts must equal their totals. Preserve sou
 compiler versions, flags and report hashes with the result. Reset the coverage environment
 variables before ordinary production builds or benchmarks.
 
+## Freestanding AMP C optimized trace coverage
+
+The production RV64 firmware is built at `-O2` without instrumentation. A separate debug-map
+link recompiles only `runtime/bare_metal/amp_controller.c` with the exact production compiler
+and flags plus `-g`, then links the other original objects unchanged. Coverage is admissible only
+when the production and debug-map `.text` sections have equal sizes and SHA-256 digests.
+
+Real Spike `-l` logs from the production lifecycle and the dedicated refusal tests are mapped to
+that byte-identical optimized image. `tests/test_amp_startup_admission_fault.py` supplies the
+remaining real MMIO, mailbox, overload, submission and post-entry hart observations on both
+production plants. Exact-function or exact-branch traces from wrapper images are included only
+after their linked instruction bytes and addresses match production. The retained profile covers
+all 112 executable source lines and all 100 conditional machine-code edges. It executes 520 of
+522 controller-attributed instructions; the remaining second `wfi` and loop-back occur after the
+real logger has already terminated on the first published refusal.
+
+These optimized instruction and edge counts are functional ISA evidence. They are not GCC
+source-branch counters and do not qualify physical U54 timing, cache policy, PMP isolation,
+HSS/Linux ownership or board acceptance.
+
+## Freestanding Rust C ABI coverage
+
+`tests/test_amp_rust_branch_coverage.py` builds the original safe core and C ABI adapter
+with Rust 1.98.1 source coverage, then runs the real C API and PID/LQR stream clients.
+It also runs the safe core's public Rust API tests and links a test-owned no-std panic
+producer to the adapter's unchanged panic handler. The host-only panic sink flushes the
+actual profile before exiting. The test merges those profiles with the matching toolchain's
+`llvm-profdata` and requires positive, fully covered line, region, function and branch
+counts for both original Rust source files. `RUSTC_BOOTSTRAP=1` is scoped to the profile
+builds solely to enable Rust 1.98.1's unstable branch instrumentation option; production
+builds and their warning gates retain their normal compiler settings. This is host source
+coverage. The separately compiled RV64 fault in `tests/test_amp_rust_panic.py` exercises
+the public target refusal path, but does not export target coverage counters or qualify
+board timing.
+
 ## Native run controller instrumentation
 
 Kernel coverage above does not cover the Linux run lifecycle, artifact hashing, scheduling
@@ -165,6 +200,8 @@ actual RTL samples. These callbacks observe the simulation lifecycle; they
 do not provide physical PAC1934 evidence. Export `run_lifecycle_test.gcno` with gcov after all
 cases exit and retain source/report hashes. This corpus supplements the production run CLI
 coverage; keep its scope and counters separate rather than reporting a combined percentage.
+The read case also refuses the upper timebase word before the lower-word latch, then reads
+the latched pair through the real AXI path.
 
 The C++ lifecycle corpus additionally applies reversible soft `RLIMIT_FSIZE` caps with
 `SIGXFSZ` ignored in its own process. Real header, event, sample and final-flush failures occur
@@ -173,6 +210,36 @@ are restored. GCC writes profiling data only after that restoration. Those API c
 therefore provide compiler evidence without truncating `.gcda` files. The CLI tests retain their
 original hard limits and isolated profiling directories. Do not merge their damaged counters
 with the API reports or substitute the API corpus for production CLI behavior tests.
+
+For direct RTL source-flow coverage, set `WITNESS_RTL_COVERAGE=1` for the same lifecycle and
+configuration API corpus, choose a fresh `WITNESS_LIFECYCLE_BUILD_ROOT`, and set pytest's
+`--basetemp` to a separate retained directory. The fixture builds the actual production RTL
+with Verilator `--coverage-line`; each successful lifecycle executable writes a nonempty
+`events.bin.coverage.dat` next to its real test outputs. Merge those files with
+`verilator_coverage --write merged.dat <files...>` and retain the raw files, source hashes,
+merged report and compiler version. Verilator's `v_branch` counters describe instrumented RTL
+source-flow branches; they are separate from C++ gcov and do not prove CDC timing, synthesis
+timing or physical board acceptance. Keep zero-count branches open for real stimulus or a
+documented unreachable-invariant review.
+
+The existing production AXI process corpus adds register, controller feedback and full-aperture
+transport paths. Set `WITNESS_RTL_COVERAGE=1`, choose a fresh
+`WITNESS_AXI_COVERAGE_BUILD_ROOT`, and run `tests/test_axi_simulator.py` with
+`tests/test_axi_transport_progress.py`. The Make target builds the same RTL with
+`--coverage-line`; each process that finishes through the public `Q` request writes a
+`axi_simulator.<pid>.coverage.dat` beside its executable. Invalid-request cases exit through
+their real error path and do not export a profile. Merge these raw files with the separately
+retained lifecycle profiles only when source hashes and Verilator versions match. The AXI
+build's FIFO parameter differs from the lifecycle build, so report the union of instrumented
+points and its actual denominator rather than adding percentages.
+The AXI process corpus also commits a command for cycle one while the actual RTL remains on
+cycle zero. It requires one retained `ACT_LATE` FIFO record and unchanged miss and safe-state
+registers, exercising accepted-but-untimely command handling through the real register path.
+The same process corpus configures ramp, sine and clipped step references through AXI writes,
+then reads successive reference snapshots and acknowledges each retained sample interrupt.
+The module-specific arithmetic simulation checks both saturated reference values and their
+clip flags. The register contract refuses reference mode 3, so that generator default case
+is not a reachable AXI runtime path.
 
 `ExclusiveOutput` supplies the same exclusive FILE ownership to controller outputs and the
 power journal. The actual lifecycle corpus copies a captured FIFO record through that public

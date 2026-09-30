@@ -203,8 +203,9 @@ def test_registry_is_found_only_in_an_ancestor(tmp_path: Path) -> None:
     registry.write_text("{}", encoding="utf-8")
     nested = tmp_path / "workspace" / "03_CODE" / "GROUP" / "repositories" / "REPOSITORY"
     nested.mkdir(parents=True)
-    standalone = tmp_path / "standalone"
-    standalone.mkdir()
+    # The temporary directory may itself be inside the canonical monorepo.
+    # Its filesystem root has no ancestors and cannot inherit that registry.
+    standalone = tmp_path.parents[-1]
     assert monorepo_registry(nested) == registry
     assert monorepo_registry(standalone) is None
     nested_plan = {gate.name: gate.description for gate in build_plan(nested)}

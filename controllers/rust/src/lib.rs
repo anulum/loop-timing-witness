@@ -9,11 +9,15 @@
 //! Bit-exact Q8.24 controllers. Coefficients are held stable until reset.
 //! Products accumulate in i128; division floors negative fractional values.
 //! These kernels do not establish physical timing or controller stability.
+//! The library uses only core arithmetic and requires neither an allocator nor an OS.
+
+#![no_std]
 
 const SCALE: i128 = 1 << 24;
 
-/// Signed Q8.24 coefficients and output/integral bounds.
+/// C-layout signed Q8.24 coefficients and output/integral bounds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
 pub struct Coefficients {
     /// Proportional error gain, nonnegative.
     pub kp: i32,
@@ -64,8 +68,9 @@ impl Coefficients {
     }
 }
 
-/// One cycle-tagged command plus the observable PID state and clipping decisions.
+/// C-layout cycle-tagged command plus the observable PID state and clipping decisions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
 pub struct Command {
     /// Original input cycle, unchanged by arithmetic latency.
     pub cycle: u32,
@@ -81,8 +86,9 @@ pub struct Command {
     pub integral_held: bool,
 }
 
-/// PID memory, with reset marking the next measurement as the derivative origin.
+/// C-layout PID memory, with reset marking the next measurement as the derivative origin.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(C)]
 pub struct PidState {
     /// Current bounded integral.
     pub integral: i32,

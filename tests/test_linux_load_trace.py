@@ -171,14 +171,15 @@ def _wait_for_receipt(trace: OwnedTrace, receipt_file: Path) -> tuple[bytes, dic
     trace
         Exclusively owned tracer and descendant pidfds.
     receipt_file
-        Actual worker completion file to observe for at most twelve seconds.
+        Actual worker completion file to observe for at most thirty seconds.
 
     Returns
     -------
     tuple of bytes and dict
         Original producer bytes and their decoded receipt.
     """
-    deadline = time.monotonic() + 12
+    # Both Python processes initialize subprocess coverage before producing a receipt.
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         trace.observe()
         if receipt_file.exists():

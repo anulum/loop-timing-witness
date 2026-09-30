@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -69,6 +70,8 @@ def test_configuration_api_refusal(lifecycle_program: Path, tmp_path: Path, scen
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified config_{scenario}\n"
     assert result.stderr == ""
+    if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
+        assert events.with_name(events.name + ".coverage.dat").stat().st_size > 0
     assert events.stat().st_size > 0
     assert len(raw.read_text().splitlines()) == 3
     assert (tmp_path / "events.bin.previous").stat().st_size > 0

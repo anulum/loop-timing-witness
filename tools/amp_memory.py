@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — original dedicated firmware and telemetry RAM reservations
+
+"""Preserve the repository amp_memory entry point using the installed package."""
+
+from loop_timing_witness.amp_memory import (
+    PAGE_BYTES,
+    RESERVED_ROOT,
+    STACK_ALIGNMENT,
+    MemorySelection,
+    ReservedMemory,
+    bind_memory,
+)
+
+__all__ = [
+    "PAGE_BYTES",
+    "RESERVED_ROOT",
+    "STACK_ALIGNMENT",
+    "MemorySelection",
+    "ReservedMemory",
+    "bind_memory",
+]

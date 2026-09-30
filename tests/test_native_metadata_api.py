@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from jsonschema import Draft202012Validator
+from test_amp_uio_run import RESOURCE
 from test_native_lifecycle_api import lifecycle_program
 from test_native_run import configuration
 
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 __all__ = ["lifecycle_program"]
 
 
-@pytest.mark.parametrize("scenario", ["zero", "fault"])
+@pytest.mark.parametrize("scenario", ["zero", "fault", "amp"])
 def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenario: str) -> None:
     """Refuse invalid public configuration before creating a receipt and retain actual data.
 
@@ -39,10 +40,13 @@ def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenari
     tmp_path
         Exclusive configuration, event, trace and metadata allocation.
     scenario
-        Zero cycle count or out-of-range fault enum in the metadata configuration.
+        Configuration refusal, or AMP receipt serialization after an actual RTL API run.
     """
     config = tmp_path / "run.conf"
     config.write_text(configuration("pid", "none").replace("pid 32", "pid 2"), encoding="utf-8")
+    resources = tmp_path / "run.conf.amp-resources"
+    if scenario == "amp":
+        resources.write_text(RESOURCE, encoding="ascii")
     events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
     result = subprocess.run(
         [str(lifecycle_program), f"metadata_{scenario}", str(config), str(events), str(raw)],
@@ -58,7 +62,9 @@ def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenari
     Draft202012Validator(
         json.loads((REPOSITORY_ROOT / "native-run.schema.json").read_text())
     ).validate(receipt)
-    assert receipt["source_kind"] == "rtl_simulation"
+    assert receipt["source_kind"] == (
+        "amp_uio_unqualified" if scenario == "amp" else "rtl_simulation"
+    )
     assert receipt["cycles"] == 2
     assert receipt["result"]["samples"] == 2
     assert receipt["result"]["records"] == 8
@@ -66,7 +72,23 @@ def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenari
     assert receipt["fault"]["kind"] == "none"
     assert events.stat().st_size == 8 * 16
     assert len(raw.read_text().splitlines()) == 3
-    for role, path in {"configuration": config, "events": events, "tracking_raw": raw}.items():
+    paths = {"configuration": config, "events": events, "tracking_raw": raw}
+    if scenario == "amp":
+        paths["amp_resources"] = resources
+        validator = Draft202012Validator(
+            json.loads((REPOSITORY_ROOT / "native-run.schema.json").read_text())
+        )
+        missing = json.loads(json.dumps(receipt))
+        del missing["artifacts"]["amp_resources"]
+        assert not validator.is_valid(missing)
+        for kind in ("rtl_simulation", "uio_unqualified"):
+            incompatible = json.loads(json.dumps(receipt))
+            incompatible["source_kind"] = kind
+            assert not validator.is_valid(incompatible)
+        modeled = json.loads(json.dumps(receipt))
+        modeled["overload"]["modeled_nanoseconds"] = 1
+        assert not validator.is_valid(modeled)
+    for role, path in paths.items():
         data = path.read_bytes()
         assert receipt["artifacts"][role] == {
             "sha256": hashlib.sha256(data).hexdigest(),

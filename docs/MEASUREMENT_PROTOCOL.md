@@ -80,6 +80,8 @@ event stream, raw tracking and completion metadata to the run manifest. It decla
 `source.kind: rtl_simulation`; its reports remain `simulation_only`, with physical acceptance
 flags false and no power series. These captures verify software and RTL behaviour; they do not
 satisfy the board procedure or instrument acceptance below.
+The frozen source includes the production Makefile and its included Spike plugin make fragment,
+even when the selected target builds only the native simulator.
 
 `tracking_sampling: observed` permits only the cycles actually read by the controller. Their
 tracking rows must match the captured `SAMPLE_READ` cycles exactly. After warm-up exclusion,
@@ -95,6 +97,13 @@ captured event stream. With loss, the report retains live counts separately: mis
 records cannot establish controller deadline misses, and the completion receipt cannot repair
 lost events or make the run valid. Finalisation waits for the configured final deadline,
 capture quiescence and receiver drain, including events after safe state first latches.
+
+Dedicated-hart ISA capture uses a separate hash-bound `amp_capture` receipt, reconciled with
+original firmware inputs, original pre-generation/pre-compilation plugin inputs and captured
+native plugin build/source snapshot, raw observations
+and actual logger completion. It declares
+`bare_metal_amp` with `rtl_simulation`; neither parked companion harts nor the functional clock
+map qualifies Linux coexistence or physical U54 latency. See [the AMP capture contract](AMP_SIMULATION.md).
 
 Optional hash-bound `host_load` identifies the idle, CPU, memory/cache, private loopback UDP or
 owned-file storage/fsync profile. Its worker interval must enclose the actual native interval;

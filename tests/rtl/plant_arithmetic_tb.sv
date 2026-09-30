@@ -75,8 +75,12 @@ module plant_arithmetic_tb;
         restart(); sample(); sample(); sample();
         mode = 0; amplitude = 32'sh7fffffff; offset = 1;
         restart(); sample();
+        if (reference_value != 32'sh7fffffff || !reference_clipped)
+            $fatal(1, "positive reference clipping not signalled");
         amplitude = 32'sh80000000; offset = -1;
         sample();
+        if (reference_value != 32'sh80000000 || !reference_clipped)
+            $fatal(1, "negative reference clipping not signalled");
         mode = 3; offset = 0;
         sample();
         mode = 2; amplitude = 32'sd8388608; phase_increment = 3;
@@ -84,7 +88,7 @@ module plant_arithmetic_tb;
         // Negative fractional product floors, rather than truncating to zero.
         if (reference_value != -32'sd3210182) $fatal(1, "negative fractional scaling");
         restart();
-        if (reference_value || reference_clipped) $fatal(1, "reference reset failed");
+        if (reference_value != 0 || reference_clipped) $fatal(1, "reference reset failed");
         $display("ARITHMETIC_PASS");
         $finish;
     end

@@ -19,6 +19,31 @@ simulation_only` and cannot be cited as a PolarFire SoC result.
 .venv/bin/python tools/analyze_run.py path/to/manifest.json --output-dir path/to/new-report
 ```
 
+The Python distribution is named `loop-timing-witness` and requires Python 3.13 or later.
+Its installed command runs the same analysis implementation:
+
+```bash
+loop-timing-witness-analyze path/to/manifest.json --output-dir path/to/new-report
+```
+
+The public Python API loads and verifies the manifest before calculating a report:
+
+```python
+from pathlib import Path
+
+from loop_timing_witness import build_report, load_run
+
+inputs = load_run(Path("path/to/manifest.json"))
+report, cycle_rows = build_report(inputs)
+```
+
+The wheel includes the analysis dependency closure, JSON contracts and `py.typed` marker.
+It does not require a source checkout to analyse a retained capture. Schemas shipped inside the
+package are checked against the repository contracts; each run still supplies its own hash-bound
+measurement-domain snapshot. Firmware preparation, capture execution and vendor-tool projects
+remain repository build surfaces. Local distribution verification does not establish publication
+on PyPI or qualify a board instrument.
+
 The output directory must not exist. The tool validates the JSON and every referenced SHA-256,
 decodes the binary events, analyses the series, writes all outputs to a sibling temporary
 directory and renames it into place only after every write succeeds. An invalid run can still
@@ -226,7 +251,8 @@ its provenance. The SVG charts are visual summaries. The JSON and CSV carry nume
 ## Linux native and RV64 builds
 
 `make uio-transport run-uio` uses host GCC/G++ and writes to `build/` by default.
-Both targets accept `LINUX_CC`, `LINUX_CXX`, `LINUX_CPPFLAGS`, `LINUX_LDFLAGS` and
+The separate [Linux AMP collector](AMP_LINUX.md) is built with `make run-amp-uio`.
+These targets accept `LINUX_CC`, `LINUX_CXX`, `LINUX_CPPFLAGS`, `LINUX_LDFLAGS` and
 `LINUX_BUILD_DIRECTORY`. The run target compiles its controller C object in that same
 directory, so a target build can keep its objects separate from native simulation artifacts.
 Strict compiler warnings remain enabled for either placement.

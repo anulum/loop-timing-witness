@@ -256,6 +256,7 @@ def run_rtl(tmp_path: Path) -> RunRtl:
             "rtl/control_io_registers.sv",
             "rtl/run_configuration_registers.sv",
             "rtl/axi_control_witness.sv",
+            "rtl/icicle_witness.sv",
             "rtl/run_reset_control.sv",
             "rtl/retained_interrupt.sv",
             "rtl/event_record_capture.sv",

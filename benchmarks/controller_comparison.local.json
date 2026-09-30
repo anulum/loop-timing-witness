@@ -1,5 +1,5 @@
 {
-  "base_commit": "83ea617089df3fee901bac410bfb371533b02f3b",
+  "base_commit": "dc3aa5bbeae29832d1ebbce3615f6ecac94600ad",
   "ci_evidence": {
     "reason": "verify hosted workflow receipt separately",
     "status": "not_attested"
@@ -29,7 +29,7 @@
     ],
     "cpu_model": "11th Gen Intel(R) Core(TM) i5-11600K @ 3.90GHz",
     "frequency_context": {
-      "scaling_cur_freq": "4301964",
+      "scaling_cur_freq": "3700000",
       "scaling_driver": "intel_pstate",
       "scaling_governor": "powersave",
       "scaling_max_freq": "4900000",
@@ -51,17 +51,17 @@
     ],
     "isolation": "taskset pin only; no CPU reservation or cpuset shielding",
     "load_after": [
-      14.39404296875,
-      21.5927734375,
-      21.16552734375
+      21.41845703125,
+      32.7919921875,
+      31.49609375
     ],
     "load_before": [
-      14.39404296875,
-      21.5927734375,
-      21.16552734375
+      21.41845703125,
+      32.7919921875,
+      31.49609375
     ],
     "other_heavy_jobs": "not excluded; shared workstation",
-    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "platform": "Linux-7.0.0-34-generic-x86_64-with-glibc2.39",
     "python": "3.13.15",
     "toolchains": {
       "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
@@ -85,7 +85,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 0,
-      "total_ns": 10215292
+      "total_ns": 16857913
     },
     {
       "backend": "c",
@@ -94,7 +94,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 0,
-      "total_ns": 5591308
+      "total_ns": 8840183
     },
     {
       "backend": "rust",
@@ -103,7 +103,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 0,
-      "total_ns": 14862629
+      "total_ns": 23009876
     },
     {
       "backend": "rust",
@@ -112,7 +112,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 0,
-      "total_ns": 5712575
+      "total_ns": 10424145
     },
     {
       "backend": "c",
@@ -121,7 +121,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 1,
-      "total_ns": 9920155
+      "total_ns": 18597742
     },
     {
       "backend": "c",
@@ -130,7 +130,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 1,
-      "total_ns": 5548275
+      "total_ns": 12340515
     },
     {
       "backend": "rust",
@@ -139,7 +139,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 1,
-      "total_ns": 15061505
+      "total_ns": 25215359
     },
     {
       "backend": "rust",
@@ -148,7 +148,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 1,
-      "total_ns": 5901991
+      "total_ns": 7820692
     },
     {
       "backend": "c",
@@ -157,7 +157,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 2,
-      "total_ns": 10514354
+      "total_ns": 15588801
     },
     {
       "backend": "c",
@@ -166,7 +166,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 2,
-      "total_ns": 5937851
+      "total_ns": 8672422
     },
     {
       "backend": "rust",
@@ -175,7 +175,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 2,
-      "total_ns": 16844878
+      "total_ns": 27897490
     },
     {
       "backend": "rust",
@@ -184,7 +184,7 @@
       "iterations": 1000000,
       "phase": "warmup",
       "repeat": 2,
-      "total_ns": 5723791
+      "total_ns": 8115979
     },
     {
       "backend": "c",
@@ -193,7 +193,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 0,
-      "total_ns": 10965915
+      "total_ns": 14239559
     },
     {
       "backend": "c",
@@ -202,7 +202,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 0,
-      "total_ns": 5743669
+      "total_ns": 8278270
     },
     {
       "backend": "rust",
@@ -211,7 +211,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 0,
-      "total_ns": 15018030
+      "total_ns": 21283028
     },
     {
       "backend": "rust",
@@ -220,7 +220,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 0,
-      "total_ns": 5973618
+      "total_ns": 7520038
     },
     {
       "backend": "c",
@@ -229,7 +229,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 1,
-      "total_ns": 10221915
+      "total_ns": 12775257
     },
     {
       "backend": "c",
@@ -238,7 +238,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 1,
-      "total_ns": 5774034
+      "total_ns": 7142423
     },
     {
       "backend": "rust",
@@ -247,7 +247,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 1,
-      "total_ns": 15087761
+      "total_ns": 41259181
     },
     {
       "backend": "rust",
@@ -256,7 +256,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 1,
-      "total_ns": 5898256
+      "total_ns": 8263610
     },
     {
       "backend": "c",
@@ -265,7 +265,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 2,
-      "total_ns": 10397823
+      "total_ns": 18939266
     },
     {
       "backend": "c",
@@ -274,7 +274,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 2,
-      "total_ns": 5735401
+      "total_ns": 8046501
     },
     {
       "backend": "rust",
@@ -283,7 +283,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 2,
-      "total_ns": 15543233
+      "total_ns": 22208313
     },
     {
       "backend": "rust",
@@ -292,7 +292,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 2,
-      "total_ns": 5930074
+      "total_ns": 9036342
     },
     {
       "backend": "c",
@@ -301,7 +301,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 3,
-      "total_ns": 12838284
+      "total_ns": 18157923
     },
     {
       "backend": "c",
@@ -310,7 +310,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 3,
-      "total_ns": 6762598
+      "total_ns": 8185494
     },
     {
       "backend": "rust",
@@ -319,7 +319,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 3,
-      "total_ns": 15381337
+      "total_ns": 25192971
     },
     {
       "backend": "rust",
@@ -328,7 +328,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 3,
-      "total_ns": 5798817
+      "total_ns": 10544841
     },
     {
       "backend": "c",
@@ -337,7 +337,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 4,
-      "total_ns": 10075747
+      "total_ns": 17107241
     },
     {
       "backend": "c",
@@ -346,7 +346,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 4,
-      "total_ns": 5700881
+      "total_ns": 10896337
     },
     {
       "backend": "rust",
@@ -355,7 +355,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 4,
-      "total_ns": 17396311
+      "total_ns": 45950784
     },
     {
       "backend": "rust",
@@ -364,7 +364,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 4,
-      "total_ns": 5754676
+      "total_ns": 8356716
     },
     {
       "backend": "c",
@@ -373,7 +373,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 5,
-      "total_ns": 9898194
+      "total_ns": 20787978
     },
     {
       "backend": "c",
@@ -382,7 +382,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 5,
-      "total_ns": 5504959
+      "total_ns": 10548298
     },
     {
       "backend": "rust",
@@ -391,7 +391,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 5,
-      "total_ns": 15113441
+      "total_ns": 39494053
     },
     {
       "backend": "rust",
@@ -400,7 +400,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 5,
-      "total_ns": 5602655
+      "total_ns": 10204811
     },
     {
       "backend": "c",
@@ -409,7 +409,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 6,
-      "total_ns": 9685274
+      "total_ns": 19866307
     },
     {
       "backend": "c",
@@ -418,7 +418,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 6,
-      "total_ns": 5450161
+      "total_ns": 9201565
     },
     {
       "backend": "rust",
@@ -427,7 +427,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 6,
-      "total_ns": 14897050
+      "total_ns": 25645147
     },
     {
       "backend": "rust",
@@ -436,7 +436,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 6,
-      "total_ns": 5563301
+      "total_ns": 8485256
     },
     {
       "backend": "c",
@@ -445,7 +445,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 7,
-      "total_ns": 9630641
+      "total_ns": 16159163
     },
     {
       "backend": "c",
@@ -454,7 +454,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 7,
-      "total_ns": 5699076
+      "total_ns": 7749775
     },
     {
       "backend": "rust",
@@ -463,7 +463,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 7,
-      "total_ns": 14632626
+      "total_ns": 25993083
     },
     {
       "backend": "rust",
@@ -472,7 +472,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 7,
-      "total_ns": 5535466
+      "total_ns": 10005148
     },
     {
       "backend": "c",
@@ -481,7 +481,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 8,
-      "total_ns": 9880219
+      "total_ns": 18465737
     },
     {
       "backend": "c",
@@ -490,7 +490,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 8,
-      "total_ns": 5660740
+      "total_ns": 11740768
     },
     {
       "backend": "rust",
@@ -499,7 +499,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 8,
-      "total_ns": 15353077
+      "total_ns": 46947098
     },
     {
       "backend": "rust",
@@ -508,7 +508,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 8,
-      "total_ns": 5476760
+      "total_ns": 13808228
     },
     {
       "backend": "c",
@@ -517,7 +517,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 9,
-      "total_ns": 9721779
+      "total_ns": 21591631
     },
     {
       "backend": "c",
@@ -526,7 +526,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 9,
-      "total_ns": 5545830
+      "total_ns": 19102958
     },
     {
       "backend": "rust",
@@ -535,7 +535,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 9,
-      "total_ns": 14254295
+      "total_ns": 27316582
     },
     {
       "backend": "rust",
@@ -544,7 +544,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 9,
-      "total_ns": 5787577
+      "total_ns": 8825910
     },
     {
       "backend": "c",
@@ -553,7 +553,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 10,
-      "total_ns": 12107756
+      "total_ns": 17322879
     },
     {
       "backend": "c",
@@ -562,7 +562,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 10,
-      "total_ns": 6453904
+      "total_ns": 8513620
     },
     {
       "backend": "rust",
@@ -571,7 +571,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 10,
-      "total_ns": 19109360
+      "total_ns": 26723450
     },
     {
       "backend": "rust",
@@ -580,7 +580,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 10,
-      "total_ns": 6275687
+      "total_ns": 9381618
     },
     {
       "backend": "c",
@@ -589,7 +589,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 11,
-      "total_ns": 11847472
+      "total_ns": 17431770
     },
     {
       "backend": "c",
@@ -598,7 +598,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 11,
-      "total_ns": 5434997
+      "total_ns": 8501148
     },
     {
       "backend": "rust",
@@ -607,7 +607,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 11,
-      "total_ns": 15287434
+      "total_ns": 26386808
     },
     {
       "backend": "rust",
@@ -616,7 +616,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 11,
-      "total_ns": 5832020
+      "total_ns": 8964394
     },
     {
       "backend": "c",
@@ -625,7 +625,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 12,
-      "total_ns": 10505139
+      "total_ns": 18024212
     },
     {
       "backend": "c",
@@ -634,7 +634,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 12,
-      "total_ns": 5715312
+      "total_ns": 8507705
     },
     {
       "backend": "rust",
@@ -643,7 +643,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 12,
-      "total_ns": 15596497
+      "total_ns": 26698588
     },
     {
       "backend": "rust",
@@ -652,7 +652,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 12,
-      "total_ns": 6149267
+      "total_ns": 8511355
     },
     {
       "backend": "c",
@@ -661,7 +661,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 13,
-      "total_ns": 10743409
+      "total_ns": 16714553
     },
     {
       "backend": "c",
@@ -670,7 +670,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 13,
-      "total_ns": 5962268
+      "total_ns": 8352350
     },
     {
       "backend": "rust",
@@ -679,7 +679,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 13,
-      "total_ns": 16030144
+      "total_ns": 25941329
     },
     {
       "backend": "rust",
@@ -688,7 +688,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 13,
-      "total_ns": 5924988
+      "total_ns": 9282847
     },
     {
       "backend": "c",
@@ -697,7 +697,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 14,
-      "total_ns": 10532351
+      "total_ns": 17314007
     },
     {
       "backend": "c",
@@ -706,7 +706,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 14,
-      "total_ns": 5924297
+      "total_ns": 7981536
     },
     {
       "backend": "rust",
@@ -715,7 +715,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 14,
-      "total_ns": 15871387
+      "total_ns": 24958826
     },
     {
       "backend": "rust",
@@ -724,7 +724,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 14,
-      "total_ns": 6031816
+      "total_ns": 8441346
     },
     {
       "backend": "c",
@@ -733,7 +733,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 15,
-      "total_ns": 12445856
+      "total_ns": 16452205
     },
     {
       "backend": "c",
@@ -742,7 +742,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 15,
-      "total_ns": 6686130
+      "total_ns": 7967891
     },
     {
       "backend": "rust",
@@ -751,7 +751,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 15,
-      "total_ns": 20136249
+      "total_ns": 25624783
     },
     {
       "backend": "rust",
@@ -760,7 +760,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 15,
-      "total_ns": 6064180
+      "total_ns": 8285093
     },
     {
       "backend": "c",
@@ -769,7 +769,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 16,
-      "total_ns": 10717732
+      "total_ns": 16031708
     },
     {
       "backend": "c",
@@ -778,7 +778,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 16,
-      "total_ns": 6239723
+      "total_ns": 8727658
     },
     {
       "backend": "rust",
@@ -787,7 +787,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 16,
-      "total_ns": 16064205
+      "total_ns": 27611060
     },
     {
       "backend": "rust",
@@ -796,7 +796,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 16,
-      "total_ns": 6199228
+      "total_ns": 12402071
     },
     {
       "backend": "c",
@@ -805,7 +805,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 17,
-      "total_ns": 11188616
+      "total_ns": 18280664
     },
     {
       "backend": "c",
@@ -814,7 +814,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 17,
-      "total_ns": 6190483
+      "total_ns": 9294171
     },
     {
       "backend": "rust",
@@ -823,7 +823,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 17,
-      "total_ns": 15657145
+      "total_ns": 27686758
     },
     {
       "backend": "rust",
@@ -832,7 +832,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 17,
-      "total_ns": 6053956
+      "total_ns": 9478518
     },
     {
       "backend": "c",
@@ -841,7 +841,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 18,
-      "total_ns": 10462417
+      "total_ns": 19036929
     },
     {
       "backend": "c",
@@ -850,7 +850,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 18,
-      "total_ns": 5844891
+      "total_ns": 9347655
     },
     {
       "backend": "rust",
@@ -859,7 +859,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 18,
-      "total_ns": 16011380
+      "total_ns": 26503382
     },
     {
       "backend": "rust",
@@ -868,7 +868,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 18,
-      "total_ns": 5990716
+      "total_ns": 9018094
     },
     {
       "backend": "c",
@@ -877,7 +877,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 19,
-      "total_ns": 10580462
+      "total_ns": 17248729
     },
     {
       "backend": "c",
@@ -886,7 +886,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 19,
-      "total_ns": 5882910
+      "total_ns": 8289164
     },
     {
       "backend": "rust",
@@ -895,7 +895,7 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 19,
-      "total_ns": 15531887
+      "total_ns": 25653338
     },
     {
       "backend": "rust",
@@ -904,61 +904,61 @@
       "iterations": 1000000,
       "phase": "measured",
       "repeat": 19,
-      "total_ns": 5728064
+      "total_ns": 9597292
     }
   ],
-  "recorded_utc": "2026-09-27T06:21:29.769165+00:00",
+  "recorded_utc": "2026-09-30T14:13:19.823286+00:00",
   "results": [
     {
       "backend": "c",
       "controller": "pid",
       "stats": {
-        "max_ns": 12.838284,
-        "mean_ns": 10.72235005,
-        "min_ns": 9.630641,
-        "p50_ns": 10.518745,
-        "p95_ns": 12.4654774,
-        "p99_ns": 12.76372268,
-        "throughput_steps_per_second": 93263136.84377429
+        "max_ns": 21.591631,
+        "mean_ns": 17.5973859,
+        "min_ns": 12.775257,
+        "p50_ns": 17.3773245,
+        "p95_ns": 20.82816065,
+        "p99_ns": 21.43893693,
+        "throughput_steps_per_second": 56826622.185969114
       }
     },
     {
       "backend": "c",
       "controller": "lqr",
       "stats": {
-        "max_ns": 6.762598,
-        "mean_ns": 5.8956132,
-        "min_ns": 5.434997,
-        "p50_ns": 5.7588515000000005,
-        "p95_ns": 6.6899534,
-        "p99_ns": 6.7480690800000005,
-        "throughput_steps_per_second": 169617640.45171756
+        "max_ns": 19.102958,
+        "mean_ns": 9.31876435,
+        "min_ns": 7.142423,
+        "p50_ns": 8.504426500000001,
+        "p95_ns": 12.108877499999998,
+        "p99_ns": 17.7041419,
+        "throughput_steps_per_second": 107310364.59785572
       }
     },
     {
       "backend": "rust",
       "controller": "pid",
       "stats": {
-        "max_ns": 20.136249,
-        "mean_ns": 15.89864245,
-        "min_ns": 14.254295,
-        "p50_ns": 15.53756,
-        "p95_ns": 19.160704449999997,
-        "p99_ns": 19.941140089999998,
-        "throughput_steps_per_second": 62898452.0624904
+        "max_ns": 46.947098,
+        "mean_ns": 29.2539281,
+        "min_ns": 21.283028,
+        "p50_ns": 26.445095,
+        "p95_ns": 46.0005997,
+        "p99_ns": 46.75779834,
+        "throughput_steps_per_second": 34183443.55608094
       }
     },
     {
       "backend": "rust",
       "controller": "lqr",
       "stats": {
-        "max_ns": 6.275687,
-        "mean_ns": 5.8785561,
-        "min_ns": 5.47676,
-        "p50_ns": 5.9116219999999995,
-        "p95_ns": 6.20305095,
-        "p99_ns": 6.261159789999999,
-        "throughput_steps_per_second": 170109799.58156732
+        "max_ns": 13.808228,
+        "mean_ns": 9.4206764,
+        "min_ns": 7.520038,
+        "p50_ns": 9.027218,
+        "p95_ns": 12.47237885,
+        "p99_ns": 13.541058170000001,
+        "throughput_steps_per_second": 106149490.49730654
       }
     }
   ],
@@ -968,15 +968,15 @@
   },
   "schema": "loop-timing-witness.controller-comparison.v1",
   "source_and_binary_sha256": {
-    "Makefile": "aa6723b5a87a3a691a7bdeccd1bd4f191c4930877d75c32c169dc7bf1de397fe",
+    "Makefile": "04d730033d5e9dc127e28716d7d0b6fc9597f0251b9d9d77a65df6dc5f0585aa",
     "benchmarks/controller_benchmark.c": "63d5902f67cfc0e8191e5be015f00c9d2bfb1e48cd6a32c183aec91ad214454d",
     "build/controller_benchmark": "95bcafcf67088795335ae416d64470f6a1445b44bf753cd0c97e471cf74f5ecc",
-    "controllers/c/witness_controller.c": "366a0afb15946fa2c1903f88a7f353780266ab05ec64702dc4d3f6fb40032fa2",
+    "controllers/c/witness_controller.c": "df748b577d136aa90e43e0fff9580e33bbd3b1e03023532d2f959322be5abefe",
     "controllers/c/witness_controller.h": "b13d01ec4318ac3c8938686a38005c7c9cce1bbe6c9fd0ddfdce9c2e2da19fba",
     "controllers/rust/Cargo.lock": "33fff9441fc3f501b0ae575314c1aacb476083cf13b93bb37df2f4658883bc6b",
-    "controllers/rust/Cargo.toml": "ad849bdd52408cbffa639b8c086756b02b42858e44bc04be89a9e77403fd4398",
+    "controllers/rust/Cargo.toml": "a44bc00546ed38a141a404ab8893f0e3b503d6693bbaef057b6093107f848cd0",
     "controllers/rust/src/bin/controller_benchmark.rs": "796137b6c78424c753c01e4ce6f77e00bc414e7910e03ce07419cd6187ba3adc",
-    "controllers/rust/src/lib.rs": "e42106f6808ae284bea18fc5de39f22fc5c8878a21eeacbb21a7ac4a9d7a3f8f",
+    "controllers/rust/src/lib.rs": "9870ca6cfe0f5824540d508e27c5ed7b10d86fa40b7ed5e67a506801f4932ba0",
     "controllers/rust/target/release/controller_benchmark": "6a9a97eaf2783cb8d5a70185496027153dcf1d02457271fbc543262a78ff751d",
     "tools/benchmark_batches.py": "8d8702757c6cc1f6e9675ead0695e4133d4d812e61127f941bb0893974e8f50c",
     "tools/benchmark_controllers.py": "4d290c9b4b22f92c4d01d7d1b62d3551f4ffd908607e2e0b2626e2935db2d2fe"

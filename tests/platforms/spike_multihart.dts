@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Commercial license available
+// © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+// © Code 2020–2026 Miroslav Šotek. All rights reserved.
+// ORCID: 0009-0009-3560-0851
+// Contact: www.anulum.li | protoscience@anulum.li
+// Loop Timing Witness — captured Spike two-hart topology with explicit AMP reservations
+
+/dts-v1/;
+
+/ {
+	#address-cells = <0x02>;
+	#size-cells = <0x02>;
+	compatible = "ucbbar,spike-bare-dev";
+	model = "ucbbar,spike-bare";
+
+	chosen {
+		stdout-path = "/soc/ns16550@10000000";
+		bootargs = "console=ttyS0 earlycon";
+	};
+
+	cpus {
+		#address-cells = <0x01>;
+		#size-cells = <0x00>;
+		timebase-frequency = <0x989680>;
+
+		cpu@0 {
+			device_type = "cpu";
+			reg = <0x01>;
+			status = "okay";
+			compatible = "riscv";
+			riscv,isa = "rv64imac_zicsr_zifencei";
+			mmu-type = "riscv,sv57";
+			riscv,pmpregions = <0x10>;
+			riscv,pmpgranularity = <0x04>;
+			clock-frequency = <0x3b9aca00>;
+
+			interrupt-controller {
+				#address-cells = <0x02>;
+				#interrupt-cells = <0x01>;
+				interrupt-controller;
+				compatible = "riscv,cpu-intc";
+				phandle = <0x01>;
+			};
+		};
+
+		cpu@1 {
+			device_type = "cpu";
+			reg = <0x02>;
+			status = "okay";
+			compatible = "riscv";
+			riscv,isa = "rv64imac_zicsr_zifencei";
+			mmu-type = "riscv,sv57";
+			riscv,pmpregions = <0x10>;
+			riscv,pmpgranularity = <0x04>;
+			clock-frequency = <0x3b9aca00>;
+
+			interrupt-controller {
+				#address-cells = <0x02>;
+				#interrupt-cells = <0x01>;
+				interrupt-controller;
+				compatible = "riscv,cpu-intc";
+				phandle = <0x02>;
+			};
+		};
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x00 0x80000000 0x00 0x80000000>;
+	};
+
+	soc {
+		#address-cells = <0x02>;
+		#size-cells = <0x02>;
+		compatible = "ucbbar,spike-bare-soc\0simple-bus";
+		ranges;
+
+		clint@2000000 {
+			compatible = "riscv,clint0";
+			interrupts-extended = <0x01 0x03 0x01 0x07 0x02 0x03 0x02 0x07>;
+			reg = <0x00 0x2000000 0x00 0xc000>;
+		};
+
+		plic@c000000 {
+			compatible = "riscv,plic0";
+			#address-cells = <0x02>;
+			interrupts-extended = <0x01 0x0b 0x01 0x09 0x02 0x0b 0x02 0x09>;
+			reg = <0x00 0xc000000 0x00 0x1000000>;
+			riscv,ndev = <0x1f>;
+			riscv,max-priority = <0x0f>;
+			#interrupt-cells = <0x01>;
+			interrupt-controller;
+			phandle = <0x03>;
+		};
+
+		ns16550@10000000 {
+			compatible = "ns16550a";
+			clock-frequency = <0x989680>;
+			interrupt-parent = <0x03>;
+			interrupts = <0x01 0x04>;
+			reg = <0x00 0x10000000 0x00 0x100>;
+			reg-shift = <0x00>;
+			reg-io-width = <0x01>;
+		};
+	};
+
+	htif {
+		compatible = "ucb,htif0";
+	};
+
+    reserved-memory {
+        #address-cells = <2>; #size-cells = <2>; ranges;
+        firmware@80000000 { reg = <0 0x80000000 0 0x80000>; no-map; };
+        telemetry@80080000 { reg = <0 0x80080000 0 0x10000>; no-map; };
+    };
+    witness@40000000 {
+        compatible = "anulum,loop-timing-witness-axi-v1", "anulum,witness-isa-simulation";
+        reg = <0 0x40000000 0 256>; interrupt-parent = <3>; interrupts = <2>;
+    };
+};

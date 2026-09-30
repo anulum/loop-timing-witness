@@ -41,6 +41,15 @@ Not yet checked on hardware, and therefore not relied on: the asymmetric-multipr
 reference release for the current board support package, the PAC1934 sampling configuration of
 the reference Linux image, and the fabric RAM budget used to freeze the event buffer size.
 
+The board-facing `rtl/icicle_witness.sv` presents a 38-bit AXI4-Lite address port to a fabric
+interconnect that selects the planned 256-byte register range at `0x60020000` through
+`0x600200ff`. It passes the low eight address bits to `axi_control_witness` and exposes its
+retained interrupt level. This boundary is exercised in simulation; the Libero interconnect,
+capture clock, interrupt route and physical timing are not yet qualified.
+The pinned Icicle reference source configures the FIC0 bus clock at 125 MHz from CCC GL0_0
+and the witness capture clock at 100 MHz from CCC GL0_1. Those source settings do not
+establish implemented clock rates or CDC timing closure.
+
 ## Block structure
 
 ```text
@@ -170,8 +179,12 @@ written for the purpose; accelerator-specific adapters live in the accelerator's
 
 Controllers are textbook PID with anti-windup and discrete LQR, with identical coefficients in C,
 Rust and fabric logic and bit-exact fixed-point parity checked in simulation. Native streaming
-CLIs and the in-process Linux UIO entry are implemented; physical UIO qualification and bare-metal
-service remain pending. The implemented host load generator covers idle, CPU arithmetic,
+CLIs, the in-process Linux UIO entry and [dedicated-hart ISA capture](AMP_SIMULATION.md)
+are implemented. The latter executes source-bound firmware against production RTL; Linux/HSS/PMP
+deployment ownership and physical qualification remain pending. The [Linux AMP collector](AMP_LINUX.md)
+maps separate explicit mailbox/fabric resources without owning the controller IRQ, using the same
+firmware-ready handshake and actual run-contract checks. Physical mapping and boot ownership
+remain unqualified. The implemented host load generator covers idle, CPU arithmetic,
 memory/cache strides, private loopback UDP and owned-file storage/fsync profiles. Source-bound
 captures retain policy readback, actual operation counters and worker/native time brackets; see
 [host load profiles](HOST_ANALYSIS.md#linux-host-load-profiles). These do not qualify physical

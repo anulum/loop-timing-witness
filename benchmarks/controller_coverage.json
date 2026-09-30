@@ -1,12 +1,12 @@
 {
   "schema": "loop-timing-witness.controller-coverage.v1",
-  "recorded_utc": "2026-09-26T19:55:55.656229+00:00",
+  "recorded_utc": "2026-09-30T14:11:18.061542+00:00",
   "evidence_status": "host_native_execution_only",
   "board_qualification": false,
   "source_sha256": {
-    "controllers/c/witness_controller.c": "366a0afb15946fa2c1903f88a7f353780266ab05ec64702dc4d3f6fb40032fa2",
+    "controllers/c/witness_controller.c": "df748b577d136aa90e43e0fff9580e33bbd3b1e03023532d2f959322be5abefe",
     "controllers/c/controller_cli.c": "7c2187ba7a12754d36cad69c47b1213d440f9e3f6c01add0cca256d75e59e602",
-    "controllers/rust/src/lib.rs": "e42106f6808ae284bea18fc5de39f22fc5c8878a21eeacbb21a7ac4a9d7a3f8f",
+    "controllers/rust/src/lib.rs": "9870ca6cfe0f5824540d508e27c5ed7b10d86fa40b7ed5e67a506801f4932ba0",
     "controllers/rust/src/main.rs": "4a321155fd330bc5cdb31a755bec2be57d62d6ad0ff6cb5443af0a59033a51ed"
   },
   "c": {
@@ -15,8 +15,8 @@
       "lines_covered": 60,
       "branches": 54,
       "branches_covered": 54,
-      "raw_report": "build/controller-coverage/kernel.gcov.json.gz",
-      "raw_sha256": "f55fc7978e63cd0a94661c93a855fb83ce05f7058ba7cb9c9a61a4a888b9db49",
+      "raw_report": "build/controller-coverage-20260930/kernel.gcov.json.gz",
+      "raw_sha256": "667a593df65d37de08cb46593a6cc7a30b618cb5f51312538986e17641b692af",
       "compiler": "GCC 13.3.0",
       "flags": "-std=gnu11 -O0 --coverage"
     },
@@ -25,8 +25,8 @@
       "lines_covered": 73,
       "branches": 74,
       "branches_covered": 74,
-      "raw_report": "build/controller-coverage/controller_cli-controller_cli.gcov.json.gz",
-      "raw_sha256": "6545ad5c167eb0db66dadbd916fe4cd843cfb86f5fc64e8f55a41a21bc37c20d",
+      "raw_report": "build/controller-coverage-20260930/controller_cli-controller_cli.gcov.json.gz",
+      "raw_sha256": "0b636ee7effcbae440520cfb1401ea922199278a48356256f143b8d7f2455dac",
       "compiler": "GCC 13.3.0",
       "flags": "-std=gnu11 -O0 --coverage"
     }
@@ -71,8 +71,8 @@
       "compiler": "rustc 1.100.0-nightly (8925ea358 2026-08-20)",
       "toolchain": "nightly-2026-08-21",
       "flags": "-C instrument-coverage -Z coverage-options=branch -C opt-level=0",
-      "raw_report": "build/controller-coverage/rust-coverage.json",
-      "raw_sha256": "437784143aa80c5898787553cc8f48c41f69f6269032a0039363d071e3c11974"
+      "raw_report": "build/controller-coverage-20260930/rust-coverage.json",
+      "raw_sha256": "14ab8ab54ac038b3036808ebf6a37d107c5c1764c737933aabdaf3537594d3ef"
     },
     "main.rs": {
       "summary": {
@@ -113,14 +113,17 @@
       "compiler": "rustc 1.100.0-nightly (8925ea358 2026-08-20)",
       "toolchain": "nightly-2026-08-21",
       "flags": "-C instrument-coverage -Z coverage-options=branch -C opt-level=0",
-      "raw_report": "build/controller-coverage/rust-coverage.json",
-      "raw_sha256": "437784143aa80c5898787553cc8f48c41f69f6269032a0039363d071e3c11974"
+      "raw_report": "build/controller-coverage-20260930/rust-coverage.json",
+      "raw_sha256": "14ab8ab54ac038b3036808ebf6a37d107c5c1764c737933aabdaf3537594d3ef"
     }
   },
   "notes": [
     "Counts cover controller kernels and streaming CLIs, not benchmark timing harnesses or numeric RTL coverage.",
     "Rust production builds use 1.98.1; branch analysis uses separately pinned nightly-2026-08-21 with unoptimized branch instrumentation.",
-    "Coverage is exercised through actual native APIs, full-range commands, malformed inputs and real OS I/O failures; no mocks, exclusions or disabled branches."
+    "Coverage is exercised through actual native APIs, full-range commands, malformed inputs and real OS I/O failures; no mocks, exclusions or disabled branches.",
+    "The current instrumented source snapshot was verified byte for byte against canonical sources before and after the actual behavioral corpus.",
+    "The CLI and RTL corpus has 54 cases; the existing C API executable and two Rust API tests also execute the public interfaces.",
+    "Rust export combines the actual CLI and API-test ELF objects; complete line, region, function and branch counts are checked without rounding."
   ],
   "reproduction": "docs/CONTROLLER_COVERAGE.md"
 }

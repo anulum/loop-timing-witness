@@ -22,6 +22,32 @@ MakeRtlRun = Callable[[], tuple[Path, dict[str, Any]]]
 RunTool = Callable[..., subprocess.CompletedProcess[str]]
 
 
+def test_undeclared_actual_fault_is_refused(
+    make_rtl_run: MakeRtlRun, run_tool: RunTool, tmp_path: Path
+) -> None:
+    """Refuse a valid manifest that omits a fault actually captured by production RTL.
+
+    Parameters
+    ----------
+    make_rtl_run
+        Real Icarus event producer retaining the injected fault and original hashes.
+    run_tool
+        Public host CLI process.
+    tmp_path
+        Exclusive report location that must remain absent after refusal.
+    """
+    run, manifest = make_rtl_run()
+    assert manifest["fault_schedule"]
+    manifest["fault_schedule"] = []
+    path = run / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    output = tmp_path / "undeclared-fault-report"
+    result = run_tool("analyze_run", str(path), "--output-dir", str(output))
+    assert result.returncode == 1
+    assert "fault schedule does not match captured FAULT_INJECTED events" in result.stderr
+    assert not output.exists()
+
+
 def test_control_run_from_rtl_simulation(
     make_rtl_run: MakeRtlRun, run_tool: RunTool, tmp_path: Path
 ) -> None:

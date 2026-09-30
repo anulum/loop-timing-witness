@@ -14,6 +14,10 @@ rust-version = "1.98.1"
 publish = false
 license = "AGPL-3.0-or-later"
 description = "Bit-exact Q8.24 PID and discrete LQR for Loop Timing Witness"
+authors = ["Miroslav Šotek"]
+repository = "https://github.com/anulum/loop-timing-witness"
+homepage = "https://www.anulum.li"
+readme = "README.md"
 
 [lints.rust]
 unsafe_code = "forbid"

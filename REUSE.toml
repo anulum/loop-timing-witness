@@ -24,7 +24,16 @@ path = [
     "measurement-domain.schema.json",
     "run-manifest.schema.json",
     "native-run.schema.json",
+    "amp-capture.schema.json",
+    "amp-plugin-build.schema.json",
     "host-load.schema.json",
+    "src/loop_timing_witness/data/amp-capture.schema.json",
+    "src/loop_timing_witness/data/amp-plugin-build.schema.json",
+    "src/loop_timing_witness/data/host-load.schema.json",
+    "src/loop_timing_witness/data/measurement-domain.json",
+    "src/loop_timing_witness/data/measurement-domain.schema.json",
+    "src/loop_timing_witness/data/native-run.schema.json",
+    "src/loop_timing_witness/data/run-manifest.schema.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = [

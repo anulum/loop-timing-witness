@@ -17,7 +17,15 @@ jobs:
   run:
     name: Pytest with 100 % statement and branch coverage
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 90
+    env:
+      WITNESS_RV64_CC: /usr/bin/riscv64-linux-gnu-gcc-13
+      WITNESS_SPIKE_SOURCE: ${{ github.workspace }}/build/amp-ci/spike-source
+      WITNESS_SPIKE_BUILD: ${{ github.workspace }}/build/amp-ci/spike-build
+      WITNESS_SPIKE: ${{ github.workspace }}/build/amp-ci/spike-build/spike
+      WITNESS_SPIKE_PLUGIN: ${{ github.workspace }}/build/amp-ci/mechanical/witness_spike_axi.so
+      WITNESS_SPIKE_THERMAL_PLUGIN: ${{ github.workspace }}/build/amp-ci/thermal/witness_spike_axi.so
+      WITNESS_AMP_IMAGE: ${{ github.workspace }}/build/amp-ci/image
     permissions:
       contents: read # read the repository for the test run
     steps:
@@ -31,18 +39,27 @@ jobs:
         with:
           go-version: "1.27.1"
           cache: false
-      - name: Install pinned RTL, native receipt and syscall trace dependencies
+      - name: Install pinned RTL, RV64, device-tree, Spike and native dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2 verilator=5.020-1 libssl-dev=3.0.13-0ubuntu3.15 strace=6.8-0ubuntu2
-          dpkg-query -W iverilog verilator libssl-dev libssl3t64 strace
+          sudo apt-get install --no-install-recommends --yes \
+            device-tree-compiler=1.7.0-2build1 gcc-riscv64-linux-gnu=4:13.2.0-7ubuntu1 \
+            gcc-13-riscv64-linux-gnu=13.3.0-6ubuntu2~24.04.1cross1 \
+            libboost-regex-dev=1.83.0.1ubuntu2 libboost-system-dev=1.83.0.1ubuntu2 \
+            libboost1.83-dev=1.83.0-2.1ubuntu3.2 libboost-regex1.83-dev=1.83.0-2.1ubuntu3.2 \
+            libboost-system1.83-dev=1.83.0-2.1ubuntu3.2 libboost-regex1.83.0=1.83.0-2.1ubuntu3.2 \
+            libboost-system1.83.0=1.83.0-2.1ubuntu3.2
+          dpkg-query -W iverilog verilator libssl-dev libssl3t64 strace device-tree-compiler 'gcc*' 'binutils*' 'libboost*'
           strace --version
           verilator --version
           iverilog -V
           vvp -V
+          dtc --version
+          "$WITNESS_RV64_CC" --version
       - name: Install the pinned Rust toolchain
         run: |
-          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown --target riscv64imac-unknown-none-elf
           rustup default 1.98.1
       - name: Native toolchain versions
         run: |
@@ -53,6 +70,40 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
+      - name: Prepare hash-verified wheels for isolated Python package consumers
+        run: make python-wheelhouse
+      - name: Build the exact original Spike simulator and SDK
+        run: |
+          mkdir -p "$WITNESS_SPIKE_SOURCE" "$WITNESS_SPIKE_BUILD"
+          git -C "$WITNESS_SPIKE_SOURCE" init
+          git -C "$WITNESS_SPIKE_SOURCE" remote add origin https://github.com/riscv-software-src/riscv-isa-sim.git
+          git -C "$WITNESS_SPIKE_SOURCE" fetch --depth 1 origin 7ab2efd6785e847c6d13d810c0b25b7c9c26bd21
+          git -C "$WITNESS_SPIKE_SOURCE" checkout --detach 7ab2efd6785e847c6d13d810c0b25b7c9c26bd21
+          cd "$WITNESS_SPIKE_SOURCE"
+          # Import Boost before Spike's yield() instruction macro; preserve the diff in receipts.
+          printf '%s\n' '2000de3a282d863b7d8e5a2a010292f224350576cd2e2ba947aa3a3aa8ff29c1  riscv/interactive.cc' | sha256sum --check --strict
+          sed -i '/#include "socketif.h"/d; /#include "decode.h"/a #include "socketif.h"' riscv/interactive.cc
+          printf '%s\n' 'a8bcc40fe376e5bc0fea16fba5b0a7d1cc6e63f667f511b98ac67d9e04c3f622  riscv/interactive.cc' | sha256sum --check --strict
+          git diff --exit-code -- . ':!riscv/interactive.cc'
+          git diff -- riscv/interactive.cc
+          cd "$WITNESS_SPIKE_BUILD"
+          "$WITNESS_SPIKE_SOURCE/configure" --prefix="$WITNESS_SPIKE_BUILD/install"
+          make -j2 spike
+          "$WITNESS_SPIKE" --help
+      - name: Build the actual RV64 firmware and both production RTL plugins
+        run: |
+          dtc -I dts -O dtb -o build/amp-ci/platform.dtb tests/platforms/spike_multihart.dts
+          printf '%s\n' 'pid 10 32768 16777216 0 0 0 16777216 0 16777216 -16777216 16777216 -16777216 16777216 0 16777216 0 0 0 none 0 0 0 0' > build/amp-ci/configuration.txt
+          .venv/bin/python tools/prepare_amp_image.py \
+            --dtb build/amp-ci/platform.dtb --configuration build/amp-ci/configuration.txt \
+            --ram-node /memory@80000000 --firmware-node /reserved-memory/firmware@80000000 \
+            --telemetry-node /reserved-memory/telemetry@80080000 --device-node /witness@40000000 \
+            --plic-node /soc/plic@c000000 --plic-layout spike --hart 2 --interrupt 2 \
+            --stack-bytes 16384 --output "$WITNESS_AMP_IMAGE" --compiler "$WITNESS_RV64_CC" --isa
+          make -C "$WITNESS_AMP_IMAGE" -j2
+          make amp-spike-plugin AMP_SPIKE_SOURCE="$WITNESS_SPIKE_SOURCE" AMP_SPIKE_BUILD="$WITNESS_SPIKE_BUILD" AMP_PLUGIN_DIRECTORY=build/amp-ci/mechanical SIMULATION_THERMAL=0
+          make amp-spike-plugin AMP_SPIKE_SOURCE="$WITNESS_SPIKE_SOURCE" AMP_SPIKE_BUILD="$WITNESS_SPIKE_BUILD" AMP_PLUGIN_DIRECTORY=build/amp-ci/thermal SIMULATION_THERMAL=1
       - name: Build pinned Go tools used by the gate-runner tests
         run: |
           go install github.com/zricethezav/gitleaks/v8@v8.30.1

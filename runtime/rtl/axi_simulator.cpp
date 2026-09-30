@@ -8,6 +8,10 @@
 
 #include "simulation.h"
 #include "../process_protocol.h"
+#ifdef WITNESS_RTL_COVERAGE
+#include "verilated_cov.h"
+#include <unistd.h>
+#endif
 
 /** Serve R/W/T/I/Q lines with response,data,simulation-nanoseconds replies. */
 int main(int argc, char **argv) {
@@ -17,7 +21,12 @@ int main(int argc, char **argv) {
     }
     try {
         witness::Simulation simulation;
-        return witness::serve(simulation);
+        const auto result = witness::serve(simulation);
+#ifdef WITNESS_RTL_COVERAGE
+        const auto profile = std::string(argv[0]) + "." + std::to_string(getpid()) + ".coverage.dat";
+        VerilatedCov::write(profile.c_str());
+#endif
+        return result;
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

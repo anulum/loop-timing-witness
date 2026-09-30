@@ -10,17 +10,15 @@
 
 from __future__ import annotations
 
+import os
 import select
 import subprocess
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 from test_controller_parity import DEFAULT, oracle
 
 from conftest import REPOSITORY_ROOT
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @pytest.fixture(scope="module", params=[0, 1])
@@ -38,8 +36,28 @@ def simulator(request: pytest.FixtureRequest) -> Path:
         Native AXI process executable.
     """
     thermal = int(request.param)
+    coverage = os.environ.get("WITNESS_RTL_COVERAGE") == "1"
+    directory = os.environ.get("WITNESS_AXI_COVERAGE_BUILD_ROOT")
+    build = (
+        Path(directory) / f"plant_{thermal}"
+        if directory is not None
+        else REPOSITORY_ROOT / f"build/axi_simulator_{thermal}"
+    )
     result = subprocess.run(
-        ["make", "axi-simulator", f"SIMULATION_THERMAL={thermal}"],
+        [
+            "make",
+            "axi-simulator",
+            f"SIMULATION_THERMAL={thermal}",
+            f"SIMULATION_DIRECTORY={build}",
+            *(
+                [
+                    "AXI_SIMULATOR_VERILATOR_FLAGS=--coverage-line",
+                    "AXI_SIMULATOR_CFLAGS=-std=c++17 -Wall -Wextra -Werror -DWITNESS_RTL_COVERAGE",
+                ]
+                if coverage
+                else []
+            ),
+        ],
         cwd=REPOSITORY_ROOT,
         capture_output=True,
         text=True,
@@ -47,7 +65,7 @@ def simulator(request: pytest.FixtureRequest) -> Path:
         timeout=90,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    return REPOSITORY_ROOT / f"build/axi_simulator_{thermal}/axi_simulator"
+    return build / "axi_simulator"
 
 
 def exchange(process: subprocess.Popen[str], message: str) -> tuple[int, int, int]:
@@ -106,6 +124,140 @@ def test_register_reset_and_irq(simulator: Path) -> None:
             assert exchange(process, "R 160")[1] == 0
             assert exchange(process, "W 164 1 15")[0] == 0
             assert exchange(process, "I 0")[1] == 0
+            assert process.stdin is not None
+            process.stdin.write("Q\n")
+            process.stdin.flush()
+            assert process.wait(timeout=5) == 0
+            if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
+                assert Path(f"{simulator}.{process.pid}.coverage.dat").stat().st_size > 0
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=5)
+
+
+def test_configuration_write_refusals(simulator: Path) -> None:
+    """Refuse invalid values and post-enable writes through the real AXI process.
+
+    Parameters
+    ----------
+    simulator
+        Actual production plant and configuration register bank.
+    """
+    with subprocess.Popen(
+        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    ) as process:
+        try:
+            registers = {60: 0, 68: 0, 84: 1, 88: 0}
+            for address, original in registers.items():
+                response, value, _ = exchange(process, f"R {address}")
+                assert (response, value) == (0, original)
+            for address, value in ((68, 3), (84, 16), (88, 4)):
+                assert exchange(process, f"W {address} {value} 15")[0] == 2
+                assert exchange(process, f"R {address}")[1] == registers[address]
+            assert exchange(process, "W 60 2 15")[0] == 0
+            assert exchange(process, "R 60")[1] == 2
+            assert exchange(process, "W 56 1 15")[0] == 0
+            assert exchange(process, "R 56")[1] == 1
+            for address, value in ((60, 3), (68, 2), (84, 15), (88, 3)):
+                assert exchange(process, f"W {address} {value} 15")[0] == 2
+                assert exchange(process, f"R {address}")[1] == (
+                    2 if address == 60 else registers[address]
+                )
+            assert process.stdin is not None
+            process.stdin.write("Q\n")
+            process.stdin.flush()
+            assert process.wait(timeout=5) == 0
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=5)
+
+
+def test_stale_command_records_late_event(simulator: Path) -> None:
+    """Retain a late event for a committed command targeting the wrong cycle.
+
+    Parameters
+    ----------
+    simulator
+        Production AXI decoder, control cycle and event FIFO.
+    """
+    with subprocess.Popen(
+        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    ) as process:
+        try:
+            assert exchange(process, "W 60 1 15")[0] == 0
+            assert exchange(process, "W 56 1 15")[0] == 0
+            assert exchange(process, "I 1000000")[1] == 1
+            assert exchange(process, "R 0")[0] == 0
+            assert exchange(process, "R 16")[1] == 0
+            assert exchange(process, "W 40 1 15")[0] == 0
+            assert exchange(process, "W 44 16777216 15")[0] == 0
+            assert exchange(process, "W 48 1 15")[0] == 0
+            assert exchange(process, "T 140")[0] == 0
+            records = []
+            for _ in range(8):
+                if not exchange(process, "R 144")[1] & 1:
+                    break
+                words = [exchange(process, f"R {address}")[1] for address in (128, 132, 136, 140)]
+                records.append((words[0], words[1]))
+                assert exchange(process, "W 148 1 15")[0] == 0
+            assert records.count((13, 0)) == 1
+            assert exchange(process, "R 52")[1] == 0
+            assert exchange(process, "R 4")[1] & 8 == 0
+            assert process.stdin is not None
+            process.stdin.write("Q\n")
+            process.stdin.flush()
+            assert process.wait(timeout=5) == 0
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=5)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (1, 16777216, 0, 2147483647, [0, 2147483647, 2147483647]),
+        (1, 16777216, 0, -2147483648, [0, -2147483648, -2147483648]),
+        (2, 16777216, 0, 0, [0, 6420363, 11863283]),
+        (0, 2147483647, 1, 0, [2147483647]),
+        (0, -2147483648, -1, 0, [-2147483648]),
+    ],
+)
+def test_reference_waveform_through_axi(
+    simulator: Path, case: tuple[int, int, int, int, list[int]]
+) -> None:
+    """Read configured ramp, sine and saturation outputs from real AXI snapshots.
+
+    Parameters
+    ----------
+    simulator
+        Production AXI process executable.
+    case
+        Mode, amplitude, offset, increment and signed Q8.24 references.
+    """
+    mode, amplitude, offset, increment, expected = case
+    with subprocess.Popen(
+        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    ) as process:
+        try:
+            for address, value in (
+                (60, len(expected) - 1),
+                (68, mode),
+                (72, amplitude),
+                (76, offset),
+                (80, increment),
+            ):
+                assert exchange(process, f"W {address} {value & 0xFFFFFFFF} 15")[0] == 0
+            assert exchange(process, "W 56 1 15")[0] == 0
+            for cycle, wanted in enumerate(expected):
+                assert exchange(process, "I 1000000")[1] == 1
+                assert exchange(process, "R 0")[0] == 0
+                assert exchange(process, "R 16")[1] == cycle
+                assert exchange(process, "R 24")[1] == wanted & 0xFFFFFFFF
+                assert exchange(process, "R 156")[1] == cycle + 1
+                assert exchange(process, "W 164 1 15")[0] == 0
             assert process.stdin is not None
             process.stdin.write("Q\n")
             process.stdin.flush()

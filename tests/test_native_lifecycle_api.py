@@ -21,25 +21,29 @@ from conftest import REPOSITORY_ROOT
 
 
 @pytest.fixture(scope="module", params=[0, 1])
-def lifecycle_program(request: pytest.FixtureRequest) -> Path:
+def lifecycle_program(
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
+) -> Path:
     """Compile the API corpus with the actual production RTL and native C controller.
 
     Parameters
     ----------
     request
         Mechanical or thermal production plant selection.
+    tmp_path_factory
+        Fresh build allocation preventing profiles from another compilation from being merged.
 
     Returns
     -------
     Path
         Actual API test executable, with strict warnings and compiler instrumentation.
     """
-    base = Path(
-        os.environ.get("WITNESS_LIFECYCLE_BUILD_ROOT", str(REPOSITORY_ROOT / "build/lifecycle_api"))
-    )
+    selected = os.environ.get("WITNESS_LIFECYCLE_BUILD_ROOT")
+    base = Path(selected) if selected is not None else tmp_path_factory.mktemp("lifecycle-api")
     directory = base / f"plant_{int(request.param)}"
     directory.mkdir(parents=True, exist_ok=True)
     kernel = directory / "kernel.o"
+    rtl_coverage = os.environ.get("WITNESS_RTL_COVERAGE") == "1"
     commands = [
         [
             "gcc",
@@ -63,6 +67,7 @@ def lifecycle_program(request: pytest.FixtureRequest) -> Path:
             "--exe",
             "--build",
             "--Wall",
+            *(["--coverage-line"] if rtl_coverage else []),
             "--top-module",
             "axi_control_witness",
             "-j",
@@ -74,7 +79,8 @@ def lifecycle_program(request: pytest.FixtureRequest) -> Path:
             "--Mdir",
             str(directory),
             "-CFLAGS",
-            "-std=c++17 -Wall -Wextra -Werror --coverage -O2",
+            "-std=c++17 -Wall -Wextra -Werror --coverage -O2"
+            + (" -DWITNESS_RTL_COVERAGE" if rtl_coverage else ""),
             "-LDFLAGS",
             f"{kernel} --coverage -lcrypto",
             "rtl/event_codes_pkg.sv",
@@ -163,6 +169,8 @@ def test_actual_lifecycle_api(lifecycle_program: Path, tmp_path: Path, scenario:
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified {scenario}\n"
     assert result.stderr == ""
+    if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
+        assert events.with_name(events.name + ".coverage.dat").stat().st_size > 0
     assert_retained_outputs(scenario, events, raw)
 
 

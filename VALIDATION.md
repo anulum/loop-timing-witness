@@ -10,6 +10,21 @@ Loop Timing Witness — validation
 
 # Validation
 
+## Installed Python distribution
+
+`make python-package-tests` prepares binary runtime wheels using the hashes in
+`requirements-runtime.txt`, then runs `tests/test_python_distribution.py`. The test builds the
+canonical wheel and source archive through the pinned Flit backend. A wheel rebuilt from the
+archive must contain the same files and bytes as the direct wheel. Each artifact is installed
+offline into a fresh environment with the complete hashed runtime dependency set.
+
+The consumer runs outside the checkout. Its public `load_run` and `build_report` API and
+`loop-timing-witness-analyze` command analyse binary events produced by the real Icarus capture
+path and must agree with repository analysis. An altered event digest must fail without creating
+a report directory. Installed import origin, packaged schemas and the typing marker are checked.
+The CI test job prepares the same hashed wheelhouse before pytest; no package-registry upload is
+performed. `WITNESS_PYTHON_WHEELHOUSE` may select an existing wheelhouse for offline verification.
+
 Every gate that exists in this repository, with its exact scope. No board instrument exists, so no
 board measurement is validated; these gates validate repository infrastructure, the internal
 consistency of the measurement contracts, the RTL-simulation-to-host-analysis path and the
@@ -19,6 +34,9 @@ truthfulness of the `architecture_only` state.
 
 - Python 3.13 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
+- Flit Core 4.1.0 is the hash-pinned Python distribution build backend in the same development
+  lock. The regeneration command retains the original upload cut-off for existing dependencies
+  and records a separate September 17 cut-off for this exact backend pin.
 - Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu noble package `12.0-2build2`, to compile the
   synthesizable capture and buffered witness modules and produce binary event files consumed by
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
@@ -29,6 +47,16 @@ truthfulness of the `architecture_only` state.
   Tool versions are printed by the jobs. The controller kernels have no third-party native dependencies.
 - Verilator 5.020 (`verilator`), Ubuntu noble package `5.020-1`, builds the native controller
   against the production AXI top. C++17 and Linux headers are required for the native adapters.
+- The [dedicated-hart ISA capture tests](docs/AMP_SIMULATION.md) require actual Spike execution,
+  matching original source/generated headers, both production RTL plugins and a publicly built
+  RV64 firmware image. The plugin uses C++20; firmware uses the freestanding RV64IMAC/Zicsr/Zifencei
+  ABI. Supply `WITNESS_SPIKE`, `WITNESS_SPIKE_SOURCE`, `WITNESS_SPIKE_BUILD`,
+  `WITNESS_SPIKE_PLUGIN`, `WITNESS_SPIKE_THERMAL_PLUGIN` and `WITNESS_AMP_IMAGE` explicitly.
+  `dtc` compiles the retained original topology. Missing actual dependencies fail these tests.
+  Host library paths must expose the selected actual RV64 compiler dependencies. Native Make
+  builds retain complete `-MD` source/system/SDK header records and exclusive plugin build
+  receipts. Image verification records the actual driver, frontend, collect2, assembler and
+  linker identities; source/receipt drift requires a fresh build.
 - Strace 6.8, Ubuntu noble package `6.8-0ubuntu2`, is required for owned-process refusal tests.
   Tests delay syscall entry and retain actual kernel results; they neither substitute return
   values nor modify process memory. Tracing starts with test-owned children and uses existing
@@ -58,6 +86,12 @@ is missing; `--only NAME` runs one gate and `--list` prints the plan.
 | `mypy` | `mypy` | `tools/`, `tests/`, `conftest.py` and native build support in strict mode |
 | `controller-build` | `make controller-build` | strict C build, Rust format/Clippy, dependency-free release build and native API documentation |
 | `controller-tests` | `make controller-tests` | public C APIs under undefined-behaviour sanitization and Rust public state/refusal tests |
+| Rust AMP image | `.venv/bin/pytest -q tests/test_amp_rust_image.py` | actual public preparation, strict original RV64 C/assembly and Rust compilation, linking, metadata/final dependency reconciliation, immutable image receipt and offline captured-byte admission; requires dtc, RV64 GCC and the RV64IMAC Rust target |
+| Rust toolchain custody | `.venv/bin/pytest -q tests/test_amp_rust_toolchain.py` | actual Rustup proxy/compiler identity and owned real-compiler toolchain refusal when Cargo or RV64 core libraries are missing; requires Rustup and an installed RV64IMAC target |
+| Rust original source custody | `.venv/bin/pytest -q tests/test_amp_rust_sources.py` | actual Rust metadata/final dependency records, archive admission, captured source/library bytes and refusal of missing or escaping original source paths; requires the installed RV64IMAC Rust target |
+| Rust AMP panic refusal | `.venv/bin/pytest -q tests/test_amp_rust_panic.py` | source-bound fault image exercises the original Rust panic handler and terminal `0x109` refusal through public capture on both mechanical and thermal production plants; requires the CI AMP image, Spike, plugins, RV64 GCC and RV64IMAC Rust target |
+| Rust package consumer | `.venv/bin/pytest -q tests/test_rust_package_consumer.py` | real Cargo archive extraction, separate dependency client, state/refusal tests, strict Clippy, allocator-free WebAssembly and RV64IMAC builds, and actual RISC-V ELF64 soft-float object checks; requires both installed Rust targets |
+| Icicle reference derivation | `.venv/bin/pytest -q tests/test_icicle_reference_derivation.py` | fetches the pinned official reference commit unless `WITNESS_ICICLE_REFERENCE` names a clean local checkout; exercises the public derivation, complete reference-tree receipt, copied RTL hashes and pre-Libero refusal paths; place pytest's base temporary directory on the repository disk |
 | `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `tools/` and native build support, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
 | `measurement-domain` | `python tools/validate_measurement_domain.py` | repeated-key rejection, JSON Schema, cross-field rules, and — where the canonical project registry is present — group and project identity |
 | `capability-inventory` | `python tools/generate_capability_inventory.py --check` | committed inventory byte-identical to a fresh generation from a valid manifest |
@@ -97,6 +131,16 @@ qualify metastability, Gray-bus physical timing or a board bitstream. See
 [`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md) for ports and remaining board gates. Python
 coverage measures tools, not SystemVerilog; the simulations do not provide a numeric RTL
 statement/branch coverage verdict.
+
+The board-facing `icicle_witness` top is also checked against every production RTL source:
+
+```bash
+verilator --lint-only --Wall --top-module icicle_witness rtl/*.sv
+yosys -Q -T -q -p 'read_verilog -sv rtl/*.sv; hierarchy -check -top icicle_witness; proc; opt; check -assert'
+```
+
+These checks establish source elaboration and obvious structural consistency. They do not
+replace the derived Libero project, device-specific DRC, physical CDC review or timing reports.
 
 ## Hooks
 
@@ -154,6 +198,32 @@ C/Rust command checksums must agree; host wall time cannot establish fabric spee
 
 `make run-simulation` compiles the in-process native controller with the actual production
 AXI top; `make run-uio` builds the same lifecycle with Linux UIO and the PAC1934 journal.
+`make run-amp-uio` builds the separate IRQ-free Linux logger for a dedicated firmware hart,
+using the ABI 2 startup handshake and actual firmware run-contract comparison described in
+[`docs/AMP_LINUX.md`](docs/AMP_LINUX.md).
+`tests/test_amp_uio_run.py` exercises its public command, resource parsing and actual
+unavailable-device refusals; `tests/test_amp_architectural_refusals.py` exercises actual
+firmware traps and mismatched published contracts through Spike and production RTL.
+`tests/test_amp_logger.py` additionally links a real RV64 wrapper around the unchanged production
+IRQ handler. Its zero baseline completes both plant models, including 300 samples that
+reuse all 256 ring slots; raw cycles, IRQ generations and snapshot timestamps match actual
+`SAMPLE_READ` records. Deliberate target RAM writes
+exercise full-ring refusal and post-IRQ ABI, cursor, status, reserved-field and trap-state
+consistency checks. Invalid sample flags, out-of-range/repeated cycles, regressed snapshot
+timestamps and repeated IRQ generations are also refused. Actual child file-size limits exercise header and final-close failures.
+These deliberately altered test ELFs run directly in Spike and produce no admitted capture
+or measurement manifest.
+`tests/test_amp_logger_api.py` links a diagnostic client against hash-verified production
+RTL objects and the unchanged logger and transport. Both plants exercise the public lifecycle,
+waiting for actual firmware arming, delayed telemetry consumption across the eight-record batch
+bound, invalid mailbox addresses, contract mismatch, premature completion, repeated polling and
+acquisition callback failures. Public Spike memory stores deliberately damage one real initial
+or arming field at a time; the logger refuses each changed word. A source-bound diagnostic ELF
+also selects the genuine LQR kernel, with matching published configuration. Successful runs retain the actual ten samples and forty events;
+refusals retain native diagnostics. Diagnostic clients produce no capture or measurement manifest.
+The AMP logger also compiled with the genuine RV64 compiler and target OpenSSL libraries
+listed below; QEMU verified usage and missing-device refusals. Neither those checks nor
+the ISA handshake establish successful Linux shared-memory acquisition on a board.
 Simulation verifies PID/LQR feedback, real sample/command events, fault handling, reset custody,
 final FIFO drain and capture-to-manifest-to-report integration. Real host-file and process tests
 exercise exclusive output, write/flush failures, hashing errors, concurrent artifact mutation,

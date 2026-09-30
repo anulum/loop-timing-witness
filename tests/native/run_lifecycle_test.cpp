@@ -14,6 +14,9 @@
 #include <sstream>
 #include <algorithm>
 #include "output_limit.h"
+#ifdef WITNESS_RTL_COVERAGE
+#include "verilated_cov.h"
+#endif
 
 /** Require the actual production API to reject a real transport state precisely. */
 template<class Operation> void refusal(Operation operation, const char *message) {
@@ -134,6 +137,9 @@ int main(int argc, char **argv) {
     } else if (scenario == "read") {
         refusal([&] { witness::read_register(device, 0xfc); }, "register read refused at 252");
         assert(witness::read_register(device, 0x7c) == 1);
+        refusal([&] { witness::read_register(device, 0x0c); }, "register read refused at 12");
+        assert(witness::read_register(device, 0x08) > 0);
+        assert(witness::read_register(device, 0x0c) == 0);
     } else if (scenario == "write") {
         refusal([&] { witness::write_register(device, 0x7c, 0); }, "register write refused at 124");
         assert(witness::read_register(device, 0x7c) == 1);
@@ -192,4 +198,8 @@ int main(int argc, char **argv) {
             closed_output(output, argv[3], argv[4]);
     } else return 1;
     std::cout << "verified " << scenario << '\n';
+#ifdef WITNESS_RTL_COVERAGE
+    const std::string profile = std::string(argv[3]) + ".coverage.dat";
+    VerilatedCov::write(profile.c_str());
+#endif
 }

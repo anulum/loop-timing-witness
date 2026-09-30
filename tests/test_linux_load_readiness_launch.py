@@ -45,7 +45,9 @@ def _actual_worker(trace: OwnedTrace) -> tuple[int, int]:
     tuple of int and int
         Actual production worker PID and its owned pidfd.
     """
-    deadline = time.monotonic() + 5
+    # Coverage starts the launcher before strace can observe its worker creation.
+    # The production readiness timeout and syscall delay are unchanged.
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         trace.observe()
         for pid, descriptor in trace.descriptors.items():

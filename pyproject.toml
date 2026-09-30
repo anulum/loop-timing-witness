@@ -4,10 +4,33 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — validation tooling configuration
+# Loop Timing Witness — package and validation tooling configuration
 
-# This file configures the repository's validation tooling. It declares no
-# distributable package: none exists at architecture-only maturity.
+# Python distribution metadata describes software interfaces; it does not
+# claim board measurements or physical acceptance.
+
+[build-system]
+requires = ["flit_core==4.1.0"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "loop-timing-witness"
+version = "0.1.0"
+description = "Timing, tracking and power analysis for Loop Timing Witness"
+requires-python = ">=3.13"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+readme = "README.md"
+authors = [{name = "Miroslav Šotek"}]
+dependencies = ["jsonschema==4.26.0"]
+
+[project.scripts]
+loop-timing-witness-analyze = "loop_timing_witness.analyze_run:main"
+
+[project.urls]
+Homepage = "https://github.com/anulum/loop-timing-witness"
+Repository = "https://github.com/anulum/loop-timing-witness"
+Documentation = "https://github.com/anulum/loop-timing-witness/blob/main/VALIDATION.md"
 
 [tool.ruff]
 target-version = "py313"
@@ -64,6 +87,11 @@ ignore = [
 "tools/preflight.py" = ["S603", "S607"]
 # Native capture builds trusted repository snapshots with fixed argv and no shell.
 "tools/capture_native_simulation.py" = ["S603", "S607"]
+# AMP execution uses an explicitly admitted absolute simulator with a closed argv, no shell.
+"tools/capture_amp_simulation.py" = ["S603"]
+# Build provenance introspects explicitly resolved actual compiler/Git/tool programs, no shell.
+"tools/amp_build_toolchain.py" = ["S603"]
+"tools/write_amp_plugin_manifest.py" = ["S603"]
 # Host load executes an explicitly selected absolute executable and owned worker
 # with argument vectors, no shell, bounded lifetime and owned process groups.
 "tools/linux_load.py" = ["S603"]
@@ -110,7 +138,7 @@ enable_error_code = [
     "unused-awaitable",
 ]
 mypy_path = ["tools"]
-files = ["tools", "tests", "conftest.py", "controller_test_support.py"]
+files = ["src", "tools", "tests", "conftest.py", "controller_test_support.py"]
 pretty = true
 
 [tool.pytest.ini_options]
@@ -121,7 +149,7 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["tools", "controller_test_support"]
+source = ["loop_timing_witness", "tools", "controller_test_support"]
 patch = ["subprocess"]
 
 [tool.coverage.report]

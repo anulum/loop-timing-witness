@@ -118,6 +118,8 @@ The instrument architecture, event record format and verification plan are descr
 procedure and its stated limits by [`docs/MEASUREMENT_PROTOCOL.md`](docs/MEASUREMENT_PROTOCOL.md),
 and the threat model by [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md). The implemented simulation
 and host file contract is in [`docs/HOST_ANALYSIS.md`](docs/HOST_ANALYSIS.md).
+The source-bound vendor input procedure is in
+[`hardware/icicle/README.md`](hardware/icicle/README.md); no Libero or board result is claimed.
 
 The [system block diagram](docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf)
 illustrates the proposed PolarFire SoC Icicle Kit design for the 2026 contest.
@@ -133,7 +135,10 @@ timebase counter cannot wrap during a repeat.
 The RTL stream contract is described in [`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md); the
 integrated plant, monitor and injector are in [`docs/PLANT_WITNESS.md`](docs/PLANT_WITNESS.md).
 Controller arithmetic, design, native interfaces and simulation limits are in
-[`docs/CONTROLLERS.md`](docs/CONTROLLERS.md).
+[`docs/CONTROLLERS.md`](docs/CONTROLLERS.md). Dedicated-hart firmware preparation, actual ISA
+capture and analysis limits are in [`docs/AMP_SIMULATION.md`](docs/AMP_SIMULATION.md).
+The IRQ-free Linux AMP logger, mailbox startup and board qualification requirements are in
+[`docs/AMP_LINUX.md`](docs/AMP_LINUX.md).
 
 ## Repository layout
 
@@ -141,6 +146,8 @@ Controller arithmetic, design, native interfaces and simulation limits are in
 |---|---|
 | `measurement-domain.json`, `measurement-domain.schema.json` | identity, boundary and planned measurement contracts |
 | `run-manifest.schema.json` | versioned, provenance-bound run input contract |
+| `amp-capture.schema.json` | actual dedicated-hart ISA logger receipt and artifact custody |
+| `amp-plugin-build.schema.json` | original generation/compilation, native compiler, SDK, source/header and link provenance |
 | `capability-inventory.json` | generated public inventory, empty at `architecture_only` |
 | `development-dependency-licences.json` | reviewed licence of every pinned development tool |
 | `docs/` | architecture, measurement protocol, threat model, decision records |
@@ -148,7 +155,7 @@ Controller arithmetic, design, native interfaces and simulation limits are in
 | `rtl/` | fixed-point controllers, plants, monitor, injector, timestamp capture and dual-clock stream |
 | `controllers/` | dependency-free C and Rust kernels, streaming CLIs and API documentation |
 | `runtime/rtl/` | native process transport through the actual production AXI simulation |
-| `runtime/linux/` | UIO transport, native run entry and bracketed PAC1934 IIO journal; hardware qualification pending |
+| `runtime/linux/` | UIO transport, native controller and AMP logger entries, bracketed PAC1934 IIO journal; hardware qualification pending |
 | `benchmarks/` | matching native workloads and labelled local regression records |
 | `tools/` | host analysis, validators, inventory generator, repository guards and preflight runner |
 | `tests/` | command-line, file and RTL-simulation tests |

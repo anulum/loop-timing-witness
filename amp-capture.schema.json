@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.anulum.li/schemas/loop-timing-witness/amp-capture-v1.json",
+  "title": "Loop Timing Witness AMP ISA capture",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "loop-timing-witness.amp-capture.v1"
+    },
+    "simulation_only": {
+      "const": true
+    },
+    "physical_verified": {
+      "const": false
+    },
+    "started_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "events": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "misses": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "overflow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "safe": {
+          "type": "boolean"
+        },
+        "thermal": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "samples",
+        "events",
+        "misses",
+        "overflow",
+        "safe",
+        "thermal"
+      ]
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "spike": {
+          "$ref": "#/$defs/digest"
+        },
+        "plugin": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "spike",
+        "plugin"
+      ]
+    },
+    "files": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime_libraries": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "version",
+        "runtime_libraries"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "simulation_only",
+    "physical_verified",
+    "started_utc",
+    "completed_utc",
+    "completion",
+    "tools",
+    "files",
+    "runtime"
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

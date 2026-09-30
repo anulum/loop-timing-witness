@@ -12,8 +12,9 @@
 #include <chrono>
 
 namespace witness {
-PowerJournal::PowerJournal(const char *path, const PowerConfiguration &config, Pac1934Device &device, UioDevice &uio)
-    : configuration(config), sensor(device), fabric(uio),
+PowerJournal::PowerJournal(const char *path, const PowerConfiguration &config, Pac1934Device &device,
+    std::function<std::uint64_t()> clock, std::function<std::uint32_t(std::uint8_t)> read)
+    : configuration(config), sensor(device), host_time(std::move(clock)), register_read(std::move(read)),
       output((validate_power_configuration(config), path), OutputFormat::text, "cannot create exclusive power journal") {
     auto *file = output.stream("power journal is closed");
     if (std::fputs("snapshot,rail,channel,quantity,attribute,host_before_ns,host_after_ns,fabric_before_ticks,fabric_after_ticks,worker_cpu,scheduler,priority,kernel_release,label_prefix,shunt_microohms,sample_rate,value\n", file) < 0 || std::fflush(file) != 0) {
@@ -22,20 +23,20 @@ PowerJournal::PowerJournal(const char *path, const PowerConfiguration &config, P
 }
 PowerJournal::~PowerJournal() { stop(); }
 std::uint64_t PowerJournal::ticks() {
-    const std::uint64_t low = read_register(fabric, 0x08);
-    return low | (static_cast<std::uint64_t>(read_register(fabric, 0x0c)) << 32);
+    const std::uint64_t low = register_read(0x08);
+    return low | (static_cast<std::uint64_t>(register_read(0x0c)) << 32);
 }
 void PowerJournal::acquire() {
     auto *file = output.stream("power journal is closed");
-    const auto frame_start = fabric.time();
+    const auto frame_start = host_time();
     sensor.verify();
     for (std::size_t index = 0; index < configuration.rails.size(); ++index) {
         const auto &rail = configuration.rails[index];
         for (const auto *quantity : {"voltage", "current", "energy"}) {
             for (bool scale : {false, true}) {
-                const auto host_before = fabric.time(), fabric_before = ticks();
+                const auto host_before = host_time(), fabric_before = ticks();
                 const auto value = sensor.read(rail, quantity, scale);
-                const auto fabric_after = ticks(), host_after = fabric.time();
+                const auto fabric_after = ticks(), host_after = host_time();
                 if (std::fprintf(file, "%llu,%s,%u,%s,%s,%llu,%llu,%llu,%llu,%d,%d,0,%s,%s,%u,%u,%s\n",
                     static_cast<unsigned long long>(snapshot), rail.name.c_str(), rail.channel, quantity,
                     scale ? "scale" : "raw", static_cast<unsigned long long>(host_before),
@@ -55,7 +56,7 @@ void PowerJournal::acquire() {
         }
     }
     sensor.verify();
-    if (fabric.time() - frame_start > configuration.maximum_read_ns)
+    if (host_time() - frame_start > configuration.maximum_read_ns)
         throw std::runtime_error("power acquisition exceeds configured read span");
     if (std::fflush(file) != 0) throw std::runtime_error("cannot flush power journal frame");
     have_energy = true;

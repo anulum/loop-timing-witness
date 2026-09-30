@@ -37,11 +37,16 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
       - name: Generate the CycloneDX document
-        run: .venv/bin/cyclonedx-py requirements requirements-dev.txt --output-file sbom.cdx.json
+        run: |
+          .venv/bin/cyclonedx-py requirements requirements-dev.txt --output-file sbom.cdx.json
+          .venv/bin/cyclonedx-py requirements requirements-runtime.txt --output-file runtime-sbom.cdx.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-cyclonedx
-          path: sbom.cdx.json
+          path: |
+            sbom.cdx.json
+            runtime-sbom.cdx.json
           retention-days: 30
           if-no-files-found: error

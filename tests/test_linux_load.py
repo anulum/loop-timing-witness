@@ -192,7 +192,9 @@ def test_actual_owned_failure(native_run: Path, tmp_path: Path, failure: str) ->
     with subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     ) as process:
-        deadline = time.monotonic() + 5
+        # Coverage initializes each Python child before the launcher creates workers.
+        # This bounds observation only; the actual native lifetime remains unchanged.
+        deadline = time.monotonic() + 30
         children: list[int] = []
         while len(children) < 2 and process.poll() is None and time.monotonic() < deadline:
             children = [
@@ -260,7 +262,8 @@ def test_actual_readiness_failure(native_run: Path, tmp_path: Path, failure: str
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     ) as process:
         try:
-            deadline = time.monotonic() + 5
+            # Allow subprocess coverage startup before observing the real worker.
+            deadline = time.monotonic() + 30
             workers: list[int] = []
             while not workers and process.poll() is None and time.monotonic() < deadline:
                 children = (

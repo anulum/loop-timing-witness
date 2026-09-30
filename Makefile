@@ -10,11 +10,18 @@ PYTHON_BOOTSTRAP ?= python3.13
 VENV := .venv/bin
 PREFLIGHT := $(VENV)/python tools/preflight.py
 
-.PHONY: venv hooks lint typecheck test validate docs security preflight inventory
+.PHONY: venv hooks lint typecheck test validate docs security preflight inventory python-wheelhouse python-package-tests
 
 venv:
 	$(PYTHON_BOOTSTRAP) -m venv .venv
 	$(VENV)/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+	$(VENV)/python -m pip install --no-index --no-build-isolation --no-deps -e .
+
+python-wheelhouse:
+	$(VENV)/python -m pip download --only-binary=:all: --require-hashes --no-deps -r requirements-runtime.txt --dest build/python-wheelhouse
+
+python-package-tests: python-wheelhouse
+	$(VENV)/python -m pytest -q tests/test_python_distribution.py
 
 hooks:
 	$(VENV)/pre-commit install
@@ -85,13 +92,17 @@ RUN_SIMULATION_DIRECTORY ?= build/run_simulation_$(SIMULATION_THERMAL)
 RUN_SIMULATION_CFLAGS ?= -std=c++17 -Wall -Wextra -Werror
 RUN_SIMULATION_LDFLAGS ?=
 SIMULATION_DIRECTORY := build/axi_simulator_$(SIMULATION_THERMAL)
+AXI_SIMULATOR_CFLAGS ?= -std=c++17 -Wall -Wextra -Werror
+AXI_SIMULATOR_VERILATOR_FLAGS ?=
 RTL_SOURCES := rtl/event_codes_pkg.sv $(filter-out rtl/event_codes_pkg.sv,$(wildcard rtl/*.sv))
 .PHONY: axi-simulator
 axi-simulator:
+	mkdir -p "$(SIMULATION_DIRECTORY)"
 	verilator --cc --exe --build --Wall --top-module axi_control_witness -j 2 \
+		$(AXI_SIMULATOR_VERILATOR_FLAGS) \
 		-GPERIOD_TICKS=32768 -GADDRESS_BITS=8 -GGROUP_ADDRESS_BITS=4 \
 		"-GTHERMAL=1'b$(SIMULATION_THERMAL)" --Mdir $(SIMULATION_DIRECTORY) \
-		-CFLAGS "-std=c++17 -Wall -Wextra -Werror" \
+		-CFLAGS "$(AXI_SIMULATOR_CFLAGS)" \
 		$(RTL_SOURCES) $(abspath runtime/rtl/axi_simulator.cpp) -o axi_simulator
 
 LINUX_CC ?= gcc
@@ -129,3 +140,19 @@ run-uio:
 		runtime/linux/power_configuration.cpp runtime/linux/pac1934_device.cpp runtime/linux/power_journal.cpp runtime/linux/file_digest.cpp \
 		"$(LINUX_BUILD_DIRECTORY)/run_controller_kernel.o" $(LINUX_LDFLAGS) \
 		-pthread -lcrypto -o "$(LINUX_BUILD_DIRECTORY)/run_uio"
+
+# The AMP logger owns configuration and drain; the dedicated hart retains its IRQ.
+.PHONY: run-amp-uio
+run-amp-uio:
+	mkdir -p "$(LINUX_BUILD_DIRECTORY)"
+	$(LINUX_CC) $(LINUX_CPPFLAGS) -std=gnu11 -O2 $(CONTROLLER_WARNINGS) \
+		-c controllers/c/witness_controller.c -o "$(LINUX_BUILD_DIRECTORY)/amp_controller_kernel.o"
+	$(LINUX_CXX) $(LINUX_CPPFLAGS) -std=c++17 -O2 -Wall -Wextra -Werror -Wconversion -Wshadow \
+		runtime/linux/amp_uio_device.cpp runtime/linux/amp_uio_configuration.cpp runtime/linux/run_amp_uio.cpp \
+		runtime/run_configuration.cpp runtime/linux/power_configuration.cpp runtime/linux/pac1934_device.cpp \
+		runtime/linux/power_journal.cpp runtime/linux/file_digest.cpp \
+		"$(LINUX_BUILD_DIRECTORY)/amp_controller_kernel.o" $(LINUX_LDFLAGS) \
+		-pthread -lcrypto -o "$(LINUX_BUILD_DIRECTORY)/run_amp_uio"
+
+# Build the actual production plugin for the explicitly supplied matching Spike SDK.
+include runtime/isa/spike_plugin.mk

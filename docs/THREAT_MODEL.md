@@ -122,3 +122,23 @@ fails a gate whose tool is missing, cannot run or is not the pinned version.
   fabric.
 - A compromised build host could produce a bitstream whose hash is recorded faithfully but whose
   content is wrong; reproducible builds and independent rebuilds are the planned control.
+
+
+## Dedicated-hart ISA capture
+
+The public ISA capture boundary admits original topology, reserved firmware/telemetry ranges,
+PLIC contexts, strict linked firmware and tool identities before execution. Exclusive capture
+output preserves failures. It snapshots the verified original inputs and rejects byte drift
+in either captured artifacts or executed tools. Analysis refuses contradictions between the
+capture receipt, executed tool identities, complete native/model compiler dependency and link
+roles, captured original source/header bytes, verified image, configuration, observed tracking
+and full fabric event history. Completion requires actual stream drain and logger acknowledgement.
+Plugin generation inputs and actual tools are frozen before Verilator runs. Actual compiler
+preprocessing freezes native/model source and system-header dependencies before compilation;
+post-build reconciliation refuses source, generated build-file, dependency-record or tool drift.
+Final receipts must agree with their original preparation, which is retained in capture sources.
+
+The functional clock map and parked companion harts do not establish physical U54 latency,
+Linux coexistence, HSS configuration or PMP isolation. A malicious compiler, simulator, plugin
+or host can forge self-consistent data; artifact hashes do not authenticate those components.
+The capture remains simulation evidence under [its public contract](AMP_SIMULATION.md).

@@ -13,10 +13,13 @@ does not ignore, so a new file is checked before it is staged. Each file type
 has exactly one rule:
 
 - hash-comment files (Python, TOML, YAML, requirements, citation metadata,
-  Makefile and Git/editor configuration) start with the seven header lines,
-  each prefixed by ``# ``; Python files may carry a shebang line first;
+  Makefile, included Make recipes, assembly, shell, Tcl and Git/editor configuration)
+  start with the seven header lines,
+  each prefixed by ``# ``; Python and shell files may carry a shebang line first;
   Cargo.lock carries Cargo's exact two-line generated preamble before the header;
-- C, C++, Rust and SystemVerilog files start with the same seven lines prefixed by ``// ``;
+- C, C++, Rust, device-tree source and SystemVerilog files start with the same seven
+  lines prefixed by ``// ``;
+- Linker scripts use a C block comment, with each following line prefixed by `` * ``;
 - Markdown files start with an HTML comment that holds the seven lines, so the
   rendered page starts with content and never shows a code-style header;
 - JSON, PDF and licence files cannot carry the text header and are exempt; their
@@ -49,12 +52,26 @@ HEADER_LINES: Final = (
 # REUSE-IgnoreEnd
 TITLE_PREFIX: Final = "Loop Timing Witness — "
 HASH_COMMENT_SUFFIXES: Final = frozenset(
-    {".cff", ".in", ".lock", ".py", ".toml", ".txt", ".yaml", ".yml", ".ys"}
+    {
+        ".cff",
+        ".in",
+        ".lock",
+        ".mk",
+        ".S",
+        ".py",
+        ".sh",
+        ".tcl",
+        ".toml",
+        ".txt",
+        ".yaml",
+        ".yml",
+        ".ys",
+    }
 )
 HASH_COMMENT_NAMES: Final = frozenset(
-    {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile"}
+    {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile", "py.typed"}
 )
-SLASH_COMMENT_SUFFIXES: Final = frozenset({".c", ".cpp", ".h", ".rs", ".sv", ".svh"})
+SLASH_COMMENT_SUFFIXES: Final = frozenset({".c", ".cpp", ".dts", ".h", ".rs", ".sv", ".svh"})
 EXEMPT_SUFFIXES: Final = frozenset({".json", ".pdf"})
 EXEMPT_PATHS: Final = frozenset({"LICENSE"})
 EXEMPT_DIRECTORIES: Final = frozenset({"LICENSES"})
@@ -108,13 +125,43 @@ def _line_comment_finding(relative: str, lines: list[str], marker: str) -> str |
         lines = lines[2:]
     body = (
         lines[1:]
-        if marker == "#" and relative.endswith(".py") and lines[:1] and lines[0].startswith("#!")
+        if marker == "#"
+        and relative.endswith((".py", ".sh"))
+        and lines[:1]
+        and lines[0].startswith("#!")
         else lines
     )
     expected = [f"{marker} {text}" for text in HEADER_LINES]
     if body[: len(expected)] != expected or len(body) <= len(expected):
         return f"{relative}: must start with the seven-line '{marker} ' provenance header"
     return _title_finding(relative, body[len(expected)].removeprefix(f"{marker} "))
+
+
+def _linker_finding(relative: str, lines: list[str]) -> str | None:
+    """Require the complete seven-line header inside a valid linker-script block comment.
+
+    Parameters
+    ----------
+    relative
+        File path for the finding.
+    lines
+        Original linker-script lines.
+
+    Returns
+    -------
+    str or None
+        A finding, or None when all provenance lines have valid block-comment syntax.
+    """
+    expected = ["/* " + HEADER_LINES[0], *(" * " + line for line in HEADER_LINES[1:])]
+    count = len(expected)
+    if (
+        lines[:count] != expected
+        or len(lines) < count + 2
+        or not lines[count].startswith(" * ")
+        or lines[count + 1] != " */"
+    ):
+        return f"{relative}: must start with the seven-line linker block-comment provenance header"
+    return _title_finding(relative, lines[count].removeprefix(" * "))
 
 
 def _markdown_finding(relative: str, lines: list[str]) -> str | None:
@@ -176,13 +223,17 @@ def file_finding(root: Path, relative: str) -> str | None:
     except (OSError, UnicodeDecodeError) as exc:
         return f"{relative}: unreadable as UTF-8 text: {exc}"
     lines = text.splitlines()
-    if path.suffix == ".md":
-        return _markdown_finding(relative, lines)
-    if path.suffix in HASH_COMMENT_SUFFIXES or path.name in HASH_COMMENT_NAMES:
-        return _line_comment_finding(relative, lines, "#")
-    if path.suffix in SLASH_COMMENT_SUFFIXES:
-        return _line_comment_finding(relative, lines, "//")
-    return f"{relative}: no provenance rule for this file type"
+    if path.suffix == ".ld":
+        finding = _linker_finding(relative, lines)
+    elif path.suffix == ".md":
+        finding = _markdown_finding(relative, lines)
+    elif path.suffix in HASH_COMMENT_SUFFIXES or path.name in HASH_COMMENT_NAMES:
+        finding = _line_comment_finding(relative, lines, "#")
+    elif path.suffix in SLASH_COMMENT_SUFFIXES:
+        finding = _line_comment_finding(relative, lines, "//")
+    else:
+        finding = f"{relative}: no provenance rule for this file type"
+    return finding
 
 
 def audit(root: Path) -> list[str]:

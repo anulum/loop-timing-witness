@@ -79,6 +79,10 @@
       "licence": "MIT",
       "version": "3.32.6"
     },
+    "flit-core": {
+      "licence": "BSD-3-Clause",
+      "version": "4.1.0"
+    },
     "fqdn": {
       "licence": "MPL-2.0",
       "version": "1.5.1"

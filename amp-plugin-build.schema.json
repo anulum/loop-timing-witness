@@ -1,0 +1,601 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.anulum.li/schemas/loop-timing-witness/amp-plugin-build-v1.json",
+  "title": "Loop Timing Witness actual AMP plugin build",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "loop-timing-witness.amp-plugin-build.v1"
+    },
+    "simulation_only": {
+      "const": true
+    },
+    "thermal": {
+      "type": "integer",
+      "enum": [
+        0,
+        1
+      ]
+    },
+    "plugin_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "compilers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "c": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "driver": {
+              "$ref": "#/$defs/tool"
+            },
+            "programs": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cc1": {
+                  "$ref": "#/$defs/tool"
+                },
+                "collect2": {
+                  "$ref": "#/$defs/tool"
+                },
+                "as": {
+                  "$ref": "#/$defs/tool"
+                },
+                "ld": {
+                  "$ref": "#/$defs/tool"
+                }
+              },
+              "required": [
+                "cc1",
+                "collect2",
+                "as",
+                "ld"
+              ]
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runtime_libraries": {
+              "$ref": "#/$defs/hashes"
+            }
+          },
+          "required": [
+            "driver",
+            "programs",
+            "version",
+            "runtime_libraries"
+          ]
+        },
+        "cxx": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "driver": {
+              "$ref": "#/$defs/tool"
+            },
+            "programs": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cc1plus": {
+                  "$ref": "#/$defs/tool"
+                },
+                "collect2": {
+                  "$ref": "#/$defs/tool"
+                },
+                "as": {
+                  "$ref": "#/$defs/tool"
+                },
+                "ld": {
+                  "$ref": "#/$defs/tool"
+                }
+              },
+              "required": [
+                "cc1plus",
+                "collect2",
+                "as",
+                "ld"
+              ]
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runtime_libraries": {
+              "$ref": "#/$defs/hashes"
+            }
+          },
+          "required": [
+            "driver",
+            "programs",
+            "version",
+            "runtime_libraries"
+          ]
+        }
+      },
+      "required": [
+        "c",
+        "cxx"
+      ]
+    },
+    "verilator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backend": {
+          "$ref": "#/$defs/versioned_tool"
+        },
+        "root": {
+          "type": "string",
+          "pattern": "^/"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "version",
+        "backend",
+        "root"
+      ]
+    },
+    "spike_sdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "build": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "patch": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "build",
+        "revision",
+        "patch"
+      ]
+    },
+    "dependencies": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "dependency_records": {
+      "type": "object",
+      "minProperties": 6,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "link_inputs": {
+      "type": "object",
+      "minProperties": 6,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/digest"
+      },
+      "maxProperties": 6
+    },
+    "working_directory": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "fifo_address_bits": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 14
+    },
+    "build_tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "make": {
+          "$ref": "#/$defs/versioned_tool"
+        },
+        "ar": {
+          "$ref": "#/$defs/versioned_tool"
+        },
+        "python3": {
+          "$ref": "#/$defs/versioned_tool"
+        },
+        "perl": {
+          "$ref": "#/$defs/versioned_tool"
+        }
+      },
+      "required": [
+        "make",
+        "ar",
+        "python3",
+        "perl"
+      ]
+    },
+    "preparation": {
+      "$ref": "#/$defs/preparation"
+    },
+    "preparation_path": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "runtime_libraries": {
+      "$ref": "#/$defs/hashes"
+    }
+  },
+  "required": [
+    "schema",
+    "simulation_only",
+    "thermal",
+    "plugin_sha256",
+    "compilers",
+    "verilator",
+    "spike_sdk",
+    "dependencies",
+    "dependency_records",
+    "link_inputs",
+    "working_directory",
+    "fifo_address_bits",
+    "build_tools",
+    "preparation",
+    "preparation_path",
+    "runtime_libraries"
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ]
+    },
+    "versioned_tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "version"
+      ]
+    },
+    "hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^/"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "loop-timing-witness.amp-plugin-preparation.v1"
+        },
+        "stage": {
+          "const": "compilation"
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "working_directory": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "thermal": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ]
+            },
+            "fifo_address_bits": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 14
+            },
+            "compilers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "c": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "driver": {
+                      "$ref": "#/$defs/tool"
+                    },
+                    "programs": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "cc1": {
+                          "$ref": "#/$defs/tool"
+                        },
+                        "collect2": {
+                          "$ref": "#/$defs/tool"
+                        },
+                        "as": {
+                          "$ref": "#/$defs/tool"
+                        },
+                        "ld": {
+                          "$ref": "#/$defs/tool"
+                        }
+                      },
+                      "required": [
+                        "cc1",
+                        "collect2",
+                        "as",
+                        "ld"
+                      ]
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "runtime_libraries": {
+                      "$ref": "#/$defs/hashes"
+                    }
+                  },
+                  "required": [
+                    "driver",
+                    "programs",
+                    "version",
+                    "runtime_libraries"
+                  ]
+                },
+                "cxx": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "driver": {
+                      "$ref": "#/$defs/tool"
+                    },
+                    "programs": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "cc1plus": {
+                          "$ref": "#/$defs/tool"
+                        },
+                        "collect2": {
+                          "$ref": "#/$defs/tool"
+                        },
+                        "as": {
+                          "$ref": "#/$defs/tool"
+                        },
+                        "ld": {
+                          "$ref": "#/$defs/tool"
+                        }
+                      },
+                      "required": [
+                        "cc1plus",
+                        "collect2",
+                        "as",
+                        "ld"
+                      ]
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "runtime_libraries": {
+                      "$ref": "#/$defs/hashes"
+                    }
+                  },
+                  "required": [
+                    "driver",
+                    "programs",
+                    "version",
+                    "runtime_libraries"
+                  ]
+                }
+              },
+              "required": [
+                "c",
+                "cxx"
+              ]
+            },
+            "verilator": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "sha256": {
+                  "$ref": "#/$defs/digest"
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "backend": {
+                  "$ref": "#/$defs/versioned_tool"
+                },
+                "root": {
+                  "type": "string",
+                  "pattern": "^/"
+                }
+              },
+              "required": [
+                "path",
+                "sha256",
+                "version",
+                "backend",
+                "root"
+              ]
+            },
+            "spike_sdk": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "build": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                "patch": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "build",
+                "revision",
+                "patch"
+              ]
+            },
+            "build_tools": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "make": {
+                  "$ref": "#/$defs/versioned_tool"
+                },
+                "ar": {
+                  "$ref": "#/$defs/versioned_tool"
+                },
+                "python3": {
+                  "$ref": "#/$defs/versioned_tool"
+                },
+                "perl": {
+                  "$ref": "#/$defs/versioned_tool"
+                }
+              },
+              "required": [
+                "make",
+                "ar",
+                "python3",
+                "perl"
+              ]
+            },
+            "sources": {
+              "$ref": "#/$defs/hashes"
+            },
+            "runtime_libraries": {
+              "$ref": "#/$defs/hashes"
+            }
+          },
+          "required": [
+            "working_directory",
+            "thermal",
+            "fifo_address_bits",
+            "compilers",
+            "verilator",
+            "spike_sdk",
+            "build_tools",
+            "sources",
+            "runtime_libraries"
+          ]
+        },
+        "generation_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/hashes"
+        },
+        "dependency_records": {
+          "type": "object",
+          "minProperties": 6,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/digest"
+          },
+          "maxProperties": 6
+        },
+        "build_files": {
+          "$ref": "#/$defs/hashes"
+        }
+      },
+      "required": [
+        "schema",
+        "stage",
+        "identity",
+        "generation_sha256",
+        "dependencies",
+        "dependency_records",
+        "build_files"
+      ]
+    }
+  }
+}

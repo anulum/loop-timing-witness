@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — RV64 C ABI adapter for the safe Rust arithmetic kernel
+
+[package]
+name = "witness-amp-rust-kernel"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+publish = false
+license = "AGPL-3.0-or-later"
+description = "Freestanding C ABI adapter for the Witness Rust controller"
+authors = ["Miroslav Šotek"]
+repository = "https://github.com/anulum/loop-timing-witness"
+readme = "README.md"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+witness-controller = { path = "../../../controllers/rust" }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "deny"
+improper_ctypes = "deny"
+improper_ctypes_definitions = "deny"
+
+[lints.clippy]
+all = "deny"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+overflow-checks = true
+opt-level = 3
+codegen-units = 1

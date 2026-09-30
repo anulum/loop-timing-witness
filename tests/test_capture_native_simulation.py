@@ -68,6 +68,9 @@ def test_real_capture(scenario: tuple[int, str], tmp_path: Path, run_tool: RunTo
     assert metadata["fault"]["kind"] == ("overload_request" if fault == "overload" else fault)
     assert manifest["tracking_sampling"] == "observed"
     assert manifest["files"]["power"] is None
+    assert "source/runtime/isa/spike_plugin.mk" in {
+        reference["path"] for reference in manifest["source"]["files"]
+    }
     assert report["evidence_status"] == "simulation_only"
     assert report["events"]["control"]["observed_deadlines"] == 32
     assert report["tracking_error"]["sample_count"] == metadata["result"]["samples"]

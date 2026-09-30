@@ -22,7 +22,7 @@ constexpr std::uint64_t advance_limit = 10000000;
 struct ProtocolReply { unsigned response; std::uint32_t data; };
 
 /** Reject signs, overflow and suffixes before narrowing protocol integers. */
-inline std::uint64_t number(std::istringstream &input, std::uint64_t maximum) {
+inline std::uint64_t number(std::istream &input, std::uint64_t maximum) {
     std::string token;
     if (!(input >> token) || token.find_first_not_of("0123456789") != std::string::npos)
         throw std::runtime_error("invalid unsigned argument");
@@ -33,7 +33,7 @@ inline std::uint64_t number(std::istringstream &input, std::uint64_t maximum) {
 }
 
 /** Validate a complete request before accessing either device. */
-inline void end_request(std::istringstream &input) {
+inline void end_request(std::istream &input) {
     std::string extra;
     if (input >> extra) throw std::runtime_error("unexpected argument");
 }

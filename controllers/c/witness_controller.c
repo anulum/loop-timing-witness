@@ -8,8 +8,6 @@
 
 #include "witness_controller.h"
 
-#include <limits.h>
-
 /* GNU C on the target RV64 ABI provides exact wide accumulation. Products and
  * sums here fit in 67 signed bits; no signed overflow or negative shift occurs. */
 __extension__ typedef __int128 witness_wide;

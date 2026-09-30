@@ -65,6 +65,9 @@ FIFO through the bus-domain record window. Its AXI addresses are offsets within 
 decoded 256-byte aperture. Plant coefficients and capture parameters retain the raw plant
 module's compile-time interface. Capture diagnostics and IRQ strobes belong to `capture_clock`;
 the record window, `run_drained` and retained `interrupt_line` belong to `bus_clock`.
+[`icicle_witness.sv`](../rtl/icicle_witness.sv) is the board-facing AXI4-Lite boundary: it
+accepts the interconnect's 38-bit address and forwards the selected low eight bits to this
+peripheral. Its physical decode and retained interrupt route still require Libero validation.
 The processor/kernel interrupt mapping remains unqualified. External `run_reset_n` aborts AXI transactions
 as well as the run; quiesce the master before asserting it. The software run-bank reset below
 retains the AXI transport and its accepted responses.
@@ -380,6 +383,10 @@ kernel directly into the production RTL model. `make run-uio` builds
 `build/run_uio`, which accepts the same first three arguments followed by
 `uioN name version map physical_address_decimal` and uses the same run lifecycle
 with direct in-process MMIO. Successful UIO operation is not yet board-qualified.
+`make run-amp-uio` builds the separate [Linux AMP logger](AMP_LINUX.md), which drains
+firmware telemetry and fabric events after the dedicated controller arms. Its resource
+configuration names both IRQ-free maps explicitly; Linux does not write controller commands
+or acknowledge the dedicated hart interrupt.
 
 The simulation transport advances its context one nanosecond at a time. It evaluates inputs
 before sampling the next bus edge, toggles the 7 ns/5 ns half-period clocks, and evaluates again
@@ -477,7 +484,7 @@ completed. This does not qualify a vendor netlist, physical CDC, RAM mapping or 
 
 ### Native Linux scheduling
 
-Both `run_simulation` and `run_uio` accept `--cpu N`, `--scheduler normal|fifo` and
+`run_simulation`, `run_uio` and `run_amp_uio` accept `--cpu N`, `--scheduler normal|fifo` and
 `--priority N`, in any order after the positional arguments. The simulation capture
 command forwards the same options. Without them, the run inherits its calling
 thread's scheduler and allowed CPU set. `normal` means Linux `SCHED_OTHER`, priority

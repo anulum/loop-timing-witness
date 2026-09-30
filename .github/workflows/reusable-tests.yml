@@ -17,7 +17,7 @@ jobs:
   run:
     name: Pytest with 100 % statement and branch coverage
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 180
     env:
       WITNESS_RV64_CC: /usr/bin/riscv64-linux-gnu-gcc-13
       WITNESS_SPIKE_SOURCE: ${{ github.workspace }}/build/amp-ci/spike-source
@@ -42,7 +42,7 @@ jobs:
       - name: Install pinned RTL, RV64, device-tree, Spike and native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2 verilator=5.020-1 libssl-dev=3.0.13-0ubuntu3.15 strace=6.8-0ubuntu2
+          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2 verilator=5.020-1 libssl-dev=3.0.13-0ubuntu3.16 libssl3t64=3.0.13-0ubuntu3.16 strace=6.8-0ubuntu2
           sudo apt-get install --no-install-recommends --yes \
             device-tree-compiler=1.7.0-2build1 gcc-riscv64-linux-gnu=4:13.2.0-7ubuntu1 \
             gcc-13-riscv64-linux-gnu=13.3.0-6ubuntu2~24.04.1cross1 \
@@ -59,7 +59,7 @@ jobs:
           "$WITNESS_RV64_CC" --version
       - name: Install the pinned Rust toolchain
         run: |
-          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown --target riscv64imac-unknown-none-elf
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --component llvm-tools-preview --target wasm32-unknown-unknown --target riscv64imac-unknown-none-elf
           rustup default 1.98.1
       - name: Native toolchain versions
         run: |
@@ -73,6 +73,8 @@ jobs:
           .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
       - name: Prepare hash-verified wheels for isolated Python package consumers
         run: make python-wheelhouse
+      - name: Rust core and C ABI source coverage with matching LLVM tools
+        run: .venv/bin/pytest -q tests/test_amp_rust_branch_coverage.py
       - name: Build the exact original Spike simulator and SDK
         run: |
           mkdir -p "$WITNESS_SPIKE_SOURCE" "$WITNESS_SPIKE_BUILD"

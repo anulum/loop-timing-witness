@@ -1,5 +1,6 @@
 {
   "allowed_licences": [
+    "0BSD",
     "Apache-2.0",
     "BSD-2-Clause",
     "BSD-3-Clause",
@@ -44,12 +45,12 @@
       "version": "3.5.0"
     },
     "chardet": {
-      "licence": "LGPL-2.1-or-later",
-      "version": "5.2.0"
+      "licence": "0BSD",
+      "version": "7.6.0"
     },
     "charset-normalizer": {
       "licence": "MIT",
-      "version": "3.5.1"
+      "version": "3.5.2"
     },
     "click": {
       "licence": "BSD-3-Clause",
@@ -57,11 +58,11 @@
     },
     "coverage": {
       "licence": "Apache-2.0",
-      "version": "7.16.1"
+      "version": "7.16.2"
     },
     "cyclonedx-bom": {
       "licence": "Apache-2.0",
-      "version": "7.4.0"
+      "version": "7.5.0"
     },
     "cyclonedx-python-lib": {
       "licence": "Apache-2.0",
@@ -77,7 +78,7 @@
     },
     "filelock": {
       "licence": "MIT",
-      "version": "3.32.6"
+      "version": "4.0.7"
     },
     "flit-core": {
       "licence": "BSD-3-Clause",
@@ -85,15 +86,15 @@
     },
     "fqdn": {
       "licence": "MPL-2.0",
-      "version": "1.5.1"
+      "version": "1.6.0"
     },
     "identify": {
       "licence": "MIT",
-      "version": "2.6.19"
+      "version": "2.6.20"
     },
     "idna": {
       "licence": "BSD-3-Clause",
-      "version": "3.19"
+      "version": "3.20"
     },
     "iniconfig": {
       "licence": "MIT",
@@ -125,7 +126,7 @@
     },
     "librt": {
       "licence": "MIT",
-      "version": "0.15.0"
+      "version": "0.16.0"
     },
     "license-expression": {
       "licence": "Apache-2.0",
@@ -149,7 +150,7 @@
     },
     "msgpack": {
       "licence": "Apache-2.0",
-      "version": "1.2.2"
+      "version": "1.2.3"
     },
     "mypy": {
       "licence": "MIT",
@@ -161,7 +162,7 @@
     },
     "nodeenv": {
       "licence": "BSD-3-Clause",
-      "version": "1.10.0"
+      "version": "1.11.0"
     },
     "packageurl-python": {
       "licence": "MIT",
@@ -193,7 +194,7 @@
     },
     "platformdirs": {
       "licence": "MIT",
-      "version": "4.11.8"
+      "version": "4.12.2"
     },
     "pluggy": {
       "licence": "MIT",
@@ -213,7 +214,7 @@
     },
     "pyparsing": {
       "licence": "MIT",
-      "version": "3.3.2"
+      "version": "3.3.3"
     },
     "pytest": {
       "licence": "MIT",
@@ -233,7 +234,7 @@
     },
     "python-discovery": {
       "licence": "MIT",
-      "version": "1.6.0"
+      "version": "1.6.1"
     },
     "python-magic": {
       "licence": "MIT",
@@ -277,7 +278,7 @@
     },
     "ruff": {
       "licence": "MIT",
-      "version": "0.16.7"
+      "version": "0.16.9"
     },
     "six": {
       "licence": "MIT",
@@ -312,8 +313,8 @@
       "version": "4.16.0"
     },
     "typos": {
-      "licence": "MIT OR Apache-2.0",
-      "version": "1.50.1"
+      "licence": "Apache-2.0 OR MIT",
+      "version": "1.50.3"
     },
     "tzdata": {
       "licence": "Apache-2.0",

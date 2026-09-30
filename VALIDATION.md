@@ -35,14 +35,13 @@ truthfulness of the `architecture_only` state.
 - Python 3.13 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
 - Flit Core 4.1.0 is the hash-pinned Python distribution build backend in the same development
-  lock. The regeneration command retains the original upload cut-off for existing dependencies
-  and records a separate September 17 cut-off for this exact backend pin.
+  lock, with the current complete-chain upload cut-off recorded in both lock headers.
 - Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu noble package `12.0-2build2`, to compile the
   synthesizable capture and buffered witness modules and produce binary event files consumed by
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
   is not evidence of board acceptance.
-- Rust 1.98.1 (Cargo, rustfmt and Clippy), installed explicitly with rustup in native CI jobs;
+- Rust 1.98.1 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs;
   C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
   Tool versions are printed by the jobs. The controller kernels have no third-party native dependencies.
 - Verilator 5.020 (`verilator`), Ubuntu noble package `5.020-1`, builds the native controller
@@ -62,14 +61,14 @@ truthfulness of the `architecture_only` state.
   values nor modify process memory. Tracing starts with test-owned children and uses existing
   kernel permissions. A missing tracer fails the tests; no security settings are changed.
 - OpenSSL 3 headers and `libcrypto` are required for native artifact SHA-256 receipts. The
-  reusable test workflow installs `libssl-dev=3.0.13-0ubuntu3.15`, prints the actual development
+  reusable test workflow installs `libssl-dev=3.0.13-0ubuntu3.16` and `libssl3t64=3.0.13-0ubuntu3.16`, prints the actual development
   and runtime packages, and links the adapters with `-lcrypto`. Native metadata records both
   header and runtime version numbers. This dependency belongs to the run adapters; it is not
   linked into the standalone C/Rust controller kernels.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
   preflight runner reads each binary's recorded module version and checksum with
   `go version -m` and refuses any other build.
-- `typos` 1.50.1, installed from the same lock and checked by its reported version.
+- `typos` 1.50.3, installed from the same lock and checked by its reported version.
 
 The lock is regenerated only with the command recorded in its header, followed by a licence review
 of every new or changed package in `development-dependency-licences.json`.

@@ -16,24 +16,24 @@ pre-commit==4.6.2
 urllib3==2.8.0
 virtualenv==21.14.1
 # Lint, format, strict typing
-ruff==0.16.7
+ruff==0.16.9
 mypy==2.3.1
 types-PyYAML==6.0.12.20260906
 types-jsonschema==4.26.0.20260518
 # Tests and coverage
 pytest==9.1.1
 pytest-cov==7.1.0
-coverage==7.16.1
+coverage==7.16.2
 # Manifest schema validation and workflow parsing
 jsonschema==4.26.0
 PyYAML==6.0.3
 # Spelling
-typos==1.50.1
+typos==1.50.3
 # Licensing, workflow security, dependency audit, software inventory
 reuse==6.2.0
 zizmor==1.30.1
 pip-audit==2.10.1
-cyclonedx-bom==7.4.0
+cyclonedx-bom==7.5.0
 
 # Reproducible Python distribution build backend
 flit_core==4.1.0

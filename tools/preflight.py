@@ -51,7 +51,7 @@ GITLEAKS_MODULE: Final = (
     "v8.30.1",
     "h1:PmEvCfVI7ti9dV3s5aMZUY7sS2GxRvG3yzih7E+cS3w=",
 )
-TYPOS_VERSION: Final = "typos-cli 1.50.1"
+TYPOS_VERSION: Final = "typos-cli 1.50.3"
 
 
 @dataclass(frozen=True, slots=True)

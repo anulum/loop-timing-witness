@@ -7,10 +7,12 @@
 # Loop Timing Witness — hash-pinned Python package runtime dependencies
 #
 # Generated from pyproject.toml; do not edit dependency entries by hand.
-# Regenerate with uv 0.12.13:
+# Regenerate with uv 0.12.21:
 #   uv pip compile pyproject.toml --python-version 3.13 \
 #     --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header \
-#     --exclude-newer 2026-09-15T11:00:00Z
+#     --exclude-newer 2026-09-30T21:30:22Z
+#
+# The upload cut-off makes the complete dependency resolution repeatable.
 
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \

@@ -325,11 +325,11 @@
     },
     "urllib3": {
       "licence": "MIT",
-      "version": "2.7.0"
+      "version": "2.8.0"
     },
     "virtualenv": {
       "licence": "MIT",
-      "version": "21.7.9"
+      "version": "21.14.1"
     },
     "webcolors": {
       "licence": "BSD-3-Clause",

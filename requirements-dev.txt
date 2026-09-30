@@ -9,16 +9,19 @@
 # Generated from requirements-dev.in; do not edit by hand. Every requirement is
 # pinned with its distribution hashes, so `pip install --require-hashes` refuses
 # anything else. Runtime dependencies have a separate requirements-runtime.txt
-# lock. Regeneration command (uv 0.12.13):
+# lock. Regeneration command (uv 0.12.21):
 #
 #   uv pip compile requirements-dev.in --python-version 3.13 \
 #     --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header \
 #     --exclude-newer 2026-09-15T11:00:00Z \
-#     --exclude-newer-package flit-core=2026-09-17T00:00:00Z
+#     --exclude-newer-package flit-core=2026-09-17T00:00:00Z \
+#     --exclude-newer-package urllib3=2026-10-01T00:00:00Z \
+#     --exclude-newer-package virtualenv=2026-10-01T00:00:00Z
 #
 # with this header block placed above the generated output. The upload cut-off
 # makes the resolution repeatable. Flit 4.1.0 was uploaded on September 16;
-# only that exact new build-backend pin uses the later package-specific cut-off.
+# that exact build-backend pin and the two security-fix pins use their recorded
+# later package-specific cut-offs. All other packages retain the original cut-off.
 
 arrow==1.4.0 \
     --hash=sha256:749f0769958ebdc79c173ff0b0670d59051a535fa26e8eba02953dc19eb43205 \
@@ -1074,6 +1077,7 @@ packaging==26.3 \
     #   pip-audit
     #   pip-requirements-parser
     #   pytest
+    #   virtualenv
 pathspec==1.1.1 \
     --hash=sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a \
     --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
@@ -1501,14 +1505,18 @@ uri-template==1.3.0 \
     --hash=sha256:0e00f8eb65e18c7de20d595a14336e9f337ead580c70934141624b6d1ffdacc7 \
     --hash=sha256:a44a133ea12d44a0c0f06d7d42a52d71282e77e2f937d8abd5655b8d56fc1363
     # via jsonschema
-urllib3==2.7.0 \
-    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
-    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
-    # via requests
-virtualenv==21.7.9 \
-    --hash=sha256:a7e42d81d779dec8afd7dc4be71640fb959ea861bccfa5980cb4ad9f92e30675 \
-    --hash=sha256:ba3b0bb41063c848d84d76a9fe3fb7711aaa0f2fe78708e8f3cd9714770e4eac
-    # via pre-commit
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+    --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
+    # via
+    #   -r requirements-dev.in
+    #   requests
+virtualenv==21.14.1 \
+    --hash=sha256:6fd04089fc0dc33549e7abdff70fc3b63d4e15799f2dbf3281f80d13b9fce522 \
+    --hash=sha256:719b189804e66678017d9f63bbfc590c44f6b96ab4829513806394f9b375929c
+    # via
+    #   -r requirements-dev.in
+    #   pre-commit
 webcolors==25.10.0 \
     --hash=sha256:032c727334856fc0b968f63daa252a1ac93d33db2f5267756623c210e57a4f1d \
     --hash=sha256:62abae86504f66d0f6364c2a8520de4a0c47b80c03fc3a5f1815fedbef7c19bf

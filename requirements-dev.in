@@ -12,6 +12,9 @@
 
 # Hook orchestration
 pre-commit==4.6.2
+# Security fixes in transitive audit and hook dependencies
+urllib3==2.8.0
+virtualenv==21.14.1
 # Lint, format, strict typing
 ruff==0.16.7
 mypy==2.3.1

@@ -14,6 +14,11 @@ Loop Timing Witness — README
 [![PyPI](https://img.shields.io/pypi/v/loop-timing-witness.svg)](https://pypi.org/project/loop-timing-witness/)
 [![crates.io](https://img.shields.io/crates/v/witness-controller.svg)](https://crates.io/crates/witness-controller)
 [![CI](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml)
+[![Docs](https://github.com/anulum/loop-timing-witness/actions/workflows/docs.yml/badge.svg?branch=main)](https://anulum.github.io/loop-timing-witness/)
+[![CodeQL](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml)
+[![Pre-commit](https://github.com/anulum/loop-timing-witness/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/pre-commit.yml)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](https://github.com/anulum/loop-timing-witness/blob/main/LICENSE)
+[![Typed Python](https://img.shields.io/badge/python-typed-blue.svg)](https://github.com/anulum/loop-timing-witness/blob/main/src/loop_timing_witness/py.typed)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge)](https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness)
 
 ![Loop Timing Witness architecture concept](https://raw.githubusercontent.com/anulum/loop-timing-witness/main/docs/assets/loop-timing-witness.webp)

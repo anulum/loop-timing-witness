@@ -42,7 +42,7 @@ jobs:
       - name: Install pinned RTL, RV64, device-tree, Spike and native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2 verilator=5.020-1 libssl-dev=3.0.13-0ubuntu3.16 libssl3t64=3.0.13-0ubuntu3.16 strace=6.8-0ubuntu2
+          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2 verilator=5.020-1 yosys=0.33-5build2 libssl-dev=3.0.13-0ubuntu3.16 libssl3t64=3.0.13-0ubuntu3.16 strace=6.8-0ubuntu2
           sudo apt-get install --no-install-recommends --yes \
             device-tree-compiler=1.7.0-2build1 gcc-riscv64-linux-gnu=4:13.2.0-7ubuntu1 \
             gcc-13-riscv64-linux-gnu=13.3.0-6ubuntu2~24.04.1cross1 \
@@ -50,9 +50,10 @@ jobs:
             libboost1.83-dev=1.83.0-2.1ubuntu3.2 libboost-regex1.83-dev=1.83.0-2.1ubuntu3.2 \
             libboost-system1.83-dev=1.83.0-2.1ubuntu3.2 libboost-regex1.83.0=1.83.0-2.1ubuntu3.2 \
             libboost-system1.83.0=1.83.0-2.1ubuntu3.2
-          dpkg-query -W iverilog verilator libssl-dev libssl3t64 strace device-tree-compiler 'gcc*' 'binutils*' 'libboost*'
+          dpkg-query -W iverilog verilator yosys libssl-dev libssl3t64 strace device-tree-compiler 'gcc*' 'binutils*' 'libboost*'
           strace --version
           verilator --version
+          yosys -V
           iverilog -V
           vvp -V
           dtc --version

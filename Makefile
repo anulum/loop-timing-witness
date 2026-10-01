@@ -200,6 +200,26 @@ RTL_INVARIANT_DIRECTORY ?= build/rtl-invariants
 RTL_INVARIANT_SOURCES := rtl/run_configuration_registers.sv rtl/control_io_registers.sv \
 	rtl/axi_lite_clock_bridge.sv rtl/clock_request_bridge.sv rtl/clock_reset_release.sv rtl/fixed_point_math.sv
 
+NATIVE_INVARIANT_DIRECTORY ?= build/native-invariants
+NATIVE_INVARIANT_SOURCES := rtl/run_configuration_registers.sv rtl/control_io_registers.sv \
+	rtl/control_cycle.sv rtl/deadline_monitor.sv rtl/clock_reset_release.sv tests/formal/runtime_commit_proof.sv
+
+.PHONY: native-runtime-invariants
+native-runtime-invariants:
+	mkdir -p "$(NATIVE_INVARIANT_DIRECTORY)"
+	for module in runtime_commit runtime_enabled runtime_finished runtime_safe runtime_release; do \
+		yosys -Q -T -p "read_verilog -formal -sv $(NATIVE_INVARIANT_SOURCES); \
+		prep -top $${module}_proof; write_json $(NATIVE_INVARIANT_DIRECTORY)/$${module}.json; \
+		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -verify -timeout 30 -show-ports" \
+		> "$(NATIVE_INVARIANT_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
+		yosys -Q -T -p "read_verilog -formal -sv $(NATIVE_INVARIANT_SOURCES); \
+		chparam -set NEGATIVE_CONTROL 1 $${module}_proof; prep -top $${module}_proof; \
+		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -timeout 30 -show-ports \
+		-dump_json $(NATIVE_INVARIANT_DIRECTORY)/$${module}-counterexample.json" \
+		> "$(NATIVE_INVARIANT_DIRECTORY)/$${module}-negative.log" 2>&1 || exit $$?; \
+		grep -Fq 'SAT proof finished - model found: FAIL!' "$(NATIVE_INVARIANT_DIRECTORY)/$${module}-negative.log" || exit 1; \
+	done
+
 .PHONY: rtl-invariants
 rtl-invariants:
 	mkdir -p "$(RTL_INVARIANT_DIRECTORY)"

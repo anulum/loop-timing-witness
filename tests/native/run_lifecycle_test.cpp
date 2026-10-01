@@ -32,6 +32,60 @@ template<class Operation> void refusal(Operation operation, const char *message)
 #include "configuration_api.h"
 #include "metadata_api.h"
 
+/** Observe a run finishing between the live-status read and command commit. */
+void boundary_commit(witness::Simulation &device, const witness::RunConfiguration &configuration,
+                     const char *events, const char *tracking) {
+    assert(configuration.cycles == 1);
+    witness::configure_run(device, configuration);
+    witness::write_register(device, 0x38, 1);
+    assert(device.wait_interrupt(1000000));
+    const auto ready = device.time();
+    const std::uint64_t low = witness::read_register(device, 0x9c);
+    const auto generation = low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
+    device.advance(static_cast<std::uint64_t>(configuration.period_ticks) * 10 - 1250 - (device.time() - ready));
+    witness::RunOutput output(events, tracking);
+    witness_pid_state state{};
+    witness_pid_reset(&state);
+    witness::RunResult result;
+    std::uint32_t previous = 0;
+    bool observed = false;
+    witness::control_sample(device, configuration, state, output, result, generation, previous, observed);
+    assert(result.samples == 1 && observed && previous == 0);
+    assert(witness::read_register(device, 4) & 4);
+    while (!(witness::read_register(device, 0x90) & 8))
+        witness::drain_available(device, output, result);
+    assert(result.records == 3 && witness::read_register(device, 0x34) == 1);
+    output.finish();
+}
+
+/** Cross real configured timer bounds through an acquisition callback's public clock. */
+void timed_out_run(witness::Simulation &device, const witness::RunConfiguration &configuration,
+                   const std::string &scenario, const char *events, const char *tracking) {
+    witness::RunOutput output(events, tracking);
+    unsigned starts = 0, checks = 0, finishes = 0;
+    const auto limit = static_cast<std::uint64_t>(configuration.period_ticks) * 10 *
+        configuration.cycles + 1000000000;
+    const witness::RunHooks hooks{
+        [&] { ++starts; },
+        [&] {
+            ++checks;
+            if (scenario == "run_timeout" && checks == 1) device.advance(limit + 1);
+            if (scenario == "final_drain_timeout" && checks == 3) {
+                assert(witness::read_register(device, 4) & 4);
+                assert(!(witness::read_register(device, 0x90) & 8));
+                device.advance(1000000001);
+            }
+        },
+        [&] { ++finishes; }};
+    refusal([&] { witness::execute_run(device, configuration, output, &hooks); },
+        scenario == "run_timeout" ? "configured run completion timed out" : "final record drain timed out");
+    assert(starts == 1 && finishes == 0);
+    assert(checks == (scenario == "run_timeout" ? 1U : 3U));
+    assert(witness::read_register(device, 4) & 4);
+    assert(witness::read_register(device, 0x34) == configuration.cycles);
+    output.finish();
+}
+
 /** Exercise repeated real samples and malformed public API configuration inputs. */
 void sample_refusal(witness::Simulation &device, witness::RunConfiguration configuration,
                     const std::string &scenario, const char *events, const char *tracking) {
@@ -149,7 +203,11 @@ int main(int argc, char **argv) {
     const auto configuration = witness::read_configuration(argv[2]);
     witness::Simulation device;
     const std::string scenario = argv[1];
-    if (scenario == "period_mismatch") {
+    if (scenario == "run_timeout" || scenario == "final_drain_timeout") {
+        timed_out_run(device, configuration, scenario, argv[3], argv[4]);
+    } else if (scenario == "commit_boundary") {
+        boundary_commit(device, configuration, argv[3], argv[4]);
+    } else if (scenario == "period_mismatch") {
         assert(witness::read_register(device, 0x40) == configuration.period_ticks);
         auto mismatched = configuration;
         ++mismatched.period_ticks;
@@ -205,7 +263,8 @@ int main(int argc, char **argv) {
     } else if (scenario == "header_limit" || scenario == "event_limit" ||
                scenario == "sample_limit" || scenario == "finish_limit") {
         output_limit(device, configuration, scenario, argv[3], argv[4]);
-    } else if (scenario == "hooks" || scenario == "closed" || scenario == "final_drain") {
+    } else if (scenario == "hooks" || scenario == "closed" || scenario == "final_drain" ||
+               scenario == "final_drain_no_hooks") {
         witness::RunOutput output(argv[3], argv[4]);
         unsigned starts = 0, checks = 0, finishes = 0;
         const witness::RunHooks hooks{
@@ -216,9 +275,11 @@ int main(int argc, char **argv) {
                 assert(witness::read_register(device, 0x90) & 8);
                 ++finishes;
             }};
-        const auto result = witness::execute_run(device, configuration, output, &hooks);
-        assert(starts == 1 && checks > 0 && finishes == 1);
-        if (scenario == "final_drain") {
+        const auto result = witness::execute_run(device, configuration, output,
+            scenario == "final_drain_no_hooks" ? nullptr : &hooks);
+        if (scenario == "final_drain_no_hooks") assert(starts == 0 && checks == 0 && finishes == 0);
+        else assert(starts == 1 && checks > 0 && finishes == 1);
+        if (scenario == "final_drain" || scenario == "final_drain_no_hooks") {
             assert(result.samples == 1 && result.records == 20);
             assert(result.misses == 8 && result.overflow == 0 && result.safe);
         } else {

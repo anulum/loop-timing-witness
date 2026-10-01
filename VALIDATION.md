@@ -262,7 +262,8 @@ affinity/scheduler requests and metadata refusal. The dedicated public API tests
 - `tests/test_native_metadata_api.py` and `tests/test_native_policy_api.py`;
 - `tests/test_power_configuration_api.py` and `tests/test_axi_transport_progress.py`.
 
-The compiler profiles described in [`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md)
+The compiler profiles and source-bound native lifecycle proofs described in
+[`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md#native-lifecycle-guard-proof)
 retain executable-line and raw-branch counts separately from Python coverage. They do not
 establish complete C++ runtime coverage. Actual UIO/IIO identity and unavailable-device refusals
 are exercised without invented sysfs nodes. Successful MMIO, IRQ handling, PAC1934 reads and

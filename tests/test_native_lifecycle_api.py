@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import csv
 import os
 import subprocess
 from pathlib import Path
@@ -79,7 +80,7 @@ def lifecycle_program(
             "--Mdir",
             str(directory),
             "-CFLAGS",
-            "-std=c++17 -Wall -Wextra -Werror --coverage -O2"
+            "-std=c++17 -Wall -Wextra -Werror --coverage -O2 -fdump-tree-cfg-lineno"
             + (" -DWITNESS_RTL_COVERAGE" if rtl_coverage else ""),
             "-LDFLAGS",
             f"{kernel} --coverage -lcrypto",
@@ -121,6 +122,10 @@ def lifecycle_program(
         "sample_limit",
         "finish_limit",
         "final_drain",
+        "final_drain_no_hooks",
+        "commit_boundary",
+        "run_timeout",
+        "final_drain_timeout",
         "duplicate",
         "out_of_range",
         "invalid_pid",
@@ -150,14 +155,14 @@ def test_actual_lifecycle_api(lifecycle_program: Path, tmp_path: Path, scenario:
             .replace("overload 0 3", "overload 0 256")
             .replace("1000 1100000", "1000 0")
         )
-    elif scenario == "final_drain":
+    elif scenario in {"final_drain", "final_drain_no_hooks", "final_drain_timeout"}:
         text = (
             configuration("pid", "overload")
             .replace("pid 32", "pid 8")
             .replace("overload 0 3", "overload 0 8")
             .replace("1000 1100000", "1000 5000000")
         )
-    elif scenario == "finish_limit":
+    elif scenario in {"finish_limit", "commit_boundary", "run_timeout"}:
         text = configuration("pid", "none").replace("pid 32", "pid 1")
     config.write_text(text, encoding="utf-8")
     events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
@@ -166,13 +171,15 @@ def test_actual_lifecycle_api(lifecycle_program: Path, tmp_path: Path, scenario:
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=180 if scenario in {"run_timeout", "final_drain_timeout"} else 10,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified {scenario}\n"
     assert result.stderr == ""
     if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
         assert events.with_name(events.name + ".coverage.dat").stat().st_size > 0
+    if scenario == "closed":
+        assert Path(str(events) + ".copy").read_bytes() == events.read_bytes()[:16]
     assert_retained_outputs(scenario, events, raw)
 
 
@@ -188,18 +195,30 @@ def assert_retained_outputs(scenario: str, events: Path, raw: Path) -> None:
     raw
         Actual controller trace allocation.
     """
-    if scenario == "closed":
-        assert Path(str(events) + ".copy").read_bytes() == events.read_bytes()[:16]
     if scenario in {"hooks", "closed", "period_mismatch"}:
         assert events.stat().st_size > 0
         assert len(raw.read_text().splitlines()) == 3
-    elif scenario == "final_drain":
+    elif scenario in {"final_drain", "final_drain_no_hooks", "final_drain_timeout"}:
         assert events.stat().st_size == 20 * 16
         assert len(raw.read_text().splitlines()) == 2
+    elif scenario == "commit_boundary":
+        assert events.stat().st_size == 3 * 16
+        with raw.open(newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        assert len(rows) == 1
+        assert rows[0]["cycle"] == "0"
+        assert rows[0]["submitted"] == "0"
     elif scenario == "recover":
         assert events.stat().st_size > 0
         assert len(raw.read_text().splitlines()) == 1
-    elif scenario in {"unstarted", "duplicate", "out_of_range", "invalid_pid", "invalid_lqr"}:
+    elif scenario in {
+        "unstarted",
+        "duplicate",
+        "out_of_range",
+        "invalid_pid",
+        "invalid_lqr",
+        "run_timeout",
+    }:
         assert events.read_bytes() == b""
         assert len(raw.read_text().splitlines()) == (2 if scenario == "duplicate" else 1)
         if scenario == "unstarted":

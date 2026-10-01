@@ -393,4 +393,58 @@ intentionally false assertions and retained their concrete counterexamples.
 The accepted argument uses two-state, one-step SAT and exact source/parameter
 binding with unconstrained initial states. It makes no reset-reachability,
 four-state, signal-toggle, MC/DC, CDC-timing, synthesis or physical-board claim.
-Native C++ compiler edges and hardware acquisition remain separate obligations.
+Native C++ compiler edges and hardware acquisition remain separate scopes.
+
+## Native lifecycle guard proof
+
+The lifecycle corpus retains the original production RTL, GCC 13.3 optimisation
+level and nanosecond timers. `commit_boundary` delays a real one-cycle run through
+`Simulation::advance`; the live-status read still sees an active run, while the
+subsequent full-word command commit receives the actual finished-run SLVERR.
+The trace retains one observed sample with `submitted=0`, and all three real
+FIFO records are drained. This exercises the second status check in `control_sample`;
+it does not replace the transport or inject a response.
+
+`final_drain_no_hooks` exercises the real backlog without callbacks. `run_timeout`
+and `final_drain_timeout` use acquisition callbacks to advance both production
+clocks past the original timer limits. They require the exact timeout exception,
+no completion callback, and the retained actual event/trace bytes. These tests
+advance more than one billion simulated nanoseconds and therefore take longer
+than ordinary lifecycle cases. They establish timer supervision in the simulation
+time domain, rather than host-wall or board timing.
+
+```bash
+WITNESS_LIFECYCLE_BUILD_ROOT="$PWD/build/native-lifecycle-proof" \
+.venv/bin/python -m pytest tests/test_native_lifecycle_api.py \
+  tests/test_native_configuration_api.py tests/test_native_metadata_api.py
+make native-runtime-invariants
+```
+
+The Yosys wrappers elaborate the unchanged production `control_io_registers`,
+`run_configuration_registers`, `control_cycle`, `deadline_monitor` and
+`clock_reset_release` modules.
+Four-step proofs check full-word cycle/value staging followed by commit, and
+preservation of enabled, finished and safe state across non-reset transitions,
+constant ABI/Q-format readback, and reset release after two running local edges.
+Each intentionally false variant must produce a counterexample; parser errors
+and solver timeouts cannot satisfy the negative control. JSON netlists and
+counterexample waveforms are retained in `build/native-invariants`.
+
+For the serial `Simulation` lifecycle, sample-read success establishes enabled
+state; both staged writes succeed or the public API throws before commit.
+There is no reset or competing bus writer inside `control_sample`. Under these
+premises, the production decoder can refuse the commit only when finished or
+safe is asserted, and those flags persist until reset. The subsequent status read
+therefore handles that refusal. The defensive exception for refusal without
+either flag remains in the source and raw coverage report. This compositional
+proof applies to the declared serial simulation path; it does not assert that an
+unqualified physical device, external reset or competing writer obeys the premises.
+
+GCC JSON reports mark exception arcs with `throw=true`. Keep those arcs and their
+counts, and inspect the accompanying `-fdump-tree-cfg-lineno` files rather than
+renaming them as source decisions. An unexecuted allocation/unwind edge is not an
+executed error path. Constant ABI/Q-format mismatches, deterministic reset release,
+and the defensive commit guard require their own source evidence; the successful
+period-mismatch test covers the independent variable period check. Report raw
+executable lines, compiler arcs, proved source invariants and actual resource
+limitations separately. Do not publish an unconditional 100% C++ compiler-edge claim.

@@ -61,6 +61,16 @@ Software implementation does not qualify a board capability or advance measureme
 
 ## Planned — in implementation order, without dates
 
+Software publication already includes the Python analysis package and standalone Rust controller
+crate at version 0.1.0, plus the public Python, C/C++ and Rust API references. Subsequent source
+verification is recorded under `Unreleased` in [CHANGELOG.md](CHANGELOG.md); it does not alter
+those immutable registry artifacts.
+
+The original-width RTL source-flow obligation is complete: 826 of 834 raw identities executed,
+with eight checked source invariants and no unresolved or excluded points. C++ lifecycle evidence
+is tracked separately in [the coverage guide](docs/CONTROLLER_COVERAGE.md). Physical UIO/PAC1934
+operation, privileged scheduling and board timing require their actual resources.
+
 1. Vendor tool project generation scripts and constraints.
 2. Bare-metal controller on a dedicated application core.
 3. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),

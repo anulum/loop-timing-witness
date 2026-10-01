@@ -37,7 +37,8 @@ module clock_reset_release_tb;
         #2; run_reset_n = 1;
         #30;
         if (local_reset_n !== 0) $fatal(1, "reset released without clock");
-        running = 1;
+        // Resume between edges so the waiter observes the first resumed edge.
+        #1; running = 1;
         @(posedge clock); #1;
         if (local_reset_n !== 0) $fatal(1, "stopped-clock release too early");
         @(posedge clock); #1;

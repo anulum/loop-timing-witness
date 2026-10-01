@@ -149,7 +149,7 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["loop_timing_witness", "tools", "controller_test_support"]
+source = ["src/loop_timing_witness", "tools", "controller_test_support"]
 patch = ["subprocess"]
 
 [tool.coverage.report]

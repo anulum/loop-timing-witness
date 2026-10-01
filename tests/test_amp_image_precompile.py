@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,21 @@ def test_actual_original_preprocessing(original_preparation: Path, *, compiled: 
     assert len(commands["compile"]) == 5
     assert all("-ffreestanding" in command for command in commands["compile"])
     assert preparation_main(["--directory", str(original_preparation)]) == 0
+    cli = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/verify_amp_preparation.py"),
+            "--directory",
+            str(original_preparation),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert cli.returncode == 0, cli.stderr
+    assert "AMP original preparation: PASS" in cli.stdout
     if compiled:
         result = subprocess.run(
             ["make", "-C", str(original_preparation), "-j2"],
@@ -90,7 +106,16 @@ def test_actual_original_preprocessing(original_preparation: Path, *, compiled: 
 
 
 @pytest.mark.parametrize(
-    "fault", ["record", "dependencies", "index", "source", "escape", "identity", "relative"]
+    "fault",
+    [
+        "record",
+        "dependencies",
+        "index",
+        "source",
+        "escape",
+        "identity",
+        "relative",
+    ],
 )
 def test_public_precompile_refusal(original_preparation: Path, fault: str) -> None:
     """Refuse changed original preprocessing inputs through actual Make before objects exist.
@@ -146,6 +171,7 @@ def test_public_precompile_refusal(original_preparation: Path, fault: str) -> No
         ]
         finding = "dependency paths escape"
     receipt.write_bytes(canonical_json_bytes(data))
+    assert preparation_main(["--directory", str(original_preparation)]) == 1
     result = subprocess.run(
         ["make", "-C", str(original_preparation), "-j2"],
         capture_output=True,
@@ -158,6 +184,39 @@ def test_public_precompile_refusal(original_preparation: Path, fault: str) -> No
     assert not tuple(original_preparation.rglob("*.o"))
     assert not (original_preparation / "firmware.elf").exists()
     assert not (original_preparation / "image.json").exists()
+
+
+@pytest.mark.parametrize("backend", ["other", "rust"])
+def test_unbound_arithmetic_backend_refused(original_preparation: Path, backend: str) -> None:
+    """Refuse changing the backend without an original Rust preparation receipt.
+
+    Parameters
+    ----------
+    original_preparation
+        Actual C firmware preparation with complete compiler dependency identities.
+    backend
+        Unsupported backend or Rust without its required original preparation.
+    """
+    receipt = original_preparation / "preparation.json"
+    data = json.loads(receipt.read_bytes())
+    data["kernel_backend"] = backend
+    receipt.write_bytes(canonical_json_bytes(data))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/verify_amp_preparation.py"),
+            "--directory",
+            str(original_preparation),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 1
+    assert "arithmetic backend or Rust preparation identity is invalid" in result.stderr
+    assert not tuple(original_preparation.rglob("*.o"))
 
 
 def test_actual_late_compiler_dependency_refused(original_preparation: Path) -> None:

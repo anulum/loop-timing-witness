@@ -10,6 +10,12 @@ Loop Timing Witness — README
 
 # Loop Timing Witness
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-anulum-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/anulum)
+[![PyPI](https://img.shields.io/pypi/v/loop-timing-witness.svg)](https://pypi.org/project/loop-timing-witness/)
+[![crates.io](https://img.shields.io/crates/v/witness-controller.svg)](https://crates.io/crates/witness-controller)
+[![CI](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge)](https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness)
+
 ![Loop Timing Witness architecture concept](https://raw.githubusercontent.com/anulum/loop-timing-witness/main/docs/assets/loop-timing-witness.webp)
 
 *Illustrative architecture concept. Hardware qualification and board measurements remain pending.*
@@ -173,6 +179,25 @@ The software package version is `0.1.0`. It installs the typed
 run records; native simulation, firmware preparation and hardware access remain
 separate source tools with the dependencies stated in `VALIDATION.md`.
 
+Install the published host analysis package in a Python 3.13 environment:
+
+```bash
+python -m pip install loop-timing-witness==0.1.0
+loop-timing-witness-analyze path/to/manifest.json --output-dir report
+```
+
+The standalone `no_std` Rust controller is published as
+[`witness-controller`](https://crates.io/crates/witness-controller):
+
+```toml
+[dependencies]
+witness-controller = "=0.1.0"
+```
+
+Its [versioned API reference](https://docs.rs/witness-controller/0.1.0/witness_controller/)
+covers the PID state, coefficient validation and LQR step. Native execution and
+board adapters remain source tools; the AMP kernel is not a registry crate.
+
 From a source checkout with Python 3.13.15:
 
 ```bash
@@ -197,7 +222,9 @@ The actual package-consumer check, `make python-package-tests`, builds both whee
 and source archive, installs them into independent environments and analyses
 events produced by the real Icarus RTL path.
 
-Native interfaces are documented in the [controller contract](https://github.com/anulum/loop-timing-witness/blob/main/docs/CONTROLLERS.md),
+The [documentation website](https://anulum.github.io/loop-timing-witness/) contains
+the source guides and Python, Rust and C/C++ API references. Native interfaces are
+documented in the [controller contract](https://github.com/anulum/loop-timing-witness/blob/main/docs/CONTROLLERS.md),
 the [Rust crate README](https://github.com/anulum/loop-timing-witness/blob/main/controllers/rust/README.md) and the AMP runtime contracts.
 `make documentation-toolchain docs-site` builds the source documentation, Python
 `pydoc`, both Rustdoc references and the C/C++ Doxygen declaration reference into

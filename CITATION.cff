@@ -7,10 +7,14 @@
 # Loop Timing Witness — citation metadata
 cff-version: 1.2.0
 message: >-
-  If you reference this repository, cite it as below. No registry release or
-  DOI exists yet; cite the commit you inspected.
+  Cite the released software version or the specific commit you inspected.
+  No DOI has been assigned; software publication does not qualify the board.
 type: software
 title: Loop Timing Witness
+version: 0.1.0
+date-released: 2026-10-01
+repository-code: https://github.com/anulum/loop-timing-witness
+url: https://anulum.github.io/loop-timing-witness/
 abstract: >-
   Measurement instrument, in design, for hardware-timestamped latency,
   deadline, fault and energy evidence of real-time control loops and fabric

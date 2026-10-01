@@ -19,5 +19,7 @@
   ],
   "license": "AGPL-3.0-or-later",
   "title": "Loop Timing Witness",
-  "upload_type": "software"
+  "upload_type": "software",
+  "version": "0.1.0",
+  "publication_date": "2026-10-01"
 }

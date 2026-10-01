@@ -14,8 +14,8 @@ Loop Timing Witness — security policy
 
 | State | Supported |
 |---|---|
-| `main` at its current commit | yes — the only supported state |
-| Released versions | none exist |
+| `main` at its current commit | yes — current development |
+| `0.1.0` | yes — published analysis package and standalone controller crate |
 
 The measurement-domain maturity remains `architecture_only`. Executable surfaces include
 validation and host analysis tools, C/Rust/RTL controllers, the simulated plants and event

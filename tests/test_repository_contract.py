@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 
 import pytest
 
@@ -85,11 +86,8 @@ FORBIDDEN_PATHS = (
     "BACKUP",
 )
 UNEARNED_BADGE_MARKERS = (
-    "[![",
     "api.reuse.software/badge/",
-    "api.scorecard.dev/projects/",
     "bestpractices.dev/projects/",
-    "pypi.org/project/",
     "zenodo.org/badge/",
 )
 WORKFLOWS = REPOSITORY_ROOT / ".github" / "workflows"
@@ -143,16 +141,44 @@ def test_ignore_rules_keep_private_and_backup_trees_out() -> None:
 
 
 def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
-    """No badge, and the changelog has only an unreleased section."""
+    """Published software metadata stays aligned without unearned hardware or DOI claims."""
     readme = publishable_text("README.md")
     for marker in UNEARNED_BADGE_MARKERS:
         assert marker not in readme, marker
     changelog = publishable_text("CHANGELOG.md")
-    assert re.findall(r"^## \[(.+?)\]", changelog, flags=re.MULTILINE) == ["Unreleased"]
+    project = tomllib.loads(publishable_text("pyproject.toml"))["project"]
+    crate = tomllib.loads(publishable_text("controllers/rust/Cargo.toml"))["package"]
+    version = project["version"]
+    assert crate["version"] == version
+    assert re.findall(r"^## \[(.+?)\]", changelog, flags=re.MULTILINE) == ["Unreleased", version]
     citation = publishable_text("CITATION.cff")
     zenodo = load_json_object(REPOSITORY_ROOT / ".zenodo.json")
-    assert not re.search(r"^(version|date-released|doi):", citation, flags=re.MULTILINE)
-    assert not {"version", "publication_date", "doi"} & set(zenodo)
+    assert re.findall(r"^version: (.+)$", citation, flags=re.MULTILINE) == [version]
+    released = re.findall(r"^date-released: (.+)$", citation, flags=re.MULTILINE)
+    assert released == [zenodo["publication_date"]]
+    assert f"## [{version}] - {released[0]}" in changelog
+    assert zenodo["version"] == version
+    assert not re.search(r"^doi:", citation, flags=re.MULTILINE)
+    assert "doi" not in zenodo
+    assert "No DOI has been assigned" in readme
+    assert "No registry release" not in citation
+    assert f"| `{version}` | yes" in publishable_text("SECURITY.md")
+    badges = re.findall(r"\[!\[([^]]+)\]\(([^)]+)\)\]\(([^)]+)\)", readme)
+    assert [(label, target) for label, _, target in badges] == [
+        ("Sponsor", "https://github.com/sponsors/anulum"),
+        ("PyPI", "https://pypi.org/project/loop-timing-witness/"),
+        ("crates.io", "https://crates.io/crates/witness-controller"),
+        ("CI", "https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml"),
+        (
+            "OpenSSF Scorecard",
+            "https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness",
+        ),
+    ]
+    assert "https://img.shields.io/pypi/v/loop-timing-witness.svg" in readme
+    assert "https://img.shields.io/crates/v/witness-controller.svg" in readme
+    assert (
+        "https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge" in readme
+    )
 
 
 def test_manifest_and_inventory_state_architecture_only() -> None:

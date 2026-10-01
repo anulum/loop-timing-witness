@@ -12,13 +12,22 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-01
+
 ### Fixed
 
+- Resume the reset testbench clock between edges so Icarus and Verilator both observe the
+  original two-edge release assertions.
 - Install the pinned Ubuntu Icarus package in the test workflow so RTL-to-host tests do not
   depend on an undeclared runner tool.
 
 ### Added
 
+- Published Python host analysis wheel and source archive with typed API, packaged schemas and
+  the `loop-timing-witness-analyze` command.
+- Published standalone `no_std` Rust controller crate, with independently tested API and
+  WASM/RV64 consumers. The platform-bound AMP kernel remains a source dependency.
+- Documentation website with Python, Rust and C/C++ native API references and source provenance.
 - Dual-clock fabric event witness with Gray-pointer FIFO, common run reset, drop-newest overflow
   accounting and real buffered RTL streams analysed by the host command.
 

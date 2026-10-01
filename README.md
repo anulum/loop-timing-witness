@@ -167,7 +167,7 @@ The IRQ-free Linux AMP logger, mailbox startup and board qualification requireme
 
 ## Python package and native interfaces
 
-The source package is version `0.1.0`, currently unreleased. It installs the typed
+The software package version is `0.1.0`. It installs the typed
 `loop_timing_witness` API, packaged JSON schemas and the
 `loop-timing-witness-analyze` command. The package analyses existing hash-bound
 run records; native simulation, firmware preparation and hardware access remain
@@ -227,8 +227,9 @@ AGPL-3.0-or-later, with a commercial licence available; see [`NOTICE.md`](https:
 
 ## Citation
 
-Citation metadata is in [`CITATION.cff`](https://github.com/anulum/loop-timing-witness/blob/main/CITATION.cff). No registry release or DOI exists yet;
-the source package version is `0.1.0`. Cite the commit you inspected.
+Citation metadata is in [`CITATION.cff`](https://github.com/anulum/loop-timing-witness/blob/main/CITATION.cff). No DOI has been assigned.
+Cite the software version and the commit you inspected. Software version numbers
+do not establish physical board qualification or measured platform performance.
 
 Native source-bound simulation capture is available through
 [`tools/capture_native_simulation.py`](https://github.com/anulum/loop-timing-witness/blob/main/tools/capture_native_simulation.py); see the

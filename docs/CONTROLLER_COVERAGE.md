@@ -12,10 +12,12 @@ Loop Timing Witness — native controller coverage reproduction
 
 [`controller_coverage.json`](../benchmarks/controller_coverage.json) binds source hashes
 to GCC and LLVM coverage reports. Both controller kernels and their streaming CLIs have
-100% executable line and branch coverage. These counts exclude benchmark harnesses and
-SystemVerilog. They establish host execution coverage, not board qualification.
+100% executable line and branch coverage in the recorded snapshot. The retained reports
+include the earlier Rust 1.98.1 build; they are historical evidence and do not certify a new
+compiler. These counts exclude benchmark harnesses and SystemVerilog. They establish
+host execution coverage, not board qualification.
 
-Production Rust builds use 1.98.1. Stable LLVM coverage additionally reports complete line,
+Production Rust builds use 1.99.0. Stable LLVM coverage additionally reports complete line,
 region and function coverage for the library and CLI, but does not instrument branches.
 The separate branch analysis uses `nightly-2026-08-21`, with `llvm-tools-preview`, without
 changing the production compiler or disabling any branch. GCC 13.3.0 uses `--coverage`.
@@ -135,13 +137,13 @@ HSS/Linux ownership or board acceptance.
 ## Freestanding Rust C ABI coverage
 
 `tests/test_amp_rust_branch_coverage.py` builds the original safe core and C ABI adapter
-with Rust 1.98.1 source coverage, then runs the real C API and PID/LQR stream clients.
+with Rust 1.99.0 source coverage, then runs the real C API and PID/LQR stream clients.
 It also runs the safe core's public Rust API tests and links a test-owned no-std panic
 producer to the adapter's unchanged panic handler. The host-only panic sink flushes the
 actual profile before exiting. The test merges those profiles with the matching toolchain's
 `llvm-profdata` and requires positive, fully covered line, region, function and branch
 counts for both original Rust source files. `RUSTC_BOOTSTRAP=1` is scoped to the profile
-builds solely to enable Rust 1.98.1's unstable branch instrumentation option; production
+builds solely to enable Rust 1.99.0's unstable branch instrumentation option; production
 builds and their warning gates retain their normal compiler settings. This is host source
 coverage. The separately compiled RV64 fault in `tests/test_amp_rust_panic.py` exercises
 the public target refusal path, but does not export target coverage counters or qualify

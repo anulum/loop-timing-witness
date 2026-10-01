@@ -105,15 +105,15 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     core = ROOT / "controllers/rust/src/lib.rs"
     adapter = ROOT / "runtime/bare_metal/rust_kernel/src/lib.rs"
     source_bytes = {path: path.read_bytes() for path in [core, adapter]}
-    version = _run(["rustc", "+1.98.1", "-vV"], tmp_path, "rust-version")
-    assert version.stdout.startswith(b"rustc 1.98.1 ")
+    version = _run(["rustc", "+1.99.0", "-vV"], tmp_path, "rust-version")
+    assert version.stdout.startswith(b"rustc 1.99.0 ")
     host = next(
         line.removeprefix("host: ")
         for line in version.stdout.decode().splitlines()
         if line.startswith("host: ")
     )
     sysroot = Path(
-        _run(["rustc", "+1.98.1", "--print", "sysroot"], tmp_path, "sysroot")
+        _run(["rustc", "+1.99.0", "--print", "sysroot"], tmp_path, "sysroot")
         .stdout.decode()
         .strip()
     )
@@ -125,7 +125,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "cargo",
-            "+1.98.1",
+            "+1.99.0",
             "build",
             "--release",
             "--offline",
@@ -164,7 +164,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "rustc",
-            "+1.98.1",
+            "+1.99.0",
             "--crate-type",
             "rlib",
             "--edition",
@@ -235,7 +235,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "cargo",
-            "+1.98.1",
+            "+1.99.0",
             "test",
             "--offline",
             "--locked",

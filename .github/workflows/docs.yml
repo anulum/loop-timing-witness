@@ -40,8 +40,8 @@ jobs:
         run: python tools/check_provenance_headers.py
       - name: Install the exact documentation toolchains
         run: |
-          rustup toolchain install 1.98.1 --profile minimal
-          rustup default 1.98.1
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup default 1.99.0
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
           .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .

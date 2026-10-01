@@ -59,9 +59,9 @@ jobs:
           PY
       - name: Install the exact native and package-consumer toolchains
         run: |
-          rustup toolchain install 1.98.1 --profile minimal --component clippy --component rustfmt
-          rustup default 1.98.1
-          rustup target add --toolchain 1.98.1 wasm32-unknown-unknown riscv64imac-unknown-none-elf
+          rustup toolchain install 1.99.0 --profile minimal --component clippy --component rustfmt
+          rustup default 1.99.0
+          rustup target add --toolchain 1.99.0 wasm32-unknown-unknown riscv64imac-unknown-none-elf
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
           .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .

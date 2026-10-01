@@ -59,8 +59,8 @@ jobs:
           "$WITNESS_RV64_CC" --version
       - name: Install the pinned Rust toolchain
         run: |
-          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --component llvm-tools-preview --target wasm32-unknown-unknown --target riscv64imac-unknown-none-elf
-          rustup default 1.98.1
+          rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy --component llvm-tools-preview --target wasm32-unknown-unknown --target riscv64imac-unknown-none-elf
+          rustup default 1.99.0
       - name: Native toolchain versions
         run: |
           gcc --version

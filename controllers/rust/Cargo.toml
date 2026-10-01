@@ -10,7 +10,7 @@
 name = "witness-controller"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.0"
 publish = ["crates-io"]
 license = "AGPL-3.0-or-later"
 description = "Bit-exact Q8.24 PID and discrete LQR for Loop Timing Witness"

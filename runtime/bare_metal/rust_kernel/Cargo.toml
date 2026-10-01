@@ -10,7 +10,7 @@
 name = "witness-amp-rust-kernel"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.0"
 publish = false
 license = "AGPL-3.0-or-later"
 description = "Freestanding C ABI adapter for the Witness Rust controller"

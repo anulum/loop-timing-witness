@@ -41,7 +41,7 @@ truthfulness of the `architecture_only` state.
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
   is not evidence of board acceptance.
-- Rust 1.98.1 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs;
+- Rust 1.99.0 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs;
   C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
   Tool versions are printed by the jobs. The controller kernels have no third-party native dependencies.
 - Verilator 5.020 (`verilator`), Ubuntu noble package `5.020-1`, builds the native controller
@@ -185,7 +185,7 @@ Ownership of every job and the omitted categories are declared in
 `make documentation-toolchain` installs the official Doxygen 1.18.0 Linux binary
 archive only after verifying SHA-256
 `14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90`.
-Local and hosted builds use that same archive and Rust 1.98.1.
+Local and hosted builds use that same archive and Rust 1.99.0.
 `make native-api` treats Doxygen warnings, undocumented public members and enum
 values as errors. Both Rust crates deny missing public documentation; Rustdoc
 also denies warnings and broken intra-doc links. Tests remove descriptions from
@@ -213,12 +213,14 @@ and LLVM line/region/function/branch analysis of the kernels and streaming CLIs.
 [`benchmarks/controller_coverage.json`](benchmarks/controller_coverage.json) retains
 source and raw-report hashes. Coverage is host execution evidence; no numeric RTL
 coverage or physical timing qualification is inferred. The production Rust compiler
-remains 1.98.1; the separate branch analysis pins nightly-2026-08-21.
+remains 1.99.0; the separate branch analysis pins nightly-2026-08-21.
 
 `make controller-benchmarks` executes matching million-sample native workloads.
 [`benchmarks/controller_regression.json`](benchmarks/controller_regression.json)
-records five repeats per language/controller with compiler, source/binary hashes,
-load, affinity and governor. Non-isolated timings are local regression evidence only.
+records five repeats per language/controller from the earlier Rust 1.98.1 build, with
+compiler, source/binary hashes, load, affinity and governor. This retained historical
+snapshot is not a performance measurement of the current compiler. Non-isolated timings
+are local regression evidence only.
 C/Rust command checksums must agree; host wall time cannot establish fabric speedup.
 
 ## Native Linux runtime verification

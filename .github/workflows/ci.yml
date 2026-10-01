@@ -30,6 +30,7 @@ jobs:
     uses: ./.github/workflows/reusable-tests.yml
     permissions:
       contents: read # read the repository for the test run
+      id-token: write # ceiling for the separate main-only Codecov job
   gate:
     name: Required gate
     runs-on: ubuntu-24.04

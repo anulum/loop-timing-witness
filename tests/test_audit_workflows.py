@@ -344,6 +344,7 @@ def test_coordinator_contract(tree: Path) -> None:
             "ci.yml: job tests: action 'other/repository/.github/workflows/tests.yml@main' "
             "is not pinned to a commit"
         ),
+        "ci.yml: coverage caller must use the exact reusable and permission ceiling",
         "ci.yml: unexpected top-level keys ['env']",
         "ci.yml: job tests is not a local reusable call",
         (
@@ -385,6 +386,7 @@ def test_gate_with_malformed_steps_and_non_mapping_call(tree: Path) -> None:
     )
     assert audit(tree) == [
         "ci.yml: job static-policy: must be a mapping",
+        "ci.yml: coverage caller must use the exact reusable and permission ceiling",
         "ci.yml: job static-policy is not a local reusable call",
         (
             "ci.yml: calls ['reusable-tests.yml'] differ from declared reusables "

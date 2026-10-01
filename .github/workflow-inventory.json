@@ -41,10 +41,11 @@
       "category": 4,
       "file": "reusable-tests.yml",
       "jobs": [
-        "run"
+        "run",
+        "coverage"
       ],
       "kind": "reusable",
-      "owner": "tests with complete statement and branch coverage"
+      "owner": "tests with complete statement and branch coverage and source-bound Codecov publication"
     },
     {
       "category": 2,

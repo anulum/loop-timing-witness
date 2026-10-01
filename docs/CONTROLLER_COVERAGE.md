@@ -23,6 +23,26 @@ The separate branch analysis uses `nightly-2026-08-21`, with `llvm-tools-preview
 changing the production compiler or disabling any branch. GCC 13.3.0 uses `--coverage`.
 Build outputs and raw reports remain under ignored `build/` and the crate's `target/`.
 
+## Python coverage report in CI
+
+The CI test job requires 100% Python statement and branch coverage for
+`src/loop_timing_witness`, `tools` and `controller_test_support.py`. It also writes
+`build/coverage/coverage.xml` through [`export_python_coverage.py`](../tools/export_python_coverage.py).
+The export preserves repository-relative paths, including equal basenames in different
+source directories, without changing the collected source set or coverage threshold. A successful test job retains that report, its SHA-256
+and the tested commit as the `python-coverage-<commit>` artifact for seven days.
+
+A separate job runs only on `main`, after the test job succeeds. It downloads the
+artifact from the same workflow run and verifies its digest and commit against the
+exact checkout before uploading only that XML report to Codecov with the `python`
+flag. OIDC authentication belongs to the `codecov` environment; test execution has
+only repository read permission. An upload error fails the CI category and its
+required gate. Pull requests retain the test report without publishing it.
+
+This report describes the configured Python source set. It does not measure C, C++,
+Rust, SystemVerilog or physical hardware. Those surfaces need their separate
+instrumented evidence below.
+
 ## Compile instrumented public interfaces
 
 Run from the repository root with its development environment installed. Use a fresh
@@ -313,3 +333,64 @@ fields must refuse before IIO selection with the same semantic contract as the p
 compiler profiles cover configuration validation and early constructor refusal, not physical
 sensor reads or journal worker execution. The journal's validation-before-output ordering is
 source-inspected and compiled; invoking that constructor requires actual IIO and UIO resources.
+
+## RTL source-flow closure
+
+The completed Verilator 5.020 measurement retains every source and elaboration
+identity, omitting only instance hierarchy when taking the union. It covers all
+24 production RTL files: 20 contain measured procedural source-flow points;
+`control_plant_witness.sv`, `fabric_control_witness.sv` and `icicle_witness.sv`
+contain continuous assignments and module wiring, and `event_codes_pkg.sv`
+contains constants. Those four files have no procedural counter in this scope.
+
+The completed union has **826 of 834 points executed**, with **8 remaining
+raw zero counters accepted as source invariants**. No point is excluded and no
+unexplained zero remains. The eight proofs do not count as runtime hits. The
+union combines actual public-port testbench, native lifecycle and AXI process
+profiles; it does not assert independent completeness for each plant.
+
+`tests/test_retained_interrupt.py` reads the real `0xa8` IRQ status register
+across three bus/capture clock ratios. It checks an older snapshot acknowledgement
+while a newer generation is pending, coalesced safe/finish events, invalid
+acknowledgements and common reset. This exercises `retained_interrupt.sv:50`;
+the unknown-address default is at line 51 and was already executed.
+
+Run the full original 32-bit counter programme separately from the ordinary suite:
+
+```bash
+make rtl-counter-saturation RTL_SATURATION_DIRECTORY=build/rtl-counter-full
+make rtl-invariants RTL_INVARIANT_DIRECTORY=build/rtl-invariants-full
+```
+
+The first command drives public clocks and inputs for `2^32 + 8` ticks after
+warmup. Six `control_cycle` period bindings (64, 256, 512, 16384, 32768 and
+100000), three `deadline_monitor` miss limits (1, 2 and 3), and an actual full
+FIFO reach `UINT32_MAX`, remain saturated and clear on common reset. The sources
+and their 32-bit widths stay unchanged. The ordinary pytest regression runs
+only one million ticks and checks progression/reset; it does not claim saturation.
+A full run takes 50 minutes on the recorded shared host. Verilator retains
+the original constant unsigned-threshold warning for miss limit 1, so this
+programme does not certify strict RTL lint. Its C++ build uses strict warnings.
+
+Coverage snapshots are cumulative observations. Verilator's unsigned 32-bit
+coverage counters can wrap during this long run; preserve the intermediate
+profiles and use positive observations to determine execution. Do not add these
+snapshots as independent cases or treat their sum as an execution frequency.
+Keep raw elaboration pages distinct: `event_witness__A3` and
+`event_witness__A3_O20` are separate measured identities. Both original 32-bit
+bindings were executed, including an exact explicit-parameter FIFO run.
+
+| Raw zero source points | Accepted invariant and reproduction |
+| --- | --- |
+| `run_configuration_registers.sv:111` | A successful public write can only select a listed sequential address; the default cannot follow an accepted write. The configuration proof runs six periods and both plant selectors. |
+| `control_io_registers.sv:83,127` | The nested read case has the same six addresses as its outer case; successful writes select the three sequential addresses. The public decoder assertions support this exact source inspection. |
+| `axi_lite_clock_bridge.sv:147,148` (three points) | The original `ENABLE_LOCAL=0` binding makes `local_valid=0`; the local response branches cannot execute. Enabled-local elaborations remain separate runtime points. |
+| `fixed_point_math.sv:28,29` (two points) | The original thermal velocity-step binding has `A=B=C=0`, so neither negative clamp nor clipping can occur. This applies only to that verified hierarchy and parameter binding. |
+
+`make rtl-invariants` runs 16 positive checks with Yosys: four default wrappers
+and 12 configuration variants. The recorded proof review also checked four
+intentionally false assertions and retained their concrete counterexamples.
+The accepted argument uses two-state, one-step SAT and exact source/parameter
+binding with unconstrained initial states. It makes no reset-reachability,
+four-state, signal-toggle, MC/DC, CDC-timing, synthesis or physical-board claim.
+Native C++ compiler edges and hardware acquisition remain separate obligations.

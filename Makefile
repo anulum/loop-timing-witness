@@ -179,3 +179,42 @@ run-amp-uio:
 
 # Build the actual production plugin for the explicitly supplied matching Spike SDK.
 include runtime/isa/spike_plugin.mk
+
+RTL_SATURATION_DIRECTORY ?= build/rtl-counter-saturation
+RTL_SATURATION_STEPS ?= 4294967304
+
+.PHONY: rtl-counter-saturation
+rtl-counter-saturation:
+	mkdir -p "$(RTL_SATURATION_DIRECTORY)"
+	verilator --cc --exe --build --Wall -Wno-fatal --assert --coverage-line \
+		--top-module rtl_counter_saturation -GOVERFLOW_COUNTER_BITS=32 -j 2 --Mdir "$(RTL_SATURATION_DIRECTORY)" \
+		-CFLAGS "-std=c++17 -O3 -Wall -Wextra -Werror" -MAKEFLAGS "OPT_FAST=-O3" \
+		rtl/control_cycle.sv rtl/deadline_monitor.sv rtl/event_witness.sv \
+		rtl/clock_reset_release.sv rtl/event_record_capture.sv rtl/event_record_fifo.sv \
+		$(abspath tests/rtl/rtl_counter_saturation.sv) \
+		$(abspath tests/native/rtl_counter_saturation.cpp) -o saturation_test
+	"$(RTL_SATURATION_DIRECTORY)/saturation_test" "$(RTL_SATURATION_STEPS)" \
+		"$(RTL_SATURATION_DIRECTORY)/coverage.dat"
+
+RTL_INVARIANT_DIRECTORY ?= build/rtl-invariants
+RTL_INVARIANT_SOURCES := rtl/run_configuration_registers.sv rtl/control_io_registers.sv \
+	rtl/axi_lite_clock_bridge.sv rtl/clock_request_bridge.sv rtl/clock_reset_release.sv rtl/fixed_point_math.sv
+
+.PHONY: rtl-invariants
+rtl-invariants:
+	mkdir -p "$(RTL_INVARIANT_DIRECTORY)"
+	for module in run_configuration_registers control_io_registers axi_lite_clock_bridge fixed_point_math; do \
+		yosys -Q -T -p "read_verilog -formal -sv $(RTL_INVARIANT_SOURCES) tests/formal/$${module}_proof.sv; \
+		prep -top $${module}_proof; write_json $(RTL_INVARIANT_DIRECTORY)/$${module}.json; \
+		flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout 30 -show-ports" \
+		> "$(RTL_INVARIANT_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
+	done
+	for period in 64 256 512 16384 32768 100000; do \
+		for thermal in 0 1; do \
+			yosys -Q -T -p "read_verilog -formal -sv rtl/run_configuration_registers.sv tests/formal/run_configuration_registers_proof.sv; \
+			chparam -set PERIOD_TICKS $$period -set THERMAL $$thermal run_configuration_registers_proof; \
+			prep -top run_configuration_registers_proof; write_json $(RTL_INVARIANT_DIRECTORY)/configuration-$${period}-$${thermal}.json; \
+			flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout 30 -show-ports" \
+			> "$(RTL_INVARIANT_DIRECTORY)/configuration-$${period}-$${thermal}.log" 2>&1 || exit $$?; \
+		done; \
+	done

@@ -331,7 +331,12 @@ def _job_findings(file: str, kind: str, name: str, job: object, reusables: set[s
         findings.append(f"{label}: must declare a permissions mapping")
     if (
         kind != "coordinator"
-        and (file, name) not in {("docs.yml", "deploy"), ("publish.yml", "publish")}
+        and (file, name)
+        not in {
+            ("docs.yml", "deploy"),
+            ("publish.yml", "publish"),
+            ("reusable-tests.yml", "coverage"),
+        }
         and "needs" in job
     ):
         findings.append(f"{label}: only the coordinator may declare needs")

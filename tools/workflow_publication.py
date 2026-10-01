@@ -6,13 +6,15 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Loop Timing Witness — exact authorised workflow publication boundaries
 
-"""Bind Pages, PyPI and Scorecard write scopes to their real authorised jobs."""
+"""Bind Pages, packages, Scorecard and Codecov write scopes to their real authorised jobs."""
 
 from __future__ import annotations
 
 from typing import Any, Final
 
 PUBLICATION_JOBS: Final = {
+    ("ci.yml", "tests"): frozenset({"id-token"}),
+    ("reusable-tests.yml", "coverage"): frozenset({"id-token"}),
     ("docs.yml", "deploy"): frozenset({"pages", "id-token"}),
     ("publish.yml", "publish"): frozenset({"id-token"}),
     ("publish-rust.yml", "publish"): frozenset({"id-token"}),
@@ -48,6 +50,8 @@ def publication_job_findings(
     expected = dict.fromkeys(sorted(PUBLICATION_JOBS[file, name]), "write")
     if file == "publish-rust.yml":
         expected = {"contents": "read", "actions": "read", "id-token": "write"}
+    if file == "reusable-tests.yml":
+        expected = {"contents": "read", "id-token": "write"}
     if job.get("permissions") != expected:
         findings.append(f"{file}: publication permissions must be exactly {expected}")
     needs = [dependency] if dependency else None
@@ -78,6 +82,7 @@ def publication_findings(file: str, workflow: dict[str, Any]) -> list[str]:
     """
     findings = []
     policies = {
+        "reusable-tests.yml": ("coverage", "run", "codecov", DEPLOY),
         "docs.yml": ("deploy", "validate", "github-pages", DEPLOY),
         "publish.yml": ("publish", "build", "pypi", MAIN),
         "publish-rust.yml": ("publish", "", "crates-io", MAIN),
@@ -92,8 +97,42 @@ def publication_findings(file: str, workflow: dict[str, Any]) -> list[str]:
         build = workflow["jobs"].get(verification)
         if not isinstance(build, dict) or build.get("if") != MAIN:
             findings.append(f"{file}: package verification must start only from main")
+    findings.extend(coverage_identity_findings(file, workflow["jobs"]))
     if file == "scorecard.yml":
         job = workflow["jobs"].get("analysis", {})
         if not isinstance(job, dict) or job.get("if") != MAIN:
             findings.append("scorecard.yml: public analysis must start only from main")
+    return findings
+
+
+def coverage_identity_findings(file: str, jobs: dict[str, Any]) -> list[str]:
+    """Check the coverage caller ceiling and the test job's read-only identity.
+
+    Parameters
+    ----------
+    file
+        Exact workflow filename.
+    jobs
+        Parsed workflow jobs mapping.
+
+    Returns
+    -------
+    list[str]
+        Coverage caller or test identity violations.
+    """
+    findings = []
+    if file == "ci.yml":
+        call = jobs.get("tests")
+        if (
+            not isinstance(call, dict)
+            or call.get("permissions") != {"contents": "read", "id-token": "write"}
+            or call.get("uses") != "./.github/workflows/reusable-tests.yml"
+        ):
+            findings.append(
+                "ci.yml: coverage caller must use the exact reusable and permission ceiling"
+            )
+    if file == "reusable-tests.yml":
+        run = jobs.get("run")
+        if not isinstance(run, dict) or run.get("permissions") != {"contents": "read"}:
+            findings.append("reusable-tests.yml: test execution must have only contents: read")
     return findings

@@ -153,8 +153,8 @@
       "version": "1.2.3"
     },
     "mypy": {
-      "licence": "MIT",
-      "version": "2.3.1"
+      "licence": "MIT AND Apache-2.0 AND PSF-2.0 AND BSD-2-Clause",
+      "version": "2.4.0"
     },
     "mypy-extensions": {
       "licence": "MIT",
@@ -278,7 +278,7 @@
     },
     "ruff": {
       "licence": "MIT",
-      "version": "0.16.9"
+      "version": "0.16.10"
     },
     "six": {
       "licence": "MIT",

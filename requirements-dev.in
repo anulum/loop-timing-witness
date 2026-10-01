@@ -16,8 +16,8 @@ pre-commit==4.6.2
 urllib3==2.8.0
 virtualenv==21.14.2
 # Lint, format, strict typing
-ruff==0.16.9
-mypy==2.3.1
+ruff==0.16.10
+mypy==2.4.0
 types-PyYAML==6.0.12.20260906
 types-jsonschema==4.26.0.20260518
 # Tests and coverage

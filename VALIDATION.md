@@ -170,13 +170,41 @@ Every action is pinned to a verified commit object.
 | `pre-commit.yml` | every pre-commit stage hook on all files | static analysis and policy |
 | `codeql.yml` | code scanning of C, Rust, Python and the workflow definitions | security and supply chain |
 | `security-audit.yml` | secret scan of the full history, vulnerability audit, licence guard, REUSE, actionlint, zizmor | security and supply chain |
-| `scorecard.yml` | OpenSSF Scorecard analysis; results are not published | security and supply chain |
+| `scorecard.yml` | OpenSSF Scorecard analysis and public project-bound results | security and supply chain |
 | `sbom.yml` | CycloneDX inventory of the development lock, kept as a 30-day artefact | security and supply chain |
-| `docs.yml` | documentation links, anchors and rendered headers; no deployment | documentation |
+| `docs.yml` | strict source, Python, C/C++ and Rust API build; Pages deploys only verified main builds | documentation |
 | `controller-comparison.yml` | matching native workload measurements and retained runner receipts | performance and benchmarking |
+| `publish.yml` | manually dispatched exact-revision validation, real wheel/sdist consumers and PyPI OIDC publication | release and registry publication |
+| `publish-rust.yml` | manually dispatched exact-revision validation, independent packaged API consumers and crates.io OIDC publication | release and registry publication |
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.
+
+## Native API documentation
+
+`make documentation-toolchain` installs the official Doxygen 1.18.0 Linux binary
+archive only after verifying SHA-256
+`14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90`.
+Local and hosted builds use that same archive and Rust 1.98.1.
+`make native-api` treats Doxygen warnings, undocumented public members and enum
+values as errors. Both Rust crates deny missing public documentation; Rustdoc
+also denies warnings and broken intra-doc links. Tests remove descriptions from
+actual C and Rust public fields and require the native builders to refuse them.
+
+`make docs-site` combines those strict native references, installed-package
+Python pydoc and every Git-publishable Markdown document. It validates source
+links, preserves heading fragments, excludes ignored private content and records
+the source revision and output hashes in `site-provenance.json`. Hosted PR builds
+have read-only source access; the separate Pages job requires a successful build
+and the main-branch `github-pages` environment.
+
+Registry workflows run only by manual dispatch on main, require completed green
+validation at that exact revision, and exercise the actual package consumers.
+PyPI uses the `pypi` environment and a configured trusted publisher. Crates.io
+uses the `crates-io` environment and a configured trusted publisher; its first
+crate creation requires a separate initial token-authenticated publication
+before that trusted publisher can be configured. Neither registry release nor
+rendered API documentation establishes physical instrument qualification.
 
 ## Native controller coverage and regression
 

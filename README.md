@@ -10,6 +10,10 @@ Loop Timing Witness — README
 
 # Loop Timing Witness
 
+![Loop Timing Witness architecture concept](https://raw.githubusercontent.com/anulum/loop-timing-witness/main/docs/assets/loop-timing-witness.webp)
+
+*Illustrative architecture concept. Hardware qualification and board measurements remain pending.*
+
 An open measurement instrument, in design, that timestamps the events of a real-time control
 loop in FPGA fabric and reports latency, jitter, deadline misses, fault response and energy per
 control cycle on a PolarFire SoC board — independently of the processor whose software is being
@@ -46,7 +50,7 @@ For one closed control loop on one PolarFire SoC Icicle Kit, the planned instrum
    multiprocessing, and fixed-point logic in fabric;
 4. relates latency to the tracking error of an emulated plant in the same run;
 5. estimates energy per control cycle from the board's PAC1934 power monitor, with the limits
-   stated in [`docs/MEASUREMENT_PROTOCOL.md`](docs/MEASUREMENT_PROTOCOL.md);
+   stated in [`docs/MEASUREMENT_PROTOCOL.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/MEASUREMENT_PROTOCOL.md);
 6. injects faults and measures detection and time to a defined safe actuator state;
 7. writes every run as raw event records plus a hashed manifest, so a run can be repeated and
    audited.
@@ -113,32 +117,32 @@ interface. No SC-NeuroCore latency or energy on PolarFire SoC has been measured.
 ## Architecture
 
 The instrument architecture, event record format and verification plan are described in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The repository boundary is fixed by
-[`docs/adr/0001-repository-boundary.md`](docs/adr/0001-repository-boundary.md), the measurement
-procedure and its stated limits by [`docs/MEASUREMENT_PROTOCOL.md`](docs/MEASUREMENT_PROTOCOL.md),
-and the threat model by [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md). The implemented simulation
-and host file contract is in [`docs/HOST_ANALYSIS.md`](docs/HOST_ANALYSIS.md).
+[`docs/ARCHITECTURE.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/ARCHITECTURE.md). The repository boundary is fixed by
+[`docs/adr/0001-repository-boundary.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/adr/0001-repository-boundary.md), the measurement
+procedure and its stated limits by [`docs/MEASUREMENT_PROTOCOL.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/MEASUREMENT_PROTOCOL.md),
+and the threat model by [`docs/THREAT_MODEL.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/THREAT_MODEL.md). The implemented simulation
+and host file contract is in [`docs/HOST_ANALYSIS.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/HOST_ANALYSIS.md).
 The source-bound vendor input procedure is in
-[`hardware/icicle/README.md`](hardware/icicle/README.md); no Libero or board result is claimed.
+[`hardware/icicle/README.md`](https://github.com/anulum/loop-timing-witness/blob/main/hardware/icicle/README.md); no Libero or board result is claimed.
 
-The [system block diagram](docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf)
+The [system block diagram](https://github.com/anulum/loop-timing-witness/blob/main/docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf)
 illustrates the proposed PolarFire SoC Icicle Kit design for the 2026 contest.
 
-The planned contracts are machine-readable in [`measurement-domain.json`](measurement-domain.json)
-(schema [`measurement-domain.schema.json`](measurement-domain.schema.json)): timebase, event
+The planned contracts are machine-readable in [`measurement-domain.json`](https://github.com/anulum/loop-timing-witness/blob/main/measurement-domain.json)
+(schema [`measurement-domain.schema.json`](https://github.com/anulum/loop-timing-witness/blob/main/measurement-domain.schema.json)): timebase, event
 record layout, event profiles and the intervals derived from them, event buffer sizing, controller
 placements and the run plan. Each run manifest binds a snapshot of this file by SHA-256. The
 validator checks their internal consistency, for example that
 the event buffer outlasts the slowest permitted drain at the highest sample rate and that the
 timebase counter cannot wrap during a repeat.
 
-The RTL stream contract is described in [`docs/FABRIC_WITNESS.md`](docs/FABRIC_WITNESS.md); the
-integrated plant, monitor and injector are in [`docs/PLANT_WITNESS.md`](docs/PLANT_WITNESS.md).
+The RTL stream contract is described in [`docs/FABRIC_WITNESS.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/FABRIC_WITNESS.md); the
+integrated plant, monitor and injector are in [`docs/PLANT_WITNESS.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/PLANT_WITNESS.md).
 Controller arithmetic, design, native interfaces and simulation limits are in
-[`docs/CONTROLLERS.md`](docs/CONTROLLERS.md). Dedicated-hart firmware preparation, actual ISA
-capture and analysis limits are in [`docs/AMP_SIMULATION.md`](docs/AMP_SIMULATION.md).
+[`docs/CONTROLLERS.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/CONTROLLERS.md). Dedicated-hart firmware preparation, actual ISA
+capture and analysis limits are in [`docs/AMP_SIMULATION.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/AMP_SIMULATION.md).
 The IRQ-free Linux AMP logger, mailbox startup and board qualification requirements are in
-[`docs/AMP_LINUX.md`](docs/AMP_LINUX.md).
+[`docs/AMP_LINUX.md`](https://github.com/anulum/loop-timing-witness/blob/main/docs/AMP_LINUX.md).
 
 ## Repository layout
 
@@ -161,9 +165,50 @@ The IRQ-free Linux AMP logger, mailbox startup and board qualification requireme
 | `tests/` | command-line, file and RTL-simulation tests |
 | `.github/` | workflow definitions, workflow inventory and contribution metadata |
 
+## Python package and native interfaces
+
+The source package is version `0.1.0`, currently unreleased. It installs the typed
+`loop_timing_witness` API, packaged JSON schemas and the
+`loop-timing-witness-analyze` command. The package analyses existing hash-bound
+run records; native simulation, firmware preparation and hardware access remain
+separate source tools with the dependencies stated in `VALIDATION.md`.
+
+From a source checkout with Python 3.13.15:
+
+```bash
+make venv
+.venv/bin/loop-timing-witness-analyze path/to/manifest.json --output-dir build/report
+```
+
+For programmatic analysis:
+
+```python
+from pathlib import Path
+
+from loop_timing_witness.analyze_run import build_report
+from loop_timing_witness.run_manifest import load_run
+
+report, cycle_rows = build_report(load_run(Path("path/to/manifest.json")))
+```
+
+Both entry points validate schema identifiers, source/file hashes and run
+provenance before analysis. A simulation record remains labelled as simulation.
+The actual package-consumer check, `make python-package-tests`, builds both wheel
+and source archive, installs them into independent environments and analyses
+events produced by the real Icarus RTL path.
+
+Native interfaces are documented in the [controller contract](https://github.com/anulum/loop-timing-witness/blob/main/docs/CONTROLLERS.md),
+the [Rust crate README](https://github.com/anulum/loop-timing-witness/blob/main/controllers/rust/README.md) and the AMP runtime contracts.
+`make documentation-toolchain docs-site` builds the source documentation, Python
+`pydoc`, both Rustdoc references and the C/C++ Doxygen declaration reference into
+`build/docs-site`. Python has NumPy docstring checks. Rustdoc rejects missing public
+items, warnings and broken intra-doc links. Doxygen rejects undocumented public
+declarations, structure members and enum values. The site build refuses publication
+if any maintained language reference is missing.
+
 ## Validation
 
-Every gate and its exact scope are listed in [`VALIDATION.md`](VALIDATION.md). From a clean
+Every gate and its exact scope are listed in [`VALIDATION.md`](https://github.com/anulum/loop-timing-witness/blob/main/VALIDATION.md). From a clean
 checkout with Python 3.13:
 
 ```bash
@@ -173,21 +218,30 @@ make preflight   # every local gate, failing closed on a missing tool
 
 ## Security
 
-Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
+Report vulnerabilities privately as described in [`SECURITY.md`](https://github.com/anulum/loop-timing-witness/blob/main/SECURITY.md).
 
 ## Licence
 
-AGPL-3.0-or-later, with a commercial licence available; see [`NOTICE.md`](NOTICE.md) and
-[`LICENSES/`](LICENSES/). Licensing metadata follows REUSE 3.x ([`REUSE.toml`](REUSE.toml)).
+AGPL-3.0-or-later, with a commercial licence available; see [`NOTICE.md`](https://github.com/anulum/loop-timing-witness/blob/main/NOTICE.md) and
+[`LICENSES/`](https://github.com/anulum/loop-timing-witness/blob/main/LICENSES/). Licensing metadata follows REUSE 3.x ([`REUSE.toml`](https://github.com/anulum/loop-timing-witness/blob/main/REUSE.toml)).
 
 ## Citation
 
-Citation metadata is in [`CITATION.cff`](CITATION.cff). No release, version or DOI exists yet;
-cite the commit you inspected.
+Citation metadata is in [`CITATION.cff`](https://github.com/anulum/loop-timing-witness/blob/main/CITATION.cff). No registry release or DOI exists yet;
+the source package version is `0.1.0`. Cite the commit you inspected.
 
 Native source-bound simulation capture is available through
-[`tools/capture_native_simulation.py`](tools/capture_native_simulation.py); see the
-[host analysis contract](docs/HOST_ANALYSIS.md#native-simulation-capture) for configuration,
+[`tools/capture_native_simulation.py`](https://github.com/anulum/loop-timing-witness/blob/main/tools/capture_native_simulation.py); see the
+[host analysis contract](https://github.com/anulum/loop-timing-witness/blob/main/docs/HOST_ANALYSIS.md#native-simulation-capture) for configuration,
 retained source/binary provenance and observed tracking coverage. Optional
-[Linux host load profiles](docs/HOST_ANALYSIS.md#linux-host-load-profiles) retain actual bounded
+[Linux host load profiles](https://github.com/anulum/loop-timing-witness/blob/main/docs/HOST_ANALYSIS.md#linux-host-load-profiles) retain actual bounded
 worker activity and scheduling facts; all captures remain simulation-only.
+
+## Support development
+
+Support the project through [GitHub Sponsors](https://github.com/sponsors/anulum),
+[Buy Me a Coffee](https://buymeacoffee.com/anulum),
+[Stripe](https://buy.stripe.com/4gM00kbiMdjAberaYz5J601),
+[PayPal](https://www.paypal.com/donate?hosted_button_id=4X5F6DNT934HY) or
+[TWINT](https://go.twint.ch/1/e/tw?tw=acq.lJTAypb8SL2s8vPg7fL0ubi2C220ajOH0BEQn1aKfEJIiIakLpt8jlEv8XdQ9tCp.).
+For commercial licensing, [contact Anulum](https://anulum.li/contact.html).

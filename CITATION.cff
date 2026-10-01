@@ -7,16 +7,17 @@
 # Loop Timing Witness — citation metadata
 cff-version: 1.2.0
 message: >-
-  If you reference this repository, cite it as below. No release, version or
+  If you reference this repository, cite it as below. No registry release or
   DOI exists yet; cite the commit you inspected.
 type: software
 title: Loop Timing Witness
 abstract: >-
   Measurement instrument, in design, for hardware-timestamped latency,
   deadline, fault and energy evidence of real-time control loops and fabric
-  accelerators on PolarFire SoC. The repository is architecture-only: it holds
-  the measurement contracts, the boundary, the measurement protocol and the
-  validation tooling, with no implemented instrument and no measured result.
+  accelerators on PolarFire SoC. The software implements hash-bound host analysis,
+  native controllers and RTL/RISC-V simulation. Physical evidence remains
+  architecture_only: no qualified board instrument or measured hardware
+  performance result is claimed.
 authors:
   - family-names: Šotek
     given-names: Miroslav

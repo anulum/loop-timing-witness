@@ -4,7 +4,7 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — documentation validation without deployment
+# Loop Timing Witness — documentation validation and authorised Pages publication
 
 name: Docs
 
@@ -21,14 +21,15 @@ concurrency:
 
 jobs:
   validate:
-    name: Documentation links, anchors and rendered headers
+    name: Documentation links and native API website
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read # read the documentation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -37,3 +38,34 @@ jobs:
         run: python tools/check_documentation.py
       - name: Rendered Markdown starts with content
         run: python tools/check_provenance_headers.py
+      - name: Install the exact documentation toolchains
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
+          make documentation-toolchain
+      - name: Build all language-native references and the website
+        run: make docs-site
+      - name: Retain the exact website for Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: build/docs-site
+          retention-days: 7
+  deploy:
+    name: Publish verified documentation
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write # deploy the validated website
+      id-token: write # bind the deployment to this repository and revision
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the exact validated website
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

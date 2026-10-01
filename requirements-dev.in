@@ -14,7 +14,7 @@
 pre-commit==4.6.2
 # Security fixes in transitive audit and hook dependencies
 urllib3==2.8.0
-virtualenv==21.14.1
+virtualenv==21.14.2
 # Lint, format, strict typing
 ruff==0.16.9
 mypy==2.3.1
@@ -37,3 +37,6 @@ cyclonedx-bom==7.5.0
 
 # Reproducible Python distribution build backend
 flit_core==4.1.0
+
+# Source documentation rendering; also used transitively by REUSE.
+markdown-it-py==4.2.0

@@ -20,6 +20,8 @@ path = [
     "capability-inventory.json",
     "development-dependency-licences.json",
     "docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf",
+    "docs/assets/loop-timing-witness.webp",
+    "controllers/rust/LICENSE",
     "measurement-domain.json",
     "measurement-domain.schema.json",
     "run-manifest.schema.json",

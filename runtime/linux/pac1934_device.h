@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — verified actual PAC1934 IIO attributes
 
+/** @file pac1934_device.h
+ * verified actual PAC1934 IIO attributes.
+ */
+
 #ifndef WITNESS_PAC1934_DEVICE_H
 #define WITNESS_PAC1934_DEVICE_H
 #include "power_configuration.h"

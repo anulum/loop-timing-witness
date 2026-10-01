@@ -16,10 +16,10 @@ Loop Timing Witness — support
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the planned design,
   [`docs/MEASUREMENT_PROTOCOL.md`](docs/MEASUREMENT_PROTOCOL.md) for how results will be produced
   and [`VALIDATION.md`](VALIDATION.md) for what each gate checks.
-- **Questions, defects and proposals.** The repository has no public hosting and therefore no
-  issue tracker yet; write to <protoscience@anulum.li>. The issue forms in `.github/ISSUE_TEMPLATE/`
-  describe the information a report needs and become the reporting route once public hosting
-  exists.
+- **Questions.** Use [GitHub Discussions](https://github.com/anulum/loop-timing-witness/discussions).
+- **Defects and proposals.** Open a [public issue](https://github.com/anulum/loop-timing-witness/issues)
+  using the repository forms, with the source revision and reproduction. Private commercial or
+  licensing enquiries go to <protoscience@anulum.li>.
 - **Pointers to prior work.** A reference to published hardware timing, deadline or energy
   measurement work that the related-work list in the README does not cite is a welcome
   contribution.

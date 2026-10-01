@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — native artifact content receipts
 
+/** @file file_digest.h
+ * native artifact content receipts.
+ */
+
 #ifndef WITNESS_FILE_DIGEST_H
 #define WITNESS_FILE_DIGEST_H
 #include <cstdint>
@@ -22,4 +26,17 @@ FileDigest file_digest(const char *path);
 /** Require a configuration to retain its original bytes across parsing and execution. */
 void verify_digest(const char *path, const FileDigest &original);
 } // namespace witness
+/** @var witness::ArtifactDigest::role
+ * Fixed role identifying the artifact in the receipt.
+ */
+/** @var witness::ArtifactDigest::digest
+ * Observed SHA-256 digest and exact byte count.
+ */
+/** @var witness::FileDigest::sha256
+ * Lowercase SHA-256 hexadecimal digest of stable file bytes.
+ */
+/** @var witness::FileDigest::bytes
+ * Observed stable regular-file size in bytes.
+ */
+
 #endif

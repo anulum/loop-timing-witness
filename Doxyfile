@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — C and C++ native declaration reference
+
+PROJECT_NAME = "Loop Timing Witness"
+PROJECT_BRIEF = "Native controller and runtime interfaces; hardware qualification pending"
+OUTPUT_DIRECTORY = build/native-api/c
+INPUT = controllers/c runtime
+FILE_PATTERNS = *.h
+RECURSIVE = YES
+EXTRACT_ALL = NO
+EXTRACT_PRIVATE = NO
+EXTRACT_STATIC = NO
+GENERATE_HTML = YES
+GENERATE_LATEX = NO
+SOURCE_BROWSER = YES
+STRIP_FROM_PATH = .
+WARN_IF_DOC_ERROR = YES
+WARN_IF_UNDOCUMENTED = YES
+WARN_IF_UNDOC_ENUM_VAL = YES
+WARN_AS_ERROR = YES
+QUIET = YES
+HAVE_DOT = NO

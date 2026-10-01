@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — separate AMP telemetry and fabric event logger
 
+/** @file amp_logger.h
+ * separate AMP telemetry and fabric event logger.
+ */
+
 #ifndef WITNESS_AMP_LOGGER_H
 #define WITNESS_AMP_LOGGER_H
 #include "run_control.h"

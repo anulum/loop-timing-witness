@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — native run command options
 
+/** @file run_options.h
+ * native run command options.
+ */
+
 #ifndef WITNESS_RUN_OPTIONS_H
 #define WITNESS_RUN_OPTIONS_H
 #include <charconv>
@@ -72,4 +76,23 @@ inline RunOptions read_run_options(int argc, char **argv, int first) {
     return result;
 }
 } // namespace witness
+/** @var witness::RunOptions::metadata
+ * Optional exclusive output path for the native run receipt.
+ */
+/** @var witness::RunOptions::power_configuration
+ * Optional explicit power-acquisition configuration path.
+ */
+/** @var witness::RunOptions::power_journal
+ * Optional exclusive power journal paired with power_configuration.
+ */
+/** @var witness::RunOptions::cpu
+ * Requested CPU, or minus one to preserve inherited affinity.
+ */
+/** @var witness::RunOptions::scheduler
+ * Minus one preserves policy; zero requests normal and one requests FIFO.
+ */
+/** @var witness::RunOptions::priority
+ * Requested scheduler priority, or minus one to preserve inherited policy.
+ */
+
 #endif

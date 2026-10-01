@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — explicit original AMP Linux resource selection
 
+/** @file amp_uio_configuration.h
+ * explicit original AMP Linux resource selection.
+ */
+
 #ifndef WITNESS_AMP_UIO_CONFIGURATION_H
 #define WITNESS_AMP_UIO_CONFIGURATION_H
 #include "amp_uio_device.h"
@@ -19,4 +23,23 @@ struct AmpUioConfiguration {
 /** Read the complete resource configuration without inferred physical addresses or aliases. */
 AmpUioConfiguration read_amp_uio_configuration(const std::string &path);
 }
+/** @var witness::AmpUioConfiguration::identity
+ * Owner-supplied device and driver identity checked against sysfs.
+ */
+/** @var witness::AmpUioConfiguration::fabric
+ * Original named fabric-register UIO map.
+ */
+/** @var witness::AmpUioConfiguration::mailbox
+ * Original named reserved-telemetry UIO map.
+ */
+/** @var witness::AmpUioConfiguration::startup_ns
+ * Host polling timeout in monotonic nanoseconds for firmware readiness.
+ */
+/** @var witness::AmpUioConfiguration::completion_ns
+ * Host polling timeout in monotonic nanoseconds for run completion.
+ */
+/** @var witness::AmpUioConfiguration::poll_ns
+ * Host nanoseconds between mailbox observations.
+ */
+
 #endif

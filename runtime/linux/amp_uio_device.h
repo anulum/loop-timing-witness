@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — separate Linux AMP mailbox and fabric ownership
 
+/** @file amp_uio_device.h
+ * separate Linux AMP mailbox and fabric ownership.
+ */
+
 #ifndef WITNESS_AMP_UIO_DEVICE_H
 #define WITNESS_AMP_UIO_DEVICE_H
 #include "uio_device.h"
@@ -52,4 +56,17 @@ public:
     void write_memory32(std::uint64_t address, std::uint32_t value);
 };
 }
+/** @var witness::AmpUioMap::index
+ * Selected sysfs UIO map index.
+ */
+/** @var witness::AmpUioMap::address
+ * Exact page-aligned physical start address.
+ */
+/** @var witness::AmpUioMap::bytes
+ * Exact mapped physical extent in bytes.
+ */
+/** @var witness::AmpUioMap::name
+ * Expected sysfs map name.
+ */
+
 #endif

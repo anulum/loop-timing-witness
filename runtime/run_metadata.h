@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — native configuration and completion metadata
 
+/** @file run_metadata.h
+ * native configuration and completion metadata.
+ */
+
 #ifndef WITNESS_RUN_METADATA_H
 #define WITNESS_RUN_METADATA_H
 #include "run_control.h"

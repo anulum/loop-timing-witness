@@ -114,6 +114,8 @@ jobs:
         run: make controller-tests
       - name: Native Linux UIO adapter build
         run: make run-uio
+      - name: Build strict documentation references used by website tests
+        run: make documentation-toolchain native-api
       - name: Tests with coverage
         run: |
           PATH="$(go env GOPATH)/bin:${PATH}" .venv/bin/pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100

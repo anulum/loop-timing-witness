@@ -8,7 +8,6 @@
     3,
     5,
     6,
-    10,
     11
   ],
   "schema": "loop-timing-witness.workflow-inventory.v1",
@@ -81,7 +80,7 @@
         "analysis"
       ],
       "kind": "standalone",
-      "owner": "supply-chain analysis without published results"
+      "owner": "published supply-chain analysis and code-scanning results"
     },
     {
       "category": 8,
@@ -96,10 +95,11 @@
       "category": 9,
       "file": "docs.yml",
       "jobs": [
-        "validate"
+        "validate",
+        "deploy"
       ],
       "kind": "standalone",
-      "owner": "documentation links, anchors and rendered headers"
+      "owner": "strict documentation and authorised main-branch Pages deployment"
     },
     {
       "category": 7,
@@ -109,6 +109,25 @@
       ],
       "kind": "standalone",
       "owner": "native comparison measurement and retained runner provenance"
+    },
+    {
+      "category": 10,
+      "file": "publish.yml",
+      "jobs": [
+        "build",
+        "publish"
+      ],
+      "kind": "standalone",
+      "owner": "owner-authorised exact-revision Python artifact verification and OIDC publication"
+    },
+    {
+      "category": 10,
+      "file": "publish-rust.yml",
+      "jobs": [
+        "publish"
+      ],
+      "kind": "standalone",
+      "owner": "owner-authorised exact-revision packaged Rust consumers and crates.io publication"
     }
   ]
 }

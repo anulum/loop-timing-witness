@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — explicit PAC1934 acquisition configuration
 
+/** @file power_configuration.h
+ * explicit PAC1934 acquisition configuration.
+ */
+
 #ifndef WITNESS_POWER_CONFIGURATION_H
 #define WITNESS_POWER_CONFIGURATION_H
 #include <array>
@@ -28,4 +32,38 @@ void validate_power_configuration(const PowerConfiguration &configuration);
 /** Read and validate the complete acquisition format; no inferred board/shunt defaults. */
 PowerConfiguration read_power_configuration(const std::string &path);
 } // namespace witness
+/** @var witness::PowerConfiguration::device
+ * Explicit IIO device selected for acquisition.
+ */
+/** @var witness::PowerConfiguration::kernel_release
+ * Expected running kernel release checked before acquisition.
+ */
+/** @var witness::PowerConfiguration::period_ns
+ * Requested host polling period in nanoseconds.
+ */
+/** @var witness::PowerConfiguration::maximum_read_ns
+ * Maximum admitted single-read duration in host nanoseconds.
+ */
+/** @var witness::PowerConfiguration::worker_cpu
+ * Explicit CPU assigned to the acquisition worker.
+ */
+/** @var witness::PowerConfiguration::sample_rate
+ * Requested device sampling rate in samples per second.
+ */
+/** @var witness::PowerConfiguration::rails
+ * Exact four-rail channel, label and shunt mapping.
+ */
+/** @var witness::PowerRail::name
+ * Measurement-contract rail name.
+ */
+/** @var witness::PowerRail::label
+ * Expected IIO channel label.
+ */
+/** @var witness::PowerRail::channel
+ * Selected unsigned IIO rail channel number.
+ */
+/** @var witness::PowerRail::shunt_microohms
+ * Operator-supplied shunt resistance in microohms.
+ */
+
 #endif

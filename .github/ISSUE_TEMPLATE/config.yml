@@ -13,6 +13,6 @@ contact_links:
     about: >-
       Do not report vulnerabilities in public issues. Follow SECURITY.md and write
       to protoscience@anulum.li.
-  - name: Project contact
-    url: https://www.anulum.li
-    about: ANULUM contact routes for questions that are not defects or proposals.
+  - name: Questions and reproducibility discussions
+    url: https://github.com/anulum/loop-timing-witness/discussions
+    about: Public questions about the software, simulation and measurement protocol.

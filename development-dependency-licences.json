@@ -78,7 +78,7 @@
     },
     "filelock": {
       "licence": "MIT",
-      "version": "4.0.7"
+      "version": "4.0.8"
     },
     "flit-core": {
       "licence": "BSD-3-Clause",
@@ -330,7 +330,7 @@
     },
     "virtualenv": {
       "licence": "MIT",
-      "version": "21.14.1"
+      "version": "21.14.2"
     },
     "webcolors": {
       "licence": "BSD-3-Clause",

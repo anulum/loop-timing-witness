@@ -246,7 +246,11 @@ def test_funding_metadata_is_the_ecosystem_payload() -> None:
 
 def test_publishable_text_uses_no_self_applied_quality_terms() -> None:
     """Outward wording stays factual; only the guard that bans the terms and its test name them."""
-    exempt = {"tools/check_commit_trailers.py", "tests/test_check_commit_trailers.py"}
+    exempt = {
+        "tools/check_commit_trailers.py",
+        "tests/test_check_commit_trailers.py",
+        "docs/assets/loop-timing-witness.webp",
+    }
     offenders = {}
     for relative in candidate_files(REPOSITORY_ROOT):
         if (

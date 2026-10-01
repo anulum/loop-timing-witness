@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — native IRQ sample command and drain lifecycle
 
+/** @file run_control.h
+ * native IRQ sample command and drain lifecycle.
+ */
+
 #ifndef WITNESS_RUN_CONTROL_H
 #define WITNESS_RUN_CONTROL_H
 #include "run_output.h"
@@ -158,4 +162,29 @@ template<class Device> RunResult execute_run(Device &device, const RunConfigurat
     return result;
 }
 } // namespace witness
+/** @var witness::RunHooks::start
+ * Optional acquisition start callback before controller execution.
+ */
+/** @var witness::RunHooks::check
+ * Optional acquisition health callback between controller iterations.
+ */
+/** @var witness::RunHooks::finish
+ * Optional acquisition completion callback after controller execution.
+ */
+/** @var witness::RunResult::samples
+ * Actual number of completed controller samples.
+ */
+/** @var witness::RunResult::records
+ * Actual number of drained fabric event records.
+ */
+/** @var witness::RunResult::misses
+ * Observed fabric deadline-miss counter.
+ */
+/** @var witness::RunResult::overflow
+ * Observed fabric dropped-event counter.
+ */
+/** @var witness::RunResult::safe
+ * Observed latched fabric safe-state flag.
+ */
+
 #endif

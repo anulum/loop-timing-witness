@@ -11,13 +11,17 @@ name = "witness-controller"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
-publish = false
+publish = ["crates-io"]
 license = "AGPL-3.0-or-later"
 description = "Bit-exact Q8.24 PID and discrete LQR for Loop Timing Witness"
-authors = ["Miroslav Šotek"]
+authors = ["Miroslav Šotek <protoscience@anulum.li>"]
 repository = "https://github.com/anulum/loop-timing-witness"
 homepage = "https://www.anulum.li"
 readme = "README.md"
+documentation = "https://docs.rs/witness-controller"
+keywords = ["control", "pid", "lqr", "fixed-point", "no-std"]
+categories = ["embedded", "no-std", "science"]
+include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 
 [lints.rust]
 unsafe_code = "forbid"

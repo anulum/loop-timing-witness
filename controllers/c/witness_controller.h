@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — controllers/c/witness_controller.h
 
+/** @file witness_controller.h
+ * controllers/c/witness_controller.h.
+ */
+
 #ifndef WITNESS_CONTROLLER_H
 #define WITNESS_CONTROLLER_H
 
@@ -61,5 +65,69 @@ bool witness_pid_step(const witness_coefficients *coefficients,
 bool witness_lqr_step(const witness_coefficients *coefficients, uint32_t cycle,
                       int32_t reference, int32_t position, int32_t velocity,
                       witness_command *command);
+
+/** @var witness_coefficients::kp
+ * Nonnegative proportional error gain in signed raw Q8.24.
+ */
+/** @var witness_coefficients::ki_period
+ * Nonnegative integral gain multiplied by the sample period, in raw Q8.24.
+ */
+/** @var witness_coefficients::derivative_decay
+ * Filtered derivative decay in the inclusive raw interval zero through 2^24.
+ */
+/** @var witness_coefficients::derivative_gain
+ * Nonnegative derivative-on-measurement gain in raw Q8.24.
+ */
+/** @var witness_coefficients::position_gain
+ * Discrete LQR position feedback gain in raw Q8.24.
+ */
+/** @var witness_coefficients::velocity_gain
+ * Discrete LQR velocity feedback gain in raw Q8.24.
+ */
+/** @var witness_coefficients::reference_gain
+ * Discrete LQR reference prefilter gain in raw Q8.24.
+ */
+/** @var witness_coefficients::output_min
+ * Minimum permitted actuator command in raw Q8.24.
+ */
+/** @var witness_coefficients::output_max
+ * Maximum permitted actuator command in raw Q8.24.
+ */
+/** @var witness_coefficients::integral_min
+ * Minimum PID integral state in raw Q8.24.
+ */
+/** @var witness_coefficients::integral_max
+ * Maximum PID integral state in raw Q8.24.
+ */
+/** @var witness_command::cycle
+ * Original input cycle identifier retained through computation.
+ */
+/** @var witness_command::command
+ * Saturated actuator command in raw Q8.24.
+ */
+/** @var witness_command::integral
+ * PID integral state after the sample; zero for LQR.
+ */
+/** @var witness_command::derivative
+ * PID derivative state after the sample; zero for LQR.
+ */
+/** @var witness_command::clipped
+ * Whether the unsaturated command exceeds a configured limit.
+ */
+/** @var witness_command::integral_held
+ * Whether saturation and error direction prevent integral accumulation.
+ */
+/** @var witness_pid_state::integral
+ * Current bounded integral state in raw Q8.24.
+ */
+/** @var witness_pid_state::derivative
+ * Current filtered derivative state in raw Q8.24.
+ */
+/** @var witness_pid_state::previous_position
+ * Previous raw Q8.24 measurement used for derivative-on-measurement.
+ */
+/** @var witness_pid_state::initialized
+ * Whether a previous measurement exists since the last reset.
+ */
 
 #endif

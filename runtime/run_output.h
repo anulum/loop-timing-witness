@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — exclusive raw event and controller trace output
 
+/** @file run_output.h
+ * exclusive raw event and controller trace output.
+ */
+
 #ifndef WITNESS_RUN_OUTPUT_H
 #define WITNESS_RUN_OUTPUT_H
 #include "run_configuration.h"

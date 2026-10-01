@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — shared native register process protocol
 
+/** @file process_protocol.h
+ * shared native register process protocol.
+ */
+
 #ifndef WITNESS_PROCESS_PROTOCOL_H
 #define WITNESS_PROCESS_PROTOCOL_H
 
@@ -17,6 +21,7 @@
 #include <string>
 
 namespace witness {
+/** Maximum admitted simulated time advance in nanoseconds per protocol request. */
 constexpr std::uint64_t advance_limit = 10000000;
 /** Register response and raw word; UIO cannot expose AXI response signals. */
 struct ProtocolReply { unsigned response; std::uint32_t data; };
@@ -75,4 +80,11 @@ template<class Device> int serve(Device &device) {
     return 0;
 }
 } // namespace witness
+/** @var witness::ProtocolReply::response
+ * Actual transport response code; UIO cannot observe AXI response wires.
+ */
+/** @var witness::ProtocolReply::data
+ * Raw 32-bit register word returned by the selected transport.
+ */
+
 #endif

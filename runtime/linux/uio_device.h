@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — Linux UIO ownership and ordered register access
 
+/** @file uio_device.h
+ * Linux UIO ownership and ordered register access.
+ */
+
 #ifndef WITNESS_UIO_DEVICE_H
 #define WITNESS_UIO_DEVICE_H
 
@@ -56,4 +60,20 @@ public:
     std::uint32_t last_interrupt_count() const { return interrupt_count; }
 };
 } // namespace witness
+/** @var witness::UioIdentity::device
+ * Explicit UIO device node to verify and open.
+ */
+/** @var witness::UioIdentity::name
+ * Expected sysfs UIO device name.
+ */
+/** @var witness::UioIdentity::version
+ * Expected sysfs UIO device version.
+ */
+/** @var witness::UioIdentity::map
+ * Selected sysfs register-map index.
+ */
+/** @var witness::UioIdentity::physical_address
+ * Exact expected physical fabric register address.
+ */
+
 #endif

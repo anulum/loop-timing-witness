@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — bracketed real IIO acquisition journal
 
+/** @file power_journal.h
+ * bracketed real IIO acquisition journal.
+ */
+
 #ifndef WITNESS_POWER_JOURNAL_H
 #define WITNESS_POWER_JOURNAL_H
 #include "pac1934_device.h"

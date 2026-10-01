@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — actual architectural RAM and production AXI transport for AMP logging
 
+/** @file spike_amp_transport.h
+ * actual architectural RAM and production AXI transport for AMP logging.
+ */
+
 #ifndef WITNESS_SPIKE_AMP_TRANSPORT_H
 #define WITNESS_SPIKE_AMP_TRANSPORT_H
 #include "sim.h"

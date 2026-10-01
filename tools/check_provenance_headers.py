@@ -69,11 +69,21 @@ HASH_COMMENT_SUFFIXES: Final = frozenset(
     }
 )
 HASH_COMMENT_NAMES: Final = frozenset(
-    {".editorconfig", ".gitattributes", ".gitignore", "CODEOWNERS", "Makefile", "py.typed"}
+    {
+        ".editorconfig",
+        ".gitattributes",
+        ".gitignore",
+        "CODEOWNERS",
+        "Doxyfile",
+        "Makefile",
+        "py.typed",
+    }
 )
 SLASH_COMMENT_SUFFIXES: Final = frozenset({".c", ".cpp", ".dts", ".h", ".rs", ".sv", ".svh"})
 EXEMPT_SUFFIXES: Final = frozenset({".json", ".pdf"})
-EXEMPT_PATHS: Final = frozenset({"LICENSE"})
+EXEMPT_PATHS: Final = frozenset(
+    {"LICENSE", "controllers/rust/LICENSE", "docs/assets/loop-timing-witness.webp"}
+)
 EXEMPT_DIRECTORIES: Final = frozenset({"LICENSES"})
 
 

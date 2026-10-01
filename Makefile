@@ -46,6 +46,29 @@ docs:
 	$(PREFLIGHT) --only documentation
 	$(PREFLIGHT) --only provenance-headers
 
+DOXYGEN_BINARY := .venv/native/doxygen/doxygen-1.18.0/bin/doxygen
+.PHONY: documentation-toolchain native-api docs-site
+
+documentation-toolchain:
+	mkdir -p build/documentation-toolchain .venv/native/doxygen
+	curl --fail --location --max-time 180 --retry 2 --retry-max-time 240 \
+		--output build/documentation-toolchain/doxygen.tar.gz \
+		https://github.com/doxygen/doxygen/releases/download/Release_1_18_0/doxygen-1.18.0.linux.bin.tar.gz
+	printf '%s\n' '14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90  build/documentation-toolchain/doxygen.tar.gz' | sha256sum --check --strict
+	$(VENV)/python -c 'import tarfile; archive = tarfile.open("build/documentation-toolchain/doxygen.tar.gz"); archive.extractall(".venv/native/doxygen", filter="data"); archive.close()'
+	$(DOXYGEN_BINARY) --version
+
+native-api:
+	test "$$( $(DOXYGEN_BINARY) --version | cut -d' ' -f1 )" = "1.18.0"
+	mkdir -p build/native-api/c
+	$(DOXYGEN_BINARY) Doxyfile
+	RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' cargo doc --offline --locked --no-deps --manifest-path controllers/rust/Cargo.toml --target-dir build/native-api/rust
+	RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' cargo doc --offline --locked --no-deps --manifest-path runtime/bare_metal/rust_kernel/Cargo.toml --target-dir build/native-api/rust
+
+docs-site: native-api
+	rm -rf build/docs-site
+	$(VENV)/python tools/build_docs_site.py --output build/docs-site
+
 security:
 	$(PREFLIGHT) --only reuse
 	$(PREFLIGHT) --only zizmor

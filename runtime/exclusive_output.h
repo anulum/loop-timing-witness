@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — exclusive native output stream ownership
 
+/** @file exclusive_output.h
+ * exclusive native output stream ownership.
+ */
+
 #ifndef WITNESS_EXCLUSIVE_OUTPUT_H
 #define WITNESS_EXCLUSIVE_OUTPUT_H
 #include <cstdio>
@@ -13,7 +17,8 @@
 
 namespace witness {
 /** Native output encoding; both selections always require an exclusive create. */
-enum class OutputFormat { text, binary };
+enum class OutputFormat { text, /**< Exclusive native text stream. */
+                          binary /**< Exclusive native binary stream. */ };
 /** Own one exclusive stream, retain partial bytes and refuse access after close. */
 class ExclusiveOutput {
     std::FILE *file;

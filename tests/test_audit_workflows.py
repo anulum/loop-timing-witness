@@ -304,12 +304,14 @@ def test_job_shapes_images_and_local_references(tree: Path) -> None:
     )
     findings = audit(tree)
     assert findings == [
+        "docs.yml: jobs ['validate'] differ from declared ['deploy', 'validate']",
         "docs.yml: job validate: image 'docker://alpine:3' is not pinned by digest",
         (
             "docs.yml: job validate: './.github/workflows/unknown.yml' is not a declared "
             "reusable workflow"
         ),
         "docs.yml: job validate: checkout must set persist-credentials: false",
+        "docs.yml: authorised publication job 'deploy' is missing",
     ]
     path.write_text(
         "on:\n  push:\npermissions: {}\nconcurrency:\n  group: g\njobs:\n  validate: text\n"
@@ -317,10 +319,11 @@ def test_job_shapes_images_and_local_references(tree: Path) -> None:
         encoding="utf-8",
     )
     assert audit(tree) == [
-        "docs.yml: jobs ['other', 'validate'] differ from declared ['validate']",
+        "docs.yml: jobs ['other', 'validate'] differ from declared ['deploy', 'validate']",
         "docs.yml: job validate: must be a mapping",
         "docs.yml: job other: must declare a permissions mapping",
         "docs.yml: job other: timeout-minutes must be an integer in 1..360",
+        "docs.yml: authorised publication job 'deploy' is missing",
     ]
 
 

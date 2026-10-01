@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — reusable production RTL clock and AXI transport
 
+/** @file simulation.h
+ * reusable production RTL clock and AXI transport.
+ */
+
 #ifndef WITNESS_SIMULATION_H
 #define WITNESS_SIMULATION_H
 
@@ -15,6 +19,7 @@
 #include <stdexcept>
 
 namespace witness {
+/** Maximum simulated nanoseconds spent awaiting one AXI transaction. */
 constexpr std::uint64_t transaction_limit = 100000;
 
 /** Accepted bus channels and response values sampled before a rising edge. */
@@ -115,5 +120,27 @@ public:
 };
 
 } // namespace witness
+
+/** @var witness::Edge::aw
+ * Write-address channel accepted on the sampled rising edge.
+ */
+/** @var witness::Edge::w
+ * Write-data channel accepted on the sampled rising edge.
+ */
+/** @var witness::Edge::ar
+ * Read-address channel accepted on the sampled rising edge.
+ */
+/** @var witness::Edge::b
+ * Write-response channel accepted on the sampled rising edge.
+ */
+/** @var witness::Edge::r
+ * Read-response channel accepted on the sampled rising edge.
+ */
+/** @var witness::Edge::response
+ * Actual AXI response code selected from the active response channel.
+ */
+/** @var witness::Edge::data
+ * Raw 32-bit read-data word sampled from the fabric.
+ */
 
 #endif

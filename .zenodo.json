@@ -7,7 +7,7 @@
       "orcid": "0009-0009-3560-0851"
     }
   ],
-  "description": "Measurement instrument, in design, for hardware-timestamped latency, deadline, fault and energy evidence of real-time control loops and fabric accelerators on PolarFire SoC. The repository is architecture-only: it holds the measurement contracts, the boundary, the measurement protocol and the validation tooling, with no implemented instrument and no measured result.",
+  "description": "Loop Timing Witness provides hash-bound host analysis, native C/Rust/RTL controllers and RTL/RISC-V simulation for hardware-timestamped real-time control-loop events. Physical evidence remains architecture_only: the PolarFire SoC board instrument is unqualified and no measured hardware performance result is claimed.",
   "keywords": [
     "real-time control",
     "latency measurement",

@@ -29,7 +29,8 @@ defines the fixed-point equations, state transitions and cross-language protocol
 
 This crate provides controller arithmetic and a host streaming interface. It does not provide
 a Rust RV64 boot entry, interrupt service, Linux UIO collector or physical timing guarantee.
-Registry publication remains disabled while the whole implementation and release gates are open.
+The manually dispatched registry publisher requires completed green validation at the exact
+source revision, verified package consumers and a project-bound publishing credential.
 The licence is AGPL-3.0-or-later; a commercial licence is available from the owner.
 
 The repository's `tests/test_rust_package_consumer.py` packages and verifies this crate, then

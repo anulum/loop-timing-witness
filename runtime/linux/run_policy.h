@@ -6,6 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — actual Linux run scheduling policy
 
+/** @file run_policy.h
+ * actual Linux run scheduling policy.
+ */
+
 #ifndef WITNESS_LINUX_RUN_POLICY_H
 #define WITNESS_LINUX_RUN_POLICY_H
 #include "../run_options.h"
@@ -30,6 +34,7 @@ struct HostPolicy {
 
 /** Own the dynamic libc affinity mask across all error and success exits. */
 struct FreeCpuMask {
+    /** Release a CPU_ALLOC allocation through libc CPU_FREE. */
     void operator()(cpu_set_t *mask) const noexcept { CPU_FREE(mask); }
 };
 
@@ -112,4 +117,20 @@ inline bool write_host_policy(std::FILE *file, const RunOptions &options, const 
     return std::fprintf(file, "]}\n") < 0 || failed;
 }
 } // namespace witness
+/** @var witness::HostPolicy::scheduler
+ * Actual Linux scheduler policy identifier.
+ */
+/** @var witness::HostPolicy::priority
+ * Actual Linux scheduling priority.
+ */
+/** @var witness::HostPolicy::observed_cpu
+ * CPU on which the calling thread was observed.
+ */
+/** @var witness::HostPolicy::nice
+ * Actual calling-thread nice value.
+ */
+/** @var witness::HostPolicy::cpus
+ * Actual allowed CPU identifiers from the affinity mask.
+ */
+
 #endif

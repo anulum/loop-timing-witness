@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — verified Rust controller publication
+
+name: Publish Rust crate
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: crates-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    name: Verify and publish the standalone controller crate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # read the exact source revision
+      actions: read # verify successful validation at the exact source revision
+      id-token: write # exchange this exact workflow/environment identity with crates.io
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/witness-controller
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+      - name: Require green validation at this exact source revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+            -f head_sha="$GITHUB_SHA" -f branch=main -f per_page=100 > validation-runs.json
+          python - <<'PY'
+          import json, os
+          required = {"CI", "Pre-commit", "CodeQL", "Security audit", "Docs", "SBOM", "Scorecard"}
+          runs = json.load(open("validation-runs.json", encoding="utf-8"))["workflow_runs"]
+          for name in sorted(required):
+              matching = [r for r in runs if r["name"] == name and r["head_sha"] == os.environ["GITHUB_SHA"]]
+              if not matching:
+                  raise SystemExit(f"Missing exact-revision validation: {name}")
+              latest = max(matching, key=lambda r: (r["id"], r["run_attempt"]))
+              if latest["status"] != "completed" or latest["conclusion"] != "success":
+                  raise SystemExit(f"Validation is not green: {name}")
+              print(f"Verified {name}: {latest['html_url']}")
+          PY
+      - name: Install the exact native and package-consumer toolchains
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component clippy --component rustfmt
+          rustup default 1.98.1
+          rustup target add --toolchain 1.98.1 wasm32-unknown-unknown riscv64imac-unknown-none-elf
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
+      - name: Strict native checks and independent packaged API consumers
+        run: |
+          cargo fmt --manifest-path controllers/rust/Cargo.toml --check
+          cargo clippy --offline --locked --all-targets --manifest-path controllers/rust/Cargo.toml -- -D warnings
+          cargo test --offline --locked --manifest-path controllers/rust/Cargo.toml
+          RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' \
+            cargo doc --offline --locked --no-deps --manifest-path controllers/rust/Cargo.toml
+          .venv/bin/pytest tests/test_rust_package_consumer.py
+      - name: Verify the actual crate before publication
+        run: |
+          cargo publish --dry-run --locked --manifest-path controllers/rust/Cargo.toml
+          sha256sum controllers/rust/target/package/witness-controller-0.1.0.crate
+      - name: Retain the verified crate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: witness-controller-crate
+          path: controllers/rust/target/package/witness-controller-0.1.0.crate
+          if-no-files-found: error
+          retention-days: 30
+      - name: Obtain a short-lived project-bound publishing identity
+        id: authentication
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Publish the exact checked-out revision to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.authentication.outputs.token }}
+        run: cargo publish --locked --manifest-path controllers/rust/Cargo.toml

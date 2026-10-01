@@ -21,7 +21,15 @@ requires-python = ">=3.13"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 readme = "README.md"
-authors = [{name = "Miroslav Šotek"}]
+authors = [{name = "Miroslav Šotek", email = "protoscience@anulum.li"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
 dependencies = ["jsonschema==4.26.0"]
 
 [project.scripts]
@@ -30,7 +38,10 @@ loop-timing-witness-analyze = "loop_timing_witness.analyze_run:main"
 [project.urls]
 Homepage = "https://github.com/anulum/loop-timing-witness"
 Repository = "https://github.com/anulum/loop-timing-witness"
-Documentation = "https://github.com/anulum/loop-timing-witness/blob/main/VALIDATION.md"
+Documentation = "https://anulum.github.io/loop-timing-witness/"
+Issues = "https://github.com/anulum/loop-timing-witness/issues"
+Changelog = "https://github.com/anulum/loop-timing-witness/blob/main/CHANGELOG.md"
+Security = "https://github.com/anulum/loop-timing-witness/security/policy"
 
 [tool.ruff]
 target-version = "py313"
@@ -97,6 +108,8 @@ ignore = [
 "tools/linux_load.py" = ["S603"]
 # Native comparisons execute trusted repository binaries and fixed tool argv without a shell.
 "tools/benchmark_controllers.py" = ["S603", "S607"]
+# The site builder invokes only Git with a fixed argument vector to bind source provenance.
+"tools/build_docs_site.py" = ["S603", "S607"]
 "tools/repository_files.py" = ["S603", "S607"]
 
 [tool.ruff.lint.flake8-copyright]

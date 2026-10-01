@@ -18,17 +18,16 @@ tree against the versioned inventory ``.github/workflow-inventory.json``:
 - workflow YAML parses without repeated mapping keys and stays inside the
   inventory's line and byte ceilings;
 - top-level permissions are empty, every job declares its own permissions,
-  and the only write scope a job may hold is ``security-events``;
+  and publication privileges belong only to explicitly authorised jobs;
 - privileged triggers (``pull_request_target``, ``workflow_run``) are absent,
   reusable workflows expose only ``workflow_call``, and every other workflow
   declares a concurrency group;
-- every job that runs steps has a bounded timeout, and only the coordinator
-  declares job dependencies;
+- every job that runs steps has a bounded timeout; dependencies belong to the
+  coordinator or the exact validated-build/publication pairs;
 - every external action is pinned to a 40-hexadecimal commit, container
   images are pinned by digest, local reusable calls resolve to declared
   reusable workflows, and every checkout disables credential persistence;
-- write-authority workflows (release, publish, deploy, pages, metrics,
-  stale) are absent;
+- unrelated write-authority workflows (release, deploy, metrics, stale) are absent;
 - the coordinator carries only trigger policy, reusable calls and one
   aggregate gate that runs always, needs every call exactly once, and fails
   on any non-success result.
@@ -43,6 +42,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import yaml
+from workflow_publication import PUBLICATION_JOBS, publication_findings
 
 from manifest_io import load_json_object
 
@@ -64,7 +64,6 @@ WRITE_AUTHORITY_WORKFLOWS: Final = frozenset(
         "docker-publish.yml",
         "metrics.yml",
         "pages.yml",
-        "publish.yml",
         "release.yml",
         "stale.yml",
     }
@@ -322,14 +321,19 @@ def _job_findings(file: str, kind: str, name: str, job: object, reusables: set[s
     findings: list[str] = []
     permissions = job.get("permissions")
     if isinstance(permissions, dict):
+        allowed = ALLOWED_WRITE_SCOPES | PUBLICATION_JOBS.get((file, name), frozenset())
         findings.extend(
             f"{label}: write scope {scope!r} is not permitted"
             for scope, level in permissions.items()
-            if level == "write" and scope not in ALLOWED_WRITE_SCOPES
+            if level == "write" and scope not in allowed
         )
     else:
         findings.append(f"{label}: must declare a permissions mapping")
-    if kind != "coordinator" and "needs" in job:
+    if (
+        kind != "coordinator"
+        and (file, name) not in {("docs.yml", "deploy"), ("publish.yml", "publish")}
+        and "needs" in job
+    ):
         findings.append(f"{label}: only the coordinator may declare needs")
     if isinstance(job.get("uses"), str):
         finding = _reference_finding(label, job["uses"], reusables)
@@ -411,6 +415,7 @@ def workflow_findings(
         findings.append(f"{file}: jobs {sorted(jobs)} differ from declared {sorted(entry['jobs'])}")
     for name, job in jobs.items():
         findings.extend(_job_findings(file, entry["kind"], name, job, reusables))
+    findings.extend(publication_findings(file, workflow))
     return findings
 
 

@@ -202,6 +202,12 @@ actual RTL samples. These callbacks observe the simulation lifecycle; they
 do not provide physical PAC1934 evidence. Export `run_lifecycle_test.gcno` with gcov after all
 cases exit and retain source/report hashes. This corpus supplements the production run CLI
 coverage; keep its scope and counters separate rather than reporting a combined percentage.
+The period-mismatch case supplies a valid configuration with a period different from the
+compiled RTL register and requires refusal before START. The unstarted-sample case calls
+the public sample operation before START and requires the actual AXI decoder to refuse
+the sample read before the native controller or command commit can run. Both cases complete a
+healthy run on the same device; the refused unstarted sample retains an empty event file
+and a header-only trace separately from the recovery capture.
 The read case also refuses the upper timebase word before the lower-word latch, then reads
 the latched pair through the real AXI path.
 

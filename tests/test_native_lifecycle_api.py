@@ -109,6 +109,8 @@ def lifecycle_program(
     [
         "read",
         "write",
+        "period_mismatch",
+        "unstarted",
         "active",
         "unread",
         "recover",
@@ -188,7 +190,7 @@ def assert_retained_outputs(scenario: str, events: Path, raw: Path) -> None:
     """
     if scenario == "closed":
         assert Path(str(events) + ".copy").read_bytes() == events.read_bytes()[:16]
-    if scenario in {"hooks", "closed"}:
+    if scenario in {"hooks", "closed", "period_mismatch"}:
         assert events.stat().st_size > 0
         assert len(raw.read_text().splitlines()) == 3
     elif scenario == "final_drain":
@@ -197,9 +199,12 @@ def assert_retained_outputs(scenario: str, events: Path, raw: Path) -> None:
     elif scenario == "recover":
         assert events.stat().st_size > 0
         assert len(raw.read_text().splitlines()) == 1
-    elif scenario in {"duplicate", "out_of_range", "invalid_pid", "invalid_lqr"}:
+    elif scenario in {"unstarted", "duplicate", "out_of_range", "invalid_pid", "invalid_lqr"}:
         assert events.read_bytes() == b""
         assert len(raw.read_text().splitlines()) == (2 if scenario == "duplicate" else 1)
+        if scenario == "unstarted":
+            assert Path(str(events) + ".recovery").stat().st_size > 0
+            assert len(Path(str(raw) + ".recovery").read_text().splitlines()) == 3
     elif scenario == "header_limit":
         assert events.read_bytes() == b""
         assert raw.stat().st_size == 32

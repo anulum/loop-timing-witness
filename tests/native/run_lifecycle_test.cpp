@@ -36,8 +36,13 @@ template<class Operation> void refusal(Operation operation, const char *message)
 void sample_refusal(witness::Simulation &device, witness::RunConfiguration configuration,
                     const std::string &scenario, const char *events, const char *tracking) {
     witness::configure_run(device, configuration);
-    witness::write_register(device, 0x38, 1);
-    assert(device.wait_interrupt(1000000));
+    if (scenario != "unstarted") {
+        witness::write_register(device, 0x38, 1);
+        assert(device.wait_interrupt(1000000));
+    } else {
+        assert(witness::read_register(device, 0x38) == 0);
+        assert((witness::read_register(device, 4) & 12) == 0);
+    }
     const std::uint64_t low = witness::read_register(device, 0x9c);
     const auto generation = low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
     witness::RunOutput output(events, tracking);
@@ -49,7 +54,13 @@ void sample_refusal(witness::Simulation &device, witness::RunConfiguration confi
     const auto sample = [&] {
         witness::control_sample(device, configuration, state, output, result, generation, previous, observed);
     };
-    if (scenario == "duplicate") {
+    if (scenario == "unstarted") {
+        refusal(sample, "register read refused at 0");
+        assert(result.samples == 0 && !observed && previous == 0);
+        assert(state.integral == 0 && state.derivative == 0 && !state.initialized);
+        assert(witness::read_register(device, 0x38) == 0);
+        assert((witness::read_register(device, 4) & 12) == 0);
+    } else if (scenario == "duplicate") {
         sample();
         assert(result.samples == 1);
         refusal(sample, "duplicate or out-of-order sample cycle");
@@ -66,6 +77,14 @@ void sample_refusal(witness::Simulation &device, witness::RunConfiguration confi
         assert(state.integral == 0 && state.derivative == 0 && !state.initialized);
     }
     output.finish();
+    if (scenario == "unstarted") {
+        const auto recovered_events = std::string(events) + ".recovery";
+        const auto recovered_tracking = std::string(tracking) + ".recovery";
+        witness::RunOutput recovered(recovered_events.c_str(), recovered_tracking.c_str());
+        const auto healthy = witness::execute_run(device, configuration, recovered);
+        assert(healthy.samples == configuration.cycles && healthy.records > 0);
+        assert(healthy.misses == 0 && healthy.overflow == 0 && !healthy.safe);
+    }
 }
 
 /** Re-submit actual captured bytes and sample fields to the closed public output API. */
@@ -130,7 +149,19 @@ int main(int argc, char **argv) {
     const auto configuration = witness::read_configuration(argv[2]);
     witness::Simulation device;
     const std::string scenario = argv[1];
-    if (scenario.compare(0, 7, "config_") == 0) {
+    if (scenario == "period_mismatch") {
+        assert(witness::read_register(device, 0x40) == configuration.period_ticks);
+        auto mismatched = configuration;
+        ++mismatched.period_ticks;
+        refusal([&] { witness::configure_run(device, mismatched); },
+                "compiled register ABI, Q format or period mismatch");
+        assert(witness::read_register(device, 0x38) == 0);
+        assert(witness::read_register(device, 0x40) == configuration.period_ticks);
+        witness::RunOutput output(argv[3], argv[4]);
+        const auto healthy = witness::execute_run(device, configuration, output);
+        assert(healthy.samples == configuration.cycles && healthy.records > 0);
+        assert(healthy.misses == 0 && healthy.overflow == 0 && !healthy.safe);
+    } else if (scenario.compare(0, 7, "config_") == 0) {
         configuration_refusal(device, configuration, scenario, argv[3], argv[4]);
     } else if (scenario.compare(0, 9, "metadata_") == 0) {
         metadata_refusal(device, configuration, scenario, argv[2], argv[3], argv[4]);
@@ -168,7 +199,7 @@ int main(int argc, char **argv) {
                 assert((witness::read_register(device, 0x90) & 7) == 4);
             }
         }
-    } else if (scenario == "duplicate" || scenario == "out_of_range" ||
+    } else if (scenario == "unstarted" || scenario == "duplicate" || scenario == "out_of_range" ||
                scenario == "invalid_pid" || scenario == "invalid_lqr") {
         sample_refusal(device, configuration, scenario, argv[3], argv[4]);
     } else if (scenario == "header_limit" || scenario == "event_limit" ||

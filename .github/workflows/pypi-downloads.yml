@@ -92,8 +92,8 @@ jobs:
           cd "$METRICS_DIR"
           mapfile -t tracked_before < <(git ls-files)
           if (( ${#tracked_before[@]} > 1 )) || \
-             (( ${#tracked_before[@]} == 1 )) && \
-             [[ "${tracked_before[0]}" != "$csv_path" ]]; then
+             { (( ${#tracked_before[@]} == 1 )) && \
+               [[ "${tracked_before[0]}" != "$csv_path" ]]; }; then
             printf 'Refusing unexpected pre-existing tracked paths:\n' >&2
             printf '  %s\n' "${tracked_before[@]}" >&2
             exit 1

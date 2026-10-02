@@ -65,6 +65,7 @@ def endpoint(
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     if context is not None:
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         server.socket = context.wrap_socket(server.socket, server_side=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -308,7 +309,7 @@ def test_project_csv_boundary(tmp_path: Path) -> None:
 
 
 def test_real_verified_tls_fetch(tmp_path: Path) -> None:
-    """Use an actual TLS socket and certificate verification through the public command."""
+    """Refuse a real legacy handshake and verify the public command's authenticated TLS."""
     certificate, key = tmp_path / "certificate.pem", tmp_path / "key.pem"
     result = subprocess.run(
         [
@@ -339,6 +340,24 @@ def test_real_verified_tls_fetch(tmp_path: Path) -> None:
     context.load_cert_chain(certificate, key)
     environment = {**os.environ, "SSL_CERT_FILE": str(certificate)}
     with endpoint(json.dumps(response()).encode(), context=context) as url:
+        legacy = subprocess.run(
+            [
+                "openssl",
+                "s_client",
+                "-connect",
+                url.removeprefix("https://"),
+                "-tls1_1",
+                "-cipher",
+                "DEFAULT:@SECLEVEL=0",
+            ],
+            input="",
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        assert legacy.returncode != 0
+        assert "alert protocol version" in legacy.stderr.lower()
         actual = command(tmp_path, "--url", url, environment=environment)
     assert actual.returncode == 0, actual.stderr
     assert json.loads(actual.stdout) == {"status": "updated", "observation_dates": 2}

@@ -18,6 +18,11 @@ Loop Timing Witness — changelog
   `v0.1.0` source archive and provenance manifest, with separate verification,
   signing and release-attachment jobs and portable verification instructions.
 
+### Fixed
+
+- Declare the original source ZIP's timezone during reconstruction so UTC CI
+  runners verify the exact published bytes without changing the frozen digest.
+
 ## [0.1.0] - 2026-10-01
 
 ### Fixed

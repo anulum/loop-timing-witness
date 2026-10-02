@@ -58,6 +58,7 @@ jobs:
       - name: Reconstruct and verify the immutable source release
         env:
           GH_TOKEN: ${{ github.token }}
+          TZ: Europe/Zurich
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = anulum/loop-timing-witness
@@ -68,6 +69,8 @@ jobs:
             --pattern loop-timing-witness-0.1.0.zip --pattern release-provenance.json
           git archive --format=zip --prefix=loop-timing-witness-0.1.0/ \
             1d12e0342d5320f62182fef41709773f3c555b50 --output=reconstructed.zip
+          git --version
+          sha256sum reconstructed.zip verified/loop-timing-witness-0.1.0.zip
           python tools/source_release.py --assets verified --reconstructed reconstructed.zip \
             --workflow-revision "$GITHUB_SHA" --predicate verified/predicate.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

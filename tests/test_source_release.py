@@ -11,9 +11,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from typing import TYPE_CHECKING
+from zipfile import ZipFile
 
 import pytest
 from source_release import SOURCE, main
@@ -50,6 +52,7 @@ def release_assets(tmp_path: Path) -> Path:
         cwd=REPOSITORY_ROOT,
         check=True,
         capture_output=True,
+        env={**os.environ, "TZ": "Europe/Zurich"},
     )
     shutil.copyfile(tmp_path / "loop-timing-witness-0.1.0.zip", tmp_path / "reconstructed.zip")
     shutil.copyfile(
@@ -60,7 +63,8 @@ def release_assets(tmp_path: Path) -> Path:
 
 
 @pytest.mark.parametrize(
-    "case", ["valid", "archive", "manifest", "reconstructed", "missing", "revision", "output"]
+    "case",
+    ["valid", "archive", "manifest", "reconstructed", "utc", "missing", "revision", "output"],
 )
 def test_source_asset_admission_and_refusal(
     release_assets: Path, case: str, capsys: pytest.CaptureFixture[str]
@@ -68,6 +72,31 @@ def test_source_asset_admission_and_refusal(
     """Real assets pass; damaged files, bad identity and unwritable output fail closed."""
     output = release_assets / "predicate.json"
     revision = "d1619fd44f66559c796621433e0fa39443d881df"
+    if case == "utc":
+        subprocess.run(
+            [
+                "git",
+                "archive",
+                "--format=zip",
+                "--prefix=loop-timing-witness-0.1.0/",
+                SOURCE,
+                f"--output={release_assets / 'reconstructed.zip'}",
+            ],
+            cwd=REPOSITORY_ROOT,
+            check=True,
+            capture_output=True,
+            env={**os.environ, "TZ": "UTC"},
+        )
+        with (
+            ZipFile(release_assets / "loop-timing-witness-0.1.0.zip") as published,
+            ZipFile(release_assets / "reconstructed.zip") as reconstructed,
+        ):
+            assert published.comment == reconstructed.comment == SOURCE.encode()
+            assert published.namelist() == reconstructed.namelist()
+            assert all(
+                published.read(name) == reconstructed.read(name) for name in published.namelist()
+            )
+            assert published.infolist()[0].date_time != reconstructed.infolist()[0].date_time
     if case in {"archive", "manifest", "reconstructed"}:
         name = {
             "archive": "loop-timing-witness-0.1.0.zip",

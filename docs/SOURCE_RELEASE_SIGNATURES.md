@@ -17,6 +17,21 @@ and requires byte-identical SHA-256 digests for the archive and the original
 `release-provenance.json`. A different tag target, damaged asset or unqualified
 workflow revision refuses signing.
 
+The original ZIP was created with `TZ=Europe/Zurich`. Git stores local DOS
+timestamps in ZIP entries, so reconstruction must declare the same timezone:
+
+```bash
+TZ=Europe/Zurich git archive --format=zip --prefix=loop-timing-witness-0.1.0/ \
+  1d12e0342d5320f62182fef41709773f3c555b50 --output=reconstructed.zip
+sha256sum reconstructed.zip
+```
+
+The expected digest is
+`3e0c83e09be127ef3fc30c0043c377f20dcfed3df58e70a49e9ebebdd6f7880e`.
+A UTC reconstruction has identical member contents but different ZIP timestamp
+bytes; verification rejects it. Both the signing workflow and test fixture
+set the release timezone explicitly instead of inheriting the host's timezone.
+
 Verification runs with read permissions. A separate job obtains a short-lived
 Sigstore certificate using GitHub OIDC and signs an in-toto statement covering
 both asset digests. This job can publish attestations but cannot change release

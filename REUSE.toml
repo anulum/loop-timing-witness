@@ -13,6 +13,7 @@ version = 1
 [[annotations]]
 path = [
     ".github/workflow-inventory.json",
+    "tests/data/source-release-v0.1.0-provenance.json",
     ".zenodo.json",
     "benchmarks/controller_regression.json",
     "benchmarks/controller_comparison.local.json",

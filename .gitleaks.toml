@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — frozen public source digests recognised as non-secrets
+
+[extend]
+useDefault = true
+
+# Exact public Git blob digests in the hash-bound original release manifest.
+# Other values, paths and rules retain the default scanner behaviour.
+[[allowlists]]
+description = "Verified Git SHA-256 lines in the immutable source release fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)tests/data/source-release-v0\.1\.0-provenance\.json$''']
+regexTarget = "line"
+regexes = [
+    '''(?m)^\ \ \ \ "controllers/rust/tests/controller_api\.rs":\ "40d234c0924b678b5a18267171698d50a1110e45a86b90b2a362f84f97d36467",$''',
+    '''(?m)^\ \ \ \ "tests/native/configuration_api\.h":\ "e48208536ac52c5561f8091bf5377ff958f863f534a1bf011f84e9803f083f57",$''',
+    '''(?m)^\ \ \ \ "tests/native/controller_api_test\.c":\ "97cff2630a6576d20b7941a023c5a81a28e94b9ece1c27aafc5e77355a5f63fe",$''',
+    '''(?m)^\ \ \ \ "tests/native/metadata_api\.h":\ "7f52b25f784dba3940e54d6957a992b07caf4d2514a7c61821ffa0f15c392969",$''',
+    '''(?m)^\ \ \ \ "tests/native/policy_api_test\.cpp":\ "92d9b966a4d62113431a2aeadcc1d8f66085f00d54fefd048a4767e793305548",$''',
+    '''(?m)^\ \ \ \ "tests/native/power_configuration_api_test\.cpp":\ "90167c96d12e1855a41a2f2c0696a9aa69ae5278ae0b390d0c7f04c4007f0162",$''',
+    '''(?m)^\ \ \ \ "tests/test_amp_logger_api\.py":\ "2239cfce6d90aa54e022515775f3ede1a53afd044c5d23b8bf41b12602980322",$''',
+    '''(?m)^\ \ \ \ "tests/test_device_tree_tokens\.py":\ "37b712d60fdfedba64f8048a463898d26f0b1bc0916afbedea44d2d6fedbd3cf",$''',
+    '''(?m)^\ \ \ \ "tests/test_legacy_analysis_api\.py":\ "eed50871bd726f2a88020fb49dd44d7ecf7109a3df36227c401f332e86bd5a91",$''',
+    '''(?m)^\ \ \ \ "tests/test_linux_load_api\.py":\ "a13fb0bc379bcaeca7304dcbf9e5f09bb04ade710c8a7395b08f57cb78811fec",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_configuration_api\.py":\ "d133b97e03fbaa3aba57cae02a0928dec55962835da72a3a74e4eefada46fb6c",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_lifecycle_api\.py":\ "e356fdb5a52bb0df3879f051e553f41be1080c365ecad339acd786188a885a53",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_metadata_api\.py":\ "892971540cfdc668562e4bda2bd38b2fd53d85d5cbabd26f5df8be84a220051e",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_policy_api\.py":\ "bb6b5dae4550faf3a5306cc529e2ae8fadb8791c86be1624603b4a3adc935bc0",$''',
+    '''(?m)^\ \ \ \ "tests/test_power_configuration_api\.py":\ "39fe45c430610e27a5bb19a4f8579aecbdd7c02724b6e3e11bb50bd793e3d8b3",$''',
+]

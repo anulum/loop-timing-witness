@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any, Final
 
+from workflow_release import release_findings
+
 PUBLICATION_JOBS: Final = {
     ("ci.yml", "tests"): frozenset({"id-token"}),
     ("reusable-tests.yml", "coverage"): frozenset({"id-token"}),
@@ -20,6 +22,8 @@ PUBLICATION_JOBS: Final = {
     ("publish-rust.yml", "publish"): frozenset({"id-token"}),
     ("scorecard.yml", "analysis"): frozenset({"security-events", "id-token"}),
     ("pypi-downloads.yml", "snapshot"): frozenset({"contents"}),
+    ("source-release-signatures.yml", "sign"): frozenset({"id-token", "attestations"}),
+    ("source-release-signatures.yml", "publish"): frozenset({"contents"}),
 }
 MAIN: Final = "github.ref == 'refs/heads/main'"
 DEPLOY: Final = MAIN + " && github.event_name != 'pull_request'"
@@ -100,6 +104,7 @@ def publication_findings(file: str, workflow: dict[str, Any]) -> list[str]:
         if not isinstance(build, dict) or build.get("if") != MAIN:
             findings.append(f"{file}: package verification must start only from main")
     findings.extend(metrics_identity_findings(file, workflow))
+    findings.extend(release_findings(file, workflow))
     findings.extend(coverage_identity_findings(file, workflow["jobs"]))
     if file == "scorecard.yml":
         job = workflow["jobs"].get("analysis", {})

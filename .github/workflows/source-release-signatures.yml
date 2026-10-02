@@ -1,0 +1,145 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — verified immutable source asset signatures
+
+name: Source release signatures
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: source-release-signatures-v0.1.0
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify immutable source assets
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # read frozen release assets and source
+      actions: read # require exact-head qualification
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+      - name: Require all source workflows green at this exact workflow revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+            -f head_sha="$GITHUB_SHA" -f branch=main -f per_page=100 > validation-runs.json
+          python - <<'PY'
+          import json, os
+          required = {"CI", "Pre-commit", "CodeQL", "Security audit", "Docs", "SBOM", "Scorecard"}
+          runs = json.load(open("validation-runs.json", encoding="utf-8"))["workflow_runs"]
+          for name in sorted(required):
+              matching = [r for r in runs if r["name"] == name and r["head_sha"] == os.environ["GITHUB_SHA"]]
+              if not matching:
+                  raise SystemExit(f"Missing exact-revision validation: {name}")
+              latest = max(matching, key=lambda r: (r["id"], r["run_attempt"]))
+              if latest["status"] != "completed" or latest["conclusion"] != "success":
+                  raise SystemExit(f"Validation is not green: {name}")
+              print(f"Verified {name}: {latest['html_url']}")
+          PY
+      - name: Reconstruct and verify the immutable source release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = anulum/loop-timing-witness
+          test "$(git rev-parse 'refs/tags/v0.1.0^{commit}')" = \
+            1d12e0342d5320f62182fef41709773f3c555b50
+          mkdir verified
+          gh release download v0.1.0 --repo "$GITHUB_REPOSITORY" --dir verified \
+            --pattern loop-timing-witness-0.1.0.zip --pattern release-provenance.json
+          git archive --format=zip --prefix=loop-timing-witness-0.1.0/ \
+            1d12e0342d5320f62182fef41709773f3c555b50 --output=reconstructed.zip
+          python tools/source_release.py --assets verified --reconstructed reconstructed.zip \
+            --workflow-revision "$GITHUB_SHA" --predicate verified/predicate.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-source-release
+          path: verified/
+          if-no-files-found: error
+          retention-days: 30
+  sign:
+    name: Sign verified assets with OIDC
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [verify]
+    environment:
+      name: source-signatures
+    permissions:
+      contents: read # authenticated repository identity
+      id-token: write # ephemeral Sigstore certificate
+      attestations: write # publish signed statements to the attestation API
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-source-release
+          path: verified
+      - name: Sign the verified source assets
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            verified/loop-timing-witness-0.1.0.zip
+            verified/release-provenance.json
+          predicate-type: https://github.com/anulum/loop-timing-witness/source-release-verification/v1
+          predicate-path: verified/predicate.json
+          create-storage-record: false
+      - name: Retain the portable signature bundle
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" verified/source-v0.1.0.sigstore.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-source-release
+          path: verified/
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    name: Attach the cryptographically verified bundle
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [sign]
+    environment:
+      name: source-signatures
+    permissions:
+      contents: write # attach only the new verified signature sidecar
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-source-release
+          path: verified
+      - name: Cryptographically verify both subjects before attaching the bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for asset in loop-timing-witness-0.1.0.zip release-provenance.json; do
+            gh attestation verify "verified/$asset" --repo "$GITHUB_REPOSITORY" \
+              --bundle verified/source-v0.1.0.sigstore.json \
+              --predicate-type https://github.com/anulum/loop-timing-witness/source-release-verification/v1 \
+              --signer-workflow anulum/loop-timing-witness/.github/workflows/source-release-signatures.yml \
+              --source-ref refs/heads/main --source-digest "$GITHUB_SHA" \
+              --deny-self-hosted-runners --format json > "verified/$asset.verification.json"
+          done
+          gh release upload v0.1.0 verified/source-v0.1.0.sigstore.json \
+            --repo "$GITHUB_REPOSITORY"

@@ -81,3 +81,7 @@ even though its successful hardware paths are unqualified.
 This policy is not a certification. The repository has had no external security review, no
 fuzzing campaign and no reported vulnerability. The simulated safe-state logic is a measurement
 feature for an emulated plant and is not a safety function for physical machinery.
+
+Source release verification and portable signature commands are documented in
+[Source release signatures](docs/SOURCE_RELEASE_SIGNATURES.md). Signing covers
+the frozen source assets; it does not establish board or vendor qualification.

@@ -12,6 +12,12 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Added
+
+- Source-release verification and OIDC/Sigstore signatures for the immutable
+  `v0.1.0` source archive and provenance manifest, with separate verification,
+  signing and release-attachment jobs and portable verification instructions.
+
 ## [0.1.0] - 2026-10-01
 
 ### Fixed

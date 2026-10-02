@@ -138,6 +138,17 @@
       ],
       "kind": "standalone",
       "owner": "exact-head verified daily PyPI history on the isolated metrics data ref"
+    },
+    {
+      "category": 10,
+      "file": "source-release-signatures.yml",
+      "jobs": [
+        "verify",
+        "sign",
+        "publish"
+      ],
+      "kind": "standalone",
+      "owner": "manual immutable source verification, OIDC signatures and verified signature attachment"
     }
   ]
 }

@@ -338,6 +338,8 @@ def _job_findings(file: str, kind: str, name: str, job: object, reusables: set[s
             ("publish.yml", "publish"),
             ("reusable-tests.yml", "coverage"),
             ("pypi-downloads.yml", "snapshot"),
+            ("source-release-signatures.yml", "sign"),
+            ("source-release-signatures.yml", "publish"),
         }
         and "needs" in job
     ):

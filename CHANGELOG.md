@@ -12,27 +12,6 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
-### Added
-
-- Complete original-width RTL source-flow proof: 826 executed identities and eight
-  checked source invariants out of 834 raw identities, with no excluded or unresolved points.
-  Public reproduction includes both full 32-bit saturation programmes and Yosys counterexamples.
-- Native C++ lifecycle regressions for a command commit crossing run completion, final FIFO
-  drain without callbacks, and real run/final-drain timeout supervision through acquisition hooks.
-- Production-register proofs for command staging and persistent run, finished and safe states,
-  each checked against an intentionally false variant with a retained counterexample.
-- Python statement and branch reports for the complete host/tool surface, uploaded separately
-  from native and RTL evidence; API-site provenance binds generated pages to the source commit.
-
-### Changed
-
-- Pin Yosys in hosted native validation to the same Ubuntu package as local proof execution.
-- Retain GCC control-flow dumps alongside instrumented native lifecycle builds so compiler
-  exception edges can be inspected without changing the production optimisation level.
-- Publish Python and Rust packages through project-specific trusted publishing identities.
-- Keep only project information in the README image metadata, preserving its decoded pixels.
-- Update development dependency locks, licence records and repository quality tools.
-
 ## [0.1.0] - 2026-10-01
 
 ### Fixed
@@ -43,6 +22,18 @@ Loop Timing Witness — changelog
   depend on an undeclared runner tool.
 
 ### Added
+
+- Source-bound Python Codecov badge and daily validated PyPI download history on
+  the isolated `metrics` data branch; missing provider observations remain unknown.
+- Complete original-width RTL source-flow proof: 826 executed identities and eight
+  checked source invariants out of 834 raw identities, with no excluded or unresolved points.
+  Public reproduction includes both full 32-bit saturation programmes and Yosys counterexamples.
+- Native C++ lifecycle regressions for a command commit crossing run completion, final FIFO
+  drain without callbacks, and real run/final-drain timeout supervision through acquisition hooks.
+- Production-register proofs for command staging and persistent run, finished and safe states,
+  each checked against an intentionally false variant with a retained counterexample.
+- Python statement and branch reports for the complete host/tool surface, uploaded separately
+  from native and RTL evidence; API-site provenance binds generated pages to the source commit.
 
 - Published Python host analysis wheel and source archive with typed API, packaged schemas and
   the `loop-timing-witness-analyze` command.
@@ -71,3 +62,14 @@ Loop Timing Witness — changelog
 - Architecture, measurement protocol, threat model and repository-boundary decision record.
 - Governance, contribution, security, support, licensing and citation metadata; manuscript
   collection index.
+
+### Changed
+
+- Reserve the initial source archive DOI, with an explicit distinction from the
+  already published immutable registry distributions. Publication follows exact-source CI.
+- Pin Yosys in hosted native validation to the same Ubuntu package as local proof execution.
+- Retain GCC control-flow dumps alongside instrumented native lifecycle builds so compiler
+  exception edges can be inspected without changing the production optimisation level.
+- Publish Python and Rust packages through project-specific trusted publishing identities.
+- Keep only project information in the README image metadata, preserving its decoded pixels.
+- Update development dependency locks, licence records and repository quality tools.

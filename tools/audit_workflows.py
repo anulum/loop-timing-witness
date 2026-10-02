@@ -27,7 +27,8 @@ tree against the versioned inventory ``.github/workflow-inventory.json``:
 - every external action is pinned to a 40-hexadecimal commit, container
   images are pinned by digest, local reusable calls resolve to declared
   reusable workflows, and every checkout disables credential persistence;
-- unrelated write-authority workflows (release, deploy, metrics, stale) are absent;
+- unrelated write-authority workflows are absent; authorised project publishers
+  have exact source, prerequisite, environment and permissions boundaries;
 - the coordinator carries only trigger policy, reusable calls and one
   aggregate gate that runs always, needs every call exactly once, and fails
   on any non-success result.
@@ -336,6 +337,7 @@ def _job_findings(file: str, kind: str, name: str, job: object, reusables: set[s
             ("docs.yml", "deploy"),
             ("publish.yml", "publish"),
             ("reusable-tests.yml", "coverage"),
+            ("pypi-downloads.yml", "snapshot"),
         }
         and "needs" in job
     ):

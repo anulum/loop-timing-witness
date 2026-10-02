@@ -101,6 +101,30 @@ def test_authorised_publication_tree_passes(
         ("publish.yml", "publish", "if", "always()", "exact main-branch condition"),
         ("publish.yml", "publish", "environment", {}, "publication environment"),
         ("publish.yml", "build", "if", "always()", "verification must start only from main"),
+        ("pypi-downloads.yml", "snapshot", "permissions", {}, "publication permissions"),
+        ("pypi-downloads.yml", "snapshot", "needs", [], "publication needs"),
+        ("pypi-downloads.yml", "snapshot", "if", "always()", "exact main-branch condition"),
+        (
+            "pypi-downloads.yml",
+            "snapshot",
+            "environment",
+            {"name": "other"},
+            "publication environment",
+        ),
+        (
+            "pypi-downloads.yml",
+            "verify",
+            "if",
+            "always()",
+            "verification must start only from main",
+        ),
+        (
+            "pypi-downloads.yml",
+            "verify",
+            "permissions",
+            {"contents": "write"},
+            "verification permissions must be read-only",
+        ),
         ("scorecard.yml", "analysis", "if", "always()", "analysis must start only from main"),
         ("docs.yml", "validate", "permissions", {"id-token": "write"}, "is not permitted"),
         ("scorecard.yml", "analysis", "needs", ["validate"], "only the coordinator"),
@@ -123,7 +147,12 @@ def test_publication_boundary_mutations_are_refused(
 
 @pytest.mark.parametrize(
     ("file", "job"),
-    [("docs.yml", "deploy"), ("publish.yml", "publish"), ("reusable-tests.yml", "coverage")],
+    [
+        ("docs.yml", "deploy"),
+        ("publish.yml", "publish"),
+        ("reusable-tests.yml", "coverage"),
+        ("pypi-downloads.yml", "snapshot"),
+    ],
 )
 def test_missing_publication_job_is_refused(
     publication_tree: Path, capsys: pytest.CaptureFixture[str], file: str, job: str
@@ -141,6 +170,7 @@ def test_missing_publication_job_is_refused(
     ("file", "job", "finding"),
     [
         ("publish.yml", "build", "verification must start only from main"),
+        ("pypi-downloads.yml", "verify", "verification must start only from main"),
         ("scorecard.yml", "analysis", "analysis must start only from main"),
         ("ci.yml", "tests", "coverage caller"),
         ("reusable-tests.yml", "run", "test execution"),
@@ -168,6 +198,18 @@ def test_package_publication_cannot_become_automatic(
     path.write_text(yaml.safe_dump(workflow))
     assert main([str(publication_tree)]) == 1
     assert "only explicit manual dispatch" in capsys.readouterr().out
+
+
+def test_metrics_publication_cannot_run_on_source_push(
+    publication_tree: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real scheduled writer refuses an added source-push trigger."""
+    path = publication_tree / ".github/workflows/pypi-downloads.yml"
+    workflow = load_workflow(path.read_text())
+    workflow["on"]["push"] = {"branches": ["main"]}
+    path.write_text(yaml.safe_dump(workflow))
+    assert main([str(publication_tree)]) == 1
+    assert "only daily schedule and manual dispatch" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("case", ["valid", "revision", "checkout", "digest", "missing"])

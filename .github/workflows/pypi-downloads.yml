@@ -1,0 +1,156 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — bounded daily PyPI download history
+
+name: PyPI downloads
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pypi-downloads-metrics
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the exact source revision
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read # verify exact-source successful validation
+      contents: read # read public repository identity
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+      - name: Require all source workflows green at this exact revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+            -f head_sha="$GITHUB_SHA" -f branch=main -f per_page=100 > validation-runs.json
+          python - <<'PYCODE'
+          import json, os
+          required = {"CI", "Pre-commit", "CodeQL", "Security audit", "Docs", "SBOM", "Scorecard"}
+          runs = json.load(open("validation-runs.json", encoding="utf-8"))["workflow_runs"]
+          for name in sorted(required):
+              matching = [r for r in runs if r["name"] == name and r["head_sha"] == os.environ["GITHUB_SHA"]]
+              if not matching:
+                  raise SystemExit(f"Missing exact-revision validation: {name}")
+              latest = max(matching, key=lambda r: (r["id"], r["run_attempt"]))
+              if latest["status"] != "completed" or latest["conclusion"] != "success":
+                  raise SystemExit(f"Validation is not green: {name}")
+              print(f"Verified {name}: {latest['html_url']}")
+          PYCODE
+  snapshot:
+    name: Import and publish only the project download CSV
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [verify]
+    environment:
+      name: metrics
+    permissions:
+      contents: write # publish only the project CSV on the metrics ref
+    steps:
+      - name: Check out the exact source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+      - name: Prepare the exact metrics commit without credentials
+        id: prepare
+        env:
+          METRICS_DIR: ${{ runner.temp }}/loop-timing-witness-metrics
+        run: |
+          set -euo pipefail
+          readonly package="loop-timing-witness"
+          readonly csv_path="downloads/loop-timing-witness.csv"
+          remote="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+
+          if git ls-remote --exit-code --heads origin metrics >/dev/null 2>&1; then
+            git clone --depth 1 --branch metrics "$remote" "$METRICS_DIR"
+          else
+            mkdir -p "$METRICS_DIR"
+            git -C "$METRICS_DIR" init --initial-branch=metrics
+            git -C "$METRICS_DIR" remote add origin "$remote"
+          fi
+
+          cd "$METRICS_DIR"
+          mapfile -t tracked_before < <(git ls-files)
+          if (( ${#tracked_before[@]} > 1 )) || \
+             (( ${#tracked_before[@]} == 1 )) && \
+             [[ "${tracked_before[0]}" != "$csv_path" ]]; then
+            printf 'Refusing unexpected pre-existing tracked paths:\n' >&2
+            printf '  %s\n' "${tracked_before[@]}" >&2
+            exit 1
+          fi
+
+          python "$GITHUB_WORKSPACE/tools/pypi_downloads.py" \
+            --csv "$csv_path" \
+            --project-csv-only --allow-missing
+          if [[ ! -f "$csv_path" ]]; then
+            echo "snapshot_available=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "snapshot_available=true" >> "$GITHUB_OUTPUT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$csv_path"
+
+          mapfile -t tracked_paths < <(git ls-files)
+          test "${#tracked_paths[@]}" -eq 1
+          test "${tracked_paths[0]}" = "$csv_path"
+          mapfile -t unstaged_paths < <(git diff --name-only)
+          test "${#unstaged_paths[@]}" -eq 0
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mapfile -t staged_paths < <(git diff --cached --name-only)
+          test "${#staged_paths[@]}" -eq 1
+          test "${staged_paths[0]}" = "$csv_path"
+          git commit --message "metrics: pypi download snapshot for ${package}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Upload the exact download series
+        if: steps.prepare.outputs.snapshot_available == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-downloads-loop-timing-witness
+          path: ${{ runner.temp }}/loop-timing-witness-metrics/downloads/loop-timing-witness.csv
+          if-no-files-found: error
+          retention-days: 30
+      - name: Push only the reviewed metrics ref
+        if: steps.prepare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          METRICS_DIR: ${{ runner.temp }}/loop-timing-witness-metrics
+        run: |
+          set -euo pipefail
+          askpass_path="$RUNNER_TEMP/loop-timing-witness-git-askpass"
+          printf '%s\n' \
+            '#!/bin/sh' \
+            "case \"\$1\" in" \
+            "*Username*) printf '%s\\n' git ;;" \
+            "*) printf '%s\\n' \"\$GH_TOKEN\" ;;" \
+            'esac' > "$askpass_path"
+          chmod 700 "$askpass_path"
+          trap 'unlink "$askpass_path"' EXIT
+          GIT_ASKPASS="$askpass_path" GIT_TERMINAL_PROMPT=0 \
+            git -C "$METRICS_DIR" push origin HEAD:refs/heads/metrics

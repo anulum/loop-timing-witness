@@ -59,11 +59,15 @@ Software implementation does not qualify a board capability or advance measureme
   for verification scope and coverage limits. Completed locally on 2026-09-27; the atomic
   Linux implementation commit records the software, with board acceptance still open below.
 
+- Source-bound Python coverage publication and a daily download-history importer with
+  actual HTTP/TLS transport tests, explicit missing-data handling and a dedicated
+  `metrics` data branch. See [repository metrics](docs/METRICS.md).
+
 ## Planned — in implementation order, without dates
 
 Software publication already includes the Python analysis package and standalone Rust controller
 crate at version 0.1.0, plus the public Python, C/C++ and Rust API references. Subsequent source
-verification is recorded under `Unreleased` in [CHANGELOG.md](CHANGELOG.md); it does not alter
+verification is recorded with source release 0.1.0 in [CHANGELOG.md](CHANGELOG.md); it does not alter
 those immutable registry artifacts.
 
 The original-width RTL source-flow obligation is complete: 826 of 834 raw identities executed,

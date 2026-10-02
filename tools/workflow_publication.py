@@ -19,6 +19,7 @@ PUBLICATION_JOBS: Final = {
     ("publish.yml", "publish"): frozenset({"id-token"}),
     ("publish-rust.yml", "publish"): frozenset({"id-token"}),
     ("scorecard.yml", "analysis"): frozenset({"security-events", "id-token"}),
+    ("pypi-downloads.yml", "snapshot"): frozenset({"contents"}),
 }
 MAIN: Final = "github.ref == 'refs/heads/main'"
 DEPLOY: Final = MAIN + " && github.event_name != 'pull_request'"
@@ -86,6 +87,7 @@ def publication_findings(file: str, workflow: dict[str, Any]) -> list[str]:
         "docs.yml": ("deploy", "validate", "github-pages", DEPLOY),
         "publish.yml": ("publish", "build", "pypi", MAIN),
         "publish-rust.yml": ("publish", "", "crates-io", MAIN),
+        "pypi-downloads.yml": ("snapshot", "verify", "metrics", MAIN),
     }
     if file in policies:
         name = policies[file][0]
@@ -97,6 +99,7 @@ def publication_findings(file: str, workflow: dict[str, Any]) -> list[str]:
         build = workflow["jobs"].get(verification)
         if not isinstance(build, dict) or build.get("if") != MAIN:
             findings.append(f"{file}: package verification must start only from main")
+    findings.extend(metrics_identity_findings(file, workflow))
     findings.extend(coverage_identity_findings(file, workflow["jobs"]))
     if file == "scorecard.yml":
         job = workflow["jobs"].get("analysis", {})
@@ -135,4 +138,34 @@ def coverage_identity_findings(file: str, jobs: dict[str, Any]) -> list[str]:
         run = jobs.get("run")
         if not isinstance(run, dict) or run.get("permissions") != {"contents": "read"}:
             findings.append("reusable-tests.yml: test execution must have only contents: read")
+    return findings
+
+
+def metrics_identity_findings(file: str, workflow: dict[str, Any]) -> list[str]:
+    """Check the scheduled metrics writer's read-only source verification.
+
+    Parameters
+    ----------
+    file
+        Exact workflow filename.
+    workflow
+        Parsed workflow mapping.
+
+    Returns
+    -------
+    list[str]
+        Trigger or verification identity violations; other workflows contribute none.
+    """
+    findings = []
+    if file == "pypi-downloads.yml":
+        if workflow.get("on") != {
+            "schedule": [{"cron": "23 6 * * *"}],
+            "workflow_dispatch": None,
+        }:
+            findings.append(f"{file}: metrics permits only daily schedule and manual dispatch")
+        verification = workflow["jobs"].get("verify")
+        if not isinstance(verification, dict) or verification.get("if") != MAIN:
+            findings.append(f"{file}: metrics verification must start only from main")
+        elif verification.get("permissions") != {"actions": "read", "contents": "read"}:
+            findings.append(f"{file}: metrics verification permissions must be read-only")
     return findings

@@ -176,9 +176,15 @@ Every action is pinned to a verified commit object.
 | `controller-comparison.yml` | matching native workload measurements and retained runner receipts | performance and benchmarking |
 | `publish.yml` | manually dispatched exact-revision validation, real wheel/sdist consumers and PyPI OIDC publication | release and registry publication |
 | `publish-rust.yml` | manually dispatched exact-revision validation, independent packaged API consumers and crates.io OIDC publication | release and registry publication |
+| `pypi-downloads.yml` | exact-revision green checks, validated official PyPI observations and one CSV on the `metrics` branch | download statistics and repository metrics |
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.
+
+The [metrics guide](docs/METRICS.md) describes the observation source, retention
+and missing-data rules. The writer uses the `metrics` environment, accepts only
+the project CSV and pushes only the `metrics` ref. Public API tests exercise the
+importer through actual HTTP/TLS sockets, file imports and separate CLI consumers.
 
 ## Native API documentation
 

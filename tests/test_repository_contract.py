@@ -158,9 +158,10 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     assert released == [zenodo["publication_date"]]
     assert f"## [{version}] - {released[0]}" in changelog
     assert zenodo["version"] == version
-    assert not re.search(r"^doi:", citation, flags=re.MULTILINE)
-    assert "doi" not in zenodo
-    assert "No DOI has been assigned" in readme
+    assert re.findall(r"^doi: (.+)$", citation, flags=re.MULTILINE) == [zenodo["doi"]]
+    assert re.fullmatch(r"10\.5281/zenodo\.\d+", zenodo["doi"])
+    assert f"`{zenodo['doi']}` is reserved" in readme
+    assert "archive publication\nis pending final source validation" in readme
     assert "No registry release" not in citation
     assert f"| `{version}` | yes" in publishable_text("SECURITY.md")
     badges = re.findall(r"\[!\[([^]]+)\]\(([^)]+)\)\]\(([^)]+)\)", readme)
@@ -169,6 +170,18 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
         ("PyPI", "https://pypi.org/project/loop-timing-witness/"),
         ("crates.io", "https://crates.io/crates/witness-controller"),
         ("CI", "https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml"),
+        ("Docs", "https://anulum.github.io/loop-timing-witness/"),
+        ("CodeQL", "https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml"),
+        (
+            "Pre-commit",
+            "https://github.com/anulum/loop-timing-witness/actions/workflows/pre-commit.yml",
+        ),
+        ("License", "https://github.com/anulum/loop-timing-witness/blob/main/LICENSE"),
+        (
+            "Typed Python",
+            "https://github.com/anulum/loop-timing-witness/blob/main/src/loop_timing_witness/py.typed",
+        ),
+        ("Codecov", "https://app.codecov.io/github/anulum/loop-timing-witness"),
         (
             "OpenSSF Scorecard",
             "https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness",

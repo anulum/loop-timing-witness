@@ -19,7 +19,12 @@ Loop Timing Witness — README
 [![Pre-commit](https://github.com/anulum/loop-timing-witness/actions/workflows/pre-commit.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/pre-commit.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](https://github.com/anulum/loop-timing-witness/blob/main/LICENSE)
 [![Typed Python](https://img.shields.io/badge/python-typed-blue.svg)](https://github.com/anulum/loop-timing-witness/blob/main/src/loop_timing_witness/py.typed)
+[![Codecov](https://codecov.io/gh/anulum/loop-timing-witness/branch/main/graph/badge.svg)](https://app.codecov.io/github/anulum/loop-timing-witness)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge)](https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness)
+
+The coverage badge describes Python host/tool reports. Native and RTL proof scopes
+are documented in the [coverage guide](https://github.com/anulum/loop-timing-witness/blob/main/docs/CONTROLLER_COVERAGE.md).
+Download history and missing-data handling are described in [repository metrics](https://github.com/anulum/loop-timing-witness/blob/main/docs/METRICS.md).
 
 ![Loop Timing Witness architecture concept](https://raw.githubusercontent.com/anulum/loop-timing-witness/main/docs/assets/loop-timing-witness.webp)
 
@@ -259,7 +264,10 @@ AGPL-3.0-or-later, with a commercial licence available; see [`NOTICE.md`](https:
 
 ## Citation
 
-Citation metadata is in [`CITATION.cff`](https://github.com/anulum/loop-timing-witness/blob/main/CITATION.cff). No DOI has been assigned.
+Citation metadata is in [`CITATION.cff`](https://github.com/anulum/loop-timing-witness/blob/main/CITATION.cff).
+The source archive DOI `10.5281/zenodo.23092361` is reserved; archive publication
+is pending final source validation. Published PyPI/crates.io 0.1.0 artifacts retain
+their original build provenance and are not replaced by the later source archive.
 Cite the software version and the commit you inspected. Software version numbers
 do not establish physical board qualification or measured platform performance.
 

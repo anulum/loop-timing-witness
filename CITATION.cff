@@ -7,12 +7,13 @@
 # Loop Timing Witness — citation metadata
 cff-version: 1.2.0
 message: >-
-  Cite the released software version or the specific commit you inspected.
-  No DOI has been assigned; software publication does not qualify the board.
+  Cite the archived source release by its DOI or the specific commit you inspected.
+  Software publication does not qualify the board instrument.
 type: software
 title: Loop Timing Witness
 version: 0.1.0
 date-released: 2026-10-01
+doi: 10.5281/zenodo.23092361
 repository-code: https://github.com/anulum/loop-timing-witness
 url: https://anulum.github.io/loop-timing-witness/
 abstract: >-

@@ -7,8 +7,7 @@
   "omitted_categories": [
     3,
     5,
-    6,
-    11
+    6
   ],
   "schema": "loop-timing-witness.workflow-inventory.v1",
   "schema_version": "1.0.0",
@@ -129,6 +128,16 @@
       ],
       "kind": "standalone",
       "owner": "owner-authorised exact-revision packaged Rust consumers and crates.io publication"
+    },
+    {
+      "category": 11,
+      "file": "pypi-downloads.yml",
+      "jobs": [
+        "verify",
+        "snapshot"
+      ],
+      "kind": "standalone",
+      "owner": "exact-head verified daily PyPI history on the isolated metrics data ref"
     }
   ]
 }

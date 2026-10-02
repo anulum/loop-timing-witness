@@ -88,7 +88,6 @@ FORBIDDEN_PATHS = (
 UNEARNED_BADGE_MARKERS = (
     "api.reuse.software/badge/",
     "bestpractices.dev/projects/",
-    "zenodo.org/badge/",
 )
 WORKFLOWS = REPOSITORY_ROOT / ".github" / "workflows"
 
@@ -160,8 +159,10 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     assert zenodo["version"] == version
     assert re.findall(r"^doi: (.+)$", citation, flags=re.MULTILINE) == [zenodo["doi"]]
     assert re.fullmatch(r"10\.5281/zenodo\.\d+", zenodo["doi"])
-    assert f"`{zenodo['doi']}` is reserved" in readme
-    assert "archive publication\nis pending final source validation" in readme
+    assert f"https://doi.org/{zenodo['doi']}" in readme
+    assert "is published on\nZenodo and binds source commit" in readme
+    assert "`1d12e0342d5320f62182fef41709773f3c555b50`" in readme
+    assert "https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0" in readme
     assert "No registry release" not in citation
     assert f"| `{version}` | yes" in publishable_text("SECURITY.md")
     badges = re.findall(r"\[!\[([^]]+)\]\(([^)]+)\)\]\(([^)]+)\)", readme)
@@ -169,6 +170,7 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
         ("Sponsor", "https://github.com/sponsors/anulum"),
         ("PyPI", "https://pypi.org/project/loop-timing-witness/"),
         ("crates.io", "https://crates.io/crates/witness-controller"),
+        ("DOI", f"https://doi.org/{zenodo['doi']}"),
         ("CI", "https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml"),
         ("Docs", "https://anulum.github.io/loop-timing-witness/"),
         ("CodeQL", "https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml"),
@@ -189,6 +191,7 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     ]
     assert "https://img.shields.io/pypi/v/loop-timing-witness.svg" in readme
     assert "https://img.shields.io/crates/v/witness-controller.svg" in readme
+    assert f"https://zenodo.org/badge/doi/{zenodo['doi'].replace('/', '%2F')}.svg" in readme
     assert (
         "https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge" in readme
     )

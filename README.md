@@ -13,6 +13,7 @@ Loop Timing Witness — README
 [![Sponsor](https://img.shields.io/badge/Sponsor-anulum-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/anulum)
 [![PyPI](https://img.shields.io/pypi/v/loop-timing-witness.svg)](https://pypi.org/project/loop-timing-witness/)
 [![crates.io](https://img.shields.io/crates/v/witness-controller.svg)](https://crates.io/crates/witness-controller)
+[![DOI](https://zenodo.org/badge/doi/10.5281%2Fzenodo.23092361.svg)](https://doi.org/10.5281/zenodo.23092361)
 [![CI](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml)
 [![Docs](https://github.com/anulum/loop-timing-witness/actions/workflows/docs.yml/badge.svg?branch=main)](https://anulum.github.io/loop-timing-witness/)
 [![CodeQL](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml)
@@ -265,9 +266,12 @@ AGPL-3.0-or-later, with a commercial licence available; see [`NOTICE.md`](https:
 ## Citation
 
 Citation metadata is in [`CITATION.cff`](https://github.com/anulum/loop-timing-witness/blob/main/CITATION.cff).
-The source archive DOI `10.5281/zenodo.23092361` is reserved; archive publication
-is pending final source validation. Published PyPI/crates.io 0.1.0 artifacts retain
-their original build provenance and are not replaced by the later source archive.
+The [0.1.0 source archive](https://doi.org/10.5281/zenodo.23092361) is published on
+Zenodo and binds source commit `1d12e0342d5320f62182fef41709773f3c555b50`.
+The [GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0)
+includes the same source ZIP and a provenance manifest with verified artifact hashes.
+Published PyPI/crates.io 0.1.0 artifacts retain their original build provenance
+and are not replaced by the later source archive.
 Cite the software version and the commit you inspected. Software version numbers
 do not establish physical board qualification or measured platform performance.
 

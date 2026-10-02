@@ -68,7 +68,9 @@ Software implementation does not qualify a board capability or advance measureme
 Software publication already includes the Python analysis package and standalone Rust controller
 crate at version 0.1.0, plus the public Python, C/C++ and Rust API references. Subsequent source
 verification is recorded with source release 0.1.0 in [CHANGELOG.md](CHANGELOG.md); it does not alter
-those immutable registry artifacts.
+those immutable registry artifacts. The [versioned source archive](https://doi.org/10.5281/zenodo.23092361)
+and [GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0)
+are published with verified hashes and explicit software-only evidence scope.
 
 The original-width RTL source-flow obligation is complete: 826 of 834 raw identities executed,
 with eight checked source invariants and no unresolved or excluded points. C++ lifecycle evidence

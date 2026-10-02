@@ -23,6 +23,8 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Published source release and permanent [Zenodo archive](https://doi.org/10.5281/zenodo.23092361),
+  binding commit `1d12e0342d5320f62182fef41709773f3c555b50` and verified source/provenance hashes.
 - Source-bound Python Codecov badge and daily validated PyPI download history on
   the isolated `metrics` data branch; missing provider observations remain unknown.
 - Complete original-width RTL source-flow proof: 826 executed identities and eight
@@ -65,8 +67,8 @@ Loop Timing Witness — changelog
 
 ### Changed
 
-- Reserve the initial source archive DOI, with an explicit distinction from the
-  already published immutable registry distributions. Publication follows exact-source CI.
+- Bind the source archive DOI to the validated software snapshot, with an explicit
+  distinction from the already published immutable registry distributions.
 - Pin Yosys in hosted native validation to the same Ubuntu package as local proof execution.
 - Retain GCC control-flow dumps alongside instrumented native lifecycle builds so compiler
   exception edges can be inspected without changing the production optimisation level.

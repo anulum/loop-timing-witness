@@ -142,8 +142,8 @@ and host file contract is in [`docs/HOST_ANALYSIS.md`](https://github.com/anulum
 The source-bound vendor input procedure is in
 [`hardware/icicle/README.md`](https://github.com/anulum/loop-timing-witness/blob/main/hardware/icicle/README.md); no Libero or board result is claimed.
 
-The [system block diagram](https://github.com/anulum/loop-timing-witness/blob/main/docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf)
-illustrates the proposed PolarFire SoC Icicle Kit design for the 2026 contest.
+The [system block diagram](docs/assets/loop-timing-witness-system-block-diagram.pdf)
+illustrates the planned PolarFire SoC Icicle Kit instrument.
 
 The planned contracts are machine-readable in [`measurement-domain.json`](https://github.com/anulum/loop-timing-witness/blob/main/measurement-domain.json)
 (schema [`measurement-domain.schema.json`](https://github.com/anulum/loop-timing-witness/blob/main/measurement-domain.schema.json)): timebase, event

@@ -20,7 +20,7 @@ path = [
     "benchmarks/controller_coverage.json",
     "capability-inventory.json",
     "development-dependency-licences.json",
-    "docs/contest/Loop_Timing_Witness_System_Block_Diagram.pdf",
+    "docs/assets/loop-timing-witness-system-block-diagram.pdf",
     "docs/assets/loop-timing-witness.webp",
     "controllers/rust/LICENSE",
     "measurement-domain.json",

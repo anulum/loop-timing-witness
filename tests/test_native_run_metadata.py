@@ -11,11 +11,10 @@
 from __future__ import annotations
 
 import subprocess
-from functools import partial
 from typing import TYPE_CHECKING
 
 from test_native_run import configuration, native_run
-from test_native_run_output import limited_profile_environment, restrict_output_size
+from test_native_run_output import OUTPUT_LIMIT_COMMAND, limited_profile_environment
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,8 +36,17 @@ def test_metadata_write_failure(native_run: Path, tmp_path: Path) -> None:
     config.write_text(configuration("pid", "none").replace("pid 32", "pid 1"), encoding="utf-8")
     events, raw, metadata = (tmp_path / name for name in ("events.bin", "raw.csv", "metadata.json"))
     result = subprocess.run(
-        [str(native_run), str(config), str(events), str(raw), "--metadata", str(metadata)],
-        preexec_fn=partial(restrict_output_size, 512),
+        [
+            *OUTPUT_LIMIT_COMMAND,
+            "--fsize=512:512",
+            "--",
+            str(native_run),
+            str(config),
+            str(events),
+            str(raw),
+            "--metadata",
+            str(metadata),
+        ],
         env=limited_profile_environment(tmp_path),
         capture_output=True,
         text=True,

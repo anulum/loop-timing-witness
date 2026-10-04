@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import os
 import resource
-import signal
 import subprocess
-from functools import partial
 from pathlib import Path
 
 import pytest
@@ -23,16 +21,11 @@ from test_native_run import configuration, native_run
 __all__ = ["native_run"]
 
 
-def restrict_output_size(maximum: int) -> None:
-    """Set a real child-only file size limit with syscall errors instead of termination.
-
-    Parameters
-    ----------
-    maximum
-        Maximum size in bytes of each regular output file.
-    """
-    signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
-    resource.setrlimit(resource.RLIMIT_FSIZE, (maximum, maximum))
+OUTPUT_LIMIT_COMMAND = (
+    "env",
+    "--ignore-signal=XFSZ",
+    "prlimit",
+)
 
 
 def limited_profile_environment(directory: Path) -> dict[str, str]:
@@ -127,8 +120,15 @@ def test_header_write_refusal(native_run: Path, tmp_path: Path, maximum: int) ->
     events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
     inherited = resource.getrlimit(resource.RLIMIT_FSIZE)
     result = subprocess.run(
-        [str(native_run), str(config), str(events), str(raw)],
-        preexec_fn=partial(restrict_output_size, maximum),
+        [
+            *OUTPUT_LIMIT_COMMAND,
+            f"--fsize={maximum}:{maximum}",
+            "--",
+            str(native_run),
+            str(config),
+            str(events),
+            str(raw),
+        ],
         env=limited_profile_environment(tmp_path),
         capture_output=True,
         text=True,
@@ -183,8 +183,15 @@ def test_runtime_write_refusal(native_run: Path, tmp_path: Path, fault: str, err
     config.write_text(text, encoding="utf-8")
     events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
     result = subprocess.run(
-        [str(native_run), str(config), str(events), str(raw)],
-        preexec_fn=partial(restrict_output_size, 512),
+        [
+            *OUTPUT_LIMIT_COMMAND,
+            "--fsize=512:512",
+            "--",
+            str(native_run),
+            str(config),
+            str(events),
+            str(raw),
+        ],
         env=limited_profile_environment(tmp_path),
         capture_output=True,
         text=True,
@@ -213,8 +220,15 @@ def test_close_write_refusal(native_run: Path, tmp_path: Path) -> None:
     config.write_text(configuration("pid", "none"), encoding="utf-8")
     events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
     result = subprocess.run(
-        [str(native_run), str(config), str(events), str(raw)],
-        preexec_fn=partial(restrict_output_size, 512),
+        [
+            *OUTPUT_LIMIT_COMMAND,
+            "--fsize=512:512",
+            "--",
+            str(native_run),
+            str(config),
+            str(events),
+            str(raw),
+        ],
         env=limited_profile_environment(tmp_path),
         capture_output=True,
         text=True,
@@ -259,3 +273,53 @@ def test_compiled_period_refusal_retains_only_header(native_run: Path, tmp_path:
     assert len(header) == 1
     assert header[0].startswith("cycle,reference_raw,")
     assert not metadata.exists()
+
+
+@pytest.mark.parametrize(
+    ("maximum", "finding"), [(32, "write tracking header"), (512, "finish run output")]
+)
+def test_output_limit_literal_paths(
+    native_run: Path, tmp_path: Path, maximum: int, finding: str
+) -> None:
+    """Forward literal paths through real child limits without interpreting path contents.
+
+    Parameters
+    ----------
+    native_run
+        Actual production native run executable.
+    tmp_path
+        Exclusive allocation for literal paths and failed capture files.
+    maximum
+        Actual kernel file-size limit in bytes.
+    finding
+        Required production write refusal at the selected limit.
+    """
+    config = tmp_path / "run configuration;literal.conf"
+    config.write_text(configuration("pid", "none"), encoding="utf-8")
+    events = tmp_path / "events $(touch executed).bin"
+    raw = tmp_path / "tracking data.csv"
+    inherited = resource.getrlimit(resource.RLIMIT_FSIZE)
+    result = subprocess.run(
+        [
+            *OUTPUT_LIMIT_COMMAND,
+            f"--fsize={maximum}:{maximum}",
+            "--",
+            str(native_run),
+            str(config),
+            str(events),
+            str(raw),
+        ],
+        cwd=tmp_path,
+        env=limited_profile_environment(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 1
+    assert f"cannot {finding}" in result.stderr
+    assert result.stdout == ""
+    assert raw.stat().st_size == maximum
+    assert events.stat().st_size <= maximum
+    assert not (tmp_path / "executed").exists()
+    assert resource.getrlimit(resource.RLIMIT_FSIZE) == inherited

@@ -16,7 +16,6 @@ import os
 import shutil
 import struct
 import subprocess
-from functools import partial
 from io import StringIO
 from pathlib import Path
 
@@ -28,7 +27,7 @@ from amp_spike_command import SpikePaths, SpikeTools, spike_command
 from device_tree_blob import decode_device_tree
 from event_stream import decode_events
 from test_amp_spike_command import REQUEST
-from test_native_run_output import restrict_output_size
+from test_native_run_output import OUTPUT_LIMIT_COMMAND
 
 from manifest_io import sha256_of_file
 
@@ -267,6 +266,7 @@ def test_actual_amp_output_failure(
         plic_path=REQUEST.plic.path,
         paths=SpikePaths(image, output),
     )
+    argv = [*OUTPUT_LIMIT_COMMAND, f"--fsize={maximum}:{maximum}", "--", *argv]
     (output / "command.json").write_text(json.dumps(argv, indent=2), encoding="ascii")
     result = subprocess.run(
         argv,
@@ -275,7 +275,6 @@ def test_actual_amp_output_failure(
         text=True,
         timeout=30,
         check=False,
-        preexec_fn=partial(restrict_output_size, maximum),
     )
     (output / "spike.log").write_text(result.stdout + result.stderr, encoding="ascii")
     assert result.returncode != 0

@@ -307,6 +307,8 @@ def build_plan(root: Path) -> list[Gate]:
             "zizmor",
             [
                 str(venv / "zizmor"),
+                "--config",
+                str(root / ".github" / "zizmor.yml"),
                 "--offline",
                 "--persona",
                 "pedantic",

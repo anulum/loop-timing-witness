@@ -38,7 +38,8 @@ def publication_tree(tmp_path: Path) -> Path:
     Returns
     -------
     Path
-        Repository snapshot containing the complete real workflow surface.
+        Git work tree containing the complete real workflow surface and the
+        dependency locks whose audits the workflow guard requires.
     """
     root = tmp_path / "repository"
     shutil.copytree(REPOSITORY_ROOT / ".github/workflows", root / ".github/workflows")
@@ -46,6 +47,16 @@ def publication_tree(tmp_path: Path) -> Path:
         REPOSITORY_ROOT / ".github/workflow-inventory.json",
         root / ".github/workflow-inventory.json",
     )
+    for name in (
+        "controllers/rust/Cargo.lock",
+        "runtime/bare_metal/rust_kernel/Cargo.lock",
+        "requirements-dev.txt",
+        "requirements-runtime.txt",
+    ):
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPOSITORY_ROOT / name, target)
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
     return root
 
 

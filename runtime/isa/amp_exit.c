@@ -16,5 +16,6 @@ __attribute__((section(".tohost"), aligned(64))) volatile uint64_t fromhost;
 void witness_amp_exit(void) {
     __asm__ volatile("fence rw,rw" ::: "memory");
     tohost = 1;
-    for (;;) __asm__ volatile("wfi" ::: "memory");
+    for (;;)
+        __asm__ volatile("wfi" ::: "memory");
 }

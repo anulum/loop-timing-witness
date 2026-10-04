@@ -41,11 +41,13 @@ static volatile witness_amp_mailbox *mailbox(void) {
 
 /** Preserve every raw signed Q8.24 word without implementation-defined narrowing. */
 static int32_t signed_word(uint32_t word) {
-    if (word <= INT32_MAX) return (int32_t)word;
+    if (word <= INT32_MAX)
+        return (int32_t)word;
     return INT32_MIN + (int32_t)(word - UINT32_C(2147483648));
 }
 
-/** Disable this hart's interrupt service, publish the reason and retain hardware deadline safety. */
+/** Disable this hart's interrupt service, publish the reason and retain hardware deadline safety.
+ */
 static _Noreturn void refuse(uint64_t cause, uint64_t value) {
     __asm__ volatile("csrw mie,zero" ::: "memory");
     if (witness_amp_platform.shared && witness_amp_platform.shared % 8 == 0) {
@@ -56,7 +58,8 @@ static _Noreturn void refuse(uint64_t cause, uint64_t value) {
         output->status = WITNESS_AMP_REFUSED;
         fence();
     }
-    for (;;) __asm__ volatile("wfi" ::: "memory");
+    for (;;)
+        __asm__ volatile("wfi" ::: "memory");
 }
 
 void witness_amp_rust_panic(void) { refuse(UINT64_C(0x109), 0); }
@@ -92,9 +95,12 @@ static void control_sample(uint64_t generation) {
     have_previous = true;
     witness_command command;
     const bool computed = witness_amp_run.lqr != 0
-        ? witness_lqr_step(&witness_amp_run.coefficients, cycle, reference, position, velocity, &command)
-        : witness_pid_step(&witness_amp_run.coefficients, &controller_state, cycle, reference, position, &command);
-    if (!computed) refuse(UINT64_C(0x102), cycle);
+                              ? witness_lqr_step(&witness_amp_run.coefficients, cycle, reference,
+                                                 position, velocity, &command)
+                              : witness_pid_step(&witness_amp_run.coefficients, &controller_state,
+                                                 cycle, reference, position, &command);
+    if (!computed)
+        refuse(UINT64_C(0x102), cycle);
     uint64_t work = 0;
     if (load(base + 0x68) & 4) {
         volatile uint64_t accumulator = 0;
@@ -109,22 +115,36 @@ static void control_sample(uint64_t generation) {
         store(base + 0x30, 1);
         submitted = 1;
     }
-    const witness_amp_sample sample = {ticks, generation, work, cycle, reference, position,
-        velocity, command.command, command.integral, command.derivative,
-        command.clipped ? 1U : 0U, command.integral_held ? 1U : 0U, submitted};
+    const witness_amp_sample sample = {ticks,
+                                       generation,
+                                       work,
+                                       cycle,
+                                       reference,
+                                       position,
+                                       velocity,
+                                       command.command,
+                                       command.integral,
+                                       command.derivative,
+                                       command.clipped ? 1U : 0U,
+                                       command.integral_held ? 1U : 0U,
+                                       submitted};
     publish(&sample);
 }
 
 void witness_amp_trap(uint64_t cause, uint64_t value) {
-    if (cause != (UINT64_C(1) << 63 | UINT64_C(11))) refuse(cause, value);
+    if (cause != (UINT64_C(1) << 63 | UINT64_C(11)))
+        refuse(cause, value);
     const uint32_t interrupt = load(witness_amp_platform.claim);
-    if (!interrupt) return;
-    if (interrupt != witness_amp_platform.interrupt) refuse(UINT64_C(0x103), interrupt);
+    if (!interrupt)
+        return;
+    if (interrupt != witness_amp_platform.interrupt)
+        refuse(UINT64_C(0x103), interrupt);
     const uint64_t base = witness_amp_platform.mmio;
     const uint64_t low = load(base + 0x9c);
     const uint64_t generation = low | ((uint64_t)load(base + 0xa0) << 32);
     const uint32_t status = load(base + 4);
-    if (!(status & 12)) control_sample(generation);
+    if (!(status & 12))
+        control_sample(generation);
     store(base + 0xa4, 1);
     store(witness_amp_platform.claim, interrupt);
     if (status & 4) {
@@ -137,15 +157,18 @@ void witness_amp_trap(uint64_t cause, uint64_t value) {
 
 void witness_amp_main(void) {
     const witness_amp_platform_contract *platform = &witness_amp_platform;
-    if (!platform->shared || platform->shared % 8) refuse(UINT64_C(0x104), 5);
-    const uint64_t addresses[] = {platform->mmio, platform->priority, platform->enable_word,
-                                 platform->threshold, platform->claim, platform->shared};
+    if (!platform->shared || platform->shared % 8)
+        refuse(UINT64_C(0x104), 5);
+    const uint64_t addresses[] = {platform->mmio,      platform->priority, platform->enable_word,
+                                  platform->threshold, platform->claim,    platform->shared};
     for (unsigned index = 0; index < sizeof(addresses) / sizeof(addresses[0]); ++index)
-        if (!addresses[index] || addresses[index] % 4) refuse(UINT64_C(0x104), index);
+        if (!addresses[index] || addresses[index] % 4)
+            refuse(UINT64_C(0x104), index);
     if (platform->hart < 1 || platform->hart > 4 || !platform->interrupt ||
         platform->interrupt >= 1024 || !witness_amp_run.cycles || !witness_amp_run.period_ticks ||
         witness_amp_run.lqr > 1 || witness_amp_run.overload_iterations > 10000000 ||
-        !witness_coefficients_valid(&witness_amp_run.coefficients)) refuse(UINT64_C(0x105), 0);
+        !witness_coefficients_valid(&witness_amp_run.coefficients))
+        refuse(UINT64_C(0x105), 0);
     volatile witness_amp_mailbox *output = mailbox();
     output->abi = 0;
     fence();
@@ -177,7 +200,8 @@ void witness_amp_main(void) {
     fence();
     output->abi = WITNESS_AMP_ABI;
     fence();
-    while (output->logger_status == WITNESS_AMP_LOGGER_WAITING) fence();
+    while (output->logger_status == WITNESS_AMP_LOGGER_WAITING)
+        fence();
     if (output->logger_status != WITNESS_AMP_LOGGER_READY)
         refuse(UINT64_C(0x108), output->logger_status);
     if (load(platform->mmio + 0x7c) != 1 || load(platform->mmio + 0x78) != 24 ||
@@ -197,9 +221,12 @@ void witness_amp_main(void) {
     output->status = WITNESS_AMP_ARMED;
     fence();
     const uint64_t external_irq = UINT64_C(1) << 11;
-    __asm__ volatile("csrw mie,%0\ncsrs mstatus,%1" :: "r"(external_irq), "r"(UINT64_C(8)) : "memory");
-    while (output->status != WITNESS_AMP_FINISHED) __asm__ volatile("wfi" ::: "memory");
-    while (output->logger_status == WITNESS_AMP_LOGGER_READY) fence();
+    __asm__ volatile("csrw mie,%0\ncsrs mstatus,%1" ::"r"(external_irq), "r"(UINT64_C(8))
+                     : "memory");
+    while (output->status != WITNESS_AMP_FINISHED)
+        __asm__ volatile("wfi" ::: "memory");
+    while (output->logger_status == WITNESS_AMP_LOGGER_READY)
+        fence();
     if (output->logger_status != WITNESS_AMP_LOGGER_COMPLETE)
         refuse(UINT64_C(0x108), output->logger_status);
     witness_amp_exit();

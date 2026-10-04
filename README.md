@@ -290,3 +290,8 @@ Support the project through [GitHub Sponsors](https://github.com/sponsors/anulum
 [PayPal](https://www.paypal.com/donate?hosted_button_id=4X5F6DNT934HY) or
 [TWINT](https://go.twint.ch/1/e/tw?tw=acq.lJTAypb8SL2s8vPg7fL0ubi2C220ajOH0BEQn1aKfEJIiIakLpt8jlEv8XdQ9tCp.).
 For commercial licensing, [contact Anulum](https://anulum.li/contact.html).
+
+<p>
+  <img src="docs/assets/anulum_logo_company.jpg" alt="Anulum" width="220">
+  <img src="docs/assets/fortis_studio_logo.jpg" alt="Fortis Studio" width="180">
+</p>

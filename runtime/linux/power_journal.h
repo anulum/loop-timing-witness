@@ -46,16 +46,20 @@ class PowerJournal {
     void collect(std::promise<void> ready) noexcept;
     /** Stop and join on every path without replacing the original failure. */
     void stop() noexcept;
-    /** Bind actual clock/register operations independently of controller versus AMP IRQ ownership. */
+    /** Bind actual clock/register operations independently of controller versus AMP IRQ ownership.
+     */
     PowerJournal(const char *path, const PowerConfiguration &config, Pac1934Device &device,
                  std::function<std::uint64_t()> clock,
                  std::function<std::uint32_t(std::uint8_t)> read);
-public:
+
+  public:
     /** Validate configuration before creating and flushing the exclusive journal header. */
-    template<class Device>
-    PowerJournal(const char *path, const PowerConfiguration &config, Pac1934Device &device, Device &fabric)
-        : PowerJournal(path, config, device, [&fabric] { return fabric.time(); },
-                       [&fabric](std::uint8_t address) { return read_register(fabric, address); }) {}
+    template <class Device>
+    PowerJournal(const char *path, const PowerConfiguration &config, Pac1934Device &device,
+                 Device &fabric)
+        : PowerJournal(
+              path, config, device, [&fabric] { return fabric.time(); },
+              [&fabric](std::uint8_t address) { return read_register(fabric, address); }) {}
     /** Join before releasing UIO/IIO resources, retaining all partial evidence. */
     ~PowerJournal();
     PowerJournal(const PowerJournal &) = delete;

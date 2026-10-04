@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import yaml
+from workflow_dependencies import dependency_audit_findings
 from workflow_publication import PUBLICATION_JOBS, publication_findings
 
 from manifest_io import load_json_object
@@ -587,6 +588,7 @@ def audit(root: Path) -> list[str]:
     entries: list[dict[str, Any]] = inventory["workflows"]
     reusables = {entry["file"] for entry in entries if entry["kind"] == "reusable"}
     limits = inventory["size_limits"]
+    workflows = {}
     for entry in entries:
         file = entry["file"]
         raw = (workflows_dir / file).read_bytes()
@@ -599,11 +601,14 @@ def audit(root: Path) -> list[str]:
         except (UnicodeDecodeError, ValueError) as exc:
             findings.append(f"{file}: {exc}")
             continue
+        workflows[file] = workflow
         findings.extend(workflow_findings(entry, workflow, reusables))
         if entry["kind"] == "coordinator":
             findings.extend(
                 coordinator_findings(file, workflow, inventory["aggregate_gate"]["job"], reusables)
             )
+    if not findings:
+        findings.extend(dependency_audit_findings(root, workflows))
     return findings
 
 

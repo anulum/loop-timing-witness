@@ -17,16 +17,20 @@ namespace {
 std::uint64_t value(std::istream &input, std::uint64_t low, std::uint64_t high) {
     std::string token;
     std::uint64_t result = 0;
-    if (!(input >> token)) throw std::runtime_error("incomplete power configuration");
+    if (!(input >> token))
+        throw std::runtime_error("incomplete power configuration");
     const auto parsed = std::from_chars(token.data(), token.data() + token.size(), result);
-    if (parsed.ec != std::errc{} || parsed.ptr != token.data() + token.size() || result < low || result > high)
+    if (parsed.ec != std::errc{} || parsed.ptr != token.data() + token.size() || result < low ||
+        result > high)
         throw std::runtime_error("power configuration integer outside range");
     return result;
 }
 /** Keep kernel/label tokens bounded and safe for exact text journal fields. */
 bool identifier(const std::string &text) {
     return !text.empty() && text.size() <= 128 &&
-        text.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-+~") == std::string::npos;
+           text.find_first_not_of(
+               "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-+~") ==
+               std::string::npos;
 }
 /** Validate identity before the parser consumes numeric or rail fields. */
 void validate_identity(const PowerConfiguration &configuration) {
@@ -35,7 +39,7 @@ void validate_identity(const PowerConfiguration &configuration) {
         !identifier(configuration.kernel_release))
         throw std::runtime_error("invalid power ABI, IIO identity or kernel release");
 }
-}
+} // namespace
 void validate_power_configuration(const PowerConfiguration &configuration) {
     validate_identity(configuration);
     if (configuration.period_ns < 50000000 || configuration.period_ns > 60000000000 ||
@@ -49,8 +53,10 @@ void validate_power_configuration(const PowerConfiguration &configuration) {
     std::array<bool, 4> used{};
     for (std::size_t index = 0; index < configuration.rails.size(); ++index) {
         const auto &rail = configuration.rails[index];
-        if (rail.name != names[index]) throw std::runtime_error("power rails must be VDD VDD25 VDDA25 VDDA in order");
-        if (rail.channel < 1 || rail.channel > 4 || !rail.shunt_microohms || rail.shunt_microohms > 1000000000)
+        if (rail.name != names[index])
+            throw std::runtime_error("power rails must be VDD VDD25 VDDA25 VDDA in order");
+        if (rail.channel < 1 || rail.channel > 4 || !rail.shunt_microohms ||
+            rail.shunt_microohms > 1000000000)
             throw std::runtime_error("power configuration integer outside range");
         if (!identifier(rail.label) || used[rail.channel - 1])
             throw std::runtime_error("invalid power label or duplicate channel");
@@ -70,14 +76,16 @@ PowerConfiguration read_power_configuration(const std::string &path) {
     result.sample_rate = static_cast<unsigned>(value(input, 8, 1024));
     for (std::size_t index = 0; index < result.rails.size(); ++index) {
         auto &rail = result.rails[index];
-        if (!(input >> rail.name)) throw std::runtime_error("power rails must be VDD VDD25 VDDA25 VDDA in order");
+        if (!(input >> rail.name))
+            throw std::runtime_error("power rails must be VDD VDD25 VDDA25 VDDA in order");
         rail.channel = static_cast<unsigned>(value(input, 1, 4));
         rail.shunt_microohms = static_cast<std::uint32_t>(value(input, 1, 1000000000));
         if (!(input >> rail.label))
             throw std::runtime_error("invalid power label or duplicate channel");
     }
     validate_power_configuration(result);
-    if (input >> extra || !input.eof()) throw std::runtime_error("extra or unreadable power configuration");
+    if (input >> extra || !input.eof())
+        throw std::runtime_error("extra or unreadable power configuration");
     return result;
 }
 } // namespace witness

@@ -40,6 +40,27 @@ __all__ = ["native_uio"]
         (10, "label,comma", "invalid power label"),
         (12, "1", "duplicate channel"),
         (22, "extra", "extra or unreadable"),
+        (3, "60000000001", "integer outside range"),
+        (3, "18446744073709551616", "integer outside range"),
+        (3, "60000000suffix", "integer outside range"),
+        (3, "+60000000", "integer outside range"),
+        (3, "60000000\x00", "integer outside range"),
+        (5, "2147483648", "integer outside range"),
+        (8, "0", "integer outside range"),
+        *[
+            (
+                23,
+                str(length),
+                "invalid power ABI"
+                if length < 3
+                else "incomplete power configuration"
+                if length < 7 or length % 4 in {0, 1}
+                else "power rails must"
+                if length % 4 == 3
+                else "invalid power label",
+            )
+            for length in range(23)
+        ],
     ],
 )
 def test_refused_power_configuration(
@@ -54,9 +75,9 @@ def test_refused_power_configuration(
     tmp_path
         Exclusive case directory.
     index
-        Configuration token to change.
+        Token to replace, 22 to append, or 23 to truncate the configuration.
     replacement
-        Invalid public configuration value.
+        Invalid public value or retained token count for a truncated file.
     error
         Expected acquisition refusal.
     """
@@ -87,6 +108,8 @@ def test_refused_power_configuration(
     ]
     if index == 22:
         tokens.append(replacement)
+    elif index == 23:
+        tokens = tokens[: int(replacement)]
     else:
         tokens[index] = replacement
     power = tmp_path / "power.conf"
@@ -118,5 +141,7 @@ def test_refused_power_configuration(
         check=False,
     )
     assert result.returncode == 1
+    assert result.stdout == ""
     assert error in result.stderr
     assert not any(path.exists() for path in (events, raw, journal))
+    assert not (tmp_path / "metadata.json").exists()

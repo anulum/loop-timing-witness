@@ -21,27 +21,29 @@ static int injected;
 /** Return whether one staging path ends with the explicitly selected owned suffix. */
 static int selected_path(const char *path) {
     const char *suffix = getenv("WITNESS_ICICLE_RACE_SUFFIX");
-    if (suffix == NULL || strstr(path, "/.icicle-derive-") == NULL) return 0;
+    if (suffix == NULL || strstr(path, "/.icicle-derive-") == NULL)
+        return 0;
     const size_t path_length = strlen(path);
     const size_t suffix_length = strlen(suffix);
-    return path_length >= suffix_length
-        && strcmp(path + path_length - suffix_length, suffix) == 0;
+    return path_length >= suffix_length && strcmp(path + path_length - suffix_length, suffix) == 0;
 }
 
 /** Leave a kernel-created receipt proving that the selected race actually occurred. */
 static void mark_injection(void) {
     const char *marker = getenv("WITNESS_ICICLE_RACE_MARKER");
-    if (marker == NULL) return;
-    const int receipt = (int)syscall(SYS_openat, AT_FDCWD, marker,
-                                     O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-    if (receipt >= 0) (void)syscall(SYS_close, receipt);
+    if (marker == NULL)
+        return;
+    const int receipt =
+        (int)syscall(SYS_openat, AT_FDCWD, marker, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    if (receipt >= 0)
+        (void)syscall(SYS_close, receipt);
 }
 
 /** Change a selected staging file immediately before the guarded production read. */
 static void mutate_staging_file(const char *path) {
-    const int source = (int)syscall(SYS_openat, AT_FDCWD, path,
-                                    O_WRONLY | O_TRUNC | O_CLOEXEC, 0);
-    if (source < 0) return;
+    const int source = (int)syscall(SYS_openat, AT_FDCWD, path, O_WRONLY | O_TRUNC | O_CLOEXEC, 0);
+    if (source < 0)
+        return;
     const char changed[] = "changed during derivation\n";
     (void)syscall(SYS_write, source, changed, sizeof(changed) - 1);
     (void)syscall(SYS_close, source);
@@ -52,9 +54,10 @@ static void mutate_staging_file(const char *path) {
 /** Create a competing output and sentinel immediately before manifest publication. */
 static void create_destination(void) {
     const char *destination = getenv("WITNESS_ICICLE_RACE_DESTINATION");
-    if (destination == NULL || syscall(SYS_mkdir, destination, 0700) != 0) return;
-    const int directory = (int)syscall(SYS_openat, AT_FDCWD, destination,
-                                       O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+    if (destination == NULL || syscall(SYS_mkdir, destination, 0700) != 0)
+        return;
+    const int directory =
+        (int)syscall(SYS_openat, AT_FDCWD, destination, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
     if (directory >= 0) {
         const int sentinel = (int)syscall(SYS_openat, directory, "keep",
                                           O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
@@ -73,14 +76,16 @@ static void create_destination(void) {
 static int original_open(const char *path, int flags, mode_t mode) {
     if (!injected && selected_path(path)) {
         const int access = flags & O_ACCMODE;
-        if (access != O_RDONLY && (flags & (O_CREAT | O_TRUNC)) != 0) ++writes_observed;
+        if (access != O_RDONLY && (flags & (O_CREAT | O_TRUNC)) != 0)
+            ++writes_observed;
         const char *destination = getenv("WITNESS_ICICLE_RACE_DESTINATION");
         if (destination != NULL && access != O_RDONLY) {
             create_destination();
         } else if (access == O_RDONLY) {
             const char *required_text = getenv("WITNESS_ICICLE_RACE_WRITES");
             const int required = required_text == NULL ? 1 : atoi(required_text);
-            if (writes_observed >= required) mutate_staging_file(path);
+            if (writes_observed >= required)
+                mutate_staging_file(path);
         }
     }
     return (int)syscall(SYS_openat, AT_FDCWD, path, flags, mode);

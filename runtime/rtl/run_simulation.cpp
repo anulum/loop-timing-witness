@@ -14,15 +14,19 @@
 /** Execute the native controller and preserve actual RTL events and raw tracking. */
 int main(int argc, char **argv) {
     if (argc < 4) {
-        std::cerr << "usage: run_simulation configuration events.bin tracking_raw.csv [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N]\n";
+        std::cerr
+            << "usage: run_simulation configuration events.bin tracking_raw.csv [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N]\n";
         return 1;
     }
     try {
         const auto options = witness::read_run_options(argc, argv, 4);
-        if (options.power_configuration) throw std::runtime_error("PAC1934 acquisition is physical UIO-only");
-        const auto original = options.metadata ? witness::file_digest(argv[1]) : witness::FileDigest{};
+        if (options.power_configuration)
+            throw std::runtime_error("PAC1934 acquisition is physical UIO-only");
+        const auto original =
+            options.metadata ? witness::file_digest(argv[1]) : witness::FileDigest{};
         const auto configuration = witness::read_configuration(argv[1]);
-        if (options.metadata) witness::verify_digest(argv[1], original);
+        if (options.metadata)
+            witness::verify_digest(argv[1], original);
         const auto policy = witness::apply_host_policy(options);
         witness::Simulation device;
         witness::RunOutput output(argv[2], argv[3]);
@@ -30,14 +34,19 @@ int main(int argc, char **argv) {
         std::vector<witness::ArtifactDigest> artifacts;
         if (options.metadata) {
             witness::verify_digest(argv[1], original);
-            artifacts = {{"configuration", original}, {"events", witness::file_digest(argv[2])},
-                {"tracking_raw", witness::file_digest(argv[3])}};
+            artifacts = {{"configuration", original},
+                         {"events", witness::file_digest(argv[2])},
+                         {"tracking_raw", witness::file_digest(argv[3])}};
         }
-        if (options.metadata) witness::write_run_metadata(options.metadata, configuration, result,
-            witness::read_register(device, 0x6c) != 0, "rtl_simulation", options, policy, artifacts);
+        if (options.metadata)
+            witness::write_run_metadata(options.metadata, configuration, result,
+                                        witness::read_register(device, 0x6c) != 0, "rtl_simulation",
+                                        options, policy, artifacts);
         std::cout << "simulation_only samples=" << result.samples << " records=" << result.records
-            << " misses=" << result.misses << " overflow=" << result.overflow << " safe=" << result.safe << std::endl;
-        if (!std::cout) throw std::runtime_error("cannot write run summary");
+                  << " misses=" << result.misses << " overflow=" << result.overflow
+                  << " safe=" << result.safe << std::endl;
+        if (!std::cout)
+            throw std::runtime_error("cannot write run summary");
         return result.overflow ? 1 : 0;
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

@@ -10,5 +10,6 @@
 
 void witness_amp_exit(void) {
     __asm__ volatile("csrw mie,zero" ::: "memory");
-    for (;;) __asm__ volatile("wfi" ::: "memory");
+    for (;;)
+        __asm__ volatile("wfi" ::: "memory");
 }

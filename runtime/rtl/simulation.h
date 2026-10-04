@@ -41,21 +41,25 @@ class Simulation {
         const bool bus_edge = context.time() % 7 == 0;
         const bool capture_edge = context.time() % 5 == 0;
         const bool rising = bus_edge && !model.bus_clock;
-        const Edge edge{
-            rising && model.awvalid && model.awready,
-            rising && model.wvalid && model.wready,
-            rising && model.arvalid && model.arready,
-            rising && model.bvalid && model.bready,
-            rising && model.rvalid && model.rready,
-            model.rvalid ? model.rresp : model.bresp, model.rdata};
-        if (bus_edge) model.bus_clock = !model.bus_clock;
-        if (capture_edge) model.capture_clock = !model.capture_clock;
-        if (bus_edge || capture_edge) model.eval();
-        if (context.gotFinish()) throw std::runtime_error("RTL ended during transaction");
+        const Edge edge{rising && model.awvalid && model.awready,
+                        rising && model.wvalid && model.wready,
+                        rising && model.arvalid && model.arready,
+                        rising && model.bvalid && model.bready,
+                        rising && model.rvalid && model.rready,
+                        model.rvalid ? model.rresp : model.bresp,
+                        model.rdata};
+        if (bus_edge)
+            model.bus_clock = !model.bus_clock;
+        if (capture_edge)
+            model.capture_clock = !model.capture_clock;
+        if (bus_edge || capture_edge)
+            model.eval();
+        if (context.gotFinish())
+            throw std::runtime_error("RTL ended during transaction");
         return edge;
     }
 
-public:
+  public:
     /** Assert the external common reset and release both actual clock domains. */
     Simulation() {
         model.run_reset_n = 0;
@@ -73,7 +77,8 @@ public:
 
     /** Advance both clocks while the native process has requested idle time. */
     void advance(std::uint64_t nanoseconds) {
-        for (std::uint64_t index = 0; index < nanoseconds; ++index) tick();
+        for (std::uint64_t index = 0; index < nanoseconds; ++index)
+            tick();
     }
 
     /** Read through AR/R channels; return the actual destination AXI response. */
@@ -83,7 +88,8 @@ public:
         model.rready = 1;
         for (std::uint64_t index = 0; index < transaction_limit; ++index) {
             const Edge edge = tick();
-            if (edge.ar) model.arvalid = 0;
+            if (edge.ar)
+                model.arvalid = 0;
             if (edge.r) {
                 model.rready = 0;
                 return edge;
@@ -102,8 +108,10 @@ public:
         model.bready = 1;
         for (std::uint64_t index = 0; index < transaction_limit; ++index) {
             const Edge edge = tick();
-            if (edge.aw) model.awvalid = 0;
-            if (edge.w) model.wvalid = 0;
+            if (edge.aw)
+                model.awvalid = 0;
+            if (edge.w)
+                model.wvalid = 0;
             if (edge.b) {
                 model.bready = 0;
                 return edge;
@@ -114,7 +122,8 @@ public:
 
     /** Advance up to a bounded wait, returning the retained bus-domain IRQ level. */
     bool wait_interrupt(std::uint64_t nanoseconds) {
-        for (std::uint64_t index = 0; index < nanoseconds && !model.interrupt_line; ++index) tick();
+        for (std::uint64_t index = 0; index < nanoseconds && !model.interrupt_line; ++index)
+            tick();
         return model.interrupt_line;
     }
 };

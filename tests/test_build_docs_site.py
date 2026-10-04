@@ -47,6 +47,11 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
     assert (output / "docs/assets/loop-timing-witness.webp").read_bytes() == (
         REPOSITORY_ROOT / "docs/assets/loop-timing-witness.webp"
     ).read_bytes()
+    for name in ("anulum_logo_company.jpg", "anulum_logo.png", "fortis_studio_logo.jpg"):
+        asset = "docs/assets/" + name
+        assert (output / asset).read_bytes() == (REPOSITORY_ROOT / asset).read_bytes()
+        assert f'src="./{asset}"' in landing
+    assert 'aria-label="Loop Timing Witness overview"' in landing
     for page in (
         "api/c/index.html",
         "api/rust/witness_controller/index.html",
@@ -56,6 +61,10 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
     ):
         assert (output / page).stat().st_size > 0
     assert "build_report" in (output / "api/python/loop_timing_witness.html").read_text()
+    package_page = (output / "api/python/loop_timing_witness.html").read_text()
+    assert 'src="../../docs/assets/anulum_logo.png"' in package_page
+    assert 'src="../../docs/assets/anulum_logo_company.jpg"' in package_page
+    assert 'src="../../docs/assets/fortis_studio_logo.jpg"' in package_page
 
 
 def test_existing_output_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

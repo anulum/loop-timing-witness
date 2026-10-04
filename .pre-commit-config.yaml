@@ -22,6 +22,8 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ["--maxkb=256"]
+        # Original brand bytes and attribution are admitted by the provenance guard.
+        exclude: ^docs/assets/(anulum_logo_company\.jpg|anulum_logo\.png)$
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-json
@@ -71,7 +73,19 @@ repos:
         entry: .venv/bin/python tools/preflight.py --only controller-build
         language: system
         pass_filenames: false
-        files: ^(controllers/|benchmarks/|tests/native/|Makefile)
+        files: ^(controllers/|benchmarks/|tests/native/|Makefile$|rust-toolchain\.toml$)
+      - id: source-gates
+        name: maintained source enrolment
+        entry: .venv/bin/python tools/preflight.py --only source-gates
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: native-format
+        name: maintained C and C++ format check
+        entry: .venv/bin/python tools/preflight.py --only native-format
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: measurement-domain
         name: measurement-domain manifest
         entry: .venv/bin/python tools/preflight.py --only measurement-domain

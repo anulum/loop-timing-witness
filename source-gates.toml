@@ -1,0 +1,219 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — maintained source and check enrolment
+
+schema_version = 1
+
+[profiles.python]
+checks = ["ruff-check", "ruff-format", "mypy", "tests"]
+roots = ["src/loop_timing_witness", "tools", "tests"]
+paths = ["conftest.py", "controller_test_support.py"]
+
+[profiles.assembly]
+checks = ["tests"]
+roots = []
+paths = [
+    "runtime/bare_metal/entry.S",
+]
+
+[profiles.c]
+checks = ["controller-build", "controller-tests", "tests", "native-format"]
+roots = []
+paths = [
+    "benchmarks/controller_benchmark.c",
+    "controllers/c/controller_cli.c",
+    "controllers/c/witness_controller.c",
+    "runtime/bare_metal/amp_controller.c",
+    "runtime/bare_metal/amp_exit.c",
+    "runtime/isa/amp_exit.c",
+    "tests/native/amp_boot_delay.c",
+    "tests/native/amp_invalid_hart_main.c",
+    "tests/native/amp_mailbox_fault.c",
+    "tests/native/amp_rust_host_panic.c",
+    "tests/native/amp_rust_profile_runtime.c",
+    "tests/native/amp_rust_profile_trigger.c",
+    "tests/native/amp_rust_snapshot_drift.c",
+    "tests/native/amp_spurious_claim.c",
+    "tests/native/controller_api_test.c",
+    "tests/native/icicle_derivation_race.c",
+]
+
+[profiles.cxx]
+checks = ["tests", "native-format"]
+roots = []
+paths = [
+    "fuzz/controller_fuzz.cpp",
+    "runtime/isa/spike_axi_device.cpp",
+    "runtime/linux/amp_uio_configuration.cpp",
+    "runtime/linux/amp_uio_device.cpp",
+    "runtime/linux/file_digest.cpp",
+    "runtime/linux/pac1934_device.cpp",
+    "runtime/linux/power_configuration.cpp",
+    "runtime/linux/power_journal.cpp",
+    "runtime/linux/run_amp_uio.cpp",
+    "runtime/linux/run_uio.cpp",
+    "runtime/linux/uio_device.cpp",
+    "runtime/linux/uio_transport.cpp",
+    "runtime/rtl/axi_simulator.cpp",
+    "runtime/rtl/run_simulation.cpp",
+    "runtime/run_configuration.cpp",
+    "tests/native/policy_api_test.cpp",
+    "tests/native/power_configuration_api_test.cpp",
+    "tests/native/rtl_counter_saturation.cpp",
+    "tests/native/run_lifecycle_test.cpp",
+]
+
+[profiles.device_tree]
+checks = ["tests"]
+roots = []
+paths = [
+    "tests/platforms/spike_multihart.dts",
+]
+
+[profiles.headers]
+checks = ["controller-build", "tests", "native-format"]
+roots = []
+paths = [
+    "controllers/c/witness_controller.h",
+    "runtime/amp_logger.h",
+    "runtime/bare_metal/amp_contract.h",
+    "runtime/exclusive_output.h",
+    "runtime/isa/spike_amp_transport.h",
+    "runtime/linux/amp_uio_configuration.h",
+    "runtime/linux/amp_uio_device.h",
+    "runtime/linux/file_digest.h",
+    "runtime/linux/pac1934_device.h",
+    "runtime/linux/power_configuration.h",
+    "runtime/linux/power_journal.h",
+    "runtime/linux/run_policy.h",
+    "runtime/linux/uio_device.h",
+    "runtime/process_protocol.h",
+    "runtime/rtl/simulation.h",
+    "runtime/run_configuration.h",
+    "runtime/run_control.h",
+    "runtime/run_metadata.h",
+    "runtime/run_options.h",
+    "runtime/run_output.h",
+    "tests/native/configuration_api.h",
+    "tests/native/metadata_api.h",
+    "tests/native/output_limit.h",
+]
+
+[profiles.linker]
+checks = ["tests"]
+roots = []
+paths = [
+    "runtime/bare_metal/firmware.ld",
+]
+
+[profiles.rtl]
+checks = ["tests"]
+roots = []
+paths = [
+    "rtl/axi_control_witness.sv",
+    "rtl/axi_lite_clock_bridge.sv",
+    "rtl/clock_request_bridge.sv",
+    "rtl/clock_reset_release.sv",
+    "rtl/control_cycle.sv",
+    "rtl/control_event_capture.sv",
+    "rtl/control_io_registers.sv",
+    "rtl/control_plant_witness.sv",
+    "rtl/deadline_monitor.sv",
+    "rtl/event_codes_pkg.sv",
+    "rtl/event_record_capture.sv",
+    "rtl/event_record_fifo.sv",
+    "rtl/event_record_window.sv",
+    "rtl/event_witness.sv",
+    "rtl/fabric_control_witness.sv",
+    "rtl/fault_injector.sv",
+    "rtl/fixed_point_controller.sv",
+    "rtl/fixed_point_math.sv",
+    "rtl/icicle_witness.sv",
+    "rtl/reference_generator.sv",
+    "rtl/retained_interrupt.sv",
+    "rtl/run_configuration_registers.sv",
+    "rtl/run_reset_control.sv",
+    "rtl/sampled_plant.sv",
+    "tests/formal/axi_lite_clock_bridge_proof.sv",
+    "tests/formal/control_io_registers_proof.sv",
+    "tests/formal/fixed_point_math_proof.sv",
+    "tests/formal/run_configuration_registers_proof.sv",
+    "tests/formal/runtime_commit_proof.sv",
+    "tests/rtl/axi_control_witness_tb.sv",
+    "tests/rtl/axi_lite_clock_bridge_tb.sv",
+    "tests/rtl/clock_request_bridge_tb.sv",
+    "tests/rtl/clock_reset_release_tb.sv",
+    "tests/rtl/control_event_capture_tb.sv",
+    "tests/rtl/control_io_registers_tb.sv",
+    "tests/rtl/control_parameters_tb.sv",
+    "tests/rtl/control_plant_witness_tb.sv",
+    "tests/rtl/controller_closed_loop_tb.sv",
+    "tests/rtl/controller_parity_tb.sv",
+    "tests/rtl/deadline_monitor_tb.sv",
+    "tests/rtl/event_capture_tb.sv",
+    "tests/rtl/event_record_fifo_tb.sv",
+    "tests/rtl/event_witness_tb.sv",
+    "tests/rtl/fabric_control_witness_tb.sv",
+    "tests/rtl/fault_injector_tb.sv",
+    "tests/rtl/icicle_witness_tb.sv",
+    "tests/rtl/plant_arithmetic_tb.sv",
+    "tests/rtl/retained_interrupt_tb.sv",
+    "tests/rtl/rtl_counter_saturation.sv",
+]
+
+[profiles.rust]
+checks = ["controller-build", "controller-tests", "tests"]
+roots = []
+paths = [
+    "controllers/rust/src/bin/controller_benchmark.rs",
+    "controllers/rust/src/lib.rs",
+    "controllers/rust/src/main.rs",
+    "controllers/rust/tests/controller_api.rs",
+    "runtime/bare_metal/rust_kernel/src/lib.rs",
+    "tests/native/amp_rust_profile_trigger.rs",
+    "tests/native/amp_rust_reset_client.rs",
+]
+
+[profiles.shell]
+checks = ["tests"]
+roots = []
+paths = [
+    "hardware/icicle/derive_reference.sh",
+    "hardware/icicle/run_reference.sh",
+]
+
+[profiles.tcl]
+checks = ["tests"]
+roots = []
+paths = [
+    "hardware/icicle/LOOP_TIMING_WITNESS.tcl",
+]
+
+[profiles.yosys]
+checks = ["tests"]
+roots = []
+paths = [
+    "rtl/check_control_equivalence.ys",
+    "rtl/check_controller_equivalence.ys",
+    "rtl/check_witness_equivalence.ys",
+    "rtl/check_witness_memory.ys",
+]
+
+[profiles.make]
+checks = ["controller-build", "tests"]
+roots = []
+paths = [
+    "Makefile",
+    "runtime/isa/spike_plugin.mk",
+]
+
+[profiles.doxygen]
+checks = ["controller-build", "documentation", "tests"]
+roots = []
+paths = [
+    "Doxyfile",
+]

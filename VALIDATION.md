@@ -41,7 +41,9 @@ truthfulness of the `architecture_only` state.
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
   is not evidence of board acceptance.
-- Rust 1.99.0 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs;
+- Rust 1.99.0 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs.
+  The repository's `rust-toolchain.toml` pins the compiler, rustfmt and Clippy in relocated checkouts;
+  source enrolment rejects drift between this pin and either maintained crate's Rust version.
   C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
   Tool versions are printed by the jobs. The controller kernels have no third-party native dependencies.
 - Verilator 5.020 (`verilator`), Ubuntu noble package `5.020-1`, builds the native controller
@@ -73,6 +75,33 @@ truthfulness of the `architecture_only` state.
 The lock is regenerated only with the command recorded in its header, followed by a licence review
 of every new or changed package in `development-dependency-licences.json`.
 
+## Native lifecycle profiles
+
+The lifecycle and configuration API tests compile the actual production RTL top and
+strict C controller. GCC coverage includes every compiled maintained C++ source
+and header, with separate notes and counters for each translation unit and plant.
+The fixture excludes Verilator's generated `Vaxi_control_witness` C++ and its
+runtime under `share/verilator` from GCC profiling. Standard-library instrumentation
+and maintained line, branch, throw-branch and function-instance scopes are retained.
+This avoids charging generated model evaluation to the native API profile.
+
+`WITNESS_RTL_COVERAGE=1` separately enables Verilator line coverage of the original
+RTL. `WITNESS_LIFECYCLE_BUILD_ROOT` selects an exclusive native build allocation.
+Compiler and runtime deadlines remain unchanged. These profiles measure software
+execution; they do not qualify physical timing or complete RTL branch coverage.
+
+## Native formatting
+
+Install clang-format 18.1.3; Ubuntu 24.04 uses
+`clang-format-18=1:18.1.3-1ubuntu1`. Run
+`.venv/bin/python tools/preflight.py --only native-format`.
+`WITNESS_CLANG_FORMAT` or the formatter command's `--formatter` option can select an
+existing private installation. The reported version must match the pin. The
+command checks every enrolled C/C++ source and header against the explicit
+`.clang-format` file without changing source bytes. Unenrolled or missing source
+fails before formatting. The same check runs in the local hook and static CI;
+its dedicated tests invoke the real formatter on the original complete cohort.
+
 ## Local gates
 
 `python tools/preflight.py` runs every gate below in order and fails if any gate fails or its tool
@@ -82,16 +111,20 @@ is missing; `--only NAME` runs one gate and `--list` prints the plan.
 |---|---|---|
 | `ruff-check` | `ruff check .` | every Python file; all rule groups enabled, exclusions listed with reasons in `pyproject.toml` |
 | `ruff-format` | `ruff format --check .` | every Python file |
-| `mypy` | `mypy` | `tools/`, `tests/`, `conftest.py` and native build support in strict mode |
+| `mypy` | `mypy` | `src/`, `tools/`, `tests/`, `conftest.py` and native build support in strict mode |
 | `controller-build` | `make controller-build` | strict C build, Rust format/Clippy, dependency-free release build and native API documentation |
 | `controller-tests` | `make controller-tests` | public C APIs under undefined-behaviour sanitization and Rust public state/refusal tests |
+| `controller-fuzz` | `make controller-fuzz` | bounded public C API sequences under ASan/UBSan; retained engine log, corpus and crash inputs, with reproducible controlled defects in the test suite |
+| Rust source and instance coverage | `.venv/bin/pytest -q tests/test_amp_rust_branch_coverage.py` | actual C API/CLI, core tests, host panic and a separate Rust consumer of the same release library; complete measured lines, regions, functions, branches and instances of both production Rust sources and the consumer, with strict Rust compilation, rustfmt and Clippy |
 | Rust AMP image | `.venv/bin/pytest -q tests/test_amp_rust_image.py` | actual public preparation, strict original RV64 C/assembly and Rust compilation, linking, metadata/final dependency reconciliation, immutable image receipt and offline captured-byte admission; requires dtc, RV64 GCC and the RV64IMAC Rust target |
 | Rust toolchain custody | `.venv/bin/pytest -q tests/test_amp_rust_toolchain.py` | actual Rustup proxy/compiler identity and owned real-compiler toolchain refusal when Cargo or RV64 core libraries are missing; requires Rustup and an installed RV64IMAC target |
 | Rust original source custody | `.venv/bin/pytest -q tests/test_amp_rust_sources.py` | actual Rust metadata/final dependency records, archive admission, captured source/library bytes and refusal of missing or escaping original source paths; requires the installed RV64IMAC Rust target |
 | Rust AMP panic refusal | `.venv/bin/pytest -q tests/test_amp_rust_panic.py` | source-bound fault image exercises the original Rust panic handler and terminal `0x109` refusal through public capture on both mechanical and thermal production plants; requires the CI AMP image, Spike, plugins, RV64 GCC and RV64IMAC Rust target |
 | Rust package consumer | `.venv/bin/pytest -q tests/test_rust_package_consumer.py` | real Cargo archive extraction, separate dependency client, state/refusal tests, strict Clippy, allocator-free WebAssembly and RV64IMAC builds, and actual RISC-V ELF64 soft-float object checks; requires both installed Rust targets |
 | Icicle reference derivation | `.venv/bin/pytest -q tests/test_icicle_reference_derivation.py` | fetches the pinned official reference commit unless `WITNESS_ICICLE_REFERENCE` names a clean local checkout; exercises the public derivation, complete reference-tree receipt, copied RTL hashes and pre-Libero refusal paths; place pytest's base temporary directory on the repository disk |
-| `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `tools/` and native build support, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
+| `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `src/loop_timing_witness`, `tools/` and native build support, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
+| `source-gates` | `python tools/check_source_gates.py` | tracked and new non-ignored Python/native sources are enrolled in actual gates; Python lint, strict typing and statement/branch coverage scopes match configuration |
+| `native-format` | `python tools/check_native_format.py` | complete enrolled C/C++ and header candidate; clang-format 18.1.3 and the explicit repository style, with missing tool, omitted source and formatting drift refused |
 | `measurement-domain` | `python tools/validate_measurement_domain.py` | repeated-key rejection, JSON Schema, cross-field rules, and — where the canonical project registry is present — group and project identity |
 | `capability-inventory` | `python tools/generate_capability_inventory.py --check` | committed inventory byte-identical to a fresh generation from a valid manifest |
 | `provenance-headers` | `python tools/check_provenance_headers.py` | seven-line provenance header in every publishable file with a comment syntax; Markdown header inside an HTML comment with rendered content after it |
@@ -104,9 +137,28 @@ is missing; `--only NAME` runs one gate and `--list` prints the plan.
 | `typos` | `typos` | every file except the lock, the licence record and the licence texts |
 | `secrets` | `gitleaks dir` on a copy of the publishable files | tracked and non-ignored untracked files |
 
-Dependency vulnerabilities are checked with
-`pip-audit --require-hashes --disable-pip -r requirements-dev.txt` (`make security`); it needs
-network access to the vulnerability database and is therefore not part of the offline preflight.
+`source-gates.toml` lists native paths individually and the Python roots already covered by the
+static and test commands. A new native source or a Python package outside those roots is refused
+until its checks are enrolled. Catalogue acceptance establishes path and command membership;
+compilation, native coverage and hardware validation still require their own evidence. The
+original brand images are byte-bound by the provenance guard and retain adjacent attribution.
+Only the two registered originals above 256 KiB are exempt from the generic file-size hook.
+
+The Rust profile collector includes every C, Rust test, panic and public-client binary. The
+executed Rust client's map precedes unused cross-language records for the same library
+functions; the original object and profile set remains complete. Its state-reset consumer
+checks nonzero integral/derivative state, complete clearing and the first measurement after
+reset. The compiler emits no branch regions for that consumer; its measured lines, regions,
+function and instance must still be fully executed.
+
+Dependency vulnerabilities are checked for both hashed Python locks with
+`pip-audit --require-hashes --disable-pip -r requirements-dev.txt` and the corresponding
+`requirements-runtime.txt` command. Both Cargo locks are checked with `cargo audit --file`
+and cargo-audit 0.22.2, installed with `cargo install cargo-audit --version 0.22.2 --locked`.
+`make security` runs the same four lock audits. Registry or advisory database failures
+fail the audit; these network checks are separate from the offline preflight. The workflow
+policy guard binds all maintained locks to exact unconditional commands and the required
+CI security call. New lock ecosystems require an explicit audit before admission.
 
 ## Fabric simulation and synthesis
 
@@ -164,12 +216,14 @@ Every action is pinned to a verified commit object.
 
 | Workflow | Purpose | Category |
 |---|---|---|
-| `ci.yml` | coordinator: calls the two reusable workflows and holds the one required gate | coordinator and required gate |
+| `ci.yml` | coordinator: calls the three reusable workflows and holds the one required gate | coordinator and required gate |
 | `reusable-static-policy.yml` | lint, format, typing, manifest, inventory, headers, licences, workflow policy | static analysis and policy |
 | `reusable-tests.yml` | tests with 100 % statement and branch coverage | unit and component quality |
 | `pre-commit.yml` | every pre-commit stage hook on all files | static analysis and policy |
 | `codeql.yml` | code scanning of C, Rust, Python and the workflow definitions | security and supply chain |
-| `security-audit.yml` | secret scan of the full history, vulnerability audit, licence guard, REUSE, actionlint, zizmor | security and supply chain |
+| `security-audit.yml` | invokes the shared security audit on push, pull request, schedule and manual dispatch | security and supply chain |
+| `reusable-security-audit.yml` | full-history secret scan, all lock audits, licences, REUSE, actionlint and zizmor; a dependency of the required CI gate | security and supply chain |
+| `controller-fuzz.yml` | bounded sanitizer campaigns on push, pull request and schedule; retains crash inputs and saves corpus only after clean main runs | security and supply chain |
 | `scorecard.yml` | OpenSSF Scorecard analysis and public project-bound results | security and supply chain |
 | `sbom.yml` | CycloneDX inventory of the development lock, kept as a 30-day artefact | security and supply chain |
 | `docs.yml` | strict source, Python, C/C++ and Rust API build; Pages deploys only verified main builds | documentation |

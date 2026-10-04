@@ -30,7 +30,8 @@ static int original_open(const char *path, int flags, mode_t mode) {
                 if (marker != NULL) {
                     int receipt = (int)syscall(SYS_openat, AT_FDCWD, marker,
                                                O_WRONLY | O_CREAT | O_EXCL, 0600);
-                    if (receipt >= 0) (void)syscall(SYS_close, receipt);
+                    if (receipt >= 0)
+                        (void)syscall(SYS_close, receipt);
                 }
             }
         }

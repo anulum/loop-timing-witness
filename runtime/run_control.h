@@ -18,10 +18,16 @@
 
 namespace witness {
 /** Optional real acquisition lifecycle, checked between controller iterations. */
-struct RunHooks { std::function<void()> start, check, finish; };
+struct RunHooks {
+    std::function<void()> start, check, finish;
+};
 
 /** Observed counts, independent of planned cycle count or controller output. */
-struct RunResult { std::uint64_t samples = 0, records = 0; std::uint32_t misses = 0, overflow = 0; bool safe = false; };
+struct RunResult {
+    std::uint64_t samples = 0, records = 0;
+    std::uint32_t misses = 0, overflow = 0;
+    bool safe = false;
+};
 
 /** Preserve signed raw word bits without out-of-range arithmetic conversion. */
 inline std::int32_t signed_word(std::uint32_t value) {
@@ -31,28 +37,33 @@ inline std::int32_t signed_word(std::uint32_t value) {
 }
 
 /** Use the actual decoder response; hardware UIO accesses may instead bus-fault. */
-template<class Device> std::uint32_t read_register(Device &device, std::uint8_t address) {
+template <class Device> std::uint32_t read_register(Device &device, std::uint8_t address) {
     const auto result = device.read(address);
-    if (result.response != 0) throw std::runtime_error("register read refused at " + std::to_string(address));
+    if (result.response != 0)
+        throw std::runtime_error("register read refused at " + std::to_string(address));
     return result.data;
 }
 
 /** Full-word register submission through the selected in-process transport. */
-template<class Device> void write_register(Device &device, std::uint8_t address, std::uint32_t value) {
+template <class Device>
+void write_register(Device &device, std::uint8_t address, std::uint32_t value) {
     if (device.write(address, value, 15).response != 0)
         throw std::runtime_error("register write refused at " + std::to_string(address));
 }
 
 /** Reset only an idle/finished run, poll real release readiness, then configure. */
-template<class Device> void configure_run(Device &device, const RunConfiguration &configuration) {
+template <class Device> void configure_run(Device &device, const RunConfiguration &configuration) {
     validate_configuration(configuration);
-    if (!(read_register(device, 0x98) & 8)) throw std::runtime_error("cannot reset an active run");
-    if ((read_register(device, 0x90) & 7) != 4) throw std::runtime_error("unread previous run records prevent reset");
+    if (!(read_register(device, 0x98) & 8))
+        throw std::runtime_error("cannot reset an active run");
+    if ((read_register(device, 0x90) & 7) != 4)
+        throw std::runtime_error("unread previous run records prevent reset");
     write_register(device, 0x98, 0);
     write_register(device, 0x98, 1);
     const auto start = device.time();
     while ((read_register(device, 0x98) & 7) != 7)
-        if (device.time() - start > 1000000000) throw std::runtime_error("run bank release timed out");
+        if (device.time() - start > 1000000000)
+            throw std::runtime_error("run bank release timed out");
     if (read_register(device, 0x7c) != 1 || read_register(device, 0x78) != 24 ||
         read_register(device, 0x40) != configuration.period_ticks)
         throw std::runtime_error("compiled register ABI, Q format or period mismatch");
@@ -71,7 +82,7 @@ template<class Device> void configure_run(Device &device, const RunConfiguration
 }
 
 /** Drain at most eight held records before returning to IRQ service. */
-template<class Device> void drain_available(Device &device, RunOutput &output, RunResult &result) {
+template <class Device> void drain_available(Device &device, RunOutput &output, RunResult &result) {
     for (unsigned batch = 0; batch < 8 && (read_register(device, 0x90) & 1); ++batch) {
         std::array<std::uint32_t, 4> words{};
         for (unsigned index = 0; index < 4; ++index)
@@ -83,9 +94,10 @@ template<class Device> void drain_available(Device &device, RunOutput &output, R
 }
 
 /** Handle one actual sample with the native kernel and an independently safe commit. */
-template<class Device> void control_sample(Device &device, const RunConfiguration &configuration,
-    witness_pid_state &state, RunOutput &output, RunResult &result, std::uint64_t generation,
-    std::uint32_t &previous_cycle, bool &have_previous) {
+template <class Device>
+void control_sample(Device &device, const RunConfiguration &configuration, witness_pid_state &state,
+                    RunOutput &output, RunResult &result, std::uint64_t generation,
+                    std::uint32_t &previous_cycle, bool &have_previous) {
     const auto position = signed_word(read_register(device, 0));
     const auto cycle = read_register(device, 0x10);
     const auto velocity = signed_word(read_register(device, 0x14));
@@ -97,10 +109,13 @@ template<class Device> void control_sample(Device &device, const RunConfiguratio
     previous_cycle = cycle;
     have_previous = true;
     witness_command command{};
-    const bool computed = configuration.lqr ?
-        witness_lqr_step(&configuration.coefficients, cycle, reference, position, velocity, &command) :
-        witness_pid_step(&configuration.coefficients, &state, cycle, reference, position, &command);
-    if (!computed) throw std::runtime_error("native controller refused validated coefficients");
+    const bool computed = configuration.lqr
+                              ? witness_lqr_step(&configuration.coefficients, cycle, reference,
+                                                 position, velocity, &command)
+                              : witness_pid_step(&configuration.coefficients, &state, cycle,
+                                                 reference, position, &command);
+    if (!computed)
+        throw std::runtime_error("native controller refused validated coefficients");
     std::uint64_t work = 0;
     if (read_register(device, 0x68) & 4) {
         volatile std::uint64_t accumulator = 0;
@@ -123,41 +138,53 @@ template<class Device> void control_sample(Device &device, const RunConfiguratio
 }
 
 /** Run configuration through final producer quiescence, receiver drain and real statistics. */
-template<class Device> RunResult execute_run(Device &device, const RunConfiguration &configuration, RunOutput &output, const RunHooks *hooks = nullptr) {
+template <class Device>
+RunResult execute_run(Device &device, const RunConfiguration &configuration, RunOutput &output,
+                      const RunHooks *hooks = nullptr) {
     configure_run(device, configuration);
     witness_pid_state state{};
     witness_pid_reset(&state);
     RunResult result;
     std::uint32_t previous_cycle = 0;
     bool have_previous = false, finished = false;
-    const auto run_limit = static_cast<std::uint64_t>(configuration.period_ticks) * 10 * configuration.cycles + 1000000000;
-    if (hooks) hooks->start();
+    const auto run_limit =
+        static_cast<std::uint64_t>(configuration.period_ticks) * 10 * configuration.cycles +
+        1000000000;
+    if (hooks)
+        hooks->start();
     write_register(device, 0x38, 1);
     const auto run_start = device.time();
     while (!finished) {
-        if (hooks) hooks->check();
+        if (hooks)
+            hooks->check();
         if (device.wait_interrupt(1000000)) {
             const std::uint64_t low = read_register(device, 0x9c);
-            const auto generation = low | (static_cast<std::uint64_t>(read_register(device, 0xa0)) << 32);
+            const auto generation =
+                low | (static_cast<std::uint64_t>(read_register(device, 0xa0)) << 32);
             const auto status = read_register(device, 4);
             finished = (status & 4) != 0;
             if (!finished && !(status & 8))
-                control_sample(device, configuration, state, output, result, generation, previous_cycle, have_previous);
+                control_sample(device, configuration, state, output, result, generation,
+                               previous_cycle, have_previous);
             write_register(device, 0xa4, 1);
         }
-        if (device.time() - run_start > run_limit) throw std::runtime_error("configured run completion timed out");
+        if (device.time() - run_start > run_limit)
+            throw std::runtime_error("configured run completion timed out");
         drain_available(device, output, result);
     }
     const auto drain_start = device.time();
     while (!(read_register(device, 0x90) & 8)) {
-        if (hooks) hooks->check();
+        if (hooks)
+            hooks->check();
         drain_available(device, output, result);
-        if (device.time() - drain_start > 1000000000) throw std::runtime_error("final record drain timed out");
+        if (device.time() - drain_start > 1000000000)
+            throw std::runtime_error("final record drain timed out");
     }
     result.misses = read_register(device, 0x34);
     result.overflow = read_register(device, 0x30);
     result.safe = (read_register(device, 4) & 8) != 0;
-    if (hooks) hooks->finish();
+    if (hooks)
+        hooks->finish();
     output.finish();
     return result;
 }

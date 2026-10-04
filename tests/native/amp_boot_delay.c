@@ -15,6 +15,7 @@ void __wrap_witness_amp_main(void);
 
 void __wrap_witness_amp_main(void) {
     volatile uint32_t progress = 0;
-    for (uint32_t index = 0; index < 5000; ++index) progress = progress + 1;
+    for (uint32_t index = 0; index < 5000; ++index)
+        progress = progress + 1;
     __real_witness_amp_main();
 }

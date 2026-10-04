@@ -18,7 +18,11 @@
 
 namespace witness {
 /** Operator-supplied rail mapping and unsigned-channel shunt contract. */
-struct PowerRail { std::string name, label; unsigned channel; std::uint32_t shunt_microohms; };
+struct PowerRail {
+    std::string name, label;
+    unsigned channel;
+    std::uint32_t shunt_microohms;
+};
 /** Explicit kernel/interface identity, polling bounds and separate logging CPU. */
 struct PowerConfiguration {
     std::string device, kernel_release;

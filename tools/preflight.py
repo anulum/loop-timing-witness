@@ -294,6 +294,8 @@ def build_plan(root: Path) -> list[Gate]:
                 "--cov-fail-under=100",
             ],
         ),
+        command("source-gates", [python, "tools/check_source_gates.py"]),
+        command("native-format", [python, "tools/check_native_format.py"]),
         command("measurement-domain", validator),
         command(
             "capability-inventory", [python, "tools/generate_capability_inventory.py", "--check"]

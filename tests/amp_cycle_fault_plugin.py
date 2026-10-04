@@ -59,7 +59,8 @@ def cycle_fault_source(directory: Path, fault: CycleFault) -> Path:
         anchor = '"' + original_include + '"'
         assert source.count(anchor) == 1
         source = source.replace(anchor, '"' + replacement + '"')
-    original = """        if (reply.response != 0) return false;
+    original = """        if (reply.response != 0)
+            return false;
         for (unsigned index = 0; index < 4; ++index)
             bytes[index] = static_cast<std::uint8_t>(reply.data >> (index * 8));"""
     assert source.count(original) == 1

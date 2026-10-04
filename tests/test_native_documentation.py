@@ -87,3 +87,53 @@ def test_actual_native_reference_includes_members_and_enum_values() -> None:
     assert "Terminal refusal" in rendered
     assert (native / "rust/doc/witness_controller/struct.Command.html").is_file()
     assert (native / "rust/doc/witness_amp_rust_kernel/index.html").is_file()
+
+
+def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) -> None:
+    """Both real crate references build outside the checkout's local Rust override."""
+    captured = tmp_path / "captured"
+    captured.mkdir()
+    shutil.copyfile(REPOSITORY_ROOT / "rust-toolchain.toml", captured / "rust-toolchain.toml")
+    for relative in ["controllers/rust", "runtime/bare_metal/rust_kernel"]:
+        shutil.copytree(
+            REPOSITORY_ROOT / relative,
+            captured / relative,
+            ignore=shutil.ignore_patterns("target"),
+        )
+    environment = {key: value for key, value in os.environ.items() if key != "RUSTUP_TOOLCHAIN"}
+    environment["RUSTDOCFLAGS"] = "-D warnings -D rustdoc::broken_intra_doc_links"
+    version = subprocess.run(
+        ["rustc", "--version"],
+        cwd=captured,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert version.returncode == 0, version.stdout + version.stderr
+    assert version.stdout.startswith("rustc 1.99.0 ")
+    for relative in ["controllers/rust", "runtime/bare_metal/rust_kernel"]:
+        result = subprocess.run(
+            [
+                "cargo",
+                "doc",
+                "--offline",
+                "--locked",
+                "--no-deps",
+                "--manifest-path",
+                str(captured / relative / "Cargo.toml"),
+                "--target-dir",
+                str(captured / "native-api/rust"),
+            ],
+            cwd=captured,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+    reference = captured / "native-api/rust/doc"
+    assert (reference / "witness_controller/struct.Command.html").is_file()
+    assert (reference / "witness_amp_rust_kernel/index.html").is_file()

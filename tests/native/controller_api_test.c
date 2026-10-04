@@ -26,14 +26,14 @@ static void refusal(witness_coefficients coefficients) {
 
 /** Exercise actual integral dynamics, reset and every invalid coefficient boundary. */
 int main(void) {
-    const witness_coefficients valid = {0, SCALE, 0, 0, SCALE, SCALE, SCALE,
-                                        -SCALE, SCALE, -10 * SCALE, 10 * SCALE};
+    const witness_coefficients valid = {0,     SCALE,  0,     0,           SCALE,     SCALE,
+                                        SCALE, -SCALE, SCALE, -10 * SCALE, 10 * SCALE};
     witness_pid_state state;
     witness_pid_reset(&state);
     witness_command command;
     assert(witness_pid_step(&valid, &state, 0, 2 * SCALE, 0, &command));
-    assert(command.command == SCALE && command.integral == 2 * SCALE &&
-           command.clipped && !command.integral_held);
+    assert(command.command == SCALE && command.integral == 2 * SCALE && command.clipped &&
+           !command.integral_held);
     assert(witness_pid_step(&valid, &state, 1, 2 * SCALE, 0, &command));
     assert(command.integral == 2 * SCALE && command.integral_held);
     assert(witness_pid_step(&valid, &state, 2, -2 * SCALE, 0, &command));
@@ -41,16 +41,40 @@ int main(void) {
     witness_pid_reset(&state);
     assert(!state.initialized && !state.integral && !state.derivative && !state.previous_position);
     witness_coefficients invalid;
-    invalid = valid; invalid.output_min = 1; refusal(invalid);
-    invalid = valid; invalid.output_max = -1; refusal(invalid);
-    invalid = valid; invalid.output_min = 1; invalid.output_max = 0; refusal(invalid);
-    invalid = valid; invalid.integral_min = 1; invalid.integral_max = 0; refusal(invalid);
-    invalid = valid; invalid.integral_min = 1; refusal(invalid);
-    invalid = valid; invalid.integral_max = -1; refusal(invalid);
-    invalid = valid; invalid.kp = -1; refusal(invalid);
-    invalid = valid; invalid.ki_period = -1; refusal(invalid);
-    invalid = valid; invalid.derivative_decay = -1; refusal(invalid);
-    invalid = valid; invalid.derivative_decay = SCALE + 1; refusal(invalid);
-    invalid = valid; invalid.derivative_gain = -1; refusal(invalid);
+    invalid = valid;
+    invalid.output_min = 1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.output_max = -1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.output_min = 1;
+    invalid.output_max = 0;
+    refusal(invalid);
+    invalid = valid;
+    invalid.integral_min = 1;
+    invalid.integral_max = 0;
+    refusal(invalid);
+    invalid = valid;
+    invalid.integral_min = 1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.integral_max = -1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.kp = -1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.ki_period = -1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.derivative_decay = -1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.derivative_decay = SCALE + 1;
+    refusal(invalid);
+    invalid = valid;
+    invalid.derivative_gain = -1;
+    refusal(invalid);
     return 0;
 }

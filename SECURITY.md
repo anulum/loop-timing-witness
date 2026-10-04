@@ -73,14 +73,20 @@ even though its successful hardware paths are unqualified.
   no persisted checkout credentials, bounded timeouts and no privileged triggers.
 - Secret scanning runs on the publishable files locally and on the complete history in the
   security-audit workflow; a private-key hook runs before each commit.
+- A bounded coverage-guided campaign (LibFuzzer with AddressSanitizer and
+  UndefinedBehaviorSanitizer) exercises the four public C controller functions on each push and
+  pull request and once a day; the engine log and every crash input are kept as workflow
+  artefacts. Tests rebuild the target against four deliberately incorrect copies of the
+  controller and require the engine to find, retain and reproduce each defect.
 - The threat model, including the controls planned for the instrument, is in
   [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
 
 ## Non-claims
 
-This policy is not a certification. The repository has had no external security review, no
-fuzzing campaign and no reported vulnerability. The simulated safe-state logic is a measurement
-feature for an emulated plant and is not a safety function for physical machinery.
+This policy is not a certification. The repository has had no external security review and no
+reported vulnerability. Fuzzing covers the public C controller API only; the Rust controller, the
+runtimes, the RTL and the Python tools are not fuzzed. The simulated safe-state logic is a
+measurement feature for an emulated plant and is not a safety function for physical machinery.
 
 Source release verification and portable signature commands are documented in
 [Source release signatures](docs/SOURCE_RELEASE_SIGNATURES.md). Signing covers

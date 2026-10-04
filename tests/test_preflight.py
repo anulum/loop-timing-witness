@@ -49,6 +49,8 @@ PLAN = [
     "controller-build",
     "controller-tests",
     "tests",
+    "source-gates",
+    "native-format",
     "measurement-domain",
     "capability-inventory",
     "provenance-headers",

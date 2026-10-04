@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,16 @@ def tree(tmp_path: Path) -> Path:
     root = tmp_path / "repository"
     shutil.copytree(REPOSITORY_ROOT / WORKFLOWS, root / WORKFLOWS)
     shutil.copyfile(REPOSITORY_ROOT / INVENTORY, root / INVENTORY)
+    for name in (
+        "controllers/rust/Cargo.lock",
+        "runtime/bare_metal/rust_kernel/Cargo.lock",
+        "requirements-dev.txt",
+        "requirements-runtime.txt",
+    ):
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPOSITORY_ROOT / name, target)
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
     return root
 
 
@@ -336,7 +347,7 @@ def test_coordinator_contract(tree: Path) -> None:
         "    uses: ./.github/workflows/reusable-tests.yml\n",
         "    uses: other/repository/.github/workflows/tests.yml@main\n",
     )
-    edit(tree, "ci.yml", "    needs: [static-policy, tests]\n", "    needs: [tests]\n")
+    edit(tree, "ci.yml", "    needs: [static-policy, tests, security]\n", "    needs: [tests]\n")
     edit(tree, "ci.yml", "    if: always()\n", "    if: success()\n")
     edit(tree, "ci.yml", "              exit 1\n", "              true\n")
     assert audit(tree) == [
@@ -348,8 +359,9 @@ def test_coordinator_contract(tree: Path) -> None:
         "ci.yml: unexpected top-level keys ['env']",
         "ci.yml: job tests is not a local reusable call",
         (
-            "ci.yml: calls ['reusable-static-policy.yml'] differ from declared reusables "
-            "['reusable-static-policy.yml', 'reusable-tests.yml']"
+            "ci.yml: calls ['reusable-security-audit.yml', 'reusable-static-policy.yml'] "
+            "differ from declared reusables "
+            "['reusable-security-audit.yml', 'reusable-static-policy.yml', 'reusable-tests.yml']"
         ),
         "ci.yml: gate must need every reusable call exactly once",
         "ci.yml: gate must run with if: always()",
@@ -361,7 +373,7 @@ def test_coordinator_without_gate_or_jobs(tree: Path) -> None:
     """A missing gate is reported; a coordinator without a jobs mapping stops after its shape."""
     edit(tree, "ci.yml", "  gate:\n", "  final:\n")
     document = inventory(tree)
-    document["workflows"][0]["jobs"] = ["final", "static-policy", "tests"]
+    document["workflows"][0]["jobs"] = ["final", "security", "static-policy", "tests"]
     save(tree, document)
     findings = audit(tree)
     assert "ci.yml: job final is not a local reusable call" in findings
@@ -379,8 +391,10 @@ def test_gate_with_malformed_steps_and_non_mapping_call(tree: Path) -> None:
         "name: CI\non:\n  push:\npermissions: {}\nconcurrency:\n  group: g\njobs:\n"
         "  static-policy: text\n"
         "  tests:\n    uses: ./.github/workflows/reusable-tests.yml\n    permissions: {}\n"
+        "  security:\n    uses: ./.github/workflows/reusable-security-audit.yml\n"
+        "    permissions: {}\n"
         "  gate:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n"
-        "    needs: [static-policy, tests]\n"
+        "    needs: [static-policy, tests, security]\n"
         "    if: always()\n    permissions: {}\n    steps: [text]\n",
         encoding="utf-8",
     )
@@ -389,8 +403,9 @@ def test_gate_with_malformed_steps_and_non_mapping_call(tree: Path) -> None:
         "ci.yml: coverage caller must use the exact reusable and permission ceiling",
         "ci.yml: job static-policy is not a local reusable call",
         (
-            "ci.yml: calls ['reusable-tests.yml'] differ from declared reusables "
-            "['reusable-static-policy.yml', 'reusable-tests.yml']"
+            "ci.yml: calls ['reusable-security-audit.yml', 'reusable-tests.yml'] "
+            "differ from declared reusables "
+            "['reusable-security-audit.yml', 'reusable-static-policy.yml', 'reusable-tests.yml']"
         ),
         "ci.yml: gate must fail on any non-success result",
     ]

@@ -19,10 +19,11 @@
 #endif
 
 /** Require the actual production API to reject a real transport state precisely. */
-template<class Operation> void refusal(Operation operation, const char *message) {
+template <class Operation> void refusal(Operation operation, const char *message) {
     bool rejected = false;
-    try { operation(); }
-    catch (const std::runtime_error &error) {
+    try {
+        operation();
+    } catch (const std::runtime_error &error) {
         rejected = true;
         assert(std::string(error.what()) == message);
     }
@@ -41,15 +42,18 @@ void boundary_commit(witness::Simulation &device, const witness::RunConfiguratio
     assert(device.wait_interrupt(1000000));
     const auto ready = device.time();
     const std::uint64_t low = witness::read_register(device, 0x9c);
-    const auto generation = low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
-    device.advance(static_cast<std::uint64_t>(configuration.period_ticks) * 10 - 1250 - (device.time() - ready));
+    const auto generation =
+        low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
+    device.advance(static_cast<std::uint64_t>(configuration.period_ticks) * 10 - 1250 -
+                   (device.time() - ready));
     witness::RunOutput output(events, tracking);
     witness_pid_state state{};
     witness_pid_reset(&state);
     witness::RunResult result;
     std::uint32_t previous = 0;
     bool observed = false;
-    witness::control_sample(device, configuration, state, output, result, generation, previous, observed);
+    witness::control_sample(device, configuration, state, output, result, generation, previous,
+                            observed);
     assert(result.samples == 1 && observed && previous == 0);
     assert(witness::read_register(device, 4) & 4);
     while (!(witness::read_register(device, 0x90) & 8))
@@ -63,22 +67,24 @@ void timed_out_run(witness::Simulation &device, const witness::RunConfiguration 
                    const std::string &scenario, const char *events, const char *tracking) {
     witness::RunOutput output(events, tracking);
     unsigned starts = 0, checks = 0, finishes = 0;
-    const auto limit = static_cast<std::uint64_t>(configuration.period_ticks) * 10 *
-        configuration.cycles + 1000000000;
-    const witness::RunHooks hooks{
-        [&] { ++starts; },
-        [&] {
-            ++checks;
-            if (scenario == "run_timeout" && checks == 1) device.advance(limit + 1);
-            if (scenario == "final_drain_timeout" && checks == 3) {
-                assert(witness::read_register(device, 4) & 4);
-                assert(!(witness::read_register(device, 0x90) & 8));
-                device.advance(1000000001);
-            }
-        },
-        [&] { ++finishes; }};
+    const auto limit =
+        static_cast<std::uint64_t>(configuration.period_ticks) * 10 * configuration.cycles +
+        1000000000;
+    const witness::RunHooks hooks{[&] { ++starts; },
+                                  [&] {
+                                      ++checks;
+                                      if (scenario == "run_timeout" && checks == 1)
+                                          device.advance(limit + 1);
+                                      if (scenario == "final_drain_timeout" && checks == 3) {
+                                          assert(witness::read_register(device, 4) & 4);
+                                          assert(!(witness::read_register(device, 0x90) & 8));
+                                          device.advance(1000000001);
+                                      }
+                                  },
+                                  [&] { ++finishes; }};
     refusal([&] { witness::execute_run(device, configuration, output, &hooks); },
-        scenario == "run_timeout" ? "configured run completion timed out" : "final record drain timed out");
+            scenario == "run_timeout" ? "configured run completion timed out"
+                                      : "final record drain timed out");
     assert(starts == 1 && finishes == 0);
     assert(checks == (scenario == "run_timeout" ? 1U : 3U));
     assert(witness::read_register(device, 4) & 4);
@@ -98,7 +104,8 @@ void sample_refusal(witness::Simulation &device, witness::RunConfiguration confi
         assert((witness::read_register(device, 4) & 12) == 0);
     }
     const std::uint64_t low = witness::read_register(device, 0x9c);
-    const auto generation = low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
+    const auto generation =
+        low | (static_cast<std::uint64_t>(witness::read_register(device, 0xa0)) << 32);
     witness::RunOutput output(events, tracking);
     witness_pid_state state{};
     witness_pid_reset(&state);
@@ -106,7 +113,8 @@ void sample_refusal(witness::Simulation &device, witness::RunConfiguration confi
     std::uint32_t previous = 0;
     bool observed = false;
     const auto sample = [&] {
-        witness::control_sample(device, configuration, state, output, result, generation, previous, observed);
+        witness::control_sample(device, configuration, state, output, result, generation, previous,
+                                observed);
     };
     if (scenario == "unstarted") {
         refusal(sample, "register read refused at 0");
@@ -149,16 +157,21 @@ void closed_output(witness::RunOutput &output, const char *events, const char *t
     binary.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     assert(binary.gcount() == 16);
     const auto copy_path = std::string(events) + ".copy";
-    witness::ExclusiveOutput copy(copy_path.c_str(), witness::OutputFormat::binary, "cannot create event copy");
+    witness::ExclusiveOutput copy(copy_path.c_str(), witness::OutputFormat::binary,
+                                  "cannot create event copy");
     assert(copy.is_open());
-    assert(std::fwrite(bytes.data(), 1, bytes.size(), copy.stream("event copy is closed")) == bytes.size());
+    assert(std::fwrite(bytes.data(), 1, bytes.size(), copy.stream("event copy is closed")) ==
+           bytes.size());
     assert(copy.close("event copy is closed") == 0);
     assert(!copy.is_open());
     refusal([&] { copy.close("event copy is closed"); }, "event copy is closed");
     refusal([&] { copy.stream("event copy is closed"); }, "event copy is closed");
-    refusal([&] {
-        witness::ExclusiveOutput existing(copy_path.c_str(), witness::OutputFormat::binary, "cannot create event copy");
-    }, "cannot create event copy");
+    refusal(
+        [&] {
+            witness::ExclusiveOutput existing(copy_path.c_str(), witness::OutputFormat::binary,
+                                              "cannot create event copy");
+        },
+        "cannot create event copy");
     std::array<std::uint32_t, 4> words{};
     for (std::size_t word = 0; word < 4; ++word)
         for (unsigned byte = 0; byte < 4; ++byte)
@@ -174,32 +187,42 @@ void closed_output(witness::RunOutput &output, const char *events, const char *t
     std::int32_t reference = 0, position = 0, velocity = 0;
     unsigned clipped = 0, held = 0, submitted = 0;
     std::uint64_t ticks = 0, generation = 0, work = 0;
-    fields >> command.cycle >> reference >> position >> velocity >> command.command >> command.integral
-           >> command.derivative >> clipped >> held >> submitted >> ticks >> generation >> work;
+    fields >> command.cycle >> reference >> position >> velocity >> command.command >>
+        command.integral >> command.derivative >> clipped >> held >> submitted >> ticks >>
+        generation >> work;
     assert(fields && submitted == 1);
     command.clipped = clipped != 0;
     command.integral_held = held != 0;
-    refusal([&] { output.sample(reference, position, velocity, command, submitted != 0, ticks, generation, work); },
-            "tracking output is closed");
+    refusal(
+        [&] {
+            output.sample(reference, position, velocity, command, submitted != 0, ticks, generation,
+                          work);
+        },
+        "tracking output is closed");
 }
 
 /** Preserve real EFBIG failures while restoring the cap before profiling completion. */
 void output_limit(witness::Simulation &device, const witness::RunConfiguration &configuration,
                   const std::string &scenario, const char *events, const char *tracking) {
     const rlim_t maximum = scenario == "header_limit" ? 32 : scenario == "finish_limit" ? 192 : 512;
-    const char *message = scenario == "header_limit" ? "cannot write tracking header" :
-        scenario == "event_limit" ? "cannot write event record" :
-        scenario == "sample_limit" ? "cannot write tracking sample" : "cannot finish run output";
+    const char *message = scenario == "header_limit"   ? "cannot write tracking header"
+                          : scenario == "event_limit"  ? "cannot write event record"
+                          : scenario == "sample_limit" ? "cannot write tracking sample"
+                                                       : "cannot finish run output";
     ScopedOutputLimit limit(maximum);
-    refusal([&] {
-        witness::RunOutput output(events, tracking);
-        if (scenario != "header_limit") witness::execute_run(device, configuration, output);
-    }, message);
+    refusal(
+        [&] {
+            witness::RunOutput output(events, tracking);
+            if (scenario != "header_limit")
+                witness::execute_run(device, configuration, output);
+        },
+        message);
 }
 
 /** Exercise lifecycle refusals and acquisition callbacks through production RTL. */
 int main(int argc, char **argv) {
-    if (argc != 5) return 1;
+    if (argc != 5)
+        return 1;
     const auto configuration = witness::read_configuration(argv[2]);
     witness::Simulation device;
     const std::string scenario = argv[1];
@@ -237,13 +260,15 @@ int main(int argc, char **argv) {
         witness::write_register(device, 0x38, 1);
         if (scenario == "active") {
             assert(!(witness::read_register(device, 0x98) & 8));
-            refusal([&] { witness::configure_run(device, configuration); }, "cannot reset an active run");
+            refusal([&] { witness::configure_run(device, configuration); },
+                    "cannot reset an active run");
         } else {
             device.advance(static_cast<std::uint64_t>(configuration.period_ticks) * 10 * 3);
             assert(witness::read_register(device, 4) & 4);
             assert(witness::read_register(device, 0x98) & 8);
             assert((witness::read_register(device, 0x90) & 7) != 4);
-            refusal([&] { witness::configure_run(device, configuration); }, "unread previous run records prevent reset");
+            refusal([&] { witness::configure_run(device, configuration); },
+                    "unread previous run records prevent reset");
             assert(witness::read_register(device, 0x90) & 1);
             if (scenario == "recover") {
                 witness::RunOutput output(argv[3], argv[4]);
@@ -267,18 +292,25 @@ int main(int argc, char **argv) {
                scenario == "final_drain_no_hooks") {
         witness::RunOutput output(argv[3], argv[4]);
         unsigned starts = 0, checks = 0, finishes = 0;
-        const witness::RunHooks hooks{
-            [&] { assert(checks == 0 && finishes == 0); ++starts; },
-            [&] { assert(starts == 1 && finishes == 0); ++checks; },
-            [&] {
-                assert(starts == 1 && checks > 0);
-                assert(witness::read_register(device, 0x90) & 8);
-                ++finishes;
-            }};
-        const auto result = witness::execute_run(device, configuration, output,
-            scenario == "final_drain_no_hooks" ? nullptr : &hooks);
-        if (scenario == "final_drain_no_hooks") assert(starts == 0 && checks == 0 && finishes == 0);
-        else assert(starts == 1 && checks > 0 && finishes == 1);
+        const witness::RunHooks hooks{[&] {
+                                          assert(checks == 0 && finishes == 0);
+                                          ++starts;
+                                      },
+                                      [&] {
+                                          assert(starts == 1 && finishes == 0);
+                                          ++checks;
+                                      },
+                                      [&] {
+                                          assert(starts == 1 && checks > 0);
+                                          assert(witness::read_register(device, 0x90) & 8);
+                                          ++finishes;
+                                      }};
+        const auto result = witness::execute_run(
+            device, configuration, output, scenario == "final_drain_no_hooks" ? nullptr : &hooks);
+        if (scenario == "final_drain_no_hooks")
+            assert(starts == 0 && checks == 0 && finishes == 0);
+        else
+            assert(starts == 1 && checks > 0 && finishes == 1);
         if (scenario == "final_drain" || scenario == "final_drain_no_hooks") {
             assert(result.samples == 1 && result.records == 20);
             assert(result.misses == 8 && result.overflow == 0 && result.safe);
@@ -288,7 +320,8 @@ int main(int argc, char **argv) {
         }
         if (scenario == "closed")
             closed_output(output, argv[3], argv[4]);
-    } else return 1;
+    } else
+        return 1;
     std::cout << "verified " << scenario << '\n';
 #ifdef WITNESS_RTL_COVERAGE
     const std::string profile = std::string(argv[3]) + ".coverage.dat";

@@ -15,7 +15,8 @@
 /** Bind original files before acquiring two actual IRQ-free UIO resources and raw outputs. */
 int main(int argc, char **argv) {
     if (argc < 5) {
-        std::cerr << "usage: run_amp_uio run_configuration resource_configuration events.bin tracking_raw.csv [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--power-config file --power-journal file]\n";
+        std::cerr
+            << "usage: run_amp_uio run_configuration resource_configuration events.bin tracking_raw.csv [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--power-config file --power-journal file]\n";
         return 1;
     }
     try {
@@ -38,24 +39,30 @@ int main(int argc, char **argv) {
             power = witness::read_power_configuration(options.power_configuration);
             witness::verify_digest(options.power_configuration, power_original);
             const auto inherited = witness::read_host_policy();
-            if (std::find(inherited.cpus.begin(), inherited.cpus.end(), power.worker_cpu) == inherited.cpus.end())
+            if (std::find(inherited.cpus.begin(), inherited.cpus.end(), power.worker_cpu) ==
+                inherited.cpus.end())
                 throw std::runtime_error("power worker CPU is outside inherited affinity");
             if (options.cpu < 0 || options.cpu == power.worker_cpu)
-                throw std::runtime_error("power acquisition requires separate logger and worker CPUs");
+                throw std::runtime_error(
+                    "power acquisition requires separate logger and worker CPUs");
             sensor = std::make_unique<witness::Pac1934Device>(power);
         }
         const auto policy = witness::apply_host_policy(options);
         witness::AmpUioDevice device(resources.identity, resources.fabric, resources.mailbox);
         const auto startup = device.time();
         std::uint32_t abi = 0;
-        while (!(abi = device.read_memory32(resources.mailbox.address + offsetof(witness_amp_mailbox, abi)))) {
+        while (!(abi = device.read_memory32(resources.mailbox.address +
+                                            offsetof(witness_amp_mailbox, abi)))) {
             if (device.time() - startup > resources.startup_ns)
                 throw std::runtime_error("AMP firmware mailbox initialisation timed out");
             device.advance(resources.poll_ns);
         }
-        if (abi != WITNESS_AMP_ABI) throw std::runtime_error("AMP firmware mailbox ABI mismatch");
-        if (device.read_memory32(resources.mailbox.address + offsetof(witness_amp_mailbox, status)) != WITNESS_AMP_INITIAL ||
-            device.read_memory32(resources.mailbox.address + offsetof(witness_amp_mailbox, logger_status)))
+        if (abi != WITNESS_AMP_ABI)
+            throw std::runtime_error("AMP firmware mailbox ABI mismatch");
+        if (device.read_memory32(resources.mailbox.address +
+                                 offsetof(witness_amp_mailbox, status)) != WITNESS_AMP_INITIAL ||
+            device.read_memory32(resources.mailbox.address +
+                                 offsetof(witness_amp_mailbox, logger_status)))
             throw std::runtime_error("AMP logger requires a fresh dedicated firmware boot");
         witness::verify_digest(argv[1], original);
         witness::verify_digest(argv[2], resource_original);
@@ -64,11 +71,12 @@ int main(int argc, char **argv) {
         std::unique_ptr<witness::PowerJournal> journal;
         witness::RunHooks hooks;
         if (sensor) {
-            journal = std::make_unique<witness::PowerJournal>(options.power_journal, power, *sensor, device);
+            journal = std::make_unique<witness::PowerJournal>(options.power_journal, power, *sensor,
+                                                              device);
             hooks = journal->hooks();
         }
-        witness::AmpLogger<witness::AmpUioDevice> logger(device, configuration, output,
-            resources.mailbox.address, journal ? &hooks : nullptr);
+        witness::AmpLogger<witness::AmpUioDevice> logger(
+            device, configuration, output, resources.mailbox.address, journal ? &hooks : nullptr);
         const auto completion_start = device.time();
         while (!logger.poll()) {
             if (device.time() - completion_start > resources.completion_ns)
@@ -79,18 +87,24 @@ int main(int argc, char **argv) {
         witness::verify_digest(argv[1], original);
         witness::verify_digest(argv[2], resource_original);
         std::vector<witness::ArtifactDigest> artifacts{
-            {"configuration", original}, {"amp_resources", resource_original},
-            {"events", witness::file_digest(argv[3])}, {"tracking_raw", witness::file_digest(argv[4])}};
+            {"configuration", original},
+            {"amp_resources", resource_original},
+            {"events", witness::file_digest(argv[3])},
+            {"tracking_raw", witness::file_digest(argv[4])}};
         if (sensor) {
             witness::verify_digest(options.power_configuration, power_original);
             artifacts.push_back({"power_configuration", power_original});
             artifacts.push_back({"power_journal", witness::file_digest(options.power_journal)});
         }
-        if (options.metadata) witness::write_run_metadata(options.metadata, configuration, result,
-            witness::read_register(device, 0x6c) != 0, "amp_uio_unqualified", options, policy, artifacts);
-        std::cout << "amp_uio_unqualified samples=" << result.samples << " records=" << result.records
-            << " misses=" << result.misses << " overflow=" << result.overflow << " safe=" << result.safe << std::endl;
-        if (!std::cout) throw std::runtime_error("cannot write AMP logger summary");
+        if (options.metadata)
+            witness::write_run_metadata(options.metadata, configuration, result,
+                                        witness::read_register(device, 0x6c) != 0,
+                                        "amp_uio_unqualified", options, policy, artifacts);
+        std::cout << "amp_uio_unqualified samples=" << result.samples
+                  << " records=" << result.records << " misses=" << result.misses
+                  << " overflow=" << result.overflow << " safe=" << result.safe << std::endl;
+        if (!std::cout)
+            throw std::runtime_error("cannot write AMP logger summary");
         return result.overflow ? 1 : 0;
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

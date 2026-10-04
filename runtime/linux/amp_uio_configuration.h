@@ -22,7 +22,7 @@ struct AmpUioConfiguration {
 };
 /** Read the complete resource configuration without inferred physical addresses or aliases. */
 AmpUioConfiguration read_amp_uio_configuration(const std::string &path);
-}
+} // namespace witness
 /** @var witness::AmpUioConfiguration::identity
  * Owner-supplied device and driver identity checked against sysfs.
  */

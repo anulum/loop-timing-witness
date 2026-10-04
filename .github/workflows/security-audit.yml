@@ -24,42 +24,6 @@ concurrency:
 jobs:
   audit:
     name: Secrets, vulnerabilities, licences and workflow security
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    uses: ./.github/workflows/reusable-security-audit.yml
     permissions:
       contents: read # read the repository and its history for the scans
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13.15"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.27.1"
-          cache: false
-      - name: Install the hashed development lock
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
-          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
-      - name: Build pinned Go scanners (module checksums verified by the Go checksum database)
-        run: |
-          go install github.com/zricethezav/gitleaks/v8@v8.30.1
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      - name: Secret scan of the complete history
-        run: '"$(go env GOPATH)/bin/gitleaks" git --no-banner --redact .'
-      - name: Known vulnerabilities in the development lock
-        run: |
-          .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
-          .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt
-      - name: Development dependency licences
-        run: .venv/bin/python tools/check_dependency_licences.py
-      - name: REUSE licensing compliance
-        run: .venv/bin/reuse lint
-      - name: Workflow lint
-        run: '"$(go env GOPATH)/bin/actionlint"'
-      - name: Workflow security analysis
-        run: .venv/bin/zizmor --offline --persona pedantic --strict-collection .

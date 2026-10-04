@@ -80,7 +80,8 @@ def lifecycle_program(
             "--Mdir",
             str(directory),
             "-CFLAGS",
-            "-std=c++17 -Wall -Wextra -Werror --coverage -O2 -fdump-tree-cfg-lineno"
+            "-std=c++17 -Wall -Wextra -Werror --coverage -O2 -fdump-tree-cfg-lineno "
+            '-fprofile-exclude-files="Vaxi_control_witness|/share/verilator/"'
             + (" -DWITNESS_RTL_COVERAGE" if rtl_coverage else ""),
             "-LDFLAGS",
             f"{kernel} --coverage -lcrypto",

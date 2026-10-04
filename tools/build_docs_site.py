@@ -37,6 +37,7 @@ from repository_files import candidate_files
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "https://github.com/anulum/loop-timing-witness"
+ASSET_SUFFIXES = frozenset({".webp", ".png", ".svg", ".pdf", ".jpg"})
 
 
 class DocumentationRefusedError(ValueError):
@@ -93,6 +94,16 @@ overflow:auto;
 font-size:.86rem;
 line-height:1.6}
 code{font-size:.9em}
+header img{vertical-align:middle;
+border-radius:0}
+.brand-logos{display:flex;
+flex-wrap:wrap;
+gap:1rem;
+align-items:center;
+margin-bottom:1rem}
+.brand-logos img{max-height:64px;
+width:auto;
+border-radius:0}
 footer{color:var(--muted);
 border-top:1px solid var(--line);
 margin-top:3rem;
@@ -150,7 +161,7 @@ def rewrite_link(target: str, source: Path, documents: set[str]) -> str:
         page = destination(resolved)
         path = os.path.relpath(page, destination(source.as_posix()).parent)
         return urlunsplit(("", "", path, parts.query, parts.fragment))
-    if Path(resolved).suffix in {".webp", ".png", ".svg", ".pdf"}:
+    if Path(resolved).suffix in ASSET_SUFFIXES:
         return target
     return urlunsplit(
         (
@@ -193,14 +204,23 @@ def write_page(output: Path, relative: Path, title: str, content: str, revision:
         "C/C++ API": "api/c/index.html",
     }
     navigation = " ".join(f'<a href="{prefix}/{url}">{label}</a>' for label, url in links.items())
+    brand = (
+        f'<a href="{prefix}/index.html" aria-label="Loop Timing Witness overview">'
+        f'<img src="{prefix}/docs/assets/anulum_logo.png" alt="Anulum" width="32" height="32"></a>'
+    )
+    logos = (
+        '<div class="brand-logos">'
+        f'<img src="{prefix}/docs/assets/anulum_logo_company.jpg" alt="Anulum">'
+        f'<img src="{prefix}/docs/assets/fortis_studio_logo.jpg" alt="Fortis Studio"></div>'
+    )
     page = output / relative
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{html.escape(title)} — Loop Timing Witness</title><style>{STYLE}</style>"
-        f"</head><body><header>{navigation}</header><main>{content}"
-        f'<footer>Source: <a href="{REPOSITORY}/tree/{revision}">{revision[:12]}</a>. '
+        f"</head><body><header>{brand} {navigation}</header><main>{content}"
+        f'<footer>{logos}Source: <a href="{REPOSITORY}/tree/{revision}">{revision[:12]}</a>. '
         "Simulation software and planned hardware instrument; no board qualification is claimed."
         "</footer></main></body></html>\n",
         encoding="utf-8",
@@ -280,7 +300,7 @@ def build(output: Path) -> None:
     for name in sorted(documents):
         render_document(name, documents, renderer, output, revision)
     for name in paths:
-        if Path(name).suffix in {".webp", ".png", ".svg", ".pdf"}:
+        if Path(name).suffix in ASSET_SUFFIXES:
             asset = output / name
             asset.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, asset)

@@ -9,45 +9,50 @@
 
 set -euo pipefail
 
-if (( $# != 2 )); then
+if (($# != 2)); then
     printf 'usage: %s OFFICIAL_SOURCE NEW_SAMSUNG_OUTPUT\n' "$0" >&2
     exit 2
 fi
 
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repository_root=$(cd -- "$script_dir/../.." && pwd)
+script_path=$(realpath -e -- "${BASH_SOURCE[0]}")
+script_dir=$(dirname -- "${script_path}")
+repository_root=$(realpath -e -- "${script_dir}/../..")
 if [[ -L "$2" ]]; then
     printf 'destination must be a new non-symlink path\n' >&2
     exit 2
 fi
 source_dir=$(realpath -e -- "$1")
 destination_dir=$(realpath -m -- "$2")
-destination_parent=$(dirname -- "$destination_dir")
+destination_parent=$(dirname -- "${destination_dir}")
 
-if [[ ! -d "$destination_parent" || -e "$destination_dir" ]]; then
+if [[ ! -d "${destination_parent}" || -e "${destination_dir}" ]]; then
     printf 'destination parent must exist and destination must be new\n' >&2
     exit 2
 fi
-if [[ "$destination_dir" == "$source_dir" || "$destination_dir" == "$source_dir/"* ]]; then
+if [[ "${destination_dir}" == "${source_dir}" || "${destination_dir}" == "${source_dir}/"* ]]; then
     printf 'destination must be outside the official source checkout\n' >&2
     exit 2
 fi
-if [[ $(stat -c %d -- "$destination_parent") != $(stat -c %d -- "$repository_root") ]]; then
+destination_device=$(stat -c %d -- "${destination_parent}")
+repository_device=$(stat -c %d -- "${repository_root}")
+if [[ "${destination_device}" != "${repository_device}" ]]; then
     printf 'destination must be on the canonical Samsung working disk\n' >&2
     exit 2
 fi
-if [[ $(git -C "$source_dir" rev-parse HEAD) != 9c34320f91e8e8a144c7d87bf299527fc5f02081 ]]; then
+source_commit=$(git -C "${source_dir}" rev-parse HEAD)
+if [[ "${source_commit}" != 9c34320f91e8e8a144c7d87bf299527fc5f02081 ]]; then
     printf 'official reference commit differs from the pinned source\n' >&2
     exit 2
 fi
-if [[ -n $(git -C "$source_dir" status --porcelain) ]]; then
+source_status=$(git -C "${source_dir}" status --porcelain)
+if [[ -n "${source_status}" ]]; then
     printf 'official reference checkout is not clean\n' >&2
     exit 2
 fi
 
-"$repository_root/.venv/bin/python" "$repository_root/tools/derive_icicle_reference.py" \
-    "$source_dir" "$destination_dir"
-"$repository_root/.venv/bin/python" "$repository_root/tools/derive_icicle_reference.py" \
-    --verify "$destination_dir"
-git -C "$destination_dir" diff --check
-printf 'derived Icicle source: %s\n' "$destination_dir"
+"${repository_root}/.venv/bin/python" "${repository_root}/tools/derive_icicle_reference.py" \
+    "${source_dir}" "${destination_dir}"
+"${repository_root}/.venv/bin/python" "${repository_root}/tools/derive_icicle_reference.py" \
+    --verify "${destination_dir}"
+git -C "${destination_dir}" diff --check
+printf 'derived Icicle source: %s\n' "${destination_dir}"

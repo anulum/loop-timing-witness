@@ -24,7 +24,10 @@ namespace witness {
 /** Maximum admitted simulated time advance in nanoseconds per protocol request. */
 constexpr std::uint64_t advance_limit = 10000000;
 /** Register response and raw word; UIO cannot expose AXI response signals. */
-struct ProtocolReply { unsigned response; std::uint32_t data; };
+struct ProtocolReply {
+    unsigned response;
+    std::uint32_t data;
+};
 
 /** Reject signs, overflow and suffixes before narrowing protocol integers. */
 inline std::uint64_t number(std::istream &input, std::uint64_t maximum) {
@@ -33,17 +36,19 @@ inline std::uint64_t number(std::istream &input, std::uint64_t maximum) {
         throw std::runtime_error("invalid unsigned argument");
     std::size_t consumed = 0;
     const auto value = std::stoull(token, &consumed);
-    if (consumed != token.size() || value > maximum) throw std::runtime_error("argument outside range");
+    if (consumed != token.size() || value > maximum)
+        throw std::runtime_error("argument outside range");
     return value;
 }
 
 /** Validate a complete request before accessing either device. */
 inline void end_request(std::istream &input) {
     std::string extra;
-    if (input >> extra) throw std::runtime_error("unexpected argument");
+    if (input >> extra)
+        throw std::runtime_error("unexpected argument");
 }
 /** Serve validated requests against either actual MMIO or production RTL. */
-template<class Device> int serve(Device &device) {
+template <class Device> int serve(Device &device) {
     std::string line;
     while (std::getline(std::cin, line)) {
         std::istringstream input(line);
@@ -60,23 +65,29 @@ template<class Device> int serve(Device &device) {
             const auto data = number(input, std::numeric_limits<std::uint32_t>::max());
             const auto strobes = number(input, 15);
             end_request(input);
-            const auto reply = device.write(static_cast<std::uint8_t>(address), static_cast<std::uint32_t>(data),
-                                            static_cast<std::uint8_t>(strobes));
+            const auto reply =
+                device.write(static_cast<std::uint8_t>(address), static_cast<std::uint32_t>(data),
+                             static_cast<std::uint8_t>(strobes));
             result = {reply.response, reply.data};
             result.data = 0;
         } else if (operation == "T" || operation == "I") {
             const auto duration = number(input, advance_limit);
             end_request(input);
-            if (operation == "T") device.advance(duration);
-            else result.data = device.wait_interrupt(duration);
+            if (operation == "T")
+                device.advance(duration);
+            else
+                result.data = device.wait_interrupt(duration);
         } else if (operation == "Q") {
             end_request(input);
             return 0;
-        } else throw std::runtime_error("unknown request");
+        } else
+            throw std::runtime_error("unknown request");
         std::cout << result.response << ',' << result.data << ',' << device.time() << std::endl;
-        if (!std::cout) throw std::runtime_error("cannot write AXI response");
+        if (!std::cout)
+            throw std::runtime_error("cannot write AXI response");
     }
-    if (!std::cin.eof()) throw std::runtime_error("cannot read AXI request");
+    if (!std::cin.eof())
+        throw std::runtime_error("cannot read AXI request");
     return 0;
 }
 } // namespace witness

@@ -10,6 +10,28 @@ PYTHON_BOOTSTRAP ?= python3.13
 VENV := .venv/bin
 PREFLIGHT := $(VENV)/python tools/preflight.py
 
+FUZZ_DIRECTORY ?= build/fuzz
+FUZZ_CC ?= clang-18
+FUZZ_CXX ?= clang++-18
+FUZZ_GCC_INSTALL ?= /usr/lib/gcc/x86_64-linux-gnu/13
+FUZZ_SECONDS ?= 120
+FUZZ_SOURCE ?= controllers/c/witness_controller.c
+
+.PHONY: controller-fuzz-build controller-fuzz
+
+controller-fuzz-build:
+	test "$$( $(FUZZ_CC) -dumpversion )" = "18.1.3"
+	test "$$( $(FUZZ_CXX) -dumpversion )" = "18.1.3"
+	mkdir -p "$(FUZZ_DIRECTORY)"
+	$(FUZZ_CC) -std=gnu11 -O1 -g -fno-omit-frame-pointer $(CONTROLLER_WARNINGS) -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -Icontrollers/c -c "$(FUZZ_SOURCE)" -o "$(FUZZ_DIRECTORY)/controller.o"
+	$(FUZZ_CXX) --gcc-install-dir="$(FUZZ_GCC_INSTALL)" -std=c++20 -O1 -g -UNDEBUG -Wall -Wextra -Werror -Wconversion -Wshadow -fno-omit-frame-pointer -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all -Icontrollers/c fuzz/controller_fuzz.cpp "$(FUZZ_DIRECTORY)/controller.o" -o "$(FUZZ_DIRECTORY)/controller_fuzz"
+
+controller-fuzz: controller-fuzz-build
+	mkdir -p "$(FUZZ_DIRECTORY)/corpus" "$(FUZZ_DIRECTORY)/crashes"
+	cp fuzz/corpus/*.bin "$(FUZZ_DIRECTORY)/corpus/"
+	ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 "$(FUZZ_DIRECTORY)/controller_fuzz" -max_total_time=$(FUZZ_SECONDS) -max_len=589 -timeout=10 -rss_limit_mb=512 -artifact_prefix="$(FUZZ_DIRECTORY)/crashes/" "$(FUZZ_DIRECTORY)/corpus" > "$(FUZZ_DIRECTORY)/run.log" 2>&1 || { result=$$?; cat "$(FUZZ_DIRECTORY)/run.log"; exit "$$result"; }
+	cat "$(FUZZ_DIRECTORY)/run.log"
+
 .PHONY: venv hooks lint typecheck test validate docs security preflight inventory python-wheelhouse python-package-tests
 
 venv:
@@ -75,6 +97,10 @@ security:
 	$(PREFLIGHT) --only actionlint
 	$(PREFLIGHT) --only secrets
 	$(VENV)/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
+	$(VENV)/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt
+	test "$$(cargo-audit --version)" = "cargo-audit 0.22.2"
+	cargo audit --file controllers/rust/Cargo.lock
+	cargo audit --file runtime/bare_metal/rust_kernel/Cargo.lock
 
 inventory:
 	$(VENV)/python tools/generate_capability_inventory.py --write

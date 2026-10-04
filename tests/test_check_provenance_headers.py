@@ -10,11 +10,13 @@
 
 from __future__ import annotations
 
+import shutil
 from typing import TYPE_CHECKING
 
 import pytest
 
 from check_provenance_headers import HEADER_LINES, TITLE_PREFIX, audit, main
+from conftest import REPOSITORY_ROOT
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -98,10 +100,81 @@ def test_repository_passes_in_a_subprocess(run_tool: RunTool) -> None:
     assert completed.stdout.strip() == "provenance-headers: PASS"
 
 
+@pytest.mark.parametrize(
+    "name", ["anulum_logo_company.jpg", "anulum_logo.png", "fortis_studio_logo.jpg"]
+)
+def test_original_brand_image_and_attribution_pass_the_cli(
+    name: str, make_git_tree: MakeGitTree, run_tool: RunTool
+) -> None:
+    """The registered original image and its actual attribution are admitted."""
+    root = make_git_tree({})
+    image = root / "docs/assets" / name
+    image.parent.mkdir(parents=True)
+    original = REPOSITORY_ROOT / "docs/assets" / name
+    shutil.copyfile(original, image)
+    shutil.copyfile(
+        original.with_name(original.name + ".license"), image.with_name(image.name + ".license")
+    )
+    result = run_tool("check_provenance_headers", str(root))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "provenance-headers: PASS"
+
+
+@pytest.mark.parametrize(
+    ("fault", "finding"),
+    [
+        ("changed-image", "bytes differ from the registered original brand image"),
+        ("missing-image", "original image and UTF-8 attribution sidecar are required"),
+        ("missing-attribution", "original image and UTF-8 attribution sidecar are required"),
+        ("non-utf8-attribution", "original image and UTF-8 attribution sidecar are required"),
+        ("changed-owner", "attribution sidecar lacks the canonical ownership fields"),
+        ("missing-title", "attribution sidecar lacks the canonical ownership fields"),
+        ("wrong-title", "header line 7 must read"),
+        ("reordered-header", "attribution sidecar lacks the canonical ownership fields"),
+    ],
+)
+def test_brand_custody_fault_is_refused_by_the_cli(
+    fault: str, finding: str, make_git_tree: MakeGitTree, run_tool: RunTool
+) -> None:
+    """A real altered image, missing file or damaged attribution cannot pass."""
+    root = make_git_tree({})
+    image = root / "docs/assets/anulum_logo.png"
+    image.parent.mkdir(parents=True)
+    original = REPOSITORY_ROOT / "docs/assets/anulum_logo.png"
+    attribution = image.with_name(image.name + ".license")
+    shutil.copyfile(original, image)
+    shutil.copyfile(original.with_name(original.name + ".license"), attribution)
+    if fault == "changed-image":
+        content = bytearray(image.read_bytes())
+        content[-1] ^= 1
+        image.write_bytes(content)
+    elif fault == "missing-image":
+        image.unlink()
+    elif fault == "missing-attribution":
+        attribution.unlink()
+    elif fault == "non-utf8-attribution":
+        attribution.write_bytes(b"\xff")
+    elif fault == "missing-title":
+        attribution.write_text("\n".join(HEADER_LINES) + "\n")
+    elif fault == "wrong-title":
+        text = attribution.read_text()
+        attribution.write_text(text.replace(TITLE_PREFIX, "Other project: "))
+    elif fault == "reordered-header":
+        lines = attribution.read_text().splitlines()
+        lines[0], lines[1] = lines[1], lines[0]
+        attribution.write_text("\n".join(lines) + "\n")
+    else:
+        attribution.write_text(attribution.read_text().replace(HEADER_LINES[2], "Changed owner"))
+    result = run_tool("check_provenance_headers", str(root))
+    assert result.returncode == 1
+    assert finding in result.stdout
+
+
 def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
     """Hash-comment, shebang, Markdown, JSON and licence files all comply."""
     root = make_git_tree(
         {
+            ".clang-format": hash_header() + "BasedOnStyle: LLVM\n",
             "tool.py": hash_header() + "\nprint('x')\n",
             "script.py": "#!/usr/bin/env python3\n" + hash_header() + "\n",
             "hardware/derive.sh": "#!/usr/bin/env bash\n" + hash_header() + "set -eu\n",
@@ -134,6 +207,11 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
 @pytest.mark.parametrize(
     ("relative", "content", "expected"),
     [
+        (
+            ".clang-format",
+            "BasedOnStyle: LLVM\n",
+            ".clang-format: must start with the seven-line '# ' provenance header",
+        ),
         (
             "runtime/simulator.cpp",
             "int main() { return 0; }\n",

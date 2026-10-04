@@ -111,7 +111,8 @@ std::string diagnostic_fault() {
     )
     load = """        const auto reply = fabric.read(static_cast<std::uint8_t>(address));
         synchronize();
-        if (reply.response != 0) return false;
+        if (reply.response != 0)
+            return false;
         for (unsigned index = 0; index < 4; ++index)
             bytes[index] = static_cast<std::uint8_t>(reply.data >> (index * 8));"""
     assert source.count(load) == 1

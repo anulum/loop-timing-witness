@@ -31,11 +31,16 @@ jobs:
     permissions:
       contents: read # read the repository for the test run
       id-token: write # ceiling for the separate main-only Codecov job
+  security:
+    name: Security and dependency audits
+    uses: ./.github/workflows/reusable-security-audit.yml
+    permissions:
+      contents: read # read the repository and its history for the scans
   gate:
     name: Required gate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [static-policy, tests]
+    needs: [static-policy, tests, security]
     if: always()
     permissions: {}
     steps:

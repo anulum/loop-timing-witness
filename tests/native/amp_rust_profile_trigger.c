@@ -10,6 +10,4 @@
 _Noreturn void witness_profile_trigger_panic(void);
 
 /** Return only if the required Rust panic fails to terminate the host process. */
-int main(void) {
-    witness_profile_trigger_panic();
-}
+int main(void) { witness_profile_trigger_panic(); }

@@ -35,7 +35,8 @@ class AmpUioDevice {
     void close() noexcept;
     /** Refuse unaligned accesses beyond the complete original native mailbox. */
     std::size_t offset(std::uint64_t address) const;
-public:
+
+  public:
     /** Verify original named map extents and absence of a Linux-owned controller IRQ. */
     AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric, const AmpUioMap &mailbox);
     /** Release mappings and the advisory lock without acknowledging firmware or its IRQ. */
@@ -55,7 +56,7 @@ public:
     /** Write only the consumer cursor or logger readiness/final acknowledgement. */
     void write_memory32(std::uint64_t address, std::uint32_t value);
 };
-}
+} // namespace witness
 /** @var witness::AmpUioMap::index
  * Selected sysfs UIO map index.
  */

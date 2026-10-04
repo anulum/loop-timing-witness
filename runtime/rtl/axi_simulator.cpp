@@ -23,7 +23,8 @@ int main(int argc, char **argv) {
         witness::Simulation simulation;
         const auto result = witness::serve(simulation);
 #ifdef WITNESS_RTL_COVERAGE
-        const auto profile = std::string(argv[0]) + "." + std::to_string(getpid()) + ".coverage.dat";
+        const auto profile =
+            std::string(argv[0]) + "." + std::to_string(getpid()) + ".coverage.dat";
         VerilatedCov::write(profile.c_str());
 #endif
         return result;

@@ -24,25 +24,56 @@ void __wrap_witness_amp_trap(uint64_t cause, uint64_t value) {
         __asm__ volatile("fence iorw,iorw" ::: "memory");
     }
     __real_witness_amp_trap(cause, value);
-    if (!output->samples) return;
+    if (!output->samples)
+        return;
     switch (fault) {
-    case 2: output->abi = 0; break;
-    case 3: output->abi = 99; break;
-    case 4: output->status = 4; break;
-    case 5: output->consumer += 1; break;
-    case 6: output->logger_status = 0; break;
-    case 7: output->reserved = 1; break;
-    case 8: output->producer = output->consumer + WITNESS_AMP_CAPACITY + 1; break;
-    case 9: output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].clipped = 2; break;
-    case 10: output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].generation = 0; break;
-    case 11: output->status = WITNESS_AMP_INITIAL; break;
-    case 12:
-        if (output->status == WITNESS_AMP_FINISHED) output->samples += 1;
+    case 2:
+        output->abi = 0;
         break;
-    case 13: output->run_reserved = 1; break;
-    case 14: output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].integral_held = 2; break;
-    case 15: output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].submitted = 2; break;
-    case 16: output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].cycle = witness_amp_run.cycles; break;
+    case 3:
+        output->abi = 99;
+        break;
+    case 4:
+        output->status = 4;
+        break;
+    case 5:
+        output->consumer += 1;
+        break;
+    case 6:
+        output->logger_status = 0;
+        break;
+    case 7:
+        output->reserved = 1;
+        break;
+    case 8:
+        output->producer = output->consumer + WITNESS_AMP_CAPACITY + 1;
+        break;
+    case 9:
+        output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].clipped = 2;
+        break;
+    case 10:
+        output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].generation = 0;
+        break;
+    case 11:
+        output->status = WITNESS_AMP_INITIAL;
+        break;
+    case 12:
+        if (output->status == WITNESS_AMP_FINISHED)
+            output->samples += 1;
+        break;
+    case 13:
+        output->run_reserved = 1;
+        break;
+    case 14:
+        output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].integral_held = 2;
+        break;
+    case 15:
+        output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].submitted = 2;
+        break;
+    case 16:
+        output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].cycle =
+            witness_amp_run.cycles;
+        break;
     case 17:
         if (output->samples >= 2)
             output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].cycle = 0;
@@ -55,10 +86,17 @@ void __wrap_witness_amp_trap(uint64_t cause, uint64_t value) {
         if (output->samples >= 2)
             output->records[(output->producer - 1) & (WITNESS_AMP_CAPACITY - 1)].generation = 1;
         break;
-    case 20: output->trap_cause = 1; break;
-    case 21: output->trap_value = 1; break;
-    case 22: output->status = WITNESS_AMP_FINISHED; break;
-    default: break;
+    case 20:
+        output->trap_cause = 1;
+        break;
+    case 21:
+        output->trap_value = 1;
+        break;
+    case 22:
+        output->status = WITNESS_AMP_FINISHED;
+        break;
+    default:
+        break;
     }
     __asm__ volatile("fence iorw,iorw" ::: "memory");
 }

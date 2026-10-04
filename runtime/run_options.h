@@ -29,7 +29,8 @@ struct RunOptions {
 
 /** Validate public options before changing any calling-thread Linux policy. */
 inline void validate_run_options(const RunOptions &options) {
-    if (options.cpu < -1 || options.scheduler < -1 || options.scheduler > 1 || options.priority < -1)
+    if (options.cpu < -1 || options.scheduler < -1 || options.scheduler > 1 ||
+        options.priority < -1)
         throw std::runtime_error("invalid CPU, scheduler or priority request");
     if (options.scheduler == 1 && (options.cpu < 0 || options.priority <= 0))
         throw std::runtime_error("FIFO requires explicit CPU and positive priority");
@@ -55,7 +56,8 @@ inline int option_number(const char *text) {
 inline RunOptions read_run_options(int argc, char **argv, int first) {
     RunOptions result;
     for (int index = first; index < argc; index += 2) {
-        if (index + 1 >= argc) throw std::runtime_error("run option requires a value");
+        if (index + 1 >= argc)
+            throw std::runtime_error("run option requires a value");
         if (std::strcmp(argv[index], "--metadata") == 0 && !result.metadata) {
             result.metadata = argv[index + 1];
         } else if (std::strcmp(argv[index], "--power-config") == 0 && !result.power_configuration) {
@@ -65,12 +67,16 @@ inline RunOptions read_run_options(int argc, char **argv, int first) {
         } else if (std::strcmp(argv[index], "--cpu") == 0 && result.cpu == -1) {
             result.cpu = option_number(argv[index + 1]);
         } else if (std::strcmp(argv[index], "--scheduler") == 0 && result.scheduler == -1) {
-            if (std::strcmp(argv[index + 1], "normal") == 0) result.scheduler = 0;
-            else if (std::strcmp(argv[index + 1], "fifo") == 0) result.scheduler = 1;
-            else throw std::runtime_error("scheduler must be normal or fifo");
+            if (std::strcmp(argv[index + 1], "normal") == 0)
+                result.scheduler = 0;
+            else if (std::strcmp(argv[index + 1], "fifo") == 0)
+                result.scheduler = 1;
+            else
+                throw std::runtime_error("scheduler must be normal or fifo");
         } else if (std::strcmp(argv[index], "--priority") == 0 && result.priority == -1) {
             result.priority = option_number(argv[index + 1]);
-        } else throw std::runtime_error("unknown or duplicate run option");
+        } else
+            throw std::runtime_error("unknown or duplicate run option");
     }
     validate_run_options(result);
     return result;

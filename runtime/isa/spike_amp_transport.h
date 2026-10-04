@@ -35,23 +35,27 @@ class SpikeAmpTransport {
         return address - ram_base;
     }
 
-public:
-    /** Bind an entire explicit mailbox to an existing real memory device, without allocating RAM. */
+  public:
+    /** Bind an entire explicit mailbox to an existing real memory device, without allocating RAM.
+     */
     SpikeAmpTransport(const sim_t &simulator, Simulation &model, std::uint64_t mailbox_address)
         : fabric(model), shared(mailbox_address) {
         if (!shared || shared % 8 || shared > UINT64_MAX - sizeof(witness_amp_mailbox))
             throw std::invalid_argument("AMP shared memory address outside bounds");
         for (const auto &entry : simulator.get_bus().get_devices()) {
             auto *candidate = dynamic_cast<abstract_mem_t *>(entry.second);
-            if (!candidate || shared < entry.first) continue;
+            if (!candidate || shared < entry.first)
+                continue;
             const auto displacement = shared - entry.first;
             if (displacement > candidate->size() ||
-                sizeof(witness_amp_mailbox) > candidate->size() - displacement) continue;
+                sizeof(witness_amp_mailbox) > candidate->size() - displacement)
+                continue;
             ram = candidate;
             ram_base = entry.first;
             break;
         }
-        if (!ram) throw std::invalid_argument("AMP mailbox does not fit actual simulator RAM");
+        if (!ram)
+            throw std::invalid_argument("AMP mailbox does not fit actual simulator RAM");
     }
 
     /** Decode actual target little-endian bytes through the real RAM load entry. */
@@ -87,5 +91,5 @@ public:
     /** Observe the original fabric clock model, never host timing or a substituted counter. */
     std::uint64_t time() const { return fabric.time(); }
 };
-}
+} // namespace witness
 #endif

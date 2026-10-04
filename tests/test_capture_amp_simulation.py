@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -158,18 +159,64 @@ def test_public_failure_retains_evidence(capture_arguments: list[str], fault: st
         assert (output / "retained").read_text() == "retained original"
 
 
+def _copy_runtime_library(executable: Path, directory: Path, environment: dict[str, str]) -> Path:
+    """Copy an actual loaded library into the owned runtime search directory.
+
+    Parameters
+    ----------
+    executable
+        Actual simulator with its genuine ELF interpreter.
+    directory
+        Exclusive library directory beside the captured image.
+    environment
+        Capture process environment whose library search path is updated.
+
+    Returns
+    -------
+    Path
+        Actual copied library observed by the simulator identity and drift checks.
+    """
+    listing = subprocess.check_output(
+        [str(elf_interpreter(executable)), "--list", str(executable)], text=True, timeout=10
+    )
+    record = next(line for line in listing.splitlines() if "=>" in line)
+    name, source = record.split("=>", 1)
+    directory.mkdir()
+    library = directory / name.strip()
+    shutil.copyfile(source.strip().rsplit(" (", 1)[0], library)
+    environment["LD_LIBRARY_PATH"] = str(directory) + ":" + environment.get("LD_LIBRARY_PATH", "")
+    return library
+
+
+def _stop_for_watchdog(process: subprocess.Popen[str]) -> None:
+    """Stall the actual capture supervisor and observe its caller deadline.
+
+    Parameters
+    ----------
+    process
+        Real public capture command in its own process session.
+    """
+    os.kill(process.pid, signal.SIGSTOP)
+    observed, status = os.waitpid(process.pid, os.WUNTRACED)
+    assert observed == process.pid
+    assert os.WIFSTOPPED(status)
+    assert os.WSTOPSIG(status) == signal.SIGSTOP
+    with pytest.raises(subprocess.TimeoutExpired):
+        process.communicate(timeout=0.05)
+
+
 @pytest.mark.parametrize(
-    "fault", ["firmware", "plugin", "receipt", "runtime-library", "runtime-source"]
+    "fault", ["firmware", "plugin", "receipt", "runtime-library", "runtime-source", "watchdog"]
 )
-def test_live_input_mutation_refused(capture_arguments: list[str], fault: str) -> None:
-    """Change a test-owned real executable input after target startup and require drift refusal.
+def test_live_input_mutation_or_stall_refused(capture_arguments: list[str], fault: str) -> None:
+    """Refuse live input drift and terminate a genuinely stalled public capture group.
 
     Parameters
     ----------
     capture_arguments
         Actual original image and installed tools.
     fault
-        Actual input whose original bytes change while the target runs.
+        Actual changed input or a stopped process group requiring caller cleanup.
     """
     output = Path(capture_arguments[capture_arguments.index("--output") + 1])
     image = Path(capture_arguments[capture_arguments.index("--image") + 1])
@@ -182,17 +229,8 @@ def test_live_input_mutation_refused(capture_arguments: list[str], fault: str) -
     actual_library = image.parent / "actual-runtime-library"
     if fault == "runtime-library":
         executable = Path(capture_arguments[capture_arguments.index("--spike") + 1])
-        listing = subprocess.check_output(
-            [str(elf_interpreter(executable)), "--list", str(executable)], text=True, timeout=10
-        )
-        record = next(line for line in listing.splitlines() if "=>" in line)
-        name, source = record.split("=>", 1)
-        directory = image.parent / "actual-runtime"
-        directory.mkdir()
-        actual_library = directory / name.strip()
-        shutil.copyfile(source.strip().rsplit(" (", 1)[0], actual_library)
-        environment["LD_LIBRARY_PATH"] = (
-            str(directory) + ":" + environment.get("LD_LIBRARY_PATH", "")
+        actual_library = _copy_runtime_library(
+            executable, image.parent / "actual-runtime", environment
         )
     with subprocess.Popen(
         [sys.executable, "tools/capture_amp_simulation.py", *capture_arguments],
@@ -201,6 +239,7 @@ def test_live_input_mutation_refused(capture_arguments: list[str], fault: str) -
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        start_new_session=True,
     ) as process:
         deadline = time.monotonic() + 75
         try:
@@ -211,7 +250,9 @@ def test_live_input_mutation_refused(capture_arguments: list[str], fault: str) -
             ):
                 time.sleep(0.001)
             assert (output / "spike.log").exists()
-            if fault == "receipt":
+            if fault == "watchdog":
+                _stop_for_watchdog(process)
+            elif fault == "receipt":
                 receipt_path = owned_plugin.with_name("plugin.json")
                 with receipt_path.open("ab") as stream:
                     stream.write(b"\n")
@@ -225,11 +266,17 @@ def test_live_input_mutation_refused(capture_arguments: list[str], fault: str) -
                 path = output / "image/firmware.elf" if fault == "firmware" else owned_plugin
                 with path.open("ab") as stream:
                     stream.write(b"observed post-start byte drift")
-            stdout, stderr = process.communicate(timeout=max(0.001, deadline - time.monotonic()))
+            if fault != "watchdog":
+                process.communicate(timeout=max(0.001, deadline - time.monotonic()))
         finally:
             if process.poll() is None:
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=10)
+        stdout, stderr = process.communicate(timeout=10)
+    if fault == "watchdog":
+        assert process.returncode == -signal.SIGKILL
+        assert not (output / "capture.json").exists()
+        return
     assert process.returncode == 1, stdout
     assert (
         "runtime library bytes or paths changed"

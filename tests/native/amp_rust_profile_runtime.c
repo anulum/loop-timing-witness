@@ -18,12 +18,14 @@ __attribute__((constructor)) static void initialize_profile(void) {
 
 /** Flush normal C client observations after its public entry points return. */
 __attribute__((destructor)) static void flush_profile(void) {
-    if (__llvm_profile_write_file() != 0) _Exit(43);
+    if (__llvm_profile_write_file() != 0)
+        _Exit(43);
 }
 
 /** Flush the unchanged Rust panic handler's observations before stopping the host process. */
 _Noreturn void witness_amp_rust_panic(void);
 _Noreturn void witness_amp_rust_panic(void) {
-    if (__llvm_profile_write_file() != 0) _Exit(43);
+    if (__llvm_profile_write_file() != 0)
+        _Exit(43);
     _Exit(42);
 }

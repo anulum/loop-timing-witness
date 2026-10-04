@@ -753,3 +753,271 @@ def test_public_python_cli_refuses_ambiguous_arguments(derived_tree: Path) -> No
     extra_output = invoke(str(PYTHON), str(VERIFY), "--verify", str(derived_tree), "extra")
     assert extra_output.returncode == 2
     assert "--verify takes only the derived tree" in extra_output.stderr
+
+
+def test_public_shell_derivation_propagates_actual_git_status_failure(
+    official_reference: Path, tmp_path: Path
+) -> None:
+    """Stop on a real status error after successful pinned-commit verification.
+
+    Parameters
+    ----------
+    official_reference
+        Unmodified official pinned reference checkout.
+    tmp_path
+        Owned source copy and unopened derivation output.
+    """
+    source = tmp_path / "bare-reference"
+    shutil.copytree(official_reference, source, symlinks=True)
+    configured = invoke("git", "-C", str(source), "config", "core.bare", "true")
+    assert configured.returncode == 0, configured.stderr
+    commit = invoke("git", "-C", str(source), "rev-parse", "HEAD")
+    assert commit.returncode == 0
+    assert commit.stdout.strip() == COMMIT
+    failed_status = invoke("git", "-C", str(source), "status", "--porcelain")
+    assert failed_status.returncode == 128
+    assert not failed_status.stdout
+    output = tmp_path / "derived"
+    result = invoke(str(DERIVE), str(source), str(output))
+    assert result.returncode == failed_status.returncode
+    assert failed_status.stderr.strip() in result.stderr
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("command", [DERIVE, RUN], ids=["derive", "run"])
+def test_public_shell_entrypoint_propagates_actual_missing_repository_failure(
+    tmp_path: Path, command: Path
+) -> None:
+    """A real non-Git directory cannot be accepted as verified reference source.
+
+    Parameters
+    ----------
+    tmp_path
+        Existing owned directory with no Git metadata.
+    command
+        Actual public derivation or pre-Libero executable.
+    """
+    source = tmp_path / "not-a-repository"
+    source.mkdir()
+    arguments = [str(source), str(tmp_path / "unopened-output")]
+    if command == RUN:
+        arguments.append("MPFS250T")
+    result = invoke(str(command), *arguments)
+    assert result.returncode == 128
+    assert "not a git repository" in result.stderr
+    assert not (tmp_path / "unopened-output").exists()
+
+
+@pytest.mark.parametrize(
+    ("command", "argument_count"),
+    [
+        (DERIVE, 0),
+        (DERIVE, 1),
+        (DERIVE, 3),
+        (DERIVE, 4),
+        (RUN, 0),
+        (RUN, 1),
+        (RUN, 2),
+        (RUN, 4),
+        (RUN, 5),
+    ],
+)
+def test_public_shell_entrypoint_refuses_wrong_argument_count(
+    command: Path, argument_count: int
+) -> None:
+    """Reject ambiguous shell modes before resolving any source or output path.
+
+    Parameters
+    ----------
+    command
+        Actual public derivation or vendor-runner entry point.
+    argument_count
+        Missing or excess arguments for that command's fixed interface.
+    """
+    result = invoke(str(command), *(["unused"] * argument_count))
+    assert result.returncode == 2
+    assert result.stderr.startswith("usage: ")
+    assert not result.stdout
+
+
+@pytest.mark.parametrize("parent_kind", ["missing", "regular-file"])
+def test_public_shell_derivation_refuses_unusable_destination_parent(
+    official_reference: Path, tmp_path: Path, parent_kind: str
+) -> None:
+    """Refuse unavailable parent directories while preserving existing bytes.
+
+    Parameters
+    ----------
+    official_reference
+        Clean pinned official checkout used as the real source.
+    tmp_path
+        Test-owned invalid destination parent.
+    parent_kind
+        Absent parent or an existing file in place of a directory.
+    """
+    parent = tmp_path / "unusable-parent"
+    if parent_kind == "regular-file":
+        parent.write_bytes(b"preserved parent bytes\n")
+    output = parent / "unopened-output"
+    result = invoke(str(DERIVE), str(official_reference), str(output))
+    assert result.returncode == 2
+    assert "destination parent must exist and destination must be new" in result.stderr
+    assert not result.stdout
+    assert not output.exists()
+    if parent_kind == "regular-file":
+        assert parent.read_bytes() == b"preserved parent bytes\n"
+    else:
+        assert not parent.exists()
+
+
+def test_public_shell_derivation_preserves_existing_output_file(
+    official_reference: Path, tmp_path: Path
+) -> None:
+    """Preserve a regular output file as well as the existing directory case.
+
+    Parameters
+    ----------
+    official_reference
+        Actual clean pinned official source.
+    tmp_path
+        Exclusive output file and original byte sentinel.
+    """
+    output = tmp_path / "existing-output-file"
+    original = b"preserved output bytes\n"
+    output.write_bytes(original)
+    result = invoke(str(DERIVE), str(official_reference), str(output))
+    assert result.returncode == 2
+    assert "destination parent must exist and destination must be new" in result.stderr
+    assert not result.stdout
+    assert output.read_bytes() == original
+
+
+def test_public_shell_derivation_refuses_destination_within_reference(
+    official_reference: Path, tmp_path: Path
+) -> None:
+    """Keep generated source outside the official checkout even with spaced paths.
+
+    Parameters
+    ----------
+    official_reference
+        Pinned vendor checkout copied before the production command.
+    tmp_path
+        Owned checkout whose path includes spaces.
+    """
+    source = tmp_path / "official source with spaces"
+    shutil.copytree(official_reference, source, symlinks=True)
+    output = source / "unopened derived tree"
+    result = invoke(str(DERIVE), str(source), str(output))
+    assert result.returncode == 2
+    assert "destination must be outside the official source checkout" in result.stderr
+    assert not result.stdout
+    assert not output.exists()
+    assert not invoke("git", "-C", str(source), "status", "--porcelain").stdout
+
+
+@pytest.mark.parametrize("command", [DERIVE, RUN], ids=["derive", "run"])
+def test_public_shell_entrypoint_refuses_actual_other_filesystem(
+    official_reference: Path, tmp_path: Path, command: Path
+) -> None:
+    """Reject the real procfs device before any output or vendor invocation.
+
+    Parameters
+    ----------
+    official_reference
+        Original pinned source used by the derivation entry point.
+    tmp_path
+        Exclusive case identity and unopened local output.
+    command
+        Actual derivation or vendor-runner entry point.
+    """
+    other_disk = Path("/proc")
+    assert other_disk.stat().st_dev != ROOT.stat().st_dev
+    output = tmp_path / "unopened-output"
+    arguments: tuple[str, ...]
+    if command == DERIVE:
+        arguments = (str(official_reference), str(other_disk / output.name))
+        expected = "destination must be on the canonical Samsung working disk"
+    else:
+        arguments = (str(other_disk), str(output), "MPFS250T")
+        expected = "derived project must run on the canonical Samsung working disk"
+    result = invoke(str(command), *arguments)
+    assert result.returncode == 2
+    assert expected in result.stderr
+    assert not result.stdout
+    assert not output.exists()
+
+
+def test_public_vendor_runner_refuses_regular_file_tree(tmp_path: Path) -> None:
+    """Reject a regular file before consulting Git or the vendor executable.
+
+    Parameters
+    ----------
+    tmp_path
+        Actual owned file supplied at the derived-tree boundary.
+    """
+    source = tmp_path / "not-a-directory"
+    original = b"unchanged input bytes\n"
+    source.write_bytes(original)
+    output = tmp_path / "unopened-output"
+    result = invoke(str(RUN), str(source), str(output), "MPFS250T")
+    assert result.returncode == 2
+    assert "derived tree is required" in result.stderr
+    assert not result.stdout
+    assert source.read_bytes() == original
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("command", [DERIVE, RUN], ids=["derive", "run"])
+def test_public_shell_entrypoint_refuses_unpinned_actual_commit(
+    official_reference: Path, tmp_path: Path, command: Path
+) -> None:
+    """Reject a clean real Git commit whose vendor file bytes are unchanged.
+
+    Parameters
+    ----------
+    official_reference
+        Pinned vendor source copied before the local empty commit.
+    tmp_path
+        Exclusive repository and unopened output.
+    command
+        Actual derivation or vendor-runner command.
+    """
+    source = tmp_path / "unpinned-reference"
+    shutil.copytree(official_reference, source, symlinks=True)
+    committed = invoke(
+        "git",
+        "-C",
+        str(source),
+        "-c",
+        "user.name=Witness Test",
+        "-c",
+        "user.email=witness-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--allow-empty",
+        "--no-gpg-sign",
+        "-m",
+        "Exercise refusal of an unpinned reference commit",
+    )
+    assert committed.returncode == 0, committed.stdout + committed.stderr
+    commit = invoke("git", "-C", str(source), "rev-parse", "HEAD")
+    assert commit.returncode == 0
+    assert commit.stdout.strip() != COMMIT
+    assert not invoke("git", "-C", str(source), "status", "--porcelain").stdout
+    vendor = Path("script_support/components/MSS_WRAPPER.tcl")
+    assert (source / vendor).read_bytes() == (official_reference / vendor).read_bytes()
+    output = tmp_path / "unopened-output"
+    arguments = [str(source), str(output)]
+    if command == RUN:
+        arguments.append("MPFS250T")
+        expected = "derived tree has the wrong official reference commit"
+    else:
+        expected = "official reference commit differs from the pinned source"
+    result = invoke(str(command), *arguments)
+    assert result.returncode == 2
+    assert expected in result.stderr
+    assert not result.stdout
+    assert not output.exists()

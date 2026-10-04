@@ -81,16 +81,15 @@ int main(int argc, char **argv) {
     /* Write each command immediately; printf reports any actual write failure. */
     setbuf(stdout, NULL);
     int64_t values[11];
-    if (read_row(&line, &capacity) != 1 ||
-        !parse_row(line, values, 11) || !signed_fields(values, 0, 11)) {
+    if (read_row(&line, &capacity) != 1 || !parse_row(line, values, 11) ||
+        !signed_fields(values, 0, 11)) {
         fputs("invalid coefficient row\n", stderr);
         return finish(line, EXIT_FAILURE);
     }
     const witness_coefficients coefficients = {
         (int32_t)values[0], (int32_t)values[1], (int32_t)values[2], (int32_t)values[3],
         (int32_t)values[4], (int32_t)values[5], (int32_t)values[6], (int32_t)values[7],
-        (int32_t)values[8], (int32_t)values[9], (int32_t)values[10]
-    };
+        (int32_t)values[8], (int32_t)values[9], (int32_t)values[10]};
     if (!witness_coefficients_valid(&coefficients)) {
         fputs("invalid coefficients\n", stderr);
         return finish(line, EXIT_FAILURE);
@@ -104,7 +103,8 @@ int main(int argc, char **argv) {
             witness_pid_reset(&state);
             continue;
         }
-        if (!parse_row(line, values, 4) || !signed_fields(values, 1, 4) || values[0] < 0 || line[0] == '-') {
+        if (!parse_row(line, values, 4) || !signed_fields(values, 1, 4) || values[0] < 0 ||
+            line[0] == '-') {
             fputs("invalid sample row\n", stderr);
             return finish(line, EXIT_FAILURE);
         }
@@ -113,12 +113,12 @@ int main(int argc, char **argv) {
             (void)witness_lqr_step(&coefficients, (uint32_t)values[0], (int32_t)values[1],
                                    (int32_t)values[2], (int32_t)values[3], &command);
         } else {
-            (void)witness_pid_step(&coefficients, &state, (uint32_t)values[0],
-                                  (int32_t)values[1], (int32_t)values[2], &command);
+            (void)witness_pid_step(&coefficients, &state, (uint32_t)values[0], (int32_t)values[1],
+                                   (int32_t)values[2], &command);
         }
-        if (printf("%" PRIu32 ",%" PRId32 ",%" PRId32 ",%" PRId32 ",%u,%u\n",
-                   command.cycle, command.command, command.integral, command.derivative,
-                   (unsigned)command.clipped, (unsigned)command.integral_held) < 0) {
+        if (printf("%" PRIu32 ",%" PRId32 ",%" PRId32 ",%" PRId32 ",%u,%u\n", command.cycle,
+                   command.command, command.integral, command.derivative, (unsigned)command.clipped,
+                   (unsigned)command.integral_held) < 0) {
             fputs("cannot write command stream\n", stderr);
             return finish(line, EXIT_FAILURE);
         }

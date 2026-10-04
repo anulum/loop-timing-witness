@@ -51,9 +51,8 @@ void witness_pid_reset(witness_pid_state *state);
  * The first sample has zero derivative; subsequent samples use a filtered
  * derivative on measurement. No setpoint derivative kick is introduced.
  */
-bool witness_pid_step(const witness_coefficients *coefficients,
-                      witness_pid_state *state, uint32_t cycle,
-                      int32_t reference, int32_t position,
+bool witness_pid_step(const witness_coefficients *coefficients, witness_pid_state *state,
+                      uint32_t cycle, int32_t reference, int32_t position,
                       witness_command *command);
 
 /**
@@ -62,9 +61,8 @@ bool witness_pid_step(const witness_coefficients *coefficients,
  * Riccati design; this kernel does not solve or certify the Riccati equation.
  * Invalid coefficients leave the command unchanged.
  */
-bool witness_lqr_step(const witness_coefficients *coefficients, uint32_t cycle,
-                      int32_t reference, int32_t position, int32_t velocity,
-                      witness_command *command);
+bool witness_lqr_step(const witness_coefficients *coefficients, uint32_t cycle, int32_t reference,
+                      int32_t position, int32_t velocity, witness_command *command);
 
 /** @var witness_coefficients::kp
  * Nonnegative proportional error gain in signed raw Q8.24.

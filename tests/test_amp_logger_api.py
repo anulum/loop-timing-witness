@@ -161,8 +161,8 @@ def logger_api_plugin(
         }""",
     )
     final = (
-        "                if (!std::cout) "
-        'throw std::runtime_error("AMP completion receipt write failed");'
+        "                if (!std::cout)\n"
+        '                    throw std::runtime_error("AMP completion receipt write failed");'
     )
     assert source.count(final) == 1
     source = source.replace(

@@ -21,6 +21,7 @@
       "file": "ci.yml",
       "jobs": [
         "gate",
+        "security",
         "static-policy",
         "tests"
       ],
@@ -45,6 +46,15 @@
       ],
       "kind": "reusable",
       "owner": "tests with complete statement and branch coverage and source-bound Codecov publication"
+    },
+    {
+      "category": 8,
+      "file": "reusable-security-audit.yml",
+      "jobs": [
+        "audit"
+      ],
+      "kind": "reusable",
+      "owner": "blocking secrets, dependency locks, licences and workflow security"
     },
     {
       "category": 2,
@@ -72,6 +82,15 @@
       ],
       "kind": "standalone",
       "owner": "secrets, vulnerabilities, licences and workflow security"
+    },
+    {
+      "category": 8,
+      "file": "controller-fuzz.yml",
+      "jobs": [
+        "campaign"
+      ],
+      "kind": "standalone",
+      "owner": "bounded coverage-guided sanitizer fuzzing of the public controller with retained crash inputs"
     },
     {
       "category": 8,

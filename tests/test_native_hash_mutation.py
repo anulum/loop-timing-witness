@@ -10,61 +10,25 @@
 
 from __future__ import annotations
 
-import ctypes
 import os
-import select
 import signal
 import subprocess
-from contextlib import contextmanager
+import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 from test_native_run import configuration, native_run
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
 __all__ = ["native_run"]
 
 
-@contextmanager
-def watch_access(path: Path) -> Iterator[int]:
-    """Observe real Linux reads of one file without reading its content in the test.
-
-    Parameters
-    ----------
-    path
-        Existing configuration file to watch with IN_ACCESS.
-
-    Yields
-    ------
-    int
-        Kernel notification descriptor closed on every exit.
-    """
-    library = ctypes.CDLL(None, use_errno=True)
-    library.inotify_init1.argtypes = [ctypes.c_int]
-    library.inotify_init1.restype = ctypes.c_int
-    library.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
-    library.inotify_add_watch.restype = ctypes.c_int
-    descriptor = library.inotify_init1(os.O_CLOEXEC | os.O_NONBLOCK)
-    if descriptor < 0:
-        raise OSError(ctypes.get_errno(), "cannot create read notification watch")
-    try:
-        if library.inotify_add_watch(descriptor, os.fsencode(path), 1) < 0:
-            raise OSError(ctypes.get_errno(), "cannot watch actual configuration reads")
-        yield descriptor
-    finally:
-        os.close(descriptor)
-
-
-def stop_reader(pid: int, config: Path) -> int:
+def stop_reader(process: subprocess.Popen[str], config: Path) -> int:
     """Confirm the real child stopped with its configuration read still in progress.
 
     Parameters
     ----------
-    pid
-        Owned native subprocess ID.
+    process
+        Owned native subprocess whose lifecycle remains under the test's control.
     config
         Actual file whose open descriptor must remain present.
 
@@ -73,17 +37,28 @@ def stop_reader(pid: int, config: Path) -> int:
     int
         Kernel-reported byte offset of the actual configuration descriptor.
     """
-    os.kill(pid, signal.SIGSTOP)
-    observed, status = os.waitpid(pid, os.WUNTRACED)
-    assert observed == pid
-    assert os.WIFSTOPPED(status)
-    assert os.WSTOPSIG(status) == signal.SIGSTOP
-    descriptors = Path(f"/proc/{pid}/fd")
-    matches = [entry for entry in descriptors.iterdir() if entry.readlink() == config]
-    assert len(matches) == 1
-    info = Path(f"/proc/{pid}/fdinfo/{matches[0].name}").read_text()
-    fields = dict(line.split(":", 1) for line in info.splitlines())
-    return int(fields["pos"].strip())
+    deadline = time.monotonic() + 5
+    original_size = config.stat().st_size
+    position = 0
+    while not 0 < position < original_size:
+        assert time.monotonic() < deadline, "native configuration read did not start"
+        assert process.poll() is None, "native reader exited before its configuration read"
+        os.kill(process.pid, signal.SIGSTOP)
+        observed, status = os.waitpid(process.pid, os.WUNTRACED)
+        assert observed == process.pid
+        assert os.WIFSTOPPED(status)
+        assert os.WSTOPSIG(status) == signal.SIGSTOP
+        descriptors = Path(f"/proc/{process.pid}/fd")
+        matches = [entry for entry in descriptors.iterdir() if entry.readlink() == config]
+        if matches:
+            assert len(matches) == 1
+            info = Path(f"/proc/{process.pid}/fdinfo/{matches[0].name}").read_text()
+            fields = dict(line.split(":", 1) for line in info.splitlines())
+            position = int(fields["pos"].strip())
+        if not 0 < position < original_size:
+            process.send_signal(signal.SIGCONT)
+            time.sleep(0.001)
+    return position
 
 
 @pytest.mark.parametrize("mutation", ["append", "truncate", "replace", "unlink"])
@@ -109,46 +84,40 @@ def test_actual_configuration_changed_during_hash(
             stream.write(padding)
     original_size = config.stat().st_size
     events, raw, metadata = (tmp_path / name for name in ("events.bin", "raw.csv", "metadata.json"))
-    with watch_access(config) as descriptor:
-        process = subprocess.Popen(
-            [str(native_run), str(config), str(events), str(raw), "--metadata", str(metadata)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+    process = subprocess.Popen(
+        [str(native_run), str(config), str(events), str(raw), "--metadata", str(metadata)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        position = stop_reader(process, config)
+        assert 0 < position < original_size
+        assert not events.exists()
+        if mutation == "append":
+            with config.open("ab") as stream:
+                stream.write(b" ")
+        elif mutation == "truncate":
+            with config.open("r+b") as stream:
+                stream.truncate(0)
+        elif mutation == "replace":
+            replacement = tmp_path / "replacement.conf"
+            replacement.write_text(configuration("pid", "none"), encoding="utf-8")
+            replacement.replace(config)
+        else:
+            config.unlink()
+        os.kill(process.pid, signal.SIGCONT)
+        stdout, stderr = process.communicate(timeout=10)
+        assert process.returncode == 1
+        assert stdout == ""
+        expected = (
+            "native artifact grew during hashing"
+            if mutation == "append"
+            else "native artifact changed during hashing"
         )
-        try:
-            ready, _, _ = select.select([descriptor], [], [], 5)
-            assert ready == [descriptor]
-            notification = os.read(descriptor, 65536)
-            assert int.from_bytes(notification[4:8], byteorder="little") & 1
-            position = stop_reader(process.pid, config)
-            assert 0 < position < original_size
-            assert not events.exists()
-            if mutation == "append":
-                with config.open("ab") as stream:
-                    stream.write(b" ")
-            elif mutation == "truncate":
-                with config.open("r+b") as stream:
-                    stream.truncate(0)
-            elif mutation == "replace":
-                replacement = tmp_path / "replacement.conf"
-                replacement.write_text(configuration("pid", "none"), encoding="utf-8")
-                replacement.replace(config)
-            else:
-                config.unlink()
-            os.kill(process.pid, signal.SIGCONT)
-            stdout, stderr = process.communicate(timeout=10)
-            assert process.returncode == 1
-            assert stdout == ""
-            expected = (
-                "native artifact grew during hashing"
-                if mutation == "append"
-                else "native artifact changed during hashing"
-            )
-            assert stderr.strip() == expected
-            assert not any(path.exists() for path in (events, raw, metadata))
-        finally:
-            if process.poll() is None:
-                os.kill(process.pid, signal.SIGCONT)
-                process.kill()
-                process.communicate(timeout=5)
+        assert stderr.strip() == expected
+        assert not any(path.exists() for path in (events, raw, metadata))
+    finally:
+        process.send_signal(signal.SIGCONT)
+        process.kill()
+        process.communicate(timeout=5)

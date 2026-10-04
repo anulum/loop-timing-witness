@@ -17,26 +17,34 @@
 
 namespace witness {
 /** Native output encoding; both selections always require an exclusive create. */
-enum class OutputFormat { text, /**< Exclusive native text stream. */
-                          binary /**< Exclusive native binary stream. */ };
+enum class OutputFormat {
+    text,  /**< Exclusive native text stream. */
+    binary /**< Exclusive native binary stream. */
+};
 /** Own one exclusive stream, retain partial bytes and refuse access after close. */
 class ExclusiveOutput {
     std::FILE *file;
-public:
+
+  public:
     /** Open exclusively; destruction closes an earlier stream if later setup fails. */
     ExclusiveOutput(const char *path, OutputFormat format, const char *error)
         : file(std::fopen(path, format == OutputFormat::binary ? "wbx" : "wx")) {
-        if (!file) throw std::runtime_error(error);
+        if (!file)
+            throw std::runtime_error(error);
     }
     /** Close once during failure cleanup without masking the original exception. */
-    ~ExclusiveOutput() { if (file) std::fclose(file); }
+    ~ExclusiveOutput() {
+        if (file)
+            std::fclose(file);
+    }
     ExclusiveOutput(const ExclusiveOutput &) = delete;
     ExclusiveOutput &operator=(const ExclusiveOutput &) = delete;
     /** Report stream ownership without touching a released FILE. */
     bool is_open() const noexcept { return file != nullptr; }
     /** Borrow the owned stream for a checked native write or flush. */
     std::FILE *stream(const char *closed_error) const {
-        if (!file) throw std::runtime_error(closed_error);
+        if (!file)
+            throw std::runtime_error(closed_error);
         return file;
     }
     /** Release ownership even on flush failure; the caller checks the return status. */

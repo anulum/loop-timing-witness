@@ -24,31 +24,41 @@ namespace {
 /** Own the read descriptor during digest construction and exceptions. */
 struct Descriptor {
     int value;
-    ~Descriptor() { if (value >= 0) ::close(value); }
+    ~Descriptor() {
+        if (value >= 0)
+            ::close(value);
+    }
 };
 /** Compare identity and modification metadata of one opened regular file. */
 bool unchanged(const struct stat &before, const struct stat &after) {
     return before.st_dev == after.st_dev && before.st_ino == after.st_ino &&
-        before.st_size == after.st_size && before.st_mtim.tv_sec == after.st_mtim.tv_sec &&
-        before.st_mtim.tv_nsec == after.st_mtim.tv_nsec && before.st_ctim.tv_sec == after.st_ctim.tv_sec &&
-        before.st_ctim.tv_nsec == after.st_ctim.tv_nsec;
+           before.st_size == after.st_size && before.st_mtim.tv_sec == after.st_mtim.tv_sec &&
+           before.st_mtim.tv_nsec == after.st_mtim.tv_nsec &&
+           before.st_ctim.tv_sec == after.st_ctim.tv_sec &&
+           before.st_ctim.tv_nsec == after.st_ctim.tv_nsec;
 }
-}
+} // namespace
 FileDigest file_digest(const char *path) {
     Descriptor file{::open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)};
-    struct stat before{}, after{}, named{};
-    if (file.value < 0 || fstat(file.value, &before) != 0 || !S_ISREG(before.st_mode) || before.st_size < 0)
+    struct stat before {
+    }, after{}, named{};
+    if (file.value < 0 || fstat(file.value, &before) != 0 || !S_ISREG(before.st_mode) ||
+        before.st_size < 0)
         throw std::runtime_error("cannot hash actual regular artifact");
-    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> context(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> context(EVP_MD_CTX_new(),
+                                                                    EVP_MD_CTX_free);
     if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
         throw std::runtime_error("cannot initialize native SHA-256");
     std::array<unsigned char, 65536> buffer{};
     FileDigest result;
     for (;;) {
         const auto count = ::read(file.value, buffer.data(), buffer.size());
-        if (count < 0 && errno == EINTR) continue;
-        if (count < 0) throw std::runtime_error("cannot read native artifact bytes");
-        if (!count) break;
+        if (count < 0 && errno == EINTR)
+            continue;
+        if (count < 0)
+            throw std::runtime_error("cannot read native artifact bytes");
+        if (!count)
+            break;
         const auto bytes = static_cast<std::size_t>(count);
         if (EVP_DigestUpdate(context.get(), buffer.data(), bytes) != 1)
             throw std::runtime_error("cannot hash native artifact bytes");

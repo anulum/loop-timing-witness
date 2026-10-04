@@ -40,7 +40,8 @@ std::uint64_t argument(const std::string &text) {
 /** Require the entire functional ISA simulation contract before creating RTL state. */
 Settings settings(const std::vector<std::string> &args) {
     if (args.size() != 8)
-        throw std::invalid_argument("Witness device requires base, IRQ, RTC nanoseconds, time limit, mailbox, run configuration, events and tracking");
+        throw std::invalid_argument(
+            "Witness device requires base, IRQ, RTC nanoseconds, time limit, mailbox, run configuration, events and tracking");
     const auto base = argument(args[0]);
     const auto interrupt = argument(args[1]);
     const auto rtc_nanoseconds = argument(args[2]);
@@ -53,10 +54,16 @@ Settings settings(const std::vector<std::string> &args) {
     if (!shared || shared % 8 || shared > UINT64_MAX - sizeof(witness_amp_mailbox) ||
         args[5].empty() || args[6].empty() || args[7].empty())
         throw std::invalid_argument("Witness AMP mailbox or run files outside bounds");
-    return {base, static_cast<std::uint32_t>(interrupt), rtc_nanoseconds, time_limit,
-            shared, args[5], args[6], args[7]};
+    return {base,
+            static_cast<std::uint32_t>(interrupt),
+            rtc_nanoseconds,
+            time_limit,
+            shared,
+            args[5],
+            args[6],
+            args[7]};
 }
-}
+} // namespace
 
 /** Real AXI transactions and retained RTL IRQ routed through Spike's architectural PLIC. */
 class witness_axi_t final : public abstract_device_t {
@@ -77,7 +84,7 @@ class witness_axi_t final : public abstract_device_t {
             throw std::runtime_error("Witness ISA simulation time limit exceeded");
     }
 
-public:
+  public:
     /** Start production RTL after the simulator has installed its actual PLIC. */
     witness_axi_t(const sim_t &sim, Settings supplied)
         : simulator(sim), configuration(supplied),
@@ -86,7 +93,8 @@ public:
           output(configuration.event_path.c_str(), configuration.tracking_path.c_str()),
           logger(transport, run, output, configuration.shared) {
         if (run.modeled_overload_ns)
-            throw std::invalid_argument("AMP overload must execute actual target instructions without a synthetic time advance");
+            throw std::invalid_argument(
+                "AMP overload must execute actual target instructions without a synthetic time advance");
         witness::configure_run(transport, run);
         synchronize();
     }
@@ -96,10 +104,12 @@ public:
 
     /** Translate an aligned 32-bit ISA load to an actual AR/R exchange, including refusal. */
     bool load(reg_t address, size_t length, std::uint8_t *bytes) override {
-        if (length != 4 || address > 252 || address % 4 != 0) return false;
+        if (length != 4 || address > 252 || address % 4 != 0)
+            return false;
         const auto reply = fabric.read(static_cast<std::uint8_t>(address));
         synchronize();
-        if (reply.response != 0) return false;
+        if (reply.response != 0)
+            return false;
         for (unsigned index = 0; index < 4; ++index)
             bytes[index] = static_cast<std::uint8_t>(reply.data >> (index * 8));
         return true;
@@ -107,7 +117,8 @@ public:
 
     /** Translate an aligned full-word ISA store to actual independent AW/W and B channels. */
     bool store(reg_t address, size_t length, const std::uint8_t *bytes) override {
-        if (length != 4 || address > 252 || address % 4 != 0) return false;
+        if (length != 4 || address > 252 || address % 4 != 0)
+            return false;
         std::uint32_t value = 0;
         for (unsigned index = 0; index < 4; ++index)
             value |= static_cast<std::uint32_t>(bytes[index]) << (index * 8);
@@ -127,14 +138,13 @@ public:
             if (complete) {
                 const auto result = logger.completion();
                 std::cout << "WITNESS_AMP_COMPLETION {\"samples\":" << result.samples
-                          << ",\"events\":" << result.records
-                          << ",\"misses\":" << result.misses
+                          << ",\"events\":" << result.records << ",\"misses\":" << result.misses
                           << ",\"overflow\":" << result.overflow
-                          << ",\"safe\":" << (result.safe ? "true" : "false")
-                          << ",\"thermal\":"
+                          << ",\"safe\":" << (result.safe ? "true" : "false") << ",\"thermal\":"
                           << (witness::read_register(transport, 0x6c) ? "true" : "false") << "}\n";
                 std::cout.flush();
-                if (!std::cout) throw std::runtime_error("AMP completion receipt write failed");
+                if (!std::cout)
+                    throw std::runtime_error("AMP completion receipt write failed");
             }
         }
         synchronize();
@@ -143,13 +153,14 @@ public:
 
 /** Bind explicit simulation arguments to the actual parsed PLIC and existing device map. */
 witness_axi_t *witness_axi_parse(const void *fdt, const sim_t *sim, reg_t *base,
-                               const std::vector<std::string> &args) {
+                                 const std::vector<std::string> &args) {
     const auto supplied = settings(args);
     reg_t plic_base = 0;
     std::uint32_t interrupts = 0;
     if (fdt_parse_plic(fdt, &plic_base, &interrupts, "riscv,plic0") != 0 ||
         supplied.interrupt > interrupts)
-        throw std::invalid_argument("Witness device requires an available architectural PLIC source");
+        throw std::invalid_argument(
+            "Witness device requires an available architectural PLIC source");
     for (const auto &entry : sim->get_bus().get_devices()) {
         const auto other_base = entry.first;
         const auto other_size = entry.second->size();
@@ -165,11 +176,12 @@ witness_axi_t *witness_axi_parse(const void *fdt, const sim_t *sim, reg_t *base,
 std::string witness_axi_dts(const sim_t *, const std::vector<std::string> &args) {
     const auto supplied = settings(args);
     std::ostringstream text;
-    text << std::hex << "    witness@" << supplied.base
-         << " { compatible = \"anulum,loop-timing-witness-axi-v1\", \"anulum,witness-isa-simulation\"; reg = <0x"
-         << (supplied.base >> 32) << " 0x" << (supplied.base & 0xffffffff)
-         << " 0 0x100>; interrupt-parent = <&PLIC>; interrupts = <0x"
-         << supplied.interrupt << ">; };\n";
+    text
+        << std::hex << "    witness@" << supplied.base
+        << " { compatible = \"anulum,loop-timing-witness-axi-v1\", \"anulum,witness-isa-simulation\"; reg = <0x"
+        << (supplied.base >> 32) << " 0x" << (supplied.base & 0xffffffff)
+        << " 0 0x100>; interrupt-parent = <&PLIC>; interrupts = <0x" << supplied.interrupt
+        << ">; };\n";
     return text.str();
 }
 

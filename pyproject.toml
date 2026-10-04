@@ -165,6 +165,12 @@ branch = true
 source = ["src/loop_timing_witness", "tools", "controller_test_support"]
 patch = ["subprocess"]
 
+# Isolated repository contract controls copy these exact maintained sources.
+# Subprocess coverage keeps their actual trace under the corresponding source root.
+[tool.coverage.paths]
+tools = ["tools", "*/repository-contract-control/tools"]
+tests = ["tests", "*/repository-contract-control/tests"]
+
 [tool.coverage.report]
 fail_under = 100
 show_missing = true

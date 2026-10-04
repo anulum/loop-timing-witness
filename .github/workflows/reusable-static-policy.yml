@@ -31,6 +31,11 @@ jobs:
         run: |
           rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
           rustup default 1.99.0
+      - name: Install the pinned native formatter
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes clang-format-18=1:18.1.3-1ubuntu1
+          clang-format-18 --version
       - name: Native toolchain versions
         run: |
           gcc --version
@@ -49,6 +54,10 @@ jobs:
         run: .venv/bin/ruff format --check .
       - name: Mypy strict
         run: .venv/bin/mypy
+      - name: Maintained source enrolment
+        run: .venv/bin/python tools/check_source_gates.py
+      - name: Maintained C and C++ formatting
+        run: .venv/bin/python tools/check_native_format.py
       - name: Measurement-domain manifest
         run: .venv/bin/python tools/validate_measurement_domain.py
       - name: Capability inventory drift

@@ -19,7 +19,8 @@ int main(int argc, char **argv) {
         const auto map = witness::number(arguments, std::numeric_limits<std::uint32_t>::max());
         const auto physical = witness::number(arguments, std::numeric_limits<std::uint64_t>::max());
         witness::end_request(arguments);
-        witness::UioDevice device({argv[1], argv[2], argv[3], static_cast<std::uint32_t>(map), physical});
+        witness::UioDevice device(
+            {argv[1], argv[2], argv[3], static_cast<std::uint32_t>(map), physical});
         return witness::serve(device);
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

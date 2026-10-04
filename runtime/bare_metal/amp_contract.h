@@ -51,13 +51,22 @@ typedef struct {
 } witness_amp_mailbox;
 
 /** Status is monotonic: initial, armed, run finished or terminal refusal. */
-enum witness_amp_status { WITNESS_AMP_INITIAL = 0 /**< Mailbox is initialised; the controller is not armed. */, WITNESS_AMP_ARMED = 1 /**< Controller interrupt service is armed for the configured run. */,
-                          WITNESS_AMP_FINISHED = 2 /**< The finite run completed and telemetry remains available for draining. */, WITNESS_AMP_REFUSED = 3 /**< Terminal refusal; trap cause and value retain the failure. */ };
+enum witness_amp_status {
+    WITNESS_AMP_INITIAL = 0 /**< Mailbox is initialised; the controller is not armed. */,
+    WITNESS_AMP_ARMED = 1 /**< Controller interrupt service is armed for the configured run. */,
+    WITNESS_AMP_FINISHED =
+        2 /**< The finite run completed and telemetry remains available for draining. */,
+    WITNESS_AMP_REFUSED = 3 /**< Terminal refusal; trap cause and value retain the failure. */
+};
 
 /** Logger owns readiness and final close acknowledgement after firmware publishes its fresh ABI. */
-enum witness_amp_logger_status { WITNESS_AMP_LOGGER_WAITING = 0 /**< Firmware waits for the sole logger to validate the fresh mailbox. */,
-                                WITNESS_AMP_LOGGER_COMPLETE = 1 /**< Logger has flushed and closed both completed output streams. */,
-                                WITNESS_AMP_LOGGER_READY = 2 /**< Logger owns the consumer and is ready to drain telemetry. */ };
+enum witness_amp_logger_status {
+    WITNESS_AMP_LOGGER_WAITING =
+        0 /**< Firmware waits for the sole logger to validate the fresh mailbox. */,
+    WITNESS_AMP_LOGGER_COMPLETE =
+        1 /**< Logger has flushed and closed both completed output streams. */,
+    WITNESS_AMP_LOGGER_READY = 2 /**< Logger owns the consumer and is ready to drain telemetry. */
+};
 
 /** Platform and run data must be supplied by the complete firmware build, never defaulted. */
 extern const witness_amp_platform_contract witness_amp_platform;

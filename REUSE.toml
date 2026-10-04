@@ -14,6 +14,9 @@ version = 1
 path = [
     ".github/workflow-inventory.json",
     "tests/data/source-release-v0.1.0-provenance.json",
+    "fuzz/corpus/zero.bin",
+    "fuzz/corpus/extremes-reset.bin",
+    "fuzz/corpus/invalid-coefficients.bin",
     ".zenodo.json",
     "benchmarks/controller_regression.json",
     "benchmarks/controller_comparison.local.json",

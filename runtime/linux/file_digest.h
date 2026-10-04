@@ -18,9 +18,15 @@
 
 namespace witness {
 /** Digest and exact byte count of one stable regular file. */
-struct FileDigest { std::string sha256; std::uint64_t bytes = 0; };
+struct FileDigest {
+    std::string sha256;
+    std::uint64_t bytes = 0;
+};
 /** Named artifact digest; role names are internal fixed literals. */
-struct ArtifactDigest { const char *role; FileDigest digest; };
+struct ArtifactDigest {
+    const char *role;
+    FileDigest digest;
+};
 /** Hash actual bytes with OpenSSL EVP, refusing symlinks and concurrent file changes. */
 FileDigest file_digest(const char *path);
 /** Require a configuration to retain its original bytes across parsing and execution. */

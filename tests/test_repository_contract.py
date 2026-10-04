@@ -10,18 +10,27 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import shutil
+import subprocess
+import sys
 import tomllib
+from typing import TYPE_CHECKING
 
 import pytest
 
 from check_commit_trailers import SUPERLATIVE
 from check_dependency_licences import locked_pins
+from check_provenance_headers import BRAND_ASSET_DIGESTS, EXEMPT_PATHS
 from conftest import REPOSITORY_ROOT
 from manifest_io import load_json_object, sha256_of_file
 from preflight import ACTIONLINT_MODULE, GITLEAKS_MODULE, TYPOS_VERSION
 from repository_files import candidate_files
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 REQUIRED_FILES = (
     ".editorconfig",
@@ -36,11 +45,13 @@ REQUIRED_FILES = (
     ".github/workflow-inventory.json",
     ".github/workflows/ci.yml",
     ".github/workflows/codeql.yml",
+    ".github/workflows/controller-fuzz.yml",
     ".github/workflows/docs.yml",
     ".github/workflows/pre-commit.yml",
     ".github/workflows/sbom.yml",
     ".github/workflows/scorecard.yml",
     ".github/workflows/security-audit.yml",
+    ".github/workflows/reusable-security-audit.yml",
     ".github/zizmor.yml",
     ".gitignore",
     ".pre-commit-config.yaml",
@@ -243,7 +254,7 @@ def test_workflows_share_one_exact_toolchain_matching_the_local_pins() -> None:
     assert python_versions == {"3.13.15"}
     assert go_versions == {"1.27.1"}
     installs = {
-        install for text in texts.values() for install in re.findall(r"go install (\S+)", text)
+        install for text in texts.values() for install in re.findall(r"\bgo install (\S+)", text)
     }
     assert installs == {
         f"github.com/rhysd/actionlint/cmd/actionlint@{ACTIONLINT_MODULE[1]}",
@@ -289,6 +300,8 @@ def test_funding_metadata_is_the_ecosystem_payload() -> None:
 def test_publishable_text_uses_no_self_applied_quality_terms() -> None:
     """Outward wording stays factual; only the guard that bans the terms and its test name them."""
     exempt = {
+        *BRAND_ASSET_DIGESTS,
+        *EXEMPT_PATHS,
         "tools/check_commit_trailers.py",
         "tests/test_check_commit_trailers.py",
         "docs/assets/loop-timing-witness.webp",
@@ -319,3 +332,43 @@ def test_licence_record_lists_the_lock_file_and_json_is_reuse_annotated() -> Non
     assert json_files
     for name in json_files:
         assert f'"{name}"' in reuse, name
+
+
+def test_public_wording_guard_rejects_an_actual_bad_readme(tmp_path: Path) -> None:
+    """Exercise the normal public test on an isolated Git copy with a rejected claim."""
+    root = tmp_path / "repository-contract-control"
+    root.mkdir()
+    for relative in candidate_files(REPOSITORY_ROOT):
+        source = REPOSITORY_ROOT / relative
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        assert (
+            hashlib.sha256(source.read_bytes()).digest()
+            == hashlib.sha256(target.read_bytes()).digest()
+        )
+    subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+    readme = root / "README.md"
+    readme.write_bytes(readme.read_bytes() + b"\n" + b"ground" + b"breaking" + b"\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-vv",
+            "tests/test_repository_contract.py",
+            "-k",
+            "test_publishable_text_uses_no_self_applied_quality_terms",
+            "--no-cov",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "AssertionError" in result.stdout
+    assert "README.md" in result.stdout
+    assert "1 failed" in result.stdout
+    assert "UnicodeDecodeError" not in result.stdout

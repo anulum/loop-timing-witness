@@ -32,6 +32,7 @@ it does not understand.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -70,6 +71,7 @@ HASH_COMMENT_SUFFIXES: Final = frozenset(
 )
 HASH_COMMENT_NAMES: Final = frozenset(
     {
+        ".clang-format",
         ".editorconfig",
         ".gitattributes",
         ".gitignore",
@@ -80,9 +82,27 @@ HASH_COMMENT_NAMES: Final = frozenset(
     }
 )
 SLASH_COMMENT_SUFFIXES: Final = frozenset({".c", ".cpp", ".dts", ".h", ".rs", ".sv", ".svh"})
+BRAND_ASSET_DIGESTS: Final = {
+    "docs/assets/anulum_logo_company.jpg": (
+        "d98a731a2b4b3b8880979d2e2f2c5cb722cc45d3f75b988e81c301902c7d1143"
+    ),
+    "docs/assets/anulum_logo.png": (
+        "fe4b3b24226e87045d4aac09284f30ee8a83bd95f9af0509272a063e284067d3"
+    ),
+    "docs/assets/fortis_studio_logo.jpg": (
+        "844c5d764c8ad0a030e8f7b83c7e878bb4ebec42ea6e40223f65f344769568c0"
+    ),
+}
 EXEMPT_SUFFIXES: Final = frozenset({".json", ".pdf"})
 EXEMPT_PATHS: Final = frozenset(
-    {"LICENSE", "controllers/rust/LICENSE", "docs/assets/loop-timing-witness.webp"}
+    {
+        "LICENSE",
+        "controllers/rust/LICENSE",
+        "docs/assets/loop-timing-witness.webp",
+        "fuzz/corpus/zero.bin",
+        "fuzz/corpus/extremes-reset.bin",
+        "fuzz/corpus/invalid-coefficients.bin",
+    }
 )
 EXEMPT_DIRECTORIES: Final = frozenset({"LICENSES"})
 
@@ -206,6 +226,43 @@ def _markdown_finding(relative: str, lines: list[str]) -> str | None:
     return None
 
 
+def _brand_asset_finding(root: Path, relative: str) -> str | None:
+    """Check original brand bytes and the adjoining attribution record.
+
+    Parameters
+    ----------
+    root
+        Candidate Git work tree.
+    relative
+        Registered original image path.
+
+    Returns
+    -------
+    str or None
+        An actionable custody finding, or no finding for the original asset.
+    """
+    path = root / relative
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        attribution = path.with_name(path.name + ".license").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return f"{relative}: original image and UTF-8 attribution sidecar are required"
+    if digest != BRAND_ASSET_DIGESTS[relative]:
+        return f"{relative}: bytes differ from the registered original brand image"
+    required = (
+        *HEADER_LINES,
+        "SPDX-FileCopyrightText: 1998-2026 Miroslav Šotek <protoscience@anulum.li>",
+    )
+    lines = attribution.splitlines()
+    if (
+        lines[: len(HEADER_LINES)] != list(HEADER_LINES)
+        or len(lines) <= len(HEADER_LINES)
+        or not all(line in lines for line in required)
+    ):
+        return f"{relative}: attribution sidecar lacks the canonical ownership fields"
+    return _title_finding(relative + ".license", lines[len(HEADER_LINES)])
+
+
 def file_finding(root: Path, relative: str) -> str | None:
     """Apply the rule for one file's type.
 
@@ -221,6 +278,10 @@ def file_finding(root: Path, relative: str) -> str | None:
     str or None
         A finding, or ``None`` when the file complies or is exempt.
     """
+    if relative in BRAND_ASSET_DIGESTS:
+        return _brand_asset_finding(root, relative)
+    if relative.endswith(".license") and relative.removesuffix(".license") in BRAND_ASSET_DIGESTS:
+        return _brand_asset_finding(root, relative.removesuffix(".license"))
     path = PurePosixPath(relative)
     if (
         relative in EXEMPT_PATHS

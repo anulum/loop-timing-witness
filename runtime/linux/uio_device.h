@@ -38,7 +38,7 @@ class UioDevice {
     /** Send one native-endian signed 32-bit generic UIO IRQ control value. */
     void irq_control(std::int32_t enabled);
 
-public:
+  public:
     /** Verify sysfs, generic driver and character-device identity before mapping. */
     explicit UioDevice(const UioIdentity &identity);
     /** Release ownership without resetting an active hardware run. */

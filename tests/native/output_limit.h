@@ -14,18 +14,21 @@
 
 /** Restrict real writes, then restore resources before GCC profiling exit writes. */
 class ScopedOutputLimit {
-    struct rlimit saved{};
-    struct sigaction saved_signal{};
-public:
+    struct rlimit saved {};
+    struct sigaction saved_signal {};
+
+  public:
     /** Lower only the soft file-size limit in this owned native test process. */
     explicit ScopedOutputLimit(rlim_t maximum) {
         assert(getrlimit(RLIMIT_FSIZE, &saved) == 0);
         assert(maximum <= saved.rlim_max);
-        struct sigaction ignored{};
+        struct sigaction ignored {};
         ignored.sa_handler = SIG_IGN;
         assert(sigemptyset(&ignored.sa_mask) == 0);
         assert(sigaction(SIGXFSZ, &ignored, &saved_signal) == 0);
-        const struct rlimit restricted{maximum, saved.rlim_max};
+        const struct rlimit restricted {
+            maximum, saved.rlim_max
+        };
         assert(setrlimit(RLIMIT_FSIZE, &restricted) == 0);
     }
     /** Restore both the original limit and signal disposition on every exit. */

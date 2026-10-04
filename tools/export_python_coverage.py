@@ -44,8 +44,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     measured = Coverage(config_file="pyproject.toml")
     measured.load()
-    measured.set_option("run:source", ["."])
-    percent = measured.xml_report(outfile=str(args.output))
+    loaded = measured.get_data()
+    try:
+        measured.set_option("run:source", ["."])
+        percent = measured.xml_report(outfile=str(args.output))
+    finally:
+        # With path aliases configured, reporting replaces the loaded SQLite
+        # data by a remapped in-memory copy. Release both connections instead
+        # of leaving them to the garbage collector of the calling process.
+        loaded.close()
+        measured.get_data().close(force=True)
     return 0 if percent == COMPLETE_COVERAGE else 1
 
 

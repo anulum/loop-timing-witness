@@ -92,12 +92,14 @@ def test_original_source_profile_keeps_duplicate_basenames_and_refuses_incomplet
         capture_output=True,
         text=True,
     )
-    original = Coverage(data_file=str(data), config_file="pyproject.toml")
-    original.combine()
-    original.save()
+    collected = Coverage(data_file=str(data), config_file="pyproject.toml")
+    collected.combine()
+    collected.save()
+    collected.get_data().close()
     monkeypatch.setenv("COVERAGE_FILE", str(data))
     original = Coverage(config_file="pyproject.toml")
     original.load()
+    loaded = original.get_data()
     before = tmp_path / "original.json"
     original.json_report(outfile=str(before))
     baseline = json.loads(before.read_text())
@@ -119,4 +121,10 @@ def test_original_source_profile_keeps_duplicate_basenames_and_refuses_incomplet
     assert xml.count("<line ") == int(totals["lines-valid"])
     unchanged = Coverage(data_file=str(data))
     unchanged.load()
-    assert original.get_data().measured_files() == unchanged.get_data().measured_files()
+    try:
+        assert original.get_data().measured_files() == unchanged.get_data().measured_files()
+    finally:
+        # Reporting replaced the loaded data by a remapped in-memory copy.
+        loaded.close()
+        original.get_data().close(force=True)
+        unchanged.get_data().close()

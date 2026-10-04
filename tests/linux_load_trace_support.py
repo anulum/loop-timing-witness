@@ -51,7 +51,9 @@ class OwnedTrace:
             if select.select([descriptor], [], [], 0)[0]:
                 continue
             children_file = Path(f"/proc/{parent}/task/{parent}/children")
-            with suppress(FileNotFoundError):
+            # A parent that exits between the two checks answers ESRCH for this
+            # file, not ENOENT; either way it has no children left to retain.
+            with suppress(FileNotFoundError, ProcessLookupError):
                 children = children_file.read_text().split()
                 if select.select([descriptor], [], [], 0)[0]:
                     continue

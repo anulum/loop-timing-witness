@@ -170,6 +170,8 @@ patch = ["subprocess"]
 [tool.coverage.paths]
 tools = ["tools", "*/repository-contract-control/tools"]
 tests = ["tests", "*/repository-contract-control/tests"]
+# The control copy also holds the measured root module controller_test_support.py.
+repository = [".", "*/repository-contract-control"]
 
 [tool.coverage.report]
 fail_under = 100

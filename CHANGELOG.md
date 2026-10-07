@@ -14,6 +14,9 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Per-run absolute adjacent-cycle latency jitter with Type-7 distributions,
+  missing-pair coverage, separate peak-to-peak spread, auditable pair CSV and
+  labelled SVG output for both event profiles. Warm-up and gaps are excluded.
 - Source-release verification and OIDC/Sigstore signatures for the immutable
   `v0.1.0` source archive and provenance manifest, with separate verification,
   signing and release-attachment jobs and portable verification instructions.

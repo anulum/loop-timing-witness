@@ -63,6 +63,14 @@ records required below.
   maximum — per repeat and pooled, with the spread between repeats.
 - Every statistic states its sample count and run duration. No single-run number is presented
   without its distribution.
+- Per-run latency jitter means the absolute change in the same periodic event interval
+  between adjacent post-warm-up cycles. Both intervals must be complete; missing cycles
+  are never bridged. Pair counts, expected pairs and missing-pair coverage accompany the
+  distribution, with peak-to-peak latency spread reported separately. Fault and safe-state
+  intervals remain latency-only. The exact definition, null/zero semantics and auditable
+  pair outputs are specified in [host analysis](HOST_ANALYSIS.md#latency-jitter).
+  This derived software metric changes no capture or input-manifest parameter; pooled
+  repeats and physical jitter qualification still require their separate campaign evidence.
 - Deadline misses are reported as counts and rates from the hardware monitor.
 - Control quality is the tracking error of the emulated plant, RMS and peak.
 - Energy is reported as mean energy per control cycle over windows of many cycles, per rail and

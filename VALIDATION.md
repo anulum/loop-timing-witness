@@ -10,6 +10,16 @@ Loop Timing Witness — validation
 
 # Validation
 
+## Per-run latency jitter
+
+`tests/test_latency_jitter.py` exercises the public API and analyser command with real
+Icarus-produced CONTROL and COMPUTE streams. It verifies Type-7 quantiles, zero variation,
+raw signed/absolute pair reconstruction, unit conversion and provenance across JSON, CSV
+and SVG. Hash-bound timestamp and missing-event controls verify decreasing latency,
+missing middle and final endpoints, empty samples and warm-up boundaries. Installed wheel
+and source-archive consumers also check the jitter artefacts. These are software and
+simulation checks; physical jitter and pooled repeated-run qualification remain absent.
+
 ## Installed Python distribution
 
 `make python-package-tests` prepares binary runtime wheels using the hashes in

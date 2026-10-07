@@ -231,7 +231,10 @@ verified measurement-domain snapshot, decodes events, computes derived intervals
 distributions (median, 95th, 99th and 99.9th percentile,
 maximum), deadline-miss rate, tracking error (RMS and peak), mean rail energy per cycle over
 power-sampling windows, fault detection and time to safe state. It writes JSON, CSV and SVG
-reports tied to sample counts and observation duration. Inputs and limits are specified in
+reports tied to sample counts and observation duration. Unreleased source analysis also
+reports absolute adjacent-cycle changes of each periodic latency, separate peak-to-peak
+spread and missing-pair coverage; warm-up and gaps are never bridged. This derived host
+metric has no capture-format or controller-kernel counterpart. Inputs and limits are specified in
 [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md). Board qualification and measured results remain absent.
 
 ## Verification of the instrument

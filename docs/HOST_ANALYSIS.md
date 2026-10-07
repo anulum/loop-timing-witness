@@ -237,12 +237,53 @@ hardware gates in [`MEASUREMENT_PROTOCOL.md`](MEASUREMENT_PROTOCOL.md).
 
 ## Outputs
 
+### Latency jitter
+
+The unreleased source analyser adds `events.jitter` and the method identifier
+`absolute_cycle_to_cycle_latency_change.v1` to the existing analysis-report v1
+summary. These derived fields do not change the event, domain or run-manifest
+input contracts. They are not present in the published Python 0.1.0 artefact.
+
+For each periodic interval, let `L[c]` be its same-cycle latency in fabric ticks.
+The jitter sample for adjacent analysed cycles is `abs(L[c] - L[c-1])`.
+Both endpoints must be observed in both cycles. Warm-up cycles are excluded
+before pairing; missing cycles or endpoints never create a pair across a gap.
+This is a project-specific measure of cycle-to-cycle latency variation, distinct
+from deviation of the sampling period from its nominal value. Occasional
+fault-detection and safe-state intervals retain their latency distributions and
+do not receive periodic jitter statistics.
+
+Jitter uses the same Type-7 median, p95, p99, p99.9 and maximum as latency.
+`sample_count` counts contributing adjacent pairs, not events or latency samples.
+`latency_sample_count` is separate. For `N` declared post-warm-up cycles,
+`expected_pair_count` is `max(0, N-1)`; `missing_pair_count` and
+`pair_coverage_fraction` expose missing observations. Complete nonempty pairing
+is `available`, incomplete nonempty pairing is `partial`, and zero pairs are
+`unavailable`. No-pair quantiles are null, including a one-cycle window;
+observed constant latency has zero jitter. Partial distributions describe only
+observed pairs and can be biased by missing events. This status is independent
+of the report's existing input-validity and physical-evidence fields.
+
+`peak_to_peak_ticks` reports `max(L) - min(L)` separately, with at least two
+latency observations. It can be available across a gap even when no adjacent
+pair exists; it never substitutes for the jitter distribution. `cycle_jitter.csv`
+retains both cycles, both latencies, signed `delta_ticks` and nonnegative
+`absolute_delta_ticks` for independent recalculation. All tick-valued fields
+convert to nanoseconds by multiplication with `timebase_resolution_ns`.
+Jitter CSV rows carry the run identity, evidence status, method, resolution and
+declared instrument floor; the summary also retains the observation duration.
+The floor is recorded without correction or subtraction. No simulated jitter
+qualifies a physical instrument or a pooled repeat campaign.
+
 | File | Content |
 |---|---|
 | `report.json` | Canonical JSON summary with evidence status, validity, metrics and limits |
 | `interval_summary.csv` | One row per interval with count, distribution and duration |
 | `cycle_intervals.csv` | Individual same-cycle intervals for audit and independent recalculation |
+| `jitter_summary.csv` | Per-interval absolute-change distributions, pair coverage and latency spread |
+| `cycle_jitter.csv` | Contributing adjacent-cycle pairs with signed and absolute latency changes |
 | `interval_p99.svg` | Labelled p99 comparison of available event intervals |
+| `jitter_p99.svg` | Labelled p99 absolute adjacent-cycle latency changes, including observed zeroes |
 | `energy_per_cycle.svg` | Rail comparison when a complete power series exists |
 
 Each CSV row and SVG title carries the evidence status, so a detached simulation artefact retains

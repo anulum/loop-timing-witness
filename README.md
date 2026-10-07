@@ -216,6 +216,11 @@ make venv
 .venv/bin/loop-timing-witness-analyze path/to/manifest.json --output-dir build/report
 ```
 
+The unreleased source analyser reports absolute adjacent-cycle latency jitter
+in JSON, summary and pair CSV files, and an SVG comparison. Counts expose missing
+pairs; warm-up and missing cycles are never bridged. This addition is separate
+from the published 0.1.0 artefact. See the [definition and outputs](docs/HOST_ANALYSIS.md#latency-jitter).
+
 For programmatic analysis:
 
 ```python

@@ -18,6 +18,7 @@ from typing import Any
 from .amp_report_completion import attach_amp_completion
 from .event_stream import decode_events
 from .host_load_receipt import attach_host_load
+from .latency_jitter import JITTER_METHOD, summarise_jitter
 from .native_completion import attach_completion_statistics
 from .report_outputs import write_report
 from .run_analysis import analyse_events
@@ -87,6 +88,17 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
         contracts["power_rails"],
     )
     duration_ticks = summary["duration_ticks"]
+    summary["jitter_method"] = JITTER_METHOD
+    summary["jitter"] = summarise_jitter(
+        cycle_rows,
+        [
+            str(interval["name"])
+            for interval in contracts["event_profiles"][manifest["profile"]]["intervals"]
+            if interval["name"] != "time_to_safe_state"
+        ],
+        summary["cycle_count"],
+        duration_ticks,
+    )
     for interval in summary["intervals"].values():
         interval["duration_ticks"] = duration_ticks
     if summary["control"] is not None:

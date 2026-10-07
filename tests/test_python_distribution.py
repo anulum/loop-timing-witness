@@ -232,6 +232,12 @@ def test_installed_distribution_analyzes_real_rtl(
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads((reports / "report.json").read_bytes()) == expected
     assert expected["evidence_status"] == "simulation_only"
+    assert expected["events"]["jitter"]["compute_time"]["sample_count"] == 2
+    assert expected["events"]["jitter"]["compute_time"]["median_ticks"] == 2495
+    for filename in ("jitter_summary.csv", "cycle_jitter.csv", "jitter_p99.svg"):
+        content = (reports / filename).read_text()
+        assert "simulation_only" in content
+        assert "compute_time" in content
     manifest["files"]["events"]["sha256"] = "0" * 64
     manifest_path.write_text(json.dumps(manifest))
     refused = tmp_path / "refused"

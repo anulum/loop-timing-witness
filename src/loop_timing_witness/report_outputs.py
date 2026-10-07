@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
+from .latency_jitter import jitter_pairs
 from .manifest_io import canonical_json_bytes
 
 
@@ -43,13 +44,15 @@ def _csv_bytes(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> bytes:
     return stream.getvalue().encode("utf-8")
 
 
-def _interval_summary_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
-    """Flatten per-interval distribution objects into a CSV table.
+def _interval_summary_rows(report: dict[str, Any], metric: str) -> list[dict[str, Any]]:
+    """Flatten per-interval latency or jitter distributions into a CSV table.
 
     Parameters
     ----------
     report
         Valid analysis report.
+    metric
+        Event summary key, either ``intervals`` or ``jitter``.
 
     Returns
     -------
@@ -63,7 +66,7 @@ def _interval_summary_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
             "interval": name,
             **statistics,
         }
-        for name, statistics in sorted(report["events"]["intervals"].items())
+        for name, statistics in sorted(report["events"][metric].items())
     ]
 
 
@@ -142,6 +145,14 @@ def _plots(report: dict[str, Any]) -> dict[str, bytes]:
             "clock ticks",
         )
     }
+    jitter = report["events"]["jitter"]
+    jitter_labels = [name for name, data in sorted(jitter.items()) if data["p99_ticks"] is not None]
+    result["jitter_p99.svg"] = _svg_plot(
+        f"99th percentile absolute adjacent-cycle latency change ({report['evidence_status']})",
+        jitter_labels,
+        [float(jitter[name]["p99_ticks"]) for name in jitter_labels],
+        "clock ticks",
+    )
     energy = report["energy"]
     if energy["status"] == "available":
         rail_labels = sorted(energy["per_rail"])
@@ -201,7 +212,52 @@ def write_report(
                     "maximum_ticks",
                     "duration_ticks",
                 ),
-                _interval_summary_rows(report),
+                _interval_summary_rows(report, "intervals"),
+            )
+        )
+        jitter_provenance = {
+            "run_id": report["run_id"],
+            "evidence_status": report["evidence_status"],
+            "jitter_method": report["events"]["jitter_method"],
+            "timebase_resolution_ns": report["timebase_resolution_ns"],
+            "instrument_floor_ticks": report["instrument_floor_ticks"],
+        }
+        provenance_columns = tuple(jitter_provenance)
+        (staging / "jitter_summary.csv").write_bytes(
+            _csv_bytes(
+                (
+                    *provenance_columns,
+                    "interval",
+                    "status",
+                    "latency_sample_count",
+                    "sample_count",
+                    "expected_pair_count",
+                    "missing_pair_count",
+                    "pair_coverage_fraction",
+                    "median_ticks",
+                    "p95_ticks",
+                    "p99_ticks",
+                    "p999_ticks",
+                    "maximum_ticks",
+                    "peak_to_peak_ticks",
+                    "duration_ticks",
+                ),
+                [{**row, **jitter_provenance} for row in _interval_summary_rows(report, "jitter")],
+            )
+        )
+        (staging / "cycle_jitter.csv").write_bytes(
+            _csv_bytes(
+                (
+                    *provenance_columns,
+                    "interval",
+                    "previous_cycle",
+                    "cycle",
+                    "previous_ticks",
+                    "ticks",
+                    "delta_ticks",
+                    "absolute_delta_ticks",
+                ),
+                [{**jitter_provenance, **pair} for pair in jitter_pairs(cycle_rows)],
             )
         )
         (staging / "cycle_intervals.csv").write_bytes(

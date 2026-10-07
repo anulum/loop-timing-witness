@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -196,3 +197,37 @@ def test_imported_command_refuses_missing_manifest(tmp_path: Path) -> None:
     """
     assert main([str(tmp_path / "absent.json"), "--output-dir", str(tmp_path / "report")]) == 1
     assert not (tmp_path / "report").exists()
+
+
+def test_module_command_reports_real_jitter(make_rtl_run: MakeRtlRun, tmp_path: Path) -> None:
+    """Exercise the Python module entry point on a complete real RTL run.
+
+    Parameters
+    ----------
+    make_rtl_run
+        Actual witness capture and its hash-bound run manifest.
+    tmp_path
+        Exclusive report destination.
+    """
+    run, _ = make_rtl_run()
+    output = tmp_path / "module-report"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "loop_timing_witness.analyze_run",
+            str(run / "manifest.json"),
+            "--output-dir",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((output / "report.json").read_bytes())
+    assert report["events"]["jitter"]["compute_time"]["sample_count"] == 2
+    assert report["events"]["jitter"]["compute_time"]["maximum_ticks"] == 4990
+    assert report["evidence_status"] == "simulation_only"
+    assert (output / "cycle_jitter.csv").is_file()

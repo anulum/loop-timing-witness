@@ -35,6 +35,11 @@ below applies to every change, including the owner's.
 7. **Language.** British English, descriptive names, no self-applied quality labels, no internal
    planning codes.
 
+Derived host metrics preserve the capture and input-manifest contracts unless they introduce
+new input requirements. Their exact definitions, units, missing-observation semantics and
+provenance belong in the measurement protocol and host-analysis documentation. Per-run latency
+jitter is defined in [host analysis](docs/HOST_ANALYSIS.md#latency-jitter).
+
 ## Workflow
 
 ```bash

@@ -19,8 +19,9 @@ module deadline_monitor #(
     if (MISS_LIMIT == 0) begin : invalid_limit
         initial $fatal(1, "MISS_LIMIT must be positive");
     end
+    // A zero sign bit preserves the entire unsigned counter range in the signed comparison.
     assign trip_now = deadline && !written && !safe_latched
-        && consecutive_misses >= MISS_LIMIT - 1'b1;
+        && $signed({1'b0, consecutive_misses}) >= $signed({1'b0, MISS_LIMIT}) - 33'sd1;
     always_ff @(posedge clock or negedge reset_n) begin
         if (!reset_n) begin
             written <= 1'b0;

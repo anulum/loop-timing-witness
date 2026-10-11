@@ -13,6 +13,7 @@
 #ifndef WITNESS_RUN_CONTROL_H
 #define WITNESS_RUN_CONTROL_H
 #include "run_output.h"
+#include "refusal.h"
 #include <cstring>
 #include <functional>
 
@@ -40,7 +41,7 @@ inline std::int32_t signed_word(std::uint32_t value) {
 template <class Device> std::uint32_t read_register(Device &device, std::uint8_t address) {
     const auto result = device.read(address);
     if (result.response != 0)
-        throw std::runtime_error("register read refused at " + std::to_string(address));
+        throw witness::RuntimeRefused("register read refused at " + std::to_string(address));
     return result.data;
 }
 
@@ -48,25 +49,25 @@ template <class Device> std::uint32_t read_register(Device &device, std::uint8_t
 template <class Device>
 void write_register(Device &device, std::uint8_t address, std::uint32_t value) {
     if (device.write(address, value, 15).response != 0)
-        throw std::runtime_error("register write refused at " + std::to_string(address));
+        throw witness::RuntimeRefused("register write refused at " + std::to_string(address));
 }
 
 /** Reset only an idle/finished run, poll real release readiness, then configure. */
 template <class Device> void configure_run(Device &device, const RunConfiguration &configuration) {
     validate_configuration(configuration);
     if (!(read_register(device, 0x98) & 8))
-        throw std::runtime_error("cannot reset an active run");
+        throw witness::RuntimeRefused("cannot reset an active run");
     if ((read_register(device, 0x90) & 7) != 4)
-        throw std::runtime_error("unread previous run records prevent reset");
+        throw witness::RuntimeRefused("unread previous run records prevent reset");
     write_register(device, 0x98, 0);
     write_register(device, 0x98, 1);
     const auto start = device.time();
     while ((read_register(device, 0x98) & 7) != 7)
         if (device.time() - start > 1000000000)
-            throw std::runtime_error("run bank release timed out");
+            throw witness::RuntimeRefused("run bank release timed out");
     if (read_register(device, 0x7c) != 1 || read_register(device, 0x78) != 24 ||
         read_register(device, 0x40) != configuration.period_ticks)
-        throw std::runtime_error("compiled register ABI, Q format or period mismatch");
+        throw witness::RuntimeRefused("compiled register ABI, Q format or period mismatch");
     write_register(device, 0x3c, configuration.cycles - 1);
     write_register(device, 0x44, configuration.reference_mode);
     write_register(device, 0x48, static_cast<std::uint32_t>(configuration.amplitude));
@@ -105,7 +106,7 @@ void control_sample(Device &device, const RunConfiguration &configuration, witne
     const std::uint64_t low = read_register(device, 0x1c);
     const auto ticks = low | (static_cast<std::uint64_t>(read_register(device, 0x20)) << 32);
     if (cycle >= configuration.cycles || (have_previous && cycle <= previous_cycle))
-        throw std::runtime_error("duplicate or out-of-order sample cycle");
+        throw witness::RuntimeRefused("duplicate or out-of-order sample cycle");
     previous_cycle = cycle;
     have_previous = true;
     witness_command command{};
@@ -115,7 +116,7 @@ void control_sample(Device &device, const RunConfiguration &configuration, witne
                               : witness_pid_step(&configuration.coefficients, &state, cycle,
                                                  reference, position, &command);
     if (!computed)
-        throw std::runtime_error("native controller refused validated coefficients");
+        throw witness::RuntimeRefused("native controller refused validated coefficients");
     std::uint64_t work = 0;
     if (read_register(device, 0x68) & 4) {
         volatile std::uint64_t accumulator = 0;
@@ -130,7 +131,7 @@ void control_sample(Device &device, const RunConfiguration &configuration, witne
         write_register(device, 0x2c, static_cast<std::uint32_t>(command.command));
         const auto commit = device.write(0x30, 1, 15);
         if (commit.response != 0 && !(read_register(device, 4) & 12))
-            throw std::runtime_error("command commit refused without a safe or finished run");
+            throw witness::RuntimeRefused("command commit refused without a safe or finished run");
         submitted = commit.response == 0;
     }
     output.sample(reference, position, velocity, command, submitted, ticks, generation, work);
@@ -169,7 +170,7 @@ RunResult execute_run(Device &device, const RunConfiguration &configuration, Run
             write_register(device, 0xa4, 1);
         }
         if (device.time() - run_start > run_limit)
-            throw std::runtime_error("configured run completion timed out");
+            throw witness::RuntimeRefused("configured run completion timed out");
         drain_available(device, output, result);
     }
     const auto drain_start = device.time();
@@ -178,7 +179,7 @@ RunResult execute_run(Device &device, const RunConfiguration &configuration, Run
             hooks->check();
         drain_available(device, output, result);
         if (device.time() - drain_start > 1000000000)
-            throw std::runtime_error("final record drain timed out");
+            throw witness::RuntimeRefused("final record drain timed out");
     }
     result.misses = read_register(device, 0x34);
     result.overflow = read_register(device, 0x30);

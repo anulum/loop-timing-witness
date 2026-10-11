@@ -7,6 +7,7 @@
 // Loop Timing Witness — Linux UIO map and IRQ implementation
 
 #include "uio_device.h"
+#include "../refusal.h"
 
 #include <cerrno>
 #include <cstring>
@@ -26,7 +27,8 @@ namespace witness {
 namespace {
 /** Preserve the failing syscall errno in an actionable transport error. */
 [[noreturn]] void syscall_error(const char *operation) {
-    throw std::runtime_error(std::string(operation) + ": " + std::strerror(errno));
+    throw witness::RuntimeRefused(std::string(operation) + " (errno " + std::to_string(errno) +
+                                  ")");
 }
 
 /** Read one whole sysfs text value; refuse truncation, extra rows or embedded NUL. */
@@ -35,7 +37,7 @@ std::string attribute(const std::filesystem::path &path) {
     std::string value, extra;
     if (!stream || !std::getline(stream, value) || value.find('\0') != std::string::npos ||
         std::getline(stream, extra) || !stream.eof())
-        throw std::runtime_error("cannot read sysfs attribute: " + path.string());
+        throw witness::RuntimeRefused("cannot read sysfs attribute: " + path.string());
     return value;
 }
 
@@ -45,7 +47,7 @@ std::uint64_t quantity(const std::string &value) {
     const std::string digits = value.substr(hex ? 2 : 0);
     if (digits.empty() || digits.find_first_not_of(hex ? "0123456789abcdefABCDEF" : "0123456789") !=
                               std::string::npos)
-        throw std::runtime_error("invalid sysfs number");
+        throw witness::RuntimeRefused("invalid sysfs number");
     return std::stoull(digits, nullptr, hex ? 16 : 10);
 }
 
@@ -65,19 +67,19 @@ UioDevice::UioDevice(const UioIdentity &identity) {
     if (identity.device.size() < 4 || identity.device.substr(0, 3) != "uio" ||
         identity.device.substr(3).find_first_not_of("0123456789") != std::string::npos ||
         identity.name.empty() || identity.version.empty())
-        throw std::runtime_error("invalid UIO identity");
+        throw witness::RuntimeRefused("invalid UIO identity");
     const auto sysfs = std::filesystem::path("/sys/class/uio") / identity.device;
     const auto map = sysfs / "maps" / ("map" + std::to_string(identity.map));
     const auto verify_identity = [&]() {
         if (attribute(sysfs / "name") != identity.name ||
             attribute(sysfs / "version") != identity.version ||
             std::filesystem::canonical(sysfs / "device/driver").filename() != "uio_pdrv_genirq")
-            throw std::runtime_error("UIO name, version or platform driver mismatch");
+            throw witness::RuntimeRefused("UIO name, version or platform driver mismatch");
     };
     verify_identity();
     const long system_page = sysconf(_SC_PAGESIZE);
     if (system_page <= 0)
-        throw std::runtime_error("cannot determine page size");
+        throw witness::RuntimeRefused("cannot determine page size");
     const auto page = static_cast<std::uint64_t>(system_page);
     const auto size = quantity(attribute(map / "size"));
     const auto offset = quantity(attribute(map / "offset"));
@@ -87,7 +89,7 @@ UioDevice::UioDevice(const UioIdentity &identity) {
         size < offset + 256 || size % page != 0 || size > std::numeric_limits<std::size_t>::max() ||
         static_cast<std::uint64_t>(identity.map) >
             static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()) / page)
-        throw std::runtime_error("UIO aperture identity, alignment or size mismatch");
+        throw witness::RuntimeRefused("UIO aperture identity, alignment or size mismatch");
     mapping_size = static_cast<std::size_t>(size);
     register_offset = static_cast<std::size_t>(offset);
     try {
@@ -100,7 +102,7 @@ UioDevice::UioDevice(const UioIdentity &identity) {
         const auto device_number =
             std::to_string(major(status.st_rdev)) + ":" + std::to_string(minor(status.st_rdev));
         if (!S_ISCHR(status.st_mode) || device_number != attribute(sysfs / "dev"))
-            throw std::runtime_error("UIO character device identity mismatch");
+            throw witness::RuntimeRefused("UIO character device identity mismatch");
         if (flock(descriptor, LOCK_EX | LOCK_NB) < 0)
             syscall_error("lock UIO");
         mapping = mmap(nullptr, mapping_size, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor,
@@ -113,11 +115,11 @@ UioDevice::UioDevice(const UioIdentity &identity) {
         if (quantity(attribute(map / "addr")) != physical ||
             quantity(attribute(map / "size")) != size ||
             quantity(attribute(map / "offset")) != offset)
-            throw std::runtime_error("UIO aperture changed during mapping");
+            throw witness::RuntimeRefused("UIO aperture changed during mapping");
         if ((read(0x98).data & 7) != 7)
-            throw std::runtime_error("witness banks are held or not ready");
+            throw witness::RuntimeRefused("witness banks are held or not ready");
         if (read(0x7c).data != 1)
-            throw std::runtime_error("unsupported witness register ABI");
+            throw witness::RuntimeRefused("unsupported witness register ABI");
     } catch (...) {
         close();
         throw;
@@ -185,7 +187,7 @@ void UioDevice::irq_control(std::int32_t enabled) {
     if (count < 0)
         syscall_error("UIO IRQ control");
     if (count != static_cast<ssize_t>(sizeof(enabled)))
-        throw std::runtime_error("short UIO IRQ control write");
+        throw witness::RuntimeRefused("short UIO IRQ control write");
     irq_managed = true;
 }
 
@@ -200,12 +202,12 @@ bool UioDevice::wait_interrupt(std::uint64_t nanoseconds) {
     if (result == 0)
         return false;
     if (event.revents != POLLIN)
-        throw std::runtime_error("UIO IRQ descriptor error");
+        throw witness::RuntimeRefused("UIO IRQ descriptor error");
     const auto count = ::read(descriptor, &interrupt_count, sizeof(interrupt_count));
     if (count < 0)
         syscall_error("UIO IRQ count");
     if (count != static_cast<ssize_t>(sizeof(interrupt_count)))
-        throw std::runtime_error("short UIO IRQ count read");
+        throw witness::RuntimeRefused("short UIO IRQ count read");
     return true;
 }
 } // namespace witness

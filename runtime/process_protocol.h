@@ -13,6 +13,8 @@
 #ifndef WITNESS_PROCESS_PROTOCOL_H
 #define WITNESS_PROCESS_PROTOCOL_H
 
+#include <charconv>
+#include "refusal.h"
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -33,11 +35,11 @@ struct ProtocolReply {
 inline std::uint64_t number(std::istream &input, std::uint64_t maximum) {
     std::string token;
     if (!(input >> token) || token.find_first_not_of("0123456789") != std::string::npos)
-        throw std::runtime_error("invalid unsigned argument");
-    std::size_t consumed = 0;
-    const auto value = std::stoull(token, &consumed);
-    if (consumed != token.size() || value > maximum)
-        throw std::runtime_error("argument outside range");
+        throw witness::RuntimeRefused("invalid unsigned argument");
+    std::uint64_t value = 0;
+    const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != token.data() + token.size() || value > maximum)
+        throw witness::RuntimeRefused("argument outside range");
     return value;
 }
 
@@ -45,7 +47,7 @@ inline std::uint64_t number(std::istream &input, std::uint64_t maximum) {
 inline void end_request(std::istream &input) {
     std::string extra;
     if (input >> extra)
-        throw std::runtime_error("unexpected argument");
+        throw witness::RuntimeRefused("unexpected argument");
 }
 /** Serve validated requests against either actual MMIO or production RTL. */
 template <class Device> int serve(Device &device) {
@@ -81,13 +83,13 @@ template <class Device> int serve(Device &device) {
             end_request(input);
             return 0;
         } else
-            throw std::runtime_error("unknown request");
+            throw witness::RuntimeRefused("unknown request");
         std::cout << result.response << ',' << result.data << ',' << device.time() << std::endl;
         if (!std::cout)
-            throw std::runtime_error("cannot write AXI response");
+            throw witness::RuntimeRefused("cannot write AXI response");
     }
     if (!std::cin.eof())
-        throw std::runtime_error("cannot read AXI request");
+        throw witness::RuntimeRefused("cannot read AXI request");
     return 0;
 }
 } // namespace witness

@@ -6,7 +6,7 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Loop Timing Witness — bounded tracing of exclusively owned test processes
 
-"""Delay real syscalls without replacing results, and own every traced test process."""
+"""Delay real syscalls and let the kernel end tracees when their tracer dies."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import select
 import shutil
 import signal
 import subprocess
-from contextlib import contextmanager, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -43,7 +43,11 @@ class OwnedTrace:
     descriptors: dict[int, int] = field(default_factory=dict)
 
     def observe(self) -> None:
-        """Retain pidfds for live descendants while their known parent remains live."""
+        """Retain verified live descendants and close candidates lost during observation.
+
+        Candidate descriptors belong to an exit stack until both parent and
+        child identity checks succeed; disappearance never leaks a descriptor.
+        """
         pending = list(self.descriptors)
         while pending:
             parent = pending.pop()
@@ -55,29 +59,26 @@ class OwnedTrace:
             # file, not ENOENT; either way it has no children left to retain.
             with suppress(FileNotFoundError, ProcessLookupError):
                 children = children_file.read_text().split()
-                if select.select([descriptor], [], [], 0)[0]:
-                    continue
                 for child in map(int, children):
                     if child in self.descriptors:
                         continue
-                    with suppress(ProcessLookupError):
+                    with suppress(ProcessLookupError), ExitStack() as candidate:
                         child_descriptor = os.pidfd_open(child)
-                        try:
+                        candidate.callback(os.close, child_descriptor)
+                        with suppress(FileNotFoundError, ProcessLookupError):
                             status = Path(f"/proc/{child}/status").read_text()
-                        except FileNotFoundError:
-                            os.close(child_descriptor)
-                            continue
-                        parent_matches = any(
-                            line.split() == ["PPid:", str(parent)] for line in status.splitlines()
-                        )
-                        if (
-                            not parent_matches
-                            or select.select([descriptor, child_descriptor], [], [], 0)[0]
-                        ):
-                            os.close(child_descriptor)
-                            continue
-                        self.descriptors[child] = child_descriptor
-                        pending.append(child)
+                            parent_matches = any(
+                                line.split() == ["PPid:", str(parent)]
+                                for line in status.splitlines()
+                            )
+                            if (
+                                not parent_matches
+                                or select.select([descriptor, child_descriptor], [], [], 0)[0]
+                            ):
+                                continue
+                            self.descriptors[child] = child_descriptor
+                            candidate.pop_all()
+                            pending.append(child)
 
     def close(self) -> None:
         """Kill only retained owned identities and reap the tracer before closing pidfds."""
@@ -109,6 +110,11 @@ def trace_command(command: list[str], delay: str, log: Path) -> Iterator[OwnedTr
     ------
     OwnedTrace
         Real tracer and bounded ownership of its descendants.
+
+    Notes
+    -----
+    Kernel exit-kill ownership covers descendants that terminate their tracer
+    before the observer can retain their individual pidfds.
     """
     tracer = shutil.which("strace")
     assert tracer is not None, "strace is required for real syscall-boundary tests"
@@ -117,6 +123,7 @@ def trace_command(command: list[str], delay: str, log: Path) -> Iterator[OwnedTr
         [
             tracer,
             "-f",
+            "--kill-on-exit",
             "-o",
             str(log),
             "-e",

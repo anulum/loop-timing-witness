@@ -111,8 +111,8 @@ def run_command(name: str, command: list[str], root: Path) -> GateResult:
     """
     try:
         completed = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
-    except OSError as exc:
-        return GateResult(name, passed=False, detail=f"cannot execute {command[0]}: {exc}")
+    except OSError:
+        return GateResult(name, passed=False, detail=f"cannot execute {command[0]}")
     output = (completed.stdout + completed.stderr).strip()
     if completed.returncode != 0:
         return GateResult(name, passed=False, detail=output or f"exit {completed.returncode}")
@@ -216,8 +216,8 @@ def secret_scan_gate(root: Path) -> GateResult:
         return GateResult("secrets", passed=False, detail=finding)
     try:
         files = candidate_files(root)
-    except RuntimeError as exc:
-        return GateResult("secrets", passed=False, detail=str(exc))
+    except RuntimeError:
+        return GateResult("secrets", passed=False, detail="cannot enumerate publishable files")
     with tempfile.TemporaryDirectory(prefix="publishable-") as scratch:
         copy_root = Path(scratch)
         for relative in files:

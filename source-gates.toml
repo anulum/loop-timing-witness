@@ -92,6 +92,7 @@ paths = [
     "runtime/linux/run_policy.h",
     "runtime/linux/uio_device.h",
     "runtime/process_protocol.h",
+    "runtime/refusal.h",
     "runtime/rtl/simulation.h",
     "runtime/run_configuration.h",
     "runtime/run_control.h",

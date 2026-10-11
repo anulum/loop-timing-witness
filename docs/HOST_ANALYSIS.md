@@ -44,9 +44,20 @@ measurement-domain snapshot. Firmware preparation, capture execution and vendor-
 remain repository build surfaces. Local distribution verification does not establish publication
 on PyPI or qualify a board instrument.
 
-The output directory must not exist. The tool validates the JSON and every referenced SHA-256,
-decodes the binary events, analyses the series, writes all outputs to a sibling temporary
-directory and renames it into place only after every write succeeds. An invalid run can still
+Report-directory publication in the unreleased source and its locally built Python distributions
+is supported on Linux with an available `renameat2(RENAME_NOREPLACE)` native binding, kernel and
+target filesystem. The writer resolves this binding lazily and exercises it in a disposable
+sibling capability directory before staging report artefacts. An unavailable binding or failed
+capability probe refuses publication; there is no check-then-rename fallback. Other operating
+systems require explicit activation and equivalent native publication tests before support is
+claimed. The pure `load_run` and `build_report` APIs do not use this publication binding; the
+package and its portable wheel tag do not imply a report-writing guarantee on another OS.
+
+The output path must not exist, including as a dangling symlink. The tool validates the JSON and
+every referenced SHA-256, decodes the binary events, analyses the series, writes all outputs to
+a sibling temporary directory and atomically publishes it only after every write succeeds.
+The native no-replacement operation refuses a destination created during staging, preserving
+the competing path and removing the staged report. An invalid run can still
 produce a report: `valid: false` and `invalid_reasons` retain the reason. Malformed inputs fail
 without a report. The source and hardware artefacts are checked as files, not accepted merely as
 hash strings. The tool accepts relative paths within the run directory only.
@@ -65,6 +76,16 @@ acceptance flags, room temperature and board-only supply. Those declarations can
 for actual board acceptance records; independent board qualification remains a separate gate.
 A report from such a declaration is labelled `board_declaration_unverified` until external
 qualification verifies the board evidence.
+
+JSON input rejects nonfinite tokens (`NaN`, `Infinity` and `-Infinity`) and
+decimal or exponent values that overflow to a nonfinite number. This applies
+inside nested objects and arrays, including worker readiness and receipts.
+Finite numeric values and quoted strings naming those tokens remain valid.
+
+The source loader accepts schema-valid UTC date-time spellings with upper- or
+lowercase `T` and `Z`, or an explicit `+00:00` offset. Nonzero UTC offsets remain
+invalid. Parsing does not rewrite `started_utc`: the original value is retained
+in the loaded manifest and report.
 
 The 16-byte event record is little-endian: `event_type` u8, zero reserved byte u8, zero reserved
 word u16, `cycle` u32 and `timebase_ticks` u64. The repository
@@ -100,6 +121,13 @@ original binary events, raw controller trace and
 controller coefficients, reference, full fault duration, overload work and completion counters.
 The producer checks event count, missed deadlines and run length against the decoded capture.
 Failed runs retain their artifacts; an existing output directory is refused.
+Each capture also freezes the actual loaded parent project tools, Python package
+and packaged JSON contracts. Their original paths, resolved locations and SHA-256
+values are recorded in `producer_context.json`, alongside the Python interpreter,
+platform and runtime dependency versions. The manifest binds that document and
+every retained source member through `source.files`. The producer verifies both
+original and frozen bytes after native execution and before writing its report;
+changed source locations, source bytes or context metadata refuse acceptance.
 The Python `capture_simulation` API also rejects plant modes outside zero/one and FIFO
 address widths outside one/fourteen before allocating a run. A native failure remains a
 failure even if event, trace and metadata files were completed; only the documented FIFO
@@ -164,7 +192,9 @@ JSON decoder, including repeated-member refusal inside nested counter objects.
 
 Loaded captures freeze the host load implementation, including the worker, configuration,
 launcher, readiness reader, pipe ownership, process cleanup and shared strict JSON decoder
-sources. The manifest binds `host_load.json`, the worker receipt/log and optional storage data by SHA-256. The
+sources. The parent package copy includes the actual JSON decoder implementation
+behind the compatibility shim; the worker keeps its separate frozen source copy.
+The manifest binds `host_load.json`, the worker receipt/log and optional storage data by SHA-256. The
 receipt follows [`host-load.schema.json`](../host-load.schema.json), preserves actual
 native return code and PIDs, policy, operation totals and monotonic time brackets. The
 analyzer rejects inconsistent counters, resource scopes, CPU binding, run profile and
@@ -183,7 +213,9 @@ implemented by the host Python tools.
 
 Native captures declare an optional hash-bound `native_metadata` file in the run manifest.
 The analyzer validates its schema, source kind, controller coefficients, plant, cycle count
-and sample period against the run. `native_completion` preserves the program's final live
+and sample period against the run. The native fault kind, cycle and delay duration must
+also match the declared fault schedule, including an empty schedule for an unfaulted run.
+`native_completion` preserves the program's final live
 sample/record/miss/overflow/safe counters. Recorded event count and overflow must always agree
 with the receipt. With zero overflow, full-run deadline count, misses, sample reads and safe state must
 agree too. This check includes the warm-up prefix even when reported metrics exclude it. Existing

@@ -102,6 +102,29 @@ def test_committed_record_covers_every_lock_pin() -> None:
     assert {name: entry["version"] for name, entry in record.items()} == pins
 
 
+def test_absolute_lock_file_is_refused_by_public_cli(tmp_path: Path, run_tool: RunTool) -> None:
+    """Refuse an absolute actual lock path even when its reviewed package records agree.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive copies of the committed policy and actual dependency lock.
+    run_tool
+        Runner for the repository's real public licence guard.
+    """
+    original = (REPOSITORY_ROOT / "requirements-dev.txt").read_bytes()
+    lock = tmp_path / "requirements-dev.txt"
+    lock.write_bytes(original)
+    document = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))
+    document["lock_file"] = str(lock)
+    policy = tmp_path / "licences.json"
+    policy.write_text(json.dumps(document), encoding="utf-8")
+    result = run_tool("check_dependency_licences", str(policy))
+    assert result.returncode == 1
+    assert "policy: lock_file must be a relative path" in result.stdout
+    assert lock.read_bytes() == original
+
+
 def test_matching_case_passes(tmp_path: Path) -> None:
     """A record that matches its lock with allowed licences has no findings."""
     assert audit(write_case(tmp_path, policy_document())) == []

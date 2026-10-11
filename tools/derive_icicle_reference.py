@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -61,6 +62,10 @@ WITNESS_SCRIPT = REPOSITORY_ROOT / "hardware/icicle/LOOP_TIMING_WITNESS.tcl"
 DERIVED_SCRIPT = "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl"
 RTL_SNAPSHOT = "witness_rtl"
 SD_NAME = "$" + "{sd_name}"
+
+
+class ReferenceDerivationRefusedError(ValueError):
+    """A deliberately authored refusal of source integrity or derivation identity."""
 
 
 def sha256(path: Path) -> str:
@@ -121,7 +126,7 @@ def tree_sha256(
                 continue
             if path.is_symlink() or not path.is_file():
                 msg = f"reference source is not a regular file: {relative}"
-                raise ValueError(msg)
+                raise ReferenceDerivationRefusedError(msg)
             entries.append((relative, sha256(path)))
     payload = json.dumps(sorted(entries), ensure_ascii=False, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
@@ -153,7 +158,7 @@ def replace_once(source: str, old: str, new: str, path: str) -> str:
     """
     if source.count(old) != 1:
         msg = f"{path}: expected one occurrence of {old!r}"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
     return source.replace(old, new)
 
 
@@ -264,10 +269,10 @@ def verify_reference(source: Path) -> None:
     for relative, expected in SOURCE_HASHES.items():
         if sha256(source / relative) != expected:
             msg = f"reference source mismatch: {relative}"
-            raise ValueError(msg)
+            raise ReferenceDerivationRefusedError(msg)
     if tree_sha256(source) != SOURCE_TREE_SHA256:
         msg = "reference source tree differs from pinned commit"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
 
 
 def derive(source: Path, destination: Path) -> None:
@@ -301,7 +306,7 @@ def derive(source: Path, destination: Path) -> None:
             path.write_text(content, encoding="utf-8")
             if sha256(path) != DERIVED_HASHES[relative]:
                 msg = f"derived source mismatch: {relative}"
-                raise ValueError(msg)
+                raise ReferenceDerivationRefusedError(msg)
         script_destination = staged_output / DERIVED_SCRIPT
         shutil.copyfile(WITNESS_SCRIPT, script_destination)
         source_rtl = REPOSITORY_ROOT / "rtl"
@@ -317,14 +322,14 @@ def derive(source: Path, destination: Path) -> None:
                 or sha256(copied) != witness_hashes[path.name]
             ):
                 msg = f"RTL source changed while deriving: {path.name}"
-                raise ValueError(msg)
+                raise ReferenceDerivationRefusedError(msg)
         excluded = frozenset({*DERIVED_HASHES, DERIVED_SCRIPT, "witness_derivation.json"})
         if (
             tree_sha256(staged_output, excluded, frozenset({RTL_SNAPSHOT}))
             != REFERENCE_REMAINDER_SHA256
         ):
             msg = "derived reference remainder differs from pinned commit"
-            raise ValueError(msg)
+            raise ReferenceDerivationRefusedError(msg)
         manifest = {
             "source_commit": REFERENCE_COMMIT,
             "source_tree_sha256": SOURCE_TREE_SHA256,
@@ -373,24 +378,24 @@ def verify_derived(destination: Path) -> None:
     manifest_path = destination / "witness_derivation.json"
     if manifest_path.is_symlink():
         msg = "derived manifest must be a local file"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
     manifest = load_json_object(manifest_path)
     if manifest != expected:
         msg = "derived manifest differs from current repository input"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
     excluded = frozenset({*DERIVED_HASHES, DERIVED_SCRIPT, "witness_derivation.json"})
     if tree_sha256(destination, excluded, frozenset({RTL_SNAPSHOT})) != REFERENCE_REMAINDER_SHA256:
         msg = "derived reference remainder differs from pinned commit"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
     for relative, digest in DERIVED_HASHES.items():
         path = destination / relative
         if path.is_symlink() or sha256(path) != digest:
             msg = f"derived vendor Tcl changed: {relative}"
-            raise ValueError(msg)
+            raise ReferenceDerivationRefusedError(msg)
     connection = destination / DERIVED_SCRIPT
     if connection.is_symlink() or sha256(connection) != expected["witness_tcl_sha256"]:
         msg = "derived witness connection Tcl changed"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
     snapshot = destination / RTL_SNAPSHOT
     if (
         snapshot.is_symlink()
@@ -398,31 +403,45 @@ def verify_derived(destination: Path) -> None:
         or {path.name for path in snapshot.iterdir()} != set(witness_hashes)
     ):
         msg = "derived RTL source set changed"
-        raise ValueError(msg)
+        raise ReferenceDerivationRefusedError(msg)
     for name, digest in witness_hashes.items():
         path = snapshot / name
         if path.is_symlink() or not path.is_file() or sha256(path) != digest:
             msg = f"derived RTL changed: {name}"
-            raise ValueError(msg)
+            raise ReferenceDerivationRefusedError(msg)
 
 
-def main() -> None:
-    """Derive a fresh Libero input tree or verify it before a vendor run."""
+def main() -> int:
+    """Derive or verify source with authored integrity and fixed input refusals.
+
+    Returns
+    -------
+    int
+        Zero after successful derivation or verification, one after refusal.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="check an existing derived tree")
     parser.add_argument("source", type=Path, help="clean reference checkout or derived tree")
     parser.add_argument("destination", nargs="?", type=Path, help="new Samsung output directory")
     arguments = parser.parse_args()
-    if arguments.verify:
-        if arguments.destination is not None:
-            parser.error("--verify takes only the derived tree")
-        verify_derived(arguments.source.resolve())
-        print(f"derived Icicle inputs verified: {arguments.source.resolve()}")
-    else:
-        if arguments.destination is None:
-            parser.error("derivation requires source and new destination")
-        derive(arguments.source.resolve(), arguments.destination.absolute())
+    try:
+        if arguments.verify:
+            if arguments.destination is not None:
+                parser.error("--verify takes only the derived tree")
+            verify_derived(arguments.source.resolve())
+            print(f"derived Icicle inputs verified: {arguments.source.resolve()}")
+        else:
+            if arguments.destination is None:
+                parser.error("derivation requires source and new destination")
+            derive(arguments.source.resolve(), arguments.destination.absolute())
+    except ReferenceDerivationRefusedError as error:
+        print(f"icicle-derivation: FAIL: {error}", file=sys.stderr)
+        return 1
+    except (OSError, ValueError):
+        print("icicle-derivation: FAIL: could not read inputs or create output", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

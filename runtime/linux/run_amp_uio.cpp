@@ -7,6 +7,7 @@
 // Loop Timing Witness — dedicated controller Linux AMP logging lifecycle
 
 #include "amp_uio_configuration.h"
+#include "../refusal.h"
 #include "power_journal.h"
 #include "../amp_logger.h"
 #include "../run_metadata.h"
@@ -28,9 +29,9 @@ int main(int argc, char **argv) {
         witness::verify_digest(argv[1], original);
         witness::verify_digest(argv[2], resource_original);
         if (configuration.modeled_overload_ns)
-            throw std::runtime_error("modeled overload delay is simulation-only");
+            throw witness::RuntimeRefused("modeled overload delay is simulation-only");
         if (resources.poll_ns > static_cast<std::uint64_t>(configuration.period_ticks) * 10)
-            throw std::runtime_error("AMP nominal logger polling exceeds the sample interval");
+            throw witness::RuntimeRefused("AMP nominal logger polling exceeds the sample interval");
         std::unique_ptr<witness::Pac1934Device> sensor;
         witness::PowerConfiguration power{};
         witness::FileDigest power_original;
@@ -41,9 +42,9 @@ int main(int argc, char **argv) {
             const auto inherited = witness::read_host_policy();
             if (std::find(inherited.cpus.begin(), inherited.cpus.end(), power.worker_cpu) ==
                 inherited.cpus.end())
-                throw std::runtime_error("power worker CPU is outside inherited affinity");
+                throw witness::RuntimeRefused("power worker CPU is outside inherited affinity");
             if (options.cpu < 0 || options.cpu == power.worker_cpu)
-                throw std::runtime_error(
+                throw witness::RuntimeRefused(
                     "power acquisition requires separate logger and worker CPUs");
             sensor = std::make_unique<witness::Pac1934Device>(power);
         }
@@ -54,16 +55,16 @@ int main(int argc, char **argv) {
         while (!(abi = device.read_memory32(resources.mailbox.address +
                                             offsetof(witness_amp_mailbox, abi)))) {
             if (device.time() - startup > resources.startup_ns)
-                throw std::runtime_error("AMP firmware mailbox initialisation timed out");
+                throw witness::RuntimeRefused("AMP firmware mailbox initialisation timed out");
             device.advance(resources.poll_ns);
         }
         if (abi != WITNESS_AMP_ABI)
-            throw std::runtime_error("AMP firmware mailbox ABI mismatch");
+            throw witness::RuntimeRefused("AMP firmware mailbox ABI mismatch");
         if (device.read_memory32(resources.mailbox.address +
                                  offsetof(witness_amp_mailbox, status)) != WITNESS_AMP_INITIAL ||
             device.read_memory32(resources.mailbox.address +
                                  offsetof(witness_amp_mailbox, logger_status)))
-            throw std::runtime_error("AMP logger requires a fresh dedicated firmware boot");
+            throw witness::RuntimeRefused("AMP logger requires a fresh dedicated firmware boot");
         witness::verify_digest(argv[1], original);
         witness::verify_digest(argv[2], resource_original);
         witness::configure_run(device, configuration);
@@ -80,7 +81,7 @@ int main(int argc, char **argv) {
         const auto completion_start = device.time();
         while (!logger.poll()) {
             if (device.time() - completion_start > resources.completion_ns)
-                throw std::runtime_error("AMP logger completion timed out");
+                throw witness::RuntimeRefused("AMP logger completion timed out");
             device.advance(resources.poll_ns);
         }
         const auto result = logger.completion();
@@ -104,10 +105,16 @@ int main(int argc, char **argv) {
                   << " records=" << result.records << " misses=" << result.misses
                   << " overflow=" << result.overflow << " safe=" << result.safe << std::endl;
         if (!std::cout)
-            throw std::runtime_error("cannot write AMP logger summary");
+            throw witness::RuntimeRefused("cannot write AMP logger summary");
         return result.overflow ? 1 : 0;
-    } catch (const std::exception &error) {
+    } catch (const witness::RuntimeRefused &error) {
         std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const witness::ArgumentRefused &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const std::exception &) {
+        std::cerr << "native execution failed\n";
         return 1;
     }
 }

@@ -129,10 +129,7 @@ def test_invalid_manifest_is_never_projected(
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     assert main([*arguments, "--write"]) == 1
     output = capsys.readouterr().out
-    assert (
-        "capability-inventory: FAIL manifest is invalid: "
-        "capabilities: must be [] at architecture_only" in output
-    )
+    assert output == "capability-inventory: FAIL invalid or unreadable manifest or schema\n"
     assert not (tmp_path / "capability-inventory.json").exists()
 
 
@@ -149,3 +146,54 @@ def test_exactly_one_mode_is_required() -> None:
     with pytest.raises(SystemExit) as raised:
         main([])
     assert raised.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        ("manifest-json", "invalid or unreadable manifest or schema"),
+        ("manifest-utf8", "invalid or unreadable manifest or schema"),
+        ("schema-json", "invalid or unreadable manifest or schema"),
+        ("manifest-missing", "invalid or unreadable manifest or schema"),
+        ("inventory-missing", "cannot read committed inventory"),
+        ("output-parent-missing", "cannot write inventory"),
+    ],
+)
+def test_public_inventory_input_failures_have_fixed_output(
+    tmp_path: Path, run_tool: RunTool, kind: str, expected: str
+) -> None:
+    """Actual JSON, encoding and filesystem failures produce fixed CLI refusals.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive input and inventory directory.
+    run_tool
+        Runner invoking the actual inventory generation command.
+    kind
+        Actual malformed-input or filesystem refusal to exercise.
+    expected
+        Deliberately authored fixed refusal sentence for the operation.
+    """
+    arguments = copied_manifest(tmp_path)
+    manifest = tmp_path / "measurement-domain.json"
+    mode = "--write"
+    if kind == "manifest-json":
+        manifest.write_text("{")
+    elif kind == "manifest-utf8":
+        manifest.write_bytes(b"\xff\xfe")
+    elif kind == "schema-json":
+        schema = tmp_path / "schema.json"
+        schema.write_text("{")
+        arguments.extend(["--schema", str(schema)])
+    elif kind == "manifest-missing":
+        manifest.unlink()
+    elif kind == "inventory-missing":
+        mode = "--check"
+    else:
+        arguments[-1] = str(tmp_path / "missing" / "inventory.json")
+    result = run_tool("generate_capability_inventory", *arguments, mode)
+    assert result.returncode == 1
+    assert result.stderr == ""
+    assert result.stdout == f"capability-inventory: FAIL {expected}\n"
+    assert not (tmp_path / "capability-inventory.json").exists()

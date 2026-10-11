@@ -28,7 +28,7 @@ The second part covers the controls needed for a qualified physical instrument.
 | Non-claims in the manifest and README | prevent the repository from being cited for results that do not exist |
 | `requirements-dev.txt` and `development-dependency-licences.json` | hash-bound Python development dependencies; native prerequisites are recorded in `VALIDATION.md` |
 | Workflow definitions | execute only with declared per-job hosted permissions after separately authorised publication |
-| Native configuration, source snapshots and receipts | identify actual controller inputs, executable and completed observations |
+| Native configuration, source snapshots and receipts | identify actual controller inputs, executable, loaded parent project context and completed observations |
 | Workload processes and pipes | affect host resources and admit a native run only after bounded, owned-worker readiness |
 | UIO/IIO adapters and raw power journal | contain physical access paths whose successful operation is unqualified |
 | Licensing and provenance metadata | legal integrity of the repository |
@@ -57,7 +57,8 @@ The second part covers the controls needed for a qualified physical instrument.
 | Editing the inventory by hand to imply capability | the inventory embeds the manifest SHA-256 and must equal a fresh generation byte for byte |
 | Shadowing a manifest field with a repeated key | every JSON reader rejects repeated member names; workflow YAML is parsed with repeated-key rejection |
 | Changing the event record or buffer so that data is silently lost | validator checks record contiguity and size, unique numeric event codes, cycle count and counter width, and buffer fill time against the slowest drain |
-| Supplying malformed or substituted run data | the host rejects duplicate-key JSON, invalid schema versions, escaping paths, missing or mismatched source/artefact/input hashes, malformed binary records and inconsistent CSV series |
+| Supplying malformed or substituted run data | the host rejects duplicate-key or nonfinite JSON numbers, invalid schema versions, escaping paths, missing or mismatched source/artefact/input hashes, malformed binary records and inconsistent CSV series |
+| Creating a report destination during staging | the Linux writer checks native publication capability before staging and uses `renameat2(RENAME_NOREPLACE)` to preserve a competing directory, file or symlink; a dangling symlink is also refused before staging |
 | Presenting RTL simulation as board measurement | run manifests label source kind; reports preserve `simulation_only` independently of internal series validity; board input requires declared acceptance state and complete artefacts |
 | Shadowing worker readiness or receipt fields | strict UTF-8 object parsing rejects repeated members, including nested counters; readiness checks exact Boolean/PID types and the owned PID |
 | Holding a partial readiness frame open | one deadline covers all chunks and the inclusive 4096-byte frame limit; native execution is refused until the complete frame validates |

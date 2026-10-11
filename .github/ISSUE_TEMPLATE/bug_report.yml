@@ -7,14 +7,15 @@
 # Loop Timing Witness — bug report form
 
 name: Bug report
-description: A reproducible defect in the validation tooling, manifests or documentation
+description: A reproducible defect in instrument software, simulation, contracts or documentation
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: >-
-        The repository is architecture-only: it holds measurement contracts and
-        validation tooling, not an implemented instrument. Report vulnerabilities
+        Software and simulation paths are implemented; physical instrument
+        qualification and board measurements remain pending. Report software,
+        simulation, contract or documentation defects here. Report vulnerabilities
         privately as described in SECURITY.md, never in a public issue.
   - type: textarea
     id: observed

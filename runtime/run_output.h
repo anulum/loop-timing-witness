@@ -13,6 +13,7 @@
 #ifndef WITNESS_RUN_OUTPUT_H
 #define WITNESS_RUN_OUTPUT_H
 #include "run_configuration.h"
+#include "refusal.h"
 #include "exclusive_output.h"
 #include <array>
 #include <cstdio>
@@ -33,7 +34,7 @@ class RunOutput {
                 "cycle,reference_raw,output_raw,velocity_raw,command_raw,integral_raw,derivative_raw,clipped,integral_held,submitted,sample_ticks,irq_generation,overload_work\n",
                 trace) < 0 ||
             std::fflush(trace) != 0)
-            throw std::runtime_error("cannot write tracking header");
+            throw witness::RuntimeRefused("cannot write tracking header");
     }
     /** Owned streams retain partial evidence and close during failure cleanup. */
     ~RunOutput() = default;
@@ -48,7 +49,7 @@ class RunOutput {
             for (unsigned byte = 0; byte < 4; ++byte)
                 bytes[word * 4 + byte] = static_cast<unsigned char>(words[word] >> (byte * 8));
         if (std::fwrite(bytes.data(), 1, bytes.size(), stream) != bytes.size())
-            throw std::runtime_error("cannot write event record");
+            throw witness::RuntimeRefused("cannot write event record");
     }
     /** Preserve actual input, returned command/state, original ticks and IRQ generation. */
     void sample(std::int32_t reference, std::int32_t position, std::int32_t velocity,
@@ -62,16 +63,16 @@ class RunOutput {
                          static_cast<unsigned>(submitted), static_cast<unsigned long long>(ticks),
                          static_cast<unsigned long long>(generation),
                          static_cast<unsigned long long>(work)) < 0)
-            throw std::runtime_error("cannot write tracking sample");
+            throw witness::RuntimeRefused("cannot write tracking sample");
     }
     /** Flush and close once; refuse later writes or repeated completion. */
     void finish() {
         if (!events.is_open() || !tracking.is_open())
-            throw std::runtime_error("run output is closed");
+            throw witness::RuntimeRefused("run output is closed");
         const int event_status = events.close("event output is closed");
         const int tracking_status = tracking.close("tracking output is closed");
         if (event_status || tracking_status)
-            throw std::runtime_error("cannot finish run output");
+            throw witness::RuntimeRefused("cannot finish run output");
     }
 };
 } // namespace witness

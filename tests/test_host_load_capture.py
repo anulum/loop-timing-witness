@@ -169,3 +169,57 @@ def test_incomplete_load_request(
     assert result.returncode == 1
     assert "load" in result.stderr
     assert not output.exists()
+
+
+def test_capture_binds_parent_json_implementation(tmp_path: Path, run_tool: RunTool) -> None:
+    """Bind actual parent JSON code and refuse a changed implementation digest.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive actual idle-work capture and refusal outputs.
+    run_tool
+        Actual native producer and public analyser commands.
+    """
+    config = tmp_path / "run.conf"
+    config.write_text(configuration("pid", "none"), encoding="utf-8")
+    run = tmp_path / "capture"
+    result = run_tool(
+        "capture_native_simulation",
+        str(config),
+        "--output-dir",
+        str(run),
+        "--load-profile",
+        "idle",
+        "--load-cpu",
+        str(min(os.sched_getaffinity(0))),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    manifest = json.loads((run / "manifest.json").read_bytes())
+    paths = {item["path"] for item in manifest["source"]["files"]}
+    context = json.loads((run / "producer_context.json").read_bytes())
+    implementation = "source/parent_package/loop_timing_witness/manifest_io.py"
+    assert implementation in paths
+    assert "producer_context.json" in paths
+    assert "source/parent_tools/linux_load_readiness.py" in paths
+    assert (
+        context["sources"][implementation]["sha256"]
+        == hashlib.sha256((run / implementation).read_bytes()).hexdigest()
+    )
+    assert context["python"]["implementation"] == "cpython"
+    wrong_source = json.loads(json.dumps(manifest))
+    source = next(
+        item for item in wrong_source["source"]["files"] if item["path"] == implementation
+    )
+    source["sha256"] = "0" * 64
+    (run / "wrong_source.json").write_text(json.dumps(wrong_source), encoding="utf-8")
+    source_refusal = run_tool(
+        "analyze_run",
+        str(run / "wrong_source.json"),
+        "--output-dir",
+        str(run / "wrong_source_report"),
+    )
+    assert source_refusal.returncode == 1
+    assert "artefact SHA-256 mismatch" in source_refusal.stderr
+    assert implementation in source_refusal.stderr
+    assert not (run / "wrong_source_report").exists()

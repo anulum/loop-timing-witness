@@ -7,24 +7,25 @@
 // Loop Timing Witness — complete native AMP resource and polling configuration parsing
 
 #include "amp_uio_configuration.h"
+#include "../refusal.h"
 #include <fstream>
 
 namespace witness {
 AmpUioConfiguration read_amp_uio_configuration(const std::string &path) {
     std::ifstream input(path);
     if (!input)
-        throw std::runtime_error("cannot open AMP UIO resource configuration");
+        throw witness::RuntimeRefused("cannot open AMP UIO resource configuration");
     AmpUioConfiguration result{};
     if (!(input >> result.identity.device >> result.identity.name >> result.identity.version))
-        throw std::runtime_error("AMP UIO resource identity is incomplete");
+        throw witness::RuntimeRefused("AMP UIO resource identity is incomplete");
     result.fabric.index = static_cast<std::uint32_t>(number(input, UINT32_MAX));
     if (!(input >> result.fabric.name))
-        throw std::runtime_error("AMP fabric map name is absent");
+        throw witness::RuntimeRefused("AMP fabric map name is absent");
     result.fabric.address = number(input, UINT64_MAX);
     result.fabric.bytes = number(input, UINT64_MAX);
     result.mailbox.index = static_cast<std::uint32_t>(number(input, UINT32_MAX));
     if (!(input >> result.mailbox.name))
-        throw std::runtime_error("AMP mailbox map name is absent");
+        throw witness::RuntimeRefused("AMP mailbox map name is absent");
     result.mailbox.address = number(input, UINT64_MAX);
     result.mailbox.bytes = number(input, UINT64_MAX);
     result.startup_ns = number(input, UINT64_C(60000000000));
@@ -33,7 +34,7 @@ AmpUioConfiguration read_amp_uio_configuration(const std::string &path) {
     end_request(input);
     if (!result.startup_ns || !result.completion_ns || !result.poll_ns ||
         result.poll_ns > result.startup_ns || result.poll_ns > result.completion_ns)
-        throw std::runtime_error("AMP polling and lifetime bounds are invalid");
+        throw witness::RuntimeRefused("AMP polling and lifetime bounds are invalid");
     result.identity.map = result.fabric.index;
     result.identity.physical_address = result.fabric.address;
     return result;

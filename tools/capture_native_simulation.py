@@ -23,6 +23,7 @@ from linux_load import LoadExecution, execute_with_load
 from linux_load_config import PROFILES, LoadConfiguration
 from native_simulation_manifest import native_metadata, write_native_manifest
 from native_source_snapshot import snapshot_native_sources
+from producer_source_context import snapshot_producer_context
 from report_outputs import write_report
 from run_manifest import load_run
 
@@ -98,6 +99,8 @@ def capture_simulation(
     output.mkdir()
     source = output / "source"
     snapshots = snapshot_native_sources(ROOT, output, host_load=options.host_load is not None)
+    producer_context = snapshot_producer_context(ROOT, output, snapshots)
+    snapshots = producer_context.artifacts()
     (output / "configuration.txt").write_bytes(config_bytes)
     (output / "build_parameters.json").write_bytes(
         canonical_json_bytes(
@@ -164,6 +167,7 @@ def capture_simulation(
         native = native_metadata(output)
         if native_result.returncode != 1 or not native["result"]["overflow"]:
             native_result.check_returncode()
+    producer_context.verify()
     manifest = write_native_manifest(
         output,
         started,
@@ -187,6 +191,7 @@ def capture_simulation(
     )
     inputs = load_run(manifest)
     report, rows = build_report(inputs)
+    producer_context.verify()
     write_report(output / "reports", report, rows)
     return manifest
 

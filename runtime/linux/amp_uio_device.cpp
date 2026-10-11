@@ -7,6 +7,7 @@
 // Loop Timing Witness — IRQ-free physical Linux AMP mapping and ordered ownership
 
 #include "amp_uio_device.h"
+#include "../refusal.h"
 #include <cerrno>
 #include <cstring>
 #include <endian.h>
@@ -24,7 +25,8 @@ namespace witness {
 namespace {
 /** Retain the actual failed syscall and errno without hardware fallback. */
 [[noreturn]] void failure(const char *operation) {
-    throw std::runtime_error(std::string(operation) + ": " + std::strerror(errno));
+    throw witness::RuntimeRefused(std::string(operation) + " (errno " + std::to_string(errno) +
+                                  ")");
 }
 /** Require one original complete sysfs attribute, without embedded NUL or extra rows. */
 std::string attribute(const std::filesystem::path &path) {
@@ -32,7 +34,7 @@ std::string attribute(const std::filesystem::path &path) {
     std::string value, extra;
     if (!input || !std::getline(input, value) || value.find('\0') != std::string::npos ||
         std::getline(input, extra) || !input.eof())
-        throw std::runtime_error("cannot read AMP sysfs attribute: " + path.string());
+        throw witness::RuntimeRefused("cannot read AMP sysfs attribute: " + path.string());
     return value;
 }
 /** Parse a full unsigned sysfs quantity before any narrowing or physical map arithmetic. */
@@ -41,7 +43,7 @@ std::uint64_t quantity(const std::string &text) {
     const auto digits = text.substr(hex ? 2 : 0);
     if (digits.empty() || digits.find_first_not_of(hex ? "0123456789abcdefABCDEF" : "0123456789") !=
                               std::string::npos)
-        throw std::runtime_error("invalid AMP sysfs quantity");
+        throw witness::RuntimeRefused("invalid AMP sysfs quantity");
     return std::stoull(digits, nullptr, hex ? 16 : 10);
 }
 /** Order mapped physical mailbox and fabric accesses on the supported actual architectures. */
@@ -60,7 +62,7 @@ void verify_map(const std::filesystem::path &sysfs, const AmpUioMap &selection) 
     if (attribute(map / "name") != selection.name ||
         quantity(attribute(map / "addr")) != selection.address ||
         quantity(attribute(map / "size")) != selection.bytes || quantity(attribute(map / "offset")))
-        throw std::runtime_error("AMP original named UIO map identity changed");
+        throw witness::RuntimeRefused("AMP original named UIO map identity changed");
 }
 } // namespace
 
@@ -70,23 +72,24 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
         identity.device.substr(3).find_first_not_of("0123456789") != std::string::npos ||
         identity.name.empty() || identity.version.empty() || identity.map != fabric.index ||
         identity.physical_address != fabric.address || fabric.name.empty() || mailbox.name.empty())
-        throw std::runtime_error("invalid AMP UIO identity");
+        throw witness::RuntimeRefused("invalid AMP UIO identity");
     const long system_page = sysconf(_SC_PAGESIZE);
     if (system_page <= 0)
-        throw std::runtime_error("cannot determine AMP mapping page size");
+        throw witness::RuntimeRefused("cannot determine AMP mapping page size");
     const auto page = static_cast<std::uint64_t>(system_page);
     for (const auto *map : {&fabric, &mailbox}) {
         if (!map->address || map->address % page || !map->bytes || map->bytes % page ||
             map->bytes > std::numeric_limits<std::size_t>::max() ||
             map->address > UINT64_MAX - map->bytes ||
             map->index > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()) / page)
-            throw std::runtime_error("AMP UIO map extent or alignment outside bounds");
+            throw witness::RuntimeRefused("AMP UIO map extent or alignment outside bounds");
     }
     if (fabric.bytes != page || mailbox.bytes < sizeof(witness_amp_mailbox) ||
         fabric.index == mailbox.index ||
         (fabric.address < mailbox.address + mailbox.bytes &&
          mailbox.address < fabric.address + fabric.bytes))
-        throw std::runtime_error("AMP UIO resources overlap or lack complete mailbox capacity");
+        throw witness::RuntimeRefused(
+            "AMP UIO resources overlap or lack complete mailbox capacity");
     const auto sysfs = std::filesystem::path("/sys/class/uio") / identity.device;
     const auto verify = [&]() {
         const auto node = sysfs / "device/of_node";
@@ -95,7 +98,8 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
             std::filesystem::canonical(sysfs / "device/driver").filename() != "uio_pdrv_genirq" ||
             !std::filesystem::is_directory(node) || std::filesystem::exists(node / "interrupts") ||
             std::filesystem::exists(node / "interrupts-extended"))
-            throw std::runtime_error("AMP UIO driver identity or dedicated IRQ ownership mismatch");
+            throw witness::RuntimeRefused(
+                "AMP UIO driver identity or dedicated IRQ ownership mismatch");
         verify_map(sysfs, fabric);
         verify_map(sysfs, mailbox);
     };
@@ -113,7 +117,7 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
         if (!S_ISCHR(status.st_mode) ||
             attribute(sysfs / "dev") !=
                 std::to_string(major(status.st_rdev)) + ":" + std::to_string(minor(status.st_rdev)))
-            throw std::runtime_error("AMP UIO character device identity mismatch");
+            throw witness::RuntimeRefused("AMP UIO character device identity mismatch");
         if (flock(descriptor, LOCK_EX | LOCK_NB) < 0)
             failure("lock AMP UIO");
         registers = mmap(nullptr, register_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor,
@@ -130,7 +134,7 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
         }
         verify();
         if (read(0x7c).data != 1)
-            throw std::runtime_error("unsupported AMP fabric register ABI");
+            throw witness::RuntimeRefused("unsupported AMP fabric register ABI");
     } catch (...) {
         close();
         throw;
@@ -149,7 +153,7 @@ void AmpUioDevice::close() noexcept {
 AmpUioDevice::~AmpUioDevice() { close(); }
 std::size_t AmpUioDevice::offset(std::uint64_t address) const {
     if (address < shared || address - shared > sizeof(witness_amp_mailbox) - 4 || address % 4)
-        throw std::invalid_argument("AMP access outside the original mailbox");
+        throw witness::ArgumentRefused("AMP access outside the original mailbox");
     return static_cast<std::size_t>(address - shared);
 }
 std::uint64_t AmpUioDevice::time() const {
@@ -195,7 +199,7 @@ void AmpUioDevice::write_memory32(std::uint64_t address, std::uint32_t value) {
     const auto displacement = offset(address);
     if (displacement != offsetof(witness_amp_mailbox, consumer) &&
         displacement != offsetof(witness_amp_mailbox, logger_status))
-        throw std::invalid_argument("AMP logger cannot write firmware-owned memory");
+        throw witness::ArgumentRefused("AMP logger cannot write firmware-owned memory");
     fence();
     static_cast<volatile std::uint32_t *>(telemetry)[displacement / 4] = htole32(value);
     fence();

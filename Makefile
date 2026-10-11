@@ -212,7 +212,7 @@ RTL_SATURATION_STEPS ?= 4294967304
 .PHONY: rtl-counter-saturation
 rtl-counter-saturation:
 	mkdir -p "$(RTL_SATURATION_DIRECTORY)"
-	verilator --cc --exe --build --Wall -Wno-fatal --assert --coverage-line \
+	verilator --cc --exe --build --Wall --assert --coverage-line \
 		--top-module rtl_counter_saturation -GOVERFLOW_COUNTER_BITS=32 -j 2 --Mdir "$(RTL_SATURATION_DIRECTORY)" \
 		-CFLAGS "-std=c++17 -O3 -Wall -Wextra -Werror" -MAKEFLAGS "OPT_FAST=-O3" \
 		rtl/control_cycle.sv rtl/deadline_monitor.sv rtl/event_witness.sv \

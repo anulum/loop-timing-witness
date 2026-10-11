@@ -152,7 +152,8 @@ def test_response_envelope_refusal(tmp_path: Path, body: bytes) -> None:
     source.write_bytes(body)
     result = command(tmp_path, "--response", str(source), "--csv", str(path))
     assert result.returncode == 1
-    assert result.stderr.startswith("downloads:")
+    assert result.stdout == ""
+    assert result.stderr == "downloads: could not validate or import observations\n"
     assert path.read_bytes() == before
     assert not list(tmp_path.glob(".history.csv.*"))
 
@@ -179,7 +180,10 @@ def test_observation_refusal(tmp_path: Path, field: str, value: object) -> None:
     source = tmp_path / "response.json"
     source.write_text(json.dumps({**response(), "data": [row]}))
     path = tmp_path / "history.csv"
-    assert command(tmp_path, "--response", str(source), "--csv", str(path)).returncode == 1
+    result = command(tmp_path, "--response", str(source), "--csv", str(path))
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "downloads: could not validate or import observations\n"
     assert not path.exists()
 
 
@@ -256,6 +260,8 @@ def test_real_http_status_and_unknown_data(tmp_path: Path, status: int) -> None:
         assert csv_path.read_text() == "date,without_mirrors,with_mirrors\n"
     else:
         assert result.returncode == 1
+        assert result.stdout == ""
+        assert result.stderr == "downloads: could not validate or import observations\n"
         assert not csv_path.exists()
 
 
@@ -306,6 +312,25 @@ def test_project_csv_boundary(tmp_path: Path) -> None:
     """The workflow-only flag cannot select another target path."""
     assert command(tmp_path, "--project-csv-only", "--csv", "other.csv").returncode == 1
     assert not (tmp_path / "other.csv").exists()
+
+
+def test_missing_response_has_fixed_output_and_preserves_history(tmp_path: Path) -> None:
+    """A real missing import file retains existing counts and hides filesystem details.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive response and established history directory.
+    """
+    history = tmp_path / "history.csv"
+    snapshot(json.dumps(response()).encode(), history)
+    before = history.read_bytes(), history.stat().st_mtime_ns
+    result = command(tmp_path, "--response", str(tmp_path / "missing.json"), "--csv", str(history))
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "downloads: could not validate or import observations\n"
+    assert (history.read_bytes(), history.stat().st_mtime_ns) == before
+    assert not list(tmp_path.glob(".history.csv.*"))
 
 
 def test_real_verified_tls_fetch(tmp_path: Path) -> None:

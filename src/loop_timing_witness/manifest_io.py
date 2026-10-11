@@ -20,10 +20,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
+
+
+class JsonInputRefusalError(ValueError):
+    """An intentionally authored refusal of invalid JSON input bytes or values."""
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -48,8 +53,50 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     for key, value in pairs:
         if key in result:
             message = f"duplicate JSON key: {key}"
-            raise ValueError(message)
+            raise JsonInputRefusalError(message)
         result[key] = value
+    return result
+
+
+def _reject_nonfinite_constant(value: str) -> NoReturn:
+    """Refuse a nonfinite JSON extension before constructing an input object.
+
+    Parameters
+    ----------
+    value
+        ``NaN``, ``Infinity`` or ``-Infinity`` encountered by the decoder.
+
+    Raises
+    ------
+    ValueError
+        Always, because the token does not represent a finite JSON number.
+    """
+    message = f"non-finite JSON number: {value}"
+    raise JsonInputRefusalError(message)
+
+
+def _finite_json_float(value: str) -> float:
+    """Decode one JSON decimal while refusing overflow to a nonfinite value.
+
+    Parameters
+    ----------
+    value
+        Decimal or exponent token supplied by the JSON decoder.
+
+    Returns
+    -------
+    float
+        Finite decoded value.
+
+    Raises
+    ------
+    ValueError
+        If the token overflows the floating-point representation.
+    """
+    result = float(value)
+    if not math.isfinite(result):
+        message = f"non-finite JSON number: {value}"
+        raise JsonInputRefusalError(message)
     return result
 
 
@@ -70,26 +117,35 @@ def parse_json_object(raw: bytes, source: str) -> dict[str, Any]:
 
     Raises
     ------
-    ValueError
+    JsonInputRefusalError
         If the bytes are not UTF-8, the document is not valid JSON, a member
-        name repeats inside one object, or the top level is not an object.
+        name repeats inside one object, a number is nonfinite after decoding,
+        or the top level is not an object.
     """
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
-        message = f"{source}: not UTF-8: {exc}"
-        raise ValueError(message) from exc
+        message = f"{source}: not UTF-8"
+        raise JsonInputRefusalError(message) from exc
     try:
-        value = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_finite_json_float,
+        )
     except json.JSONDecodeError as exc:
-        message = f"{source}: invalid JSON: {exc}"
-        raise ValueError(message) from exc
-    except ValueError as exc:
+        message = f"{source}: invalid JSON"
+        raise JsonInputRefusalError(message) from exc
+    except JsonInputRefusalError as exc:
         message = f"{source}: {exc}"
-        raise ValueError(message) from exc
+        raise JsonInputRefusalError(message) from exc
+    except (RecursionError, ValueError) as exc:
+        message = f"{source}: JSON input exceeds decoder limits"
+        raise JsonInputRefusalError(message) from exc
     if not isinstance(value, dict):
         message = f"{source}: top-level JSON value must be an object"
-        raise ValueError(message)
+        raise JsonInputRefusalError(message)
     return value
 
 

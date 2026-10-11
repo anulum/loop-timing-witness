@@ -127,10 +127,11 @@ def test_native_summary_write_failure(tmp_path: Path) -> None:
     with ThreadPoolExecutor(max_workers=1) as executor:
         capture = executor.submit(capture_simulation, config, output, 0)
         limit = time.monotonic() + 30
-        while not (output / "build.log").exists() and not capture.done():
-            if time.monotonic() >= limit:
-                pytest.fail("actual source snapshot did not reach compilation")
+        while (
+            not (output / "build.log").exists() and not capture.done() and time.monotonic() < limit
+        ):
             time.sleep(0.01)
+        assert (output / "build.log").exists(), "actual source snapshot did not reach compilation"
         (output / "native.log").symlink_to("/dev/full")
         with pytest.raises(subprocess.CalledProcessError):
             capture.result(timeout=120)

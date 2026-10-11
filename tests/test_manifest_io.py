@@ -12,11 +12,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
-from manifest_io import canonical_json_bytes, load_json_object, sha256_of_file, write_bytes_atomic
+from manifest_io import (
+    JsonInputRefusalError,
+    canonical_json_bytes,
+    load_json_object,
+    sha256_of_file,
+    write_bytes_atomic,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -57,22 +65,91 @@ def test_load_rejects_invalid_json(tmp_path: Path) -> None:
     """A syntax error surfaces as ValueError with the file name."""
     path = tmp_path / "broken.json"
     path.write_text("{not json", encoding="utf-8")
-    with pytest.raises(ValueError, match=r"broken\.json: invalid JSON"):
+    with pytest.raises(JsonInputRefusalError) as refusal:
         load_json_object(path)
+    assert str(refusal.value) == f"{path}: invalid JSON"
 
 
 def test_load_rejects_bytes_that_are_not_utf8(tmp_path: Path) -> None:
     """A Windows-1250 encoded file is refused rather than decoded wrongly."""
     path = tmp_path / "latin1.json"
     path.write_bytes('{"name": "Šotek"}'.encode("cp1250"))
-    with pytest.raises(ValueError, match="not UTF-8"):
+    with pytest.raises(JsonInputRefusalError) as refusal:
         load_json_object(path)
+    assert str(refusal.value) == f"{path}: not UTF-8"
+
+
+@pytest.mark.parametrize("limit", ["integer", "nesting"])
+def test_real_decoder_limits_have_an_authored_refusal(tmp_path: Path, limit: str) -> None:
+    """Actual integer and recursion limits refuse input without decoder diagnostics.
+
+    Parameters
+    ----------
+    tmp_path
+        Real JSON input outside the running interpreter's admitted decoding limits.
+    limit
+        Decimal integer conversion or deeply nested input, with no interpreter setting changed.
+    """
+    if limit == "integer":
+        maximum = sys.get_int_max_str_digits()
+        assert maximum > 0
+        content = '{"value":' + "9" * (maximum + 1) + "}"
+    else:
+        depth = 10_000
+        content = '{"value":' + "[" * depth + "0" + "]" * depth + "}"
+    path = tmp_path / "limits.json"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(JsonInputRefusalError) as refusal:
+        load_json_object(path)
+    assert str(refusal.value) == f"{path}: JSON input exceeds decoder limits"
+    assert isinstance(refusal.value.__cause__, RecursionError if limit == "nesting" else ValueError)
 
 
 def test_load_of_a_missing_file_raises_oserror(tmp_path: Path) -> None:
     """A missing file is an OSError, never an empty object."""
     with pytest.raises(FileNotFoundError):
         load_json_object(tmp_path / "absent.json")
+
+
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"])
+@pytest.mark.parametrize("shape", ['{"value":%s}', '{"nested":{"value":%s}}', '{"values":[%s]}'])
+def test_load_refuses_nonfinite_numbers(tmp_path: Path, token: str, shape: str) -> None:
+    """Refuse actual nonfinite input bytes at every JSON object or array depth.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive real input file.
+    token
+        Nonfinite extension or an exponent that overflows on decoding.
+    shape
+        Top-level field, nested object or nested array containing the number.
+    """
+    path = tmp_path / "nonfinite.json"
+    path.write_text(shape % token, encoding="utf-8")
+    with pytest.raises(ValueError, match=r"nonfinite\.json: non-finite JSON number"):
+        load_json_object(path)
+
+
+@pytest.mark.parametrize(
+    "token", ["1.25", "1.7976931348623157e308", "-1.7976931348623157e308", "1e-999"]
+)
+def test_load_preserves_finite_numbers_and_literal_strings(tmp_path: Path, token: str) -> None:
+    """Retain finite numeric boundaries and ordinary strings naming rejected tokens.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive actual JSON file.
+    token
+        Representable finite decimal, maximal signed magnitude or underflow to zero.
+    """
+    path = tmp_path / "finite.json"
+    path.write_text('{"value":' + token + ',"labels":["NaN","Infinity","-Infinity"]}')
+    result = load_json_object(path)
+    assert math.isfinite(result["value"])
+    assert result["value"] == float(token)
+    assert result["labels"] == ["NaN", "Infinity", "-Infinity"]
 
 
 def test_canonical_bytes_are_independent_of_key_order() -> None:

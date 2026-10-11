@@ -12,6 +12,8 @@ import shlex
 import shutil
 import subprocess
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -111,10 +113,8 @@ def owned_rustup(
     library.mkdir()
     shutil.copy2(sysroot / "bin/rustc", toolchain / "bin/rustc")
     for source in (sysroot / "lib").iterdir():
-        if source.is_file() and not source.is_symlink():
-            shutil.copy2(source, library / source.name)
-        elif source.is_symlink():
-            (library / source.name).symlink_to(source.readlink())
+        if source.is_file() or source.is_symlink():
+            shutil.copy2(source, library / source.name, follow_symlinks=False)
     (library / "rustlib" / TARGET / "lib").mkdir(parents=True)
     rustup = shutil.which("rustup")
     assert rustup is not None, "actual installed Rustup is required"
@@ -210,6 +210,46 @@ def test_actual_owned_target_symlink_boundaries(
         rust_toolchain("rustc")
 
 
+@contextmanager
+def watch_owned_archive(output: Path, archive: Path) -> Iterator[threading.Event]:
+    """Mutate an owned archive on metadata compilation and join the watcher on every exit.
+
+    Parameters
+    ----------
+    output
+        Exclusive preparation directory whose first actual compiler log triggers mutation.
+    archive
+        Actual target-library copy contained in the same test allocation.
+
+    Yields
+    ------
+    threading.Event
+        Whether the original archive was changed during actual compilation.
+    """
+    assert archive.resolve().is_relative_to(output.parent.resolve())
+    stopped = threading.Event()
+    mutated = threading.Event()
+
+    def change_owned_archive_during_real_compile() -> None:
+        """Change an owned installed archive after snapshot and during actual metadata compile."""
+        marker = output / "rust_metadata/input_0.log"
+        while not stopped.wait(0.002):
+            if marker.exists():
+                with archive.open("ab") as stream:
+                    stream.write(b"owned-archive-drift")
+                mutated.set()
+                return
+
+    watcher = threading.Thread(target=change_owned_archive_during_real_compile)
+    watcher.start()
+    try:
+        yield mutated
+    finally:
+        stopped.set()
+        watcher.join(timeout=2)
+    assert not watcher.is_alive()
+
+
 def test_actual_owned_target_drift_during_metadata_compilation(
     owned_rustup: tuple[Path, Path, dict[str, object]], tmp_path: Path
 ) -> None:
@@ -231,26 +271,43 @@ def test_actual_owned_target_drift_during_metadata_compilation(
     output = tmp_path / "metadata-drift"
     output.mkdir()
     archive = next(target.glob("liballoc-*.rlib"))
-    stopped = threading.Event()
-    mutated = threading.Event()
-
-    def change_owned_archive_during_real_compile() -> None:
-        """Change an owned installed archive after snapshot and during actual metadata compile."""
-        marker = output / "rust_metadata/input_0.log"
-        while not stopped.wait(0.002):
-            if marker.exists():
-                with archive.open("ab") as stream:
-                    stream.write(b"owned-archive-drift")
-                mutated.set()
-                return
-
-    watcher = threading.Thread(target=change_owned_archive_during_real_compile)
-    watcher.start()
-    try:
-        with pytest.raises(ValueError, match="changed during metadata compilation"):
-            prepare_rust_sources(ROOT, output, "rustc")
-    finally:
-        stopped.set()
-        watcher.join(timeout=2)
+    with (
+        watch_owned_archive(output, archive) as mutated,
+        pytest.raises(ValueError, match="changed during metadata compilation"),
+    ):
+        prepare_rust_sources(ROOT, output, "rustc")
     assert mutated.is_set()
+    assert not (output / "rust_preparation.json").exists()
+
+
+def test_missing_original_source_stops_archive_watcher(
+    owned_rustup: tuple[Path, Path, dict[str, object]], tmp_path: Path
+) -> None:
+    """Join the archive watcher without mutation when genuine preparation refuses absent sources.
+
+    Parameters
+    ----------
+    owned_rustup
+        Exclusive actual compiler and original target-library copies.
+    tmp_path
+        Exclusive absent source selection and preparation output.
+    """
+    toolchain, target, original = owned_rustup
+    compiler = original["compiler"]
+    assert isinstance(compiler, dict)
+    shutil.copy2(Path(compiler["path"]).parent / "cargo", toolchain / "bin/cargo")
+    for suffix in [".rlib", ".rmeta"]:
+        _copy_owned_target(original, target, suffix=suffix)
+    archive = next(target.glob("liballoc-*.rlib"))
+    original_hash = sha256_of_file(archive)
+    output = tmp_path / "missing-source-preparation"
+    output.mkdir()
+    with (
+        watch_owned_archive(output, archive) as mutated,
+        pytest.raises(ValueError, match="contained regular file"),
+    ):
+        prepare_rust_sources(tmp_path / "missing-source", output, "rustc")
+    assert not mutated.is_set()
+    assert sha256_of_file(archive) == original_hash
+    assert not (output / "rust_metadata").exists()
     assert not (output / "rust_preparation.json").exists()

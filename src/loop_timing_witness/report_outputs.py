@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import csv
+import ctypes
 import io
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -20,6 +22,7 @@ from xml.sax.saxutils import escape
 
 from .latency_jitter import jitter_pairs
 from .manifest_io import canonical_json_bytes
+from .report_publication import DirectoryPublication
 
 
 def _csv_bytes(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> bytes:
@@ -185,16 +188,19 @@ def write_report(
     FileExistsError
         If the output directory already exists.
     OSError
-        If an artefact cannot be written or the transaction cannot land.
+        If Linux atomic publication is unavailable, an artefact cannot be
+        written or the transaction cannot land.
     """
-    target = output_directory.resolve()
-    if target.exists():
+    target = output_directory.parent.resolve() / output_directory.name
+    if os.path.lexists(target):
         message = f"report directory already exists: {target}"
         raise FileExistsError(message)
     parent = target.parent
     if not parent.is_dir():
         message = f"report parent does not exist: {parent}"
         raise FileNotFoundError(message)
+    publication = DirectoryPublication(ctypes.CDLL(None, use_errno=True))
+    publication.check(parent)
     staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=parent))
     try:
         (staging / "report.json").write_bytes(canonical_json_bytes(report))
@@ -275,7 +281,7 @@ def write_report(
         )
         for filename, content in _plots(report).items():
             (staging / filename).write_bytes(content)
-        staging.rename(target)
+        publication.publish(staging, target)
     except BaseException:
         shutil.rmtree(staging)
         raise

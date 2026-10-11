@@ -182,10 +182,8 @@ def test_original_target_archive_changed_between_hash_and_copy_refused(
     host_library = owned / "lib"
     host_library.mkdir()
     for path in (sysroot / "lib").iterdir():
-        if path.is_file() and not path.is_symlink():
-            shutil.copy2(path, host_library / path.name)
-        elif path.is_symlink():
-            (host_library / path.name).symlink_to(path.readlink())
+        if path.is_file() or path.is_symlink():
+            shutil.copy2(path, host_library / path.name, follow_symlinks=False)
     target = host_library / "rustlib" / TARGET / "lib"
     target.mkdir(parents=True)
     for name in selected["target_libraries"]:

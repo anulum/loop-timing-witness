@@ -66,7 +66,12 @@ def test_amp_uio_usage(amp_uio_program: Path) -> None:
         (0, "../uio0", "invalid AMP UIO identity"),
         (3, "-1", "invalid unsigned"),
         (3, "4294967296", "outside"),
-        (5, "18446744073709551616", "stoull"),
+        pytest.param(
+            5,
+            "18446744073709551616",
+            "argument outside range",
+            id="5-18446744073709551616-stoull",
+        ),
         (5, "0", "extent or alignment"),
         (5, "1073741825", "extent or alignment"),
         (6, "4095", "extent or alignment"),

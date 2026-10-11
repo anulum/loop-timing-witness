@@ -45,11 +45,15 @@ jitter is defined in [host analysis](docs/HOST_ANALYSIS.md#latency-jitter).
 ```bash
 make venv       # hashed development environment
 make hooks      # pre-commit, commit-message and pre-push hooks
-make preflight  # every gate in VALIDATION.md
+make preflight  # every gate in VALIDATION.md, on an allocated runner
 ```
 
 Commits are atomic, staged by explicit path and described in the conventional
 `type(scope): summary` form. History on `main` is never rewritten.
+
+On a shared workstation, run targeted tests and the normal commit hooks.
+Whole suites, coverage and matrix builds belong on hosted runners. Publishing
+starts those checks; accept the checkpoint only when they pass on its exact SHA.
 
 ## Security-relevant changes
 

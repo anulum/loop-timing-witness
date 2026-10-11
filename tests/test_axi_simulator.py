@@ -12,13 +12,20 @@ from __future__ import annotations
 
 import os
 import select
+import signal
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+from process_lifetime_support import finish_process, retain_process
 from test_controller_parity import DEFAULT, oracle
 
 from conftest import REPOSITORY_ROOT
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 @pytest.fixture(scope="module", params=[0, 1])
@@ -68,6 +75,50 @@ def simulator(request: pytest.FixtureRequest) -> Path:
     return build / "axi_simulator"
 
 
+@contextmanager
+def owned_streaming_process(binary: Path, *arguments: str) -> Iterator[subprocess.Popen[str]]:
+    """Retain and reap the real stream process on normal or incomplete caller return.
+
+    Parameters
+    ----------
+    binary
+        Actual production AXI simulator or native controller executable.
+    *arguments
+        Literal public command arguments forwarded without a shell.
+
+    Yields
+    ------
+    subprocess.Popen[str]
+        Owned child with live stdin/stdout pipes and a retained kernel identity.
+    """
+    with subprocess.Popen(
+        [str(binary), *arguments], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    ) as process:
+        descriptor = retain_process(process)
+        try:
+            yield process
+        finally:
+            finish_process(process, descriptor)
+
+
+def test_caller_return_reaps_waiting_axi_process(simulator: Path) -> None:
+    """Returning without Q reaps the actual waiting child and closes both streams.
+
+    Parameters
+    ----------
+    simulator
+        Actual production AXI simulator linked to the selected plant.
+    """
+    with owned_streaming_process(simulator) as process:
+        assert exchange(process, "R 124")[1] == 1
+        assert process.poll() is None
+    assert process.returncode == -signal.SIGKILL
+    assert process.stdin is not None
+    assert process.stdin.closed
+    assert process.stdout is not None
+    assert process.stdout.closed
+
+
 def exchange(process: subprocess.Popen[str], message: str) -> tuple[int, int, int]:
     """Send one public protocol request and bound its response wait.
 
@@ -101,39 +152,32 @@ def test_register_reset_and_irq(simulator: Path) -> None:
     simulator
         Compiled production top process.
     """
-    with subprocess.Popen(
-        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-    ) as process:
-        try:
-            assert exchange(process, "R 124")[1] == 1
-            assert exchange(process, "R 125")[0] == 2
-            assert exchange(process, "R 0")[0] == 2
-            assert exchange(process, "W 152 0 15")[0] == 0
-            assert exchange(process, "R 152")[1] == 8
-            assert exchange(process, "R 124")[0] == 2
-            assert exchange(process, "W 152 1 15")[0] == 0
-            assert exchange(process, "T 140")[0] == 0
-            assert exchange(process, "R 152")[1] & 7 == 7
-            assert exchange(process, "I 0")[1] == 0
-            before = exchange(process, "T 0")[2]
-            assert exchange(process, "T 123")[2] - before == 123
-            assert exchange(process, "W 56 1 1")[0] == 2
-            assert exchange(process, "W 56 1 15")[0] == 0
-            assert exchange(process, "I 10000")[1] == 1
-            assert exchange(process, "R 156")[1] == 1
-            assert exchange(process, "R 160")[1] == 0
-            assert exchange(process, "W 164 1 15")[0] == 0
-            assert exchange(process, "I 0")[1] == 0
-            assert process.stdin is not None
-            process.stdin.write("Q\n")
-            process.stdin.flush()
-            assert process.wait(timeout=5) == 0
-            if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
-                assert Path(f"{simulator}.{process.pid}.coverage.dat").stat().st_size > 0
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=5)
+    with owned_streaming_process(simulator) as process:
+        assert exchange(process, "R 124")[1] == 1
+        assert exchange(process, "R 125")[0] == 2
+        assert exchange(process, "R 0")[0] == 2
+        assert exchange(process, "W 152 0 15")[0] == 0
+        assert exchange(process, "R 152")[1] == 8
+        assert exchange(process, "R 124")[0] == 2
+        assert exchange(process, "W 152 1 15")[0] == 0
+        assert exchange(process, "T 140")[0] == 0
+        assert exchange(process, "R 152")[1] & 7 == 7
+        assert exchange(process, "I 0")[1] == 0
+        before = exchange(process, "T 0")[2]
+        assert exchange(process, "T 123")[2] - before == 123
+        assert exchange(process, "W 56 1 1")[0] == 2
+        assert exchange(process, "W 56 1 15")[0] == 0
+        assert exchange(process, "I 10000")[1] == 1
+        assert exchange(process, "R 156")[1] == 1
+        assert exchange(process, "R 160")[1] == 0
+        assert exchange(process, "W 164 1 15")[0] == 0
+        assert exchange(process, "I 0")[1] == 0
+        assert process.stdin is not None
+        process.stdin.write("Q\n")
+        process.stdin.flush()
+        assert process.wait(timeout=5) == 0
+        if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
+            assert Path(f"{simulator}.{process.pid}.coverage.dat").stat().st_size > 0
 
 
 def test_configuration_write_refusals(simulator: Path) -> None:
@@ -144,34 +188,84 @@ def test_configuration_write_refusals(simulator: Path) -> None:
     simulator
         Actual production plant and configuration register bank.
     """
-    with subprocess.Popen(
-        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-    ) as process:
-        try:
-            registers = {60: 0, 68: 0, 84: 1, 88: 0}
-            for address, original in registers.items():
-                response, value, _ = exchange(process, f"R {address}")
-                assert (response, value) == (0, original)
-            for address, value in ((68, 3), (84, 16), (88, 4)):
-                assert exchange(process, f"W {address} {value} 15")[0] == 2
-                assert exchange(process, f"R {address}")[1] == registers[address]
-            assert exchange(process, "W 60 2 15")[0] == 0
-            assert exchange(process, "R 60")[1] == 2
-            assert exchange(process, "W 56 1 15")[0] == 0
-            assert exchange(process, "R 56")[1] == 1
-            for address, value in ((60, 3), (68, 2), (84, 15), (88, 3)):
-                assert exchange(process, f"W {address} {value} 15")[0] == 2
-                assert exchange(process, f"R {address}")[1] == (
-                    2 if address == 60 else registers[address]
-                )
-            assert process.stdin is not None
-            process.stdin.write("Q\n")
-            process.stdin.flush()
-            assert process.wait(timeout=5) == 0
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=5)
+    with owned_streaming_process(simulator) as process:
+        registers = {60: 0, 68: 0, 84: 1, 88: 0}
+        for address, original in registers.items():
+            response, value, _ = exchange(process, f"R {address}")
+            assert (response, value) == (0, original)
+        for address, value in ((68, 3), (84, 16), (88, 4)):
+            assert exchange(process, f"W {address} {value} 15")[0] == 2
+            assert exchange(process, f"R {address}")[1] == registers[address]
+        assert exchange(process, "W 60 2 15")[0] == 0
+        assert exchange(process, "R 60")[1] == 2
+        assert exchange(process, "W 56 1 15")[0] == 0
+        assert exchange(process, "R 56")[1] == 1
+        for address, value in ((60, 3), (68, 2), (84, 15), (88, 3)):
+            assert exchange(process, f"W {address} {value} 15")[0] == 2
+            assert exchange(process, f"R {address}")[1] == (
+                2 if address == 60 else registers[address]
+            )
+        assert process.stdin is not None
+        process.stdin.write("Q\n")
+        process.stdin.flush()
+        assert process.wait(timeout=5) == 0
+
+
+def read_available_codes(process: subprocess.Popen[str], maximum: int) -> list[tuple[int, int]]:
+    """Drain at most the selected number of actual coherent FIFO records.
+
+    Parameters
+    ----------
+    process
+        Live production AXI process with its real FIFO aperture.
+    maximum
+        Maximum records the caller will consume in this bounded drain.
+
+    Returns
+    -------
+    list of tuple of int
+        Event code and cycle from actual four-word snapshots, preserving POP order.
+    """
+    records = []
+    for _ in range(maximum):
+        if not exchange(process, "R 144")[1] & 1:
+            break
+        words = [exchange(process, f"R {address}")[1] for address in (128, 132, 136, 140)]
+        records.append((words[0], words[1]))
+        assert exchange(process, "W 148 1 15")[0] == 0
+    return records
+
+
+def test_complete_two_cycle_drain_reaches_the_caller_limit(simulator: Path) -> None:
+    """A real eight-record FIFO drains exactly to the caller limit, then reports empty.
+
+    Parameters
+    ----------
+    simulator
+        Production AXI process linked to the selected real RTL plant.
+    """
+    with owned_streaming_process(simulator) as process:
+        assert exchange(process, "W 60 1 15")[0] == 0
+        assert exchange(process, "W 56 1 15")[0] == 0
+        for cycle in range(2):
+            assert exchange(process, "I 1000000")[1] == 1
+            assert exchange(process, "R 156")[1] == cycle + 1
+            assert exchange(process, "R 0")[0] == 0
+            assert exchange(process, "R 16")[1] == cycle
+            assert exchange(process, f"W 40 {cycle} 15")[0] == 0
+            assert exchange(process, "W 44 0 15")[0] == 0
+            assert exchange(process, "W 48 1 15")[0] == 0
+            assert exchange(process, "W 164 1 15")[0] == 0
+        assert exchange(process, "I 1000000")[1] == 1
+        assert exchange(process, "R 4")[1] & 4
+        assert read_available_codes(process, 8) == [
+            (code, cycle) for cycle in range(2) for code in (1, 2, 3, 4)
+        ]
+        assert read_available_codes(process, 8) == []
+        assert process.stdin is not None
+        process.stdin.write("Q\n")
+        process.stdin.flush()
+        assert process.wait(timeout=5) == 0
 
 
 def test_stale_command_records_late_event(simulator: Path) -> None:
@@ -182,37 +276,24 @@ def test_stale_command_records_late_event(simulator: Path) -> None:
     simulator
         Production AXI decoder, control cycle and event FIFO.
     """
-    with subprocess.Popen(
-        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-    ) as process:
-        try:
-            assert exchange(process, "W 60 1 15")[0] == 0
-            assert exchange(process, "W 56 1 15")[0] == 0
-            assert exchange(process, "I 1000000")[1] == 1
-            assert exchange(process, "R 0")[0] == 0
-            assert exchange(process, "R 16")[1] == 0
-            assert exchange(process, "W 40 1 15")[0] == 0
-            assert exchange(process, "W 44 16777216 15")[0] == 0
-            assert exchange(process, "W 48 1 15")[0] == 0
-            assert exchange(process, "T 140")[0] == 0
-            records = []
-            for _ in range(8):
-                if not exchange(process, "R 144")[1] & 1:
-                    break
-                words = [exchange(process, f"R {address}")[1] for address in (128, 132, 136, 140)]
-                records.append((words[0], words[1]))
-                assert exchange(process, "W 148 1 15")[0] == 0
-            assert records.count((13, 0)) == 1
-            assert exchange(process, "R 52")[1] == 0
-            assert exchange(process, "R 4")[1] & 8 == 0
-            assert process.stdin is not None
-            process.stdin.write("Q\n")
-            process.stdin.flush()
-            assert process.wait(timeout=5) == 0
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=5)
+    with owned_streaming_process(simulator) as process:
+        assert exchange(process, "W 60 1 15")[0] == 0
+        assert exchange(process, "W 56 1 15")[0] == 0
+        assert exchange(process, "I 1000000")[1] == 1
+        assert exchange(process, "R 0")[0] == 0
+        assert exchange(process, "R 16")[1] == 0
+        assert exchange(process, "W 40 1 15")[0] == 0
+        assert exchange(process, "W 44 16777216 15")[0] == 0
+        assert exchange(process, "W 48 1 15")[0] == 0
+        assert exchange(process, "T 140")[0] == 0
+        records = read_available_codes(process, 8)
+        assert records.count((13, 0)) == 1
+        assert exchange(process, "R 52")[1] == 0
+        assert exchange(process, "R 4")[1] & 8 == 0
+        assert process.stdin is not None
+        process.stdin.write("Q\n")
+        process.stdin.flush()
+        assert process.wait(timeout=5) == 0
 
 
 @pytest.mark.parametrize(
@@ -238,34 +319,27 @@ def test_reference_waveform_through_axi(
         Mode, amplitude, offset, increment and signed Q8.24 references.
     """
     mode, amplitude, offset, increment, expected = case
-    with subprocess.Popen(
-        [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-    ) as process:
-        try:
-            for address, value in (
-                (60, len(expected) - 1),
-                (68, mode),
-                (72, amplitude),
-                (76, offset),
-                (80, increment),
-            ):
-                assert exchange(process, f"W {address} {value & 0xFFFFFFFF} 15")[0] == 0
-            assert exchange(process, "W 56 1 15")[0] == 0
-            for cycle, wanted in enumerate(expected):
-                assert exchange(process, "I 1000000")[1] == 1
-                assert exchange(process, "R 0")[0] == 0
-                assert exchange(process, "R 16")[1] == cycle
-                assert exchange(process, "R 24")[1] == wanted & 0xFFFFFFFF
-                assert exchange(process, "R 156")[1] == cycle + 1
-                assert exchange(process, "W 164 1 15")[0] == 0
-            assert process.stdin is not None
-            process.stdin.write("Q\n")
-            process.stdin.flush()
-            assert process.wait(timeout=5) == 0
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=5)
+    with owned_streaming_process(simulator) as process:
+        for address, value in (
+            (60, len(expected) - 1),
+            (68, mode),
+            (72, amplitude),
+            (76, offset),
+            (80, increment),
+        ):
+            assert exchange(process, f"W {address} {value & 0xFFFFFFFF} 15")[0] == 0
+        assert exchange(process, "W 56 1 15")[0] == 0
+        for cycle, wanted in enumerate(expected):
+            assert exchange(process, "I 1000000")[1] == 1
+            assert exchange(process, "R 0")[0] == 0
+            assert exchange(process, "R 16")[1] == cycle
+            assert exchange(process, "R 24")[1] == wanted & 0xFFFFFFFF
+            assert exchange(process, "R 156")[1] == cycle + 1
+            assert exchange(process, "W 164 1 15")[0] == 0
+        assert process.stdin is not None
+        process.stdin.write("Q\n")
+        process.stdin.flush()
+        assert process.wait(timeout=5) == 0
 
 
 def drain_capture(
@@ -319,61 +393,51 @@ def test_native_feedback_and_capture(
     histories = []
     for controller in native_controllers:
         with (
-            subprocess.Popen(
-                [str(simulator)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-            ) as process,
-            subprocess.Popen(
-                [str(controller), mode], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-            ) as kernel,
+            owned_streaming_process(simulator) as process,
+            owned_streaming_process(controller, mode) as kernel,
         ):
-            try:
-                assert kernel.stdin is not None
-                assert kernel.stdout is not None
-                kernel.stdin.write(",".join(map(str, DEFAULT)) + "\n")
+            assert kernel.stdin is not None
+            assert kernel.stdout is not None
+            kernel.stdin.write(",".join(map(str, DEFAULT)) + "\n")
+            kernel.stdin.flush()
+            assert exchange(process, "W 60 3 15")[0] == 0
+            assert exchange(process, "W 56 1 15")[0] == 0
+            samples, commands, read_ticks = [], [], []
+            for cycle in range(4):
+                assert exchange(process, "I 1000000")[1] == 1
+                assert exchange(process, "R 156")[1] == cycle + 1
+                position = exchange(process, "R 0")[1]
+                assert exchange(process, "R 16")[1] == cycle
+                velocity = exchange(process, "R 20")[1]
+                reference = exchange(process, "R 24")[1]
+                low = exchange(process, "R 28")[1]
+                high = exchange(process, "R 32")[1]
+                read_ticks.append(low | (high << 32))
+                signed = [
+                    value if value < 1 << 31 else value - (1 << 32)
+                    for value in (reference, position, velocity)
+                ]
+                row = ",".join(map(str, [cycle, *signed]))
+                samples.append(row)
+                kernel.stdin.write(row + "\n")
                 kernel.stdin.flush()
-                assert exchange(process, "W 60 3 15")[0] == 0
-                assert exchange(process, "W 56 1 15")[0] == 0
-                samples, commands, read_ticks = [], [], []
-                for cycle in range(4):
-                    assert exchange(process, "I 1000000")[1] == 1
-                    assert exchange(process, "R 156")[1] == cycle + 1
-                    position = exchange(process, "R 0")[1]
-                    assert exchange(process, "R 16")[1] == cycle
-                    velocity = exchange(process, "R 20")[1]
-                    reference = exchange(process, "R 24")[1]
-                    low = exchange(process, "R 28")[1]
-                    high = exchange(process, "R 32")[1]
-                    read_ticks.append(low | (high << 32))
-                    signed = [
-                        value if value < 1 << 31 else value - (1 << 32)
-                        for value in (reference, position, velocity)
-                    ]
-                    row = ",".join(map(str, [cycle, *signed]))
-                    samples.append(row)
-                    kernel.stdin.write(row + "\n")
-                    kernel.stdin.flush()
-                    assert select.select([kernel.stdout], [], [], 5)[0]
-                    command = kernel.stdout.readline()
-                    commands.append(command)
-                    raw = int(command.split(",")[1]) & 0xFFFFFFFF
-                    assert exchange(process, f"W 40 {cycle} 15")[0] == 0
-                    assert exchange(process, f"W 44 {raw} 15")[0] == 0
-                    assert exchange(process, "W 48 1 15")[0] == 0
-                    assert exchange(process, "W 164 1 15")[0] == 0
-                records = drain_capture(process, read_ticks)
-                assert "".join(commands) == oracle(mode, DEFAULT, samples)
-                histories.append((samples, commands, records))
-                kernel.stdin.close()
-                assert kernel.wait(timeout=5) == 0
-                assert process.stdin is not None
-                process.stdin.write("Q\n")
-                process.stdin.flush()
-                assert process.wait(timeout=5) == 0
-            finally:
-                for child in (process, kernel):
-                    if child.poll() is None:
-                        child.terminate()
-                        child.wait(timeout=5)
+                assert select.select([kernel.stdout], [], [], 5)[0]
+                command = kernel.stdout.readline()
+                commands.append(command)
+                raw = int(command.split(",")[1]) & 0xFFFFFFFF
+                assert exchange(process, f"W 40 {cycle} 15")[0] == 0
+                assert exchange(process, f"W 44 {raw} 15")[0] == 0
+                assert exchange(process, "W 48 1 15")[0] == 0
+                assert exchange(process, "W 164 1 15")[0] == 0
+            records = drain_capture(process, read_ticks)
+            assert "".join(commands) == oracle(mode, DEFAULT, samples)
+            histories.append((samples, commands, records))
+            kernel.stdin.close()
+            assert kernel.wait(timeout=5) == 0
+            assert process.stdin is not None
+            process.stdin.write("Q\n")
+            process.stdin.flush()
+            assert process.wait(timeout=5) == 0
     assert histories[0] == histories[1]
 
 
@@ -415,4 +479,19 @@ def test_protocol_refusal(simulator: Path, message: str) -> None:
     )
     assert result.returncode == 1
     assert result.stdout == ""
-    assert result.stderr
+    expected = {
+        "R -1": "invalid unsigned argument",
+        "R 256": "argument outside range",
+        "R 0 extra": "unexpected argument",
+        "R": "invalid unsigned argument",
+        "W 0 4294967296 15": "argument outside range",
+        "W 0 1 16": "argument outside range",
+        "W 0 1": "invalid unsigned argument",
+        "T 10000001": "argument outside range",
+        "I -1": "invalid unsigned argument",
+        "T 18446744073709551616": "argument outside range",
+        "Q extra": "unexpected argument",
+        "": "unknown request",
+        "X": "unknown request",
+    }
+    assert result.stderr == expected[message] + "\n"

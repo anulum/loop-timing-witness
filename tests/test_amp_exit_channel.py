@@ -81,31 +81,36 @@ def test_original_completion_refusals(
         table = next(section for section in sections if section[1] == 2)
         strings = sections[table[6]]
         names = content[strings[4] : strings[4] + strings[5]]
-        for offset in range(table[4], table[4] + table[5], SYMBOL.size):
-            fields = list(SYMBOL.unpack_from(content, offset))
-            if names[fields[0] : names.find(b"\0", fields[0])].decode("ascii") != "tohost":
-                continue
-            if corruption == "missing":
-                fields[1] = 1
-                finding = "requires both"
-            elif corruption == "kind":
-                fields[1] = 18
-                finding = "aligned writable"
-            elif corruption == "size":
-                fields[5] = 16
-                finding = "aligned writable"
-            elif corruption == "alignment":
-                fields[4] += 1
-                finding = "aligned writable"
-            elif corruption == "outside":
-                fields[4] = 0x80040000
-                finding = "aligned writable"
-            else:
-                fields[4] = symbols["fromhost"].address
-                finding = "distinct original"
-            SYMBOL.pack_into(altered, offset, *fields)
-            break
+        assert "tohost" in symbols, "original compiler did not emit HTIF symbol"
+        records = {
+            offset: SYMBOL.unpack_from(content, offset)
+            for offset in range(table[4], table[4] + table[5], SYMBOL.size)
+        }
+        globals_by_name = {
+            names[fields[0] : names.find(b"\0", fields[0])].decode("ascii"): offset
+            for offset, fields in records.items()
+            if fields[1] >> 4 in (1, 2)
+        }
+        offset = globals_by_name["tohost"]
+        fields = list(records[offset])
+        if corruption == "missing":
+            fields[1] = 1
+            finding = "requires both"
+        elif corruption == "kind":
+            fields[1] = 18
+            finding = "aligned writable"
+        elif corruption == "size":
+            fields[5] = 16
+            finding = "aligned writable"
+        elif corruption == "alignment":
+            fields[4] += 1
+            finding = "aligned writable"
+        elif corruption == "outside":
+            fields[4] = 0x80040000
+            finding = "aligned writable"
         else:
-            pytest.fail("original compiler did not emit HTIF symbol")
+            fields[4] = symbols["fromhost"].address
+            finding = "distinct original"
+        SYMBOL.pack_into(altered, offset, *fields)
     with pytest.raises(ValueError, match=finding):
         admit_exit_channel(bytes(altered), segments, isa=True)

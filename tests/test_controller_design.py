@@ -104,3 +104,18 @@ def test_default_thermal_against_independent_quadratic_solution() -> None:
     closed = transition - input_gain * (6944437 / SCALE)
     assert abs(closed) < 1
     assert round((1 - closed) / input_gain * SCALE) == 23721653
+
+
+def test_stable_uncontrolled_reference_has_finite_state_cost() -> None:
+    """An unactuated stable plant agrees with its independent geometric-series cost."""
+    gains, riccati = reference_dare(((0.5,),), (0.0,), (1.0,))
+    assert gains == [0.0]
+    assert math.isclose(riccati[0][0], 1 / (1 - 0.5**2), rel_tol=1e-9)
+
+
+def test_uncontrollable_unit_pole_has_no_stationary_riccati_solution() -> None:
+    """The real P(n+1)=P(n)+1 recurrence refuses a nonexistent stationary design."""
+    with pytest.raises(
+        pytest.fail.Exception, match="default discrete Riccati recurrence did not converge"
+    ):
+        reference_dare(((1.0,),), (0.0,), (1.0,))

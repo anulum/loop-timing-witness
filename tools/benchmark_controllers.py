@@ -44,6 +44,10 @@ BINARIES = {
 }
 
 
+class BenchmarkRefusedError(ValueError):
+    """A deliberately authored refusal of invalid measurement or source identity."""
+
+
 def measure_controllers(
     output: Path, cpu: int, warmup: int = 3, repeats: int = 20, *, root: Path = ROOT
 ) -> None:
@@ -74,11 +78,11 @@ def measure_controllers(
     """
     if not 1 <= warmup <= MAX_REPEATS or not MIN_REPEATS <= repeats <= MAX_REPEATS:
         message = "warmup must be [1,1000] and repeats [5,1000]"
-        raise ValueError(message)
+        raise BenchmarkRefusedError(message)
     allowed = sorted(os.sched_getaffinity(0))
     if cpu not in allowed:
         message = "benchmark CPU is outside inherited affinity"
-        raise ValueError(message)
+        raise BenchmarkRefusedError(message)
     if output.exists():
         raise FileExistsError(output)
     paths = {name: root / name for name in (*SOURCES, *BINARIES.values())}
@@ -88,7 +92,7 @@ def measure_controllers(
         before[name] != hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in producers
     ):
         message = "snapshot benchmark producer differs from executing producer"
-        raise ValueError(message)
+        raise BenchmarkRefusedError(message)
     versions = {
         tool: subprocess.run(
             [tool, "--version"], check=True, capture_output=True, text=True, timeout=10
@@ -105,7 +109,7 @@ def measure_controllers(
             for controller, iterations, elapsed, checksum in decode_batch(result.stdout):
                 if checksums.setdefault(controller, checksum) != checksum:
                     message = "native benchmark checksum parity failed"
-                    raise ValueError(message)
+                    raise BenchmarkRefusedError(message)
                 rows.append(
                     {
                         "backend": backend,
@@ -120,7 +124,7 @@ def measure_controllers(
     after = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()}
     if before != after:
         message = "benchmark source or binary changed during measurement"
-        raise ValueError(message)
+        raise BenchmarkRefusedError(message)
     summaries = [
         {
             "backend": backend,
@@ -230,8 +234,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         measure_controllers(args.output, args.cpu, args.warmup, args.repeats, root=args.source_root)
-    except (ValueError, OSError, subprocess.SubprocessError) as exc:
-        print(f"controller benchmark: FAIL: {exc}", file=sys.stderr)
+    except BenchmarkRefusedError as error:
+        print(f"controller benchmark: FAIL: {error}", file=sys.stderr)
+        return 1
+    except (ValueError, OSError, subprocess.SubprocessError):
+        print("controller benchmark: FAIL: could not complete measurement", file=sys.stderr)
         return 1
     print(f"controller benchmark: PASS: {args.output}")
     return 0

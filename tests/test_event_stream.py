@@ -29,6 +29,7 @@ RunTool = Callable[..., subprocess.CompletedProcess[str]]
         ("empty", "event file is empty"),
         ("partial", "whole number of 16-byte records"),
         ("reserved", "reserved bits must be zero"),
+        ("reserved_word", "reserved bits must be zero"),
         ("unknown_code", "not in CONTROL"),
         ("foreign_profile", "not in CONTROL"),
         ("cycle_outside", "cycle is outside the run"),
@@ -67,6 +68,8 @@ def test_corrupt_rtl_event_record_is_refused(
         raw.pop()
     elif variant == "reserved":
         raw[1] = 1
+    elif variant == "reserved_word":
+        raw[2:4] = (1).to_bytes(2, "little")
     elif variant == "unknown_code":
         raw[0] = 255
     elif variant == "foreign_profile":
@@ -77,7 +80,8 @@ def test_corrupt_rtl_event_record_is_refused(
         raw[16 + 8 : 16 + 16] = (5).to_bytes(8, "little")
     elif variant == "cycle_regress":
         raw[5 * 16 + 4 : 5 * 16 + 8] = (0).to_bytes(4, "little")
-    elif variant == "duplicate_event":
+    else:
+        assert variant == "duplicate_event"
         raw[16] = 1
     (run / "events.bin").write_bytes(raw)
     manifest["files"]["events"]["sha256"] = hashlib.sha256(raw).hexdigest()

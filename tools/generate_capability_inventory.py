@@ -103,21 +103,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         generated = canonical_json_bytes(generate_inventory(args.manifest, args.schema))
-    except (OSError, ValueError) as exc:
-        print(f"capability-inventory: FAIL {exc}")
+    except (OSError, ValueError):
+        print("capability-inventory: FAIL invalid or unreadable manifest or schema")
         return 1
     if args.write:
         try:
             write_bytes_atomic(args.inventory, generated)
-        except OSError as exc:
-            print(f"capability-inventory: FAIL cannot write inventory: {exc}")
+        except OSError:
+            print("capability-inventory: FAIL cannot write inventory")
             return 1
         print(f"capability-inventory: wrote {args.inventory}")
         return 0
     try:
         committed = args.inventory.read_bytes()
-    except OSError as exc:
-        print(f"capability-inventory: FAIL cannot read committed inventory: {exc}")
+    except OSError:
+        print("capability-inventory: FAIL cannot read committed inventory")
         return 1
     if committed != generated:
         print("capability-inventory: FAIL drift between manifest and inventory")

@@ -83,6 +83,9 @@ def policy_program() -> Path:
         "normal",
         "cpu_only",
         "normal_unpinned",
+        "fifo_permissions",
+        "affinity_denied",
+        "scheduler_denied",
     ],
 )
 def test_actual_policy_api(policy_program: Path, scenario: str) -> None:

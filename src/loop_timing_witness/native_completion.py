@@ -57,6 +57,21 @@ def completion_statistics(
     if errors:
         message = f"native metadata invalid: {errors[0].message}"
         raise ValueError(message)
+    fault = native["fault"]
+    schedule = (
+        []
+        if fault["kind"] == "none"
+        else [
+            {
+                "cycle": fault["cycle"],
+                "kind": fault["kind"],
+                "delay_periods": fault["duration_periods"] if fault["kind"] == "delay" else 0,
+            }
+        ]
+    )
+    if schedule != manifest["fault_schedule"]:
+        message = "native metadata fault schedule does not match the run declaration"
+        raise ValueError(message)
     if (
         native["source_kind"] != "rtl_simulation"
         or manifest["source"]["kind"] != "rtl_simulation"

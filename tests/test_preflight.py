@@ -21,6 +21,8 @@ import string
 import sys
 from typing import TYPE_CHECKING
 
+import pytest
+
 from conftest import REPOSITORY_ROOT, MakeGitTree, RunTool
 from preflight import (
     ACTIONLINT_MODULE,
@@ -39,8 +41,6 @@ from preflight import (
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 PLAN = [
     "ruff-check",
@@ -108,7 +108,7 @@ def test_run_command_fails_closed_on_a_missing_tool(tmp_path: Path) -> None:
     """A tool that cannot be started is a failed gate."""
     result = run_command("absent", [str(tmp_path / "no-such-tool")], tmp_path)
     assert not result.passed
-    assert result.detail.startswith(f"cannot execute {tmp_path / 'no-such-tool'}:")
+    assert result.detail == f"cannot execute {tmp_path / 'no-such-tool'}"
 
 
 def test_pinned_actionlint_build_is_accepted_and_runs() -> None:
@@ -192,7 +192,7 @@ def test_secret_scan_fails_without_gitleaks_or_work_tree(
     """A missing scanner and a directory outside Git both fail the gate."""
     outside = secret_scan_gate(tmp_path)
     assert not outside.passed
-    assert "git ls-files failed" in outside.detail
+    assert outside.detail == "cannot enumerate publishable files"
     monkeypatch.setenv("PATH", str(tmp_path / "empty"))
     missing = secret_scan_gate(tmp_path)
     assert (missing.passed, missing.detail) == (False, "gitleaks is not on PATH")
@@ -267,3 +267,31 @@ def test_list_prints_the_plan_in_a_subprocess(run_tool: RunTool) -> None:
     assert completed.returncode == 0, completed.stderr
     lines = completed.stdout.splitlines()
     assert [line.split(":", 1)[0] for line in lines] == PLAN
+
+
+@pytest.mark.parametrize("gate", ["documentation", "secrets"])
+def test_cli_execution_and_inventory_failures_have_authored_messages(
+    tmp_path: Path, run_tool: RunTool, gate: str
+) -> None:
+    """A missing tool or real non-Git root fails without operating-system or Git text.
+
+    Parameters
+    ----------
+    tmp_path
+        Actual directory outside a Git work tree with no repository tool environment.
+    run_tool
+        Public preflight script runner using the actual pinned tool search path.
+    gate
+        Documentation executable or publishable-file inventory failure.
+    """
+    detail = (
+        f"cannot execute {tmp_path / '.venv/bin/python'}"
+        if gate == "documentation"
+        else "cannot enumerate publishable files"
+    )
+    result = run_tool("preflight", "--root", str(tmp_path), "--only", gate)
+    assert result.returncode == 1
+    assert result.stdout == (
+        f"preflight: FAIL {gate}\n  {detail}\npreflight: FAIL gates_failed=1 of 1\n"
+    )
+    assert result.stderr == ""

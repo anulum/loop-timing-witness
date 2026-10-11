@@ -111,6 +111,10 @@ def built_distribution(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
         wheel = source_wheel
     with zipfile.ZipFile(wheel) as package:
         assert (
+            package.read("loop_timing_witness/manifest_io.py")
+            == (ROOT / "src/loop_timing_witness/manifest_io.py").read_bytes()
+        )
+        assert (
             package.read("loop_timing_witness/py.typed")
             == (ROOT / "src/loop_timing_witness/py.typed").read_bytes()
         )
@@ -183,9 +187,66 @@ def installed_distribution(tmp_path: Path, built_distribution: Path) -> Path:
     return consumer
 
 
+def assert_installed_nonfinite_refusal(consumer: Path, manifest_path: Path, tmp_path: Path) -> None:
+    """Refuse altered real run numbers through the installed public API and command.
+
+    Parameters
+    ----------
+    consumer
+        Independent environment containing the actual built wheel.
+    manifest_path
+        Existing valid manifest whose original bytes are restored after the controls.
+    tmp_path
+        Exclusive process logs and output paths for each deliberately invalid number.
+    """
+    original = manifest_path.read_text()
+    for index, token in enumerate(("NaN", "Infinity", "-Infinity", "1e999", "-1e999")):
+        manifest_path.write_text(original.replace("{", '{"untrusted_numeric":' + token + ",", 1))
+        api = _run(
+            [
+                str(consumer / "bin/python"),
+                "-I",
+                "-c",
+                (
+                    "import sys\nfrom pathlib import Path\n"
+                    "from loop_timing_witness import load_run\n"
+                    "try:\n load_run(Path(sys.argv[1]))\n"
+                    "except ValueError as error:\n print(str(error))\n"
+                    "else:\n raise AssertionError('nonfinite input accepted')\n"
+                ),
+                str(manifest_path),
+            ],
+            tmp_path,
+            tmp_path,
+            f"nonfinite-api-{index}",
+        )
+        assert api.returncode == 0, api.stdout + api.stderr
+        assert "non-finite JSON number" in api.stdout
+        output = tmp_path / f"nonfinite-report-{index}"
+        cli = _run(
+            [
+                str(consumer / "bin/loop-timing-witness-analyze"),
+                str(manifest_path),
+                "--output-dir",
+                str(output),
+            ],
+            tmp_path,
+            tmp_path,
+            f"nonfinite-cli-{index}",
+        )
+        assert cli.returncode == 1
+        assert "non-finite JSON number" in cli.stderr
+        assert not output.exists()
+    manifest_path.write_text(original)
+
+
 @pytest.mark.parametrize("built_distribution", ["wheel", "sdist"], indirect=True)
+@pytest.mark.parametrize("started_utc", [None, "2026-09-26t00:00:00z"])
 def test_installed_distribution_analyzes_real_rtl(
-    tmp_path: Path, make_rtl_run: MakeRtlRun, installed_distribution: Path
+    tmp_path: Path,
+    make_rtl_run: MakeRtlRun,
+    installed_distribution: Path,
+    started_utc: str | None,
 ) -> None:
     """Verify packaged API, command and digest refusal on actual RTL-produced events.
 
@@ -197,11 +258,16 @@ def test_installed_distribution_analyzes_real_rtl(
         Factory executing the repository's Icarus event capture path.
     installed_distribution
         Independent environment using the wheel or source-rebuilt artifact.
+    started_utc
+        Optional schema-valid lowercase UTC timestamp for the installed consumers.
     """
     consumer = installed_distribution
     interpreter = consumer / "bin/python"
     run_directory, manifest = make_rtl_run()
     manifest_path = run_directory / "manifest.json"
+    if started_utc is not None:
+        manifest["started_utc"] = started_utc
+        manifest_path.write_text(json.dumps(manifest))
     expected, _ = build_report(load_run(manifest_path))
     api = _run(
         [
@@ -224,6 +290,7 @@ def test_installed_distribution_analyzes_real_rtl(
     assert Path(observed["origin"]).is_relative_to(consumer)
     assert Path(observed["prefix"]) == consumer
     assert observed["report"] == expected
+    assert observed["report"]["started_utc"] == manifest["started_utc"]
     command = consumer / "bin/loop-timing-witness-analyze"
     reports = tmp_path / "reports"
     result = _run(
@@ -238,6 +305,7 @@ def test_installed_distribution_analyzes_real_rtl(
         content = (reports / filename).read_text()
         assert "simulation_only" in content
         assert "compute_time" in content
+    assert_installed_nonfinite_refusal(consumer, manifest_path, tmp_path)
     manifest["files"]["events"]["sha256"] = "0" * 64
     manifest_path.write_text(json.dumps(manifest))
     refused = tmp_path / "refused"

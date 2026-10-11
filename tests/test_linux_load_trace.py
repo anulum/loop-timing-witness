@@ -16,6 +16,7 @@ import os
 import select
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -58,14 +59,14 @@ def test_actual_policy_readback_mismatch(tmp_path: Path) -> None:
         tmp_path / "policy.strace",
     ) as trace:
         deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
+        observed = False
+        while not observed and time.monotonic() < deadline:
             trace.observe()
-            if trace.log.exists() and "sched_setaffinity" in trace.log.read_text():
-                break
-            assert trace.process.poll() is None
-            time.sleep(0.005)
-        else:
-            pytest.fail("actual worker affinity syscall was not observed")
+            observed = trace.log.exists() and "sched_setaffinity" in trace.log.read_text()
+            if not observed:
+                assert trace.process.poll() is None
+                time.sleep(0.005)
+        assert observed, "actual worker affinity syscall was not observed"
         children = (
             Path(f"/proc/{trace.process.pid}/task/{trace.process.pid}/children").read_text().split()
         )
@@ -180,16 +181,16 @@ def _wait_for_receipt(trace: OwnedTrace, receipt_file: Path) -> tuple[bytes, dic
     """
     # Both Python processes initialize subprocess coverage before producing a receipt.
     deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
+    receipt: dict[str, Any] | None = None
+    original = b""
+    while receipt is None and time.monotonic() < deadline:
         trace.observe()
         if receipt_file.exists():
             original = receipt_file.read_bytes()
-            try:
+            with suppress(json.JSONDecodeError):
                 receipt = json.loads(original)
-            except json.JSONDecodeError:
-                pass
-            else:
-                return original, receipt
-        assert trace.process.poll() is None
-        time.sleep(0.005)
-    pytest.fail("actual completed worker receipt was not observed")
+        if receipt is None:
+            assert trace.process.poll() is None
+            time.sleep(0.005)
+    assert receipt is not None, "actual completed worker receipt was not observed"
+    return original, receipt

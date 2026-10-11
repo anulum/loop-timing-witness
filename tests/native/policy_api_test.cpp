@@ -7,10 +7,17 @@
 // Loop Timing Witness — actual Linux scheduling API validation
 
 #include "../../runtime/linux/run_policy.h"
+#include <array>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
 #include <limits>
 #include <string>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
 
 /** Refuse invalid public options without changing the actual child-thread policy. */
 int main(int argc, char **argv) {
@@ -28,7 +35,7 @@ int main(int argc, char **argv) {
     assert(before.nice == requested_nice);
     witness::RunOptions options;
     const std::string scenario = argv[1];
-    const char *message = "invalid CPU, scheduler or priority request";
+    std::string message = "invalid CPU, scheduler or priority request";
     if (scenario == "cpu_low")
         options.cpu = -2;
     else if (scenario == "scheduler_low")
@@ -68,6 +75,28 @@ int main(int argc, char **argv) {
             options.power_configuration = "power.conf";
         if (scenario != "power_config")
             options.power_journal = "power.csv";
+    } else if (scenario == "fifo_permissions") {
+        options.scheduler = 1;
+        options.priority = 1;
+        options.cpu = before.cpus.front();
+    } else if (scenario == "affinity_denied" || scenario == "scheduler_denied") {
+        const bool affinity = scenario == "affinity_denied";
+        const auto syscall = affinity ? __NR_sched_setaffinity : __NR_sched_setscheduler;
+        std::array<sock_filter, 4> filter{
+            {BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(seccomp_data, nr)),
+             BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, static_cast<std::uint32_t>(syscall), 0, 1),
+             BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | EACCES),
+             BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)}};
+        sock_fprog program{static_cast<unsigned short>(filter.size()), filter.data()};
+        assert(prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0);
+        assert(prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program) == 0);
+        if (affinity)
+            options.cpu = before.cpus.front();
+        else
+            options.scheduler = 0;
+        message = std::string(affinity ? "cannot set Linux CPU affinity (errno "
+                                       : "cannot set Linux scheduler (errno ") +
+                  std::to_string(EACCES) + ")";
     } else if (scenario != "preserve" && scenario != "normal" && scenario != "cpu_only" &&
                scenario != "normal_unpinned")
         return 1;
@@ -83,6 +112,19 @@ int main(int argc, char **argv) {
         assert(actual.scheduler == (normal ? SCHED_OTHER : SCHED_BATCH));
         assert(actual.priority == 0 && actual.nice == before.nice);
         assert(actual.cpus == (pinned ? std::vector<int>{before.cpus.front()} : before.cpus));
+    } else if (scenario == "fifo_permissions") {
+        try {
+            const auto actual = witness::apply_host_policy(options);
+            assert(actual.scheduler == SCHED_FIFO && actual.priority == 1);
+        } catch (const std::runtime_error &error) {
+            assert(std::string(error.what()) ==
+                   "cannot set Linux scheduler (errno " + std::to_string(EPERM) + ")");
+            const auto actual = witness::read_host_policy();
+            assert(actual.scheduler == before.scheduler && actual.priority == before.priority);
+        }
+        const auto actual = witness::read_host_policy();
+        assert(actual.cpus == std::vector<int>{before.cpus.front()});
+        assert(actual.nice == before.nice);
     } else {
         bool refused = false;
         try {

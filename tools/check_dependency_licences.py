@@ -190,7 +190,8 @@ def _policy_shape(policy: dict[str, Any]) -> list[str]:
         findings.append(f"policy: schema must be {POLICY_SCHEMA!r}")
     if policy.get("schema_version") != POLICY_SCHEMA_VERSION:
         findings.append(f"policy: schema_version must be {POLICY_SCHEMA_VERSION!r}")
-    if not isinstance(policy.get("lock_file"), str):
+    lock_file = policy.get("lock_file")
+    if not isinstance(lock_file, str) or Path(lock_file).is_absolute():
         findings.append("policy: lock_file must be a relative path")
     allowed = policy.get("allowed_licences")
     if not (

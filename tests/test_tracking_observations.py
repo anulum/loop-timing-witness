@@ -67,3 +67,61 @@ def test_analyzer_observations(content: str, make_rtl_run: MakeRtlRun, run_tool:
     else:
         assert result.returncode == 1
         assert not (run / "report").exists()
+
+
+@pytest.mark.parametrize("coverage", ["partial", "empty"])
+def test_missing_captured_samples_remain_explicit(
+    coverage: str, make_rtl_run: MakeRtlRun, run_tool: RunTool
+) -> None:
+    """Report incomplete observed tracking without inventing missing samples.
+
+    Parameters
+    ----------
+    coverage
+        Whether two captured reads remain or all captured reads are absent.
+    make_rtl_run
+        Actual Icarus capture whose event and tracking subsets remain matched.
+    run_tool
+        Public analyser process consuming the digest-bound partial input.
+    """
+    run, manifest = make_rtl_run()
+    observed_cycles = {0, 2} if coverage == "partial" else set()
+    events = run / "events.bin"
+    original = events.read_bytes()
+    records = [original[offset : offset + 16] for offset in range(0, len(original), 16)]
+    events.write_bytes(
+        b"".join(
+            record
+            for record in records
+            if record[0] != 2 or int.from_bytes(record[4:8], "little") in observed_cycles
+        )
+    )
+    tracking = run / "tracking.csv"
+    rows = tracking.read_text(encoding="utf-8").splitlines()
+    selected_rows = [row for row in rows[1:] if int(row.split(",", 1)[0]) in observed_cycles]
+    tracking.write_text("\n".join([rows[0], *selected_rows]) + "\n", encoding="utf-8")
+    manifest["tracking_sampling"] = "observed"
+    for name, path in {"events": events, "tracking": tracking}.items():
+        manifest["files"][name]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    (run / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    result = run_tool(
+        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "report")
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((run / "report/report.json").read_text())
+    metric = report["tracking_error"]
+    assert report["valid"] is False
+    assert report["evidence_status"] == "simulation_only"
+    assert metric["sampling"] == "observed"
+    assert metric["status"] == ("partial" if observed_cycles else "unavailable")
+    assert metric["sample_count"] == len(observed_cycles)
+    assert metric["expected_cycle_count"] == 3
+    assert metric["missing_cycles"] == sorted({0, 1, 2} - observed_cycles)
+    assert metric["coverage_fraction"] == pytest.approx(len(observed_cycles) / 3)
+    if observed_cycles:
+        assert metric["rms"] == pytest.approx(0.22360679774997896)
+        assert metric["peak_absolute"] == pytest.approx(0.3)
+    else:
+        assert metric["reason"] == "no observed post-warmup samples"
+        assert "rms" not in metric
+        assert "peak_absolute" not in metric

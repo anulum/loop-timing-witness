@@ -13,6 +13,7 @@
 #ifndef WITNESS_SPIKE_AMP_TRANSPORT_H
 #define WITNESS_SPIKE_AMP_TRANSPORT_H
 #include "sim.h"
+#include "../refusal.h"
 #include "../rtl/simulation.h"
 extern "C" {
 #include "../bare_metal/amp_contract.h"
@@ -31,7 +32,7 @@ class SpikeAmpTransport {
     /** Refuse access outside the bound mailbox before translating to actual RAM offsets. */
     std::uint64_t offset(std::uint64_t address) const {
         if (address < shared || address - shared > sizeof(witness_amp_mailbox) - 4 || address % 4)
-            throw std::invalid_argument("AMP memory access outside the reserved mailbox");
+            throw witness::ArgumentRefused("AMP memory access outside the reserved mailbox");
         return address - ram_base;
     }
 
@@ -41,7 +42,7 @@ class SpikeAmpTransport {
     SpikeAmpTransport(const sim_t &simulator, Simulation &model, std::uint64_t mailbox_address)
         : fabric(model), shared(mailbox_address) {
         if (!shared || shared % 8 || shared > UINT64_MAX - sizeof(witness_amp_mailbox))
-            throw std::invalid_argument("AMP shared memory address outside bounds");
+            throw witness::ArgumentRefused("AMP shared memory address outside bounds");
         for (const auto &entry : simulator.get_bus().get_devices()) {
             auto *candidate = dynamic_cast<abstract_mem_t *>(entry.second);
             if (!candidate || shared < entry.first)
@@ -55,14 +56,14 @@ class SpikeAmpTransport {
             break;
         }
         if (!ram)
-            throw std::invalid_argument("AMP mailbox does not fit actual simulator RAM");
+            throw witness::ArgumentRefused("AMP mailbox does not fit actual simulator RAM");
     }
 
     /** Decode actual target little-endian bytes through the real RAM load entry. */
     std::uint32_t read_memory32(std::uint64_t address) {
         std::array<std::uint8_t, 4> bytes{};
         if (!ram->load(offset(address), bytes.size(), bytes.data()))
-            throw std::runtime_error("actual AMP RAM load refused");
+            throw witness::RuntimeRefused("actual AMP RAM load refused");
         std::uint32_t result = 0;
         for (unsigned index = 0; index < 4; ++index)
             result |= static_cast<std::uint32_t>(bytes[index]) << (index * 8);
@@ -74,12 +75,12 @@ class SpikeAmpTransport {
         const auto displacement = address >= shared ? address - shared : UINT64_MAX;
         if (displacement != offsetof(witness_amp_mailbox, consumer) &&
             displacement != offsetof(witness_amp_mailbox, logger_status))
-            throw std::invalid_argument("AMP logger cannot write firmware-owned memory");
+            throw witness::ArgumentRefused("AMP logger cannot write firmware-owned memory");
         std::array<std::uint8_t, 4> bytes{};
         for (unsigned index = 0; index < 4; ++index)
             bytes[index] = static_cast<std::uint8_t>(value >> (index * 8));
         if (!ram->store(offset(address), bytes.size(), bytes.data()))
-            throw std::runtime_error("actual AMP RAM store refused");
+            throw witness::RuntimeRefused("actual AMP RAM store refused");
     }
 
     /** Read the production fabric through actual AXI AR/R channels. */

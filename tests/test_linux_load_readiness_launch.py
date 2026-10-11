@@ -16,6 +16,7 @@ import select
 import signal
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -48,20 +49,22 @@ def _actual_worker(trace: OwnedTrace) -> tuple[int, int]:
     # Coverage starts the launcher before strace can observe its worker creation.
     # The production readiness timeout and syscall delay are unchanged.
     deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
+    found: tuple[int, int] | None = None
+    while found is None and time.monotonic() < deadline:
         trace.observe()
         for pid, descriptor in trace.descriptors.items():
             if select.select([descriptor], [], [], 0)[0]:
                 continue
-            try:
+            with suppress(FileNotFoundError, ProcessLookupError):
                 command = Path(f"/proc/{pid}/cmdline").read_bytes()
-            except FileNotFoundError:
-                continue
-            if b"linux_load_worker.py" in command:
-                return pid, descriptor
-        assert trace.process.poll() is None
-        time.sleep(0.001)
-    pytest.fail("actual production worker was not observed")
+                if b"linux_load_worker.py" in command:
+                    found = pid, descriptor
+                    break
+        if found is None:
+            assert trace.process.poll() is None
+            time.sleep(0.001)
+    assert found is not None, "actual production worker was not observed"
+    return found
 
 
 @pytest.mark.parametrize(

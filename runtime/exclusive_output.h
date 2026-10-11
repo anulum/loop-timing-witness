@@ -13,6 +13,7 @@
 #ifndef WITNESS_EXCLUSIVE_OUTPUT_H
 #define WITNESS_EXCLUSIVE_OUTPUT_H
 #include <cstdio>
+#include "refusal.h"
 #include <stdexcept>
 
 namespace witness {
@@ -30,7 +31,7 @@ class ExclusiveOutput {
     ExclusiveOutput(const char *path, OutputFormat format, const char *error)
         : file(std::fopen(path, format == OutputFormat::binary ? "wbx" : "wx")) {
         if (!file)
-            throw std::runtime_error(error);
+            throw witness::RuntimeRefused(error);
     }
     /** Close once during failure cleanup without masking the original exception. */
     ~ExclusiveOutput() {
@@ -44,7 +45,7 @@ class ExclusiveOutput {
     /** Borrow the owned stream for a checked native write or flush. */
     std::FILE *stream(const char *closed_error) const {
         if (!file)
-            throw std::runtime_error(closed_error);
+            throw witness::RuntimeRefused(closed_error);
         return file;
     }
     /** Release ownership even on flush failure; the caller checks the return status. */

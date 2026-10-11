@@ -148,15 +148,21 @@ def test_original_symbol_contract_corruption(
     table = next(section for section in sections if section[1] == 2)
     strings = sections[table[6]]
     names = content[strings[4] : strings[4] + strings[5]]
+    assert name in read_symbols(content), "original compiler did not emit expected symbol"
+    records = {
+        offset: SYMBOL.unpack_from(content, offset)
+        for offset in range(table[4], table[4] + table[5], SYMBOL.size)
+    }
+    globals_by_name = {
+        names[fields[0] : names.find(b"\0", fields[0])].decode("ascii"): offset
+        for offset, fields in records.items()
+        if fields[1] >> 4 in (1, 2)
+    }
+    offset = globals_by_name[name]
+    fields = list(records[offset])
+    fields[field] = value
     altered = bytearray(content)
-    for offset in range(table[4], table[4] + table[5], SYMBOL.size):
-        fields = list(SYMBOL.unpack_from(content, offset))
-        if names[fields[0] : names.find(b"\0", fields[0])].decode("ascii") == name:
-            fields[field] = value
-            SYMBOL.pack_into(altered, offset, *fields)
-            break
-    else:
-        pytest.fail("original compiler did not emit expected symbol")
+    SYMBOL.pack_into(altered, offset, *fields)
     with pytest.raises(ValueError, match=finding):
         admit_image_contract(bytes(altered), platform, RUN, 16384)
 
@@ -194,24 +200,31 @@ def test_original_global_identity(native_image: tuple[bytes, AmpPlatform], corru
     table = next(section for section in sections if section[1] == 2)
     strings = sections[table[6]]
     names = content[strings[4] : strings[4] + strings[5]]
+    assert "witness_amp_run" in read_symbols(content), (
+        "original compiler did not emit expected global"
+    )
+    records = {
+        offset: SYMBOL.unpack_from(content, offset)
+        for offset in range(table[4], table[4] + table[5], SYMBOL.size)
+    }
+    globals_by_name = {
+        names[fields[0] : names.find(b"\0", fields[0])].decode("ascii"): offset
+        for offset, fields in records.items()
+        if fields[1] >> 4 in (1, 2)
+    }
+    offset = globals_by_name["witness_amp_run"]
+    fields = list(records[offset])
     altered = bytearray(content)
-    for offset in range(table[4], table[4] + table[5], SYMBOL.size):
-        fields = list(SYMBOL.unpack_from(content, offset))
-        if names[fields[0] : names.find(b"\0", fields[0])].decode("ascii") != "witness_amp_run":
-            continue
-        if corruption == "nonascii":
-            altered[strings[4] + fields[0]] = 255
-            finding = "not ASCII"
-        elif corruption == "duplicate":
-            fields[0] = names.index(b"witness_amp_platform\0")
-            SYMBOL.pack_into(altered, offset, *fields)
-            finding = "ambiguous"
-        else:
-            fields[1] = 1
-            SYMBOL.pack_into(altered, offset, *fields)
-            finding = "required entry/resource symbols"
-        break
+    if corruption == "nonascii":
+        altered[strings[4] + fields[0]] = 255
+        finding = "not ASCII"
+    elif corruption == "duplicate":
+        fields[0] = names.index(b"witness_amp_platform\0")
+        SYMBOL.pack_into(altered, offset, *fields)
+        finding = "ambiguous"
     else:
-        pytest.fail("original compiler did not emit expected global")
+        fields[1] = 1
+        SYMBOL.pack_into(altered, offset, *fields)
+        finding = "required entry/resource symbols"
     with pytest.raises(ValueError, match=finding):
         admit_image_contract(bytes(altered), platform, RUN, 16384)

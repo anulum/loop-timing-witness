@@ -12,6 +12,7 @@ Only Git-publishable documents and assets enter the site. Python's own pydoc
 renders the installed package; Doxygen and Rustdoc output must already exist.
 Missing native documentation refuses the build instead of silently dropping a
 maintained language. The website carries the actual source revision and hashes.
+Repository paths in Python references are relative to the source tree.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import argparse
 import hashlib
 import html
 import importlib
+import inspect
 import json
 import os
 import pkgutil
@@ -42,6 +44,76 @@ ASSET_SUFFIXES = frozenset({".webp", ".png", ".svg", ".pdf", ".jpg"})
 
 class DocumentationRefusedError(ValueError):
     """A deliberately authored refusal of incomplete documentation input."""
+
+
+class RepositoryTextDoc(pydoc.TextDoc):
+    """Format resolved checkout-local paths before pydoc abbreviates them."""
+
+    def _path_value(self, value: object) -> object:
+        """Resolve only absolute defaults when deciding repository containment."""
+        if isinstance(value, Path) and value.is_absolute():
+            resolved = value.resolve()
+            if resolved.is_relative_to(ROOT):
+                return resolved.relative_to(ROOT)
+        return value
+
+    def repr(self, value: object) -> str:
+        """Describe a value with checkout-local paths relative to the repository.
+
+        Parameters
+        ----------
+        value
+            Actual Python API default or module data value.
+
+        Returns
+        -------
+        str
+            Pydoc representation, retaining external paths and other values.
+        """
+        return super().repr(self._path_value(value))
+
+    def docroutine(
+        self,
+        value: object,
+        name: str | None = None,
+        mod: str | None = None,
+        cl: object = None,
+        homecls: object = None,
+    ) -> str:
+        """Retain native routine documentation with relative checkout-local defaults.
+
+        Parameters
+        ----------
+        value
+            Actual routine supplied by pydoc's module traversal.
+        name
+            Display name, or the routine's own name.
+        mod
+            Owning module name used by pydoc.
+        cl
+            Class context when documenting a method.
+        homecls
+            Class which defines the method, when applicable.
+
+        Returns
+        -------
+        str
+            Native pydoc text with only resolved internal Path defaults rebased.
+            Unsupported signatures retain pydoc's original fallback text.
+        """
+        reference = super().docroutine(value, name, mod, cl, homecls)
+        if not callable(value):
+            return reference
+        try:
+            signature = inspect.signature(value)
+        except (TypeError, ValueError):
+            return reference
+        for parameter in signature.parameters.values():
+            default: object = parameter.default
+            relative = self._path_value(default)
+            if relative is not default:
+                reference = reference.replace(repr(default), repr(relative), 1)
+        return reference
 
 
 STYLE = """:root{color-scheme:light dark;
@@ -69,6 +141,7 @@ header a{font-size:.9rem;
 white-space:nowrap}
 main{max-width:1050px;
 margin:auto;
+overflow-wrap:anywhere;
 padding:2rem 1.5rem 5rem}
 a{color:var(--link);
 text-decoration:none}
@@ -309,10 +382,17 @@ def build(output: Path) -> None:
         package.__name__,
         *(item.name for item in pkgutil.walk_packages(package.__path__, package.__name__ + ".")),
     ]
+    reference_renderer = RepositoryTextDoc()
     for name in modules:
         module = importlib.import_module(name)
-        reference = html.escape(pydoc.plain(pydoc.render_doc(module)))
-        content = f"<h1>{html.escape(name)}</h1><pre>{reference}</pre>"
+        reference = pydoc.plain(pydoc.render_doc(module, renderer=reference_renderer)).replace(
+            f"\nFILE\n    {ROOT}{os.sep}", "\nFILE\n    "
+        )
+        content = (
+            f"<h1>{html.escape(name)}</h1>"
+            "<p>Repository paths are shown relative to the source tree.</p>"
+            f"<pre>{html.escape(reference)}</pre>"
+        )
         write_page(output, Path("api/python") / (name + ".html"), name, content, revision)
     shutil.copytree(native / "c/html", output / "api/c")
     shutil.copytree(native / "rust/doc", output / "api/rust")

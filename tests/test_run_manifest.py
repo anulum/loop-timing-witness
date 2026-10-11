@@ -19,6 +19,8 @@ from typing import Any
 
 import pytest
 
+from loop_timing_witness import load_run
+
 MakeRtlRun = Callable[[], tuple[Path, dict[str, Any]]]
 RunTool = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -240,3 +242,73 @@ def test_forged_board_input_is_refused(
     expected = "overflow" if variant == "overflow" else "SHA-256 mismatch"
     assert expected in result.stderr
     assert not output.exists()
+
+
+def test_bound_binary_file_cannot_substitute_for_native_receipt(
+    make_rtl_run: MakeRtlRun, run_tool: RunTool, tmp_path: Path
+) -> None:
+    """Bind an actual optional input but refuse its incompatible receipt format.
+
+    Parameters
+    ----------
+    make_rtl_run
+        Real witness capture with its original event bytes and manifest hashes.
+    run_tool
+        Public analyser command, including native receipt interpretation.
+    tmp_path
+        Exclusive report path that must remain absent on refusal.
+    """
+    run, manifest = make_rtl_run()
+    original = (run / "events.bin").read_bytes()
+    manifest["native_metadata"] = manifest["files"]["events"].copy()
+    path = run / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    inputs = load_run(path)
+    assert inputs.files["native_metadata"] == inputs.files["events"] == original
+    assert inputs.manifest["native_metadata"]["sha256"] == hashlib.sha256(original).hexdigest()
+    output = tmp_path / "wrong-receipt-report"
+    result = run_tool("analyze_run", str(path), "--output-dir", str(output))
+    assert result.returncode == 1
+    assert "native metadata:" in result.stderr
+    assert not output.exists()
+    assert (run / "events.bin").read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "started_utc",
+    [
+        "2026-09-26t00:00:00z",
+        "2026-09-26T00:00:00z",
+        "2026-09-26t00:00:00Z",
+        "2026-09-26T00:00:00+00:00",
+    ],
+)
+def test_schema_valid_utc_notation_reaches_the_real_report(
+    started_utc: str, make_rtl_run: MakeRtlRun, run_tool: RunTool, tmp_path: Path
+) -> None:
+    """Accept schema-valid UTC spellings without rewriting run provenance.
+
+    Parameters
+    ----------
+    started_utc
+        Case variants of the RFC3339 separators or explicit zero UTC offset.
+    make_rtl_run
+        Real RTL capture with original source and input hashes.
+    run_tool
+        Public analyser command through schema, loader and report transaction.
+    tmp_path
+        Exclusive report output.
+    """
+    run, manifest = make_rtl_run()
+    manifest["started_utc"] = started_utc
+    path = run / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    inputs = load_run(path)
+    assert inputs.manifest["started_utc"] == started_utc
+    output = tmp_path / "utc-report"
+    result = run_tool("analyze_run", str(path), "--output-dir", str(output))
+    assert result.returncode == 0, result.stderr
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    assert report["started_utc"] == started_utc
+    assert report["evidence_status"] == "simulation_only"
+    assert report["input_sha256"]["events"] == manifest["files"]["events"]["sha256"]

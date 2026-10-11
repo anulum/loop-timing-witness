@@ -17,11 +17,12 @@ import signal
 import subprocess
 import sys
 import time
-from contextlib import suppress
+from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
 from linux_load_config import PROFILES
+from process_lifetime_support import finish_process, retain_process, stop_pidfd
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
@@ -257,40 +258,35 @@ def test_actual_readiness_failure(native_run: Path, tmp_path: Path, failure: str
         "--",
         str(native_run.resolve()),
     ]
-    descriptor = None
-    with subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    ) as process:
-        try:
-            # Allow subprocess coverage startup before observing the real worker.
-            deadline = time.monotonic() + 30
-            workers: list[int] = []
-            while not workers and process.poll() is None and time.monotonic() < deadline:
-                children = (
-                    Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()
-                )
-                workers = [
-                    int(pid)
-                    for pid in children
-                    if b"linux_load_worker.py" in Path(f"/proc/{pid}/cmdline").read_bytes()
-                ]
-                if not workers:
-                    time.sleep(0.001)
-            assert len(workers) == 1
-            descriptor = os.pidfd_open(workers[0])
-            signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
-            if failure == "identity":
-                with Path(f"/proc/{workers[0]}/fd/1").open("wb", buffering=0) as pipe:
-                    pipe.write((json.dumps({"ready": True, "pid": workers[0] + 1}) + "\n").encode())
-            stdout, stderr = process.communicate(timeout=20)
-            assert process.returncode == 1, stdout + stderr
-            assert ("timed out" if failure == "timeout" else "readiness differs") in stderr
-            assert not (tmp_path / "load.json").exists()
-        finally:
-            if descriptor is not None:
-                with suppress(ProcessLookupError):
-                    signal.pidfd_send_signal(descriptor, signal.SIGKILL)
-                os.close(descriptor)
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=5)
+    with (
+        subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        ) as process,
+        ExitStack() as resources,
+    ):
+        parent_descriptor = retain_process(process)
+        resources.callback(finish_process, process, parent_descriptor)
+        # Allow subprocess coverage startup before observing the real worker.
+        deadline = time.monotonic() + 30
+        workers: list[int] = []
+        while not workers and process.poll() is None and time.monotonic() < deadline:
+            children = Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()
+            workers = [
+                int(pid)
+                for pid in children
+                if b"linux_load_worker.py" in Path(f"/proc/{pid}/cmdline").read_bytes()
+            ]
+            if not workers:
+                time.sleep(0.001)
+        assert len(workers) == 1
+        descriptor = os.pidfd_open(workers[0])
+        resources.callback(os.close, descriptor)
+        resources.callback(stop_pidfd, descriptor)
+        signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
+        if failure == "identity":
+            with Path(f"/proc/{workers[0]}/fd/1").open("wb", buffering=0) as pipe:
+                pipe.write((json.dumps({"ready": True, "pid": workers[0] + 1}) + "\n").encode())
+        stdout, stderr = process.communicate(timeout=20)
+        assert process.returncode == 1, stdout + stderr
+        assert ("timed out" if failure == "timeout" else "readiness differs") in stderr
+        assert not (tmp_path / "load.json").exists()

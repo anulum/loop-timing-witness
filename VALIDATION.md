@@ -117,6 +117,19 @@ its dedicated tests invoke the real formatter on the original complete cohort.
 `python tools/preflight.py` runs every gate below in order and fails if any gate fails or its tool
 is missing; `--only NAME` runs one gate and `--list` prints the plan.
 
+Failures to start a gate report the selected command with an authored refusal. Failure to
+enumerate publishable files reports `cannot enumerate publishable files`; operating-system
+and Git exception text is not forwarded. Started tools retain their gate output and exit status.
+
+The measurement-domain validator also uses authored refusals for unreadable files, malformed
+JSON, invalid encodings, decoder limits and invalid schemas. JSON input refusals have an explicit
+`JsonInputRefusalError` type; registry and measurement input wrappers preserve those messages.
+
+Native AXI/UIO protocol and run-configuration decimal bounds are checked without forwarding
+standard-library conversion exceptions. Oversized tokens retain the authored `argument outside
+range` or `configuration integer outside range` refusal. Signed run fields continue to admit
+their original explicit positive and negative signs.
+
 | Gate | Command | Scope |
 |---|---|---|
 | `ruff-check` | `ruff check .` | every Python file; all rule groups enabled, exclusions listed with reasons in `pyproject.toml` |
@@ -174,7 +187,12 @@ CI security call. New lock ecosystems require an explicit audit before admission
 
 Dedicated RTL tests are `tests/test_clock_reset_release.py`, `tests/test_event_record_fifo.py`
 `tests/test_event_witness.py`, `tests/test_control_plant_witness.py` and
-`tests/test_control_faults.py`. Controller parity, design, 64,000-sample trajectories and
+`tests/test_control_faults.py`. `tests/test_deadline_monitor.py` additionally checks
+warning-fatal compilation and the first-miss, recovery, trip-edge and latched-reset
+contracts at limits 1, 2, 3 and 7. Its counters remain 32 bits; the threshold comparison
+uses a zero-extended signed 33-bit value to retain the full unsigned range.
+The saturation target treats every Verilator warning as fatal.
+Controller parity, design, 64,000-sample trajectories and
 closed fabric/native replay are exercised by `tests/test_controller_*.py` and
 `tests/test_fabric_controller*.py`. They compile the actual modules with Icarus and check public
 ports with scoreboards, including the default 16,384-record capacity, clock ratios, queued-data
@@ -214,7 +232,12 @@ replace the derived Libero project, device-specific DRC, physical CDC review or 
 - on the commit message: `tools/check_commit_trailers.py` (conventional subject, seat and
   authorship trailers, no other trailers, no generated-by attribution, no self-applied quality
   terms);
-- before each push: the complete preflight.
+- before each push: maintained source enrolment. Complete test, coverage, build
+  and repository-policy checks run in the hosted workflows on the pushed SHA;
+  a checkpoint is accepted only after those workflows succeed on that SHA.
+- on an allocated runner: the complete preflight through the manual hook stage
+  (`pre-commit run preflight --hook-stage manual`). Do not run the complete
+  suite on a shared workstation.
 
 Upstream hook repositories are pinned to verified commit objects.
 
@@ -262,7 +285,9 @@ also denies warnings and broken intra-doc links. Tests remove descriptions from
 actual C and Rust public fields and require the native builders to refuse them.
 
 `make docs-site` combines those strict native references, installed-package
-Python pydoc and every Git-publishable Markdown document. It validates source
+Python pydoc and every Git-publishable Markdown document. Python references show
+repository paths relative to the source tree, including source files and schema
+defaults; builder filesystem locations are omitted. It validates source
 links, preserves heading fragments, excludes ignored private content and records
 the source revision and output hashes in `site-provenance.json`. Hosted PR builds
 have read-only source access; the separate Pages job requires a successful build
@@ -326,7 +351,19 @@ the ISA handshake establish successful Linux shared-memory acquisition on a boar
 Simulation verifies PID/LQR feedback, real sample/command events, fault handling, reset custody,
 final FIFO drain and capture-to-manifest-to-report integration. Real host-file and process tests
 exercise exclusive output, write/flush failures, hashing errors, concurrent artifact mutation,
-affinity/scheduler requests and metadata refusal. The dedicated public API tests are:
+affinity/scheduler requests and metadata refusal. Failed Linux affinity and scheduler
+requests report the authored operation and numeric `errno`; locale-dependent libc
+error text is not part of the CLI contract. Native commands echo deliberately
+authored `RuntimeRefused` and `ArgumentRefused` messages, preserving their standard
+exception base classes. Other caught exceptions return status 1 with exactly
+`native execution failed`, including real filesystem failures while resolving
+an unavailable IIO device. `tests/test_native_refusal.py` exercises that boundary
+through both actual Linux commands before any output or hardware acquisition.
+The policy API corpus installs a
+child-local kernel filter to deny each change syscall with `EACCES`, then checks
+the exact refusal and unchanged policy. This tightens the child's restrictions;
+successful FIFO execution still requires actual scheduler permission.
+The dedicated public API tests are:
 
 - `tests/test_native_lifecycle_api.py` and `tests/test_native_configuration_api.py`;
 - `tests/test_native_metadata_api.py` and `tests/test_native_policy_api.py`;

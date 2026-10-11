@@ -221,6 +221,12 @@ in JSON, summary and pair CSV files, and an SVG comparison. Counts expose missin
 pairs; warm-up and missing cycles are never bridged. This addition is separate
 from the published 0.1.0 artefact. See the [definition and outputs](docs/HOST_ANALYSIS.md#latency-jitter).
 
+The unreleased report writer supports Linux with capability-checked
+`renameat2(RENAME_NOREPLACE)` publication. A destination created during staging
+is preserved and the write fails. Other OS report publication remains unqualified;
+the pure loading and calculation API below is independent of this native binding.
+See the [host analysis contract](docs/HOST_ANALYSIS.md).
+
 For programmatic analysis:
 
 ```python
@@ -283,7 +289,8 @@ do not establish physical board qualification or measured platform performance.
 Native source-bound simulation capture is available through
 [`tools/capture_native_simulation.py`](https://github.com/anulum/loop-timing-witness/blob/main/tools/capture_native_simulation.py); see the
 [host analysis contract](https://github.com/anulum/loop-timing-witness/blob/main/docs/HOST_ANALYSIS.md#native-simulation-capture) for configuration,
-retained source/binary provenance and observed tracking coverage. Optional
+retained source/binary provenance, the bound parent Python producer context and
+observed tracking coverage. Optional
 [Linux host load profiles](https://github.com/anulum/loop-timing-witness/blob/main/docs/HOST_ANALYSIS.md#linux-host-load-profiles) retain actual bounded
 worker activity and scheduling facts; all captures remain simulation-only.
 

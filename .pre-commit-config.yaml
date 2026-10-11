@@ -80,6 +80,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        stages: [pre-commit, pre-push]
       - id: native-format
         name: maintained C and C++ format check
         entry: .venv/bin/python tools/preflight.py --only native-format
@@ -140,9 +141,9 @@ repos:
         language: system
         stages: [commit-msg]
       - id: preflight
-        name: complete preflight before push
+        name: complete preflight on an allocated runner
         entry: .venv/bin/python tools/preflight.py
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-push]
+        stages: [manual]

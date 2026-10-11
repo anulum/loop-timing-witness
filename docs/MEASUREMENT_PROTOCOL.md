@@ -90,6 +90,10 @@ flags false and no power series. These captures verify software and RTL behaviou
 satisfy the board procedure or instrument acceptance below.
 The frozen source includes the production Makefile and its included Spike plugin make fragment,
 even when the selected target builds only the native simulator.
+The run also binds `producer_context.json` and the actual parent project package,
+packaged contracts and loaded tools. The context records source origins and hashes,
+interpreter, platform and dependency versions. Source or context drift during
+capture refuses producer acceptance while retaining the original native artifacts.
 
 `tracking_sampling: observed` permits only the cycles actually read by the controller. Their
 tracking rows must match the captured `SAMPLE_READ` cycles exactly. After warm-up exclusion,
@@ -100,7 +104,9 @@ nor their errors are interpolated. Omitting this option or selecting `complete` 
 complete-series contract in [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md).
 
 Optional hash-bound `native_metadata` preserves the final live miss, overflow, sample and record
-counts and safe-state status. Without FIFO loss, those counts must agree with the complete
+counts and safe-state status. Its fault kind, cycle and delay duration must agree with
+the declared schedule even when the metadata and manifest hashes are updated together.
+Without FIFO loss, those counts must agree with the complete
 captured event stream. With loss, the report retains live counts separately: missing actuator
 records cannot establish controller deadline misses, and the completion receipt cannot repair
 lost events or make the run valid. Finalisation waits for the configured final deadline,

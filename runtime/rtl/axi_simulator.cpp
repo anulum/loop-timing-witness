@@ -7,6 +7,7 @@
 // Loop Timing Witness — native process AXI access to production RTL
 
 #include "simulation.h"
+#include "../refusal.h"
 #include "../process_protocol.h"
 #ifdef WITNESS_RTL_COVERAGE
 #include "verilated_cov.h"
@@ -28,8 +29,14 @@ int main(int argc, char **argv) {
         VerilatedCov::write(profile.c_str());
 #endif
         return result;
-    } catch (const std::exception &error) {
+    } catch (const witness::RuntimeRefused &error) {
         std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const witness::ArgumentRefused &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const std::exception &) {
+        std::cerr << "native execution failed\n";
         return 1;
     }
     return 0;

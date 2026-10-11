@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import subprocess
@@ -161,7 +162,8 @@ def test_fifo_permissions(native_run: Path, tmp_path: Path) -> None:
         assert actual["affinity_cpus"] == [cpu]
     else:
         assert result.returncode == 1
-        assert "cannot set Linux scheduler: Operation not permitted" in result.stderr
+        assert result.stderr == f"cannot set Linux scheduler (errno {errno.EPERM})\n"
+        assert result.stdout == ""
         assert not events.exists()
         assert not raw.exists()
         assert not metadata.exists()

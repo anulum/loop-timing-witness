@@ -27,6 +27,7 @@ def test_packaged_rust_public_api(tmp_path: Path) -> None:
     tmp_path
         Exclusive producer output, unpacked archive, independent client and raw Cargo logs.
         The client resolves the unpacked package rather than the working-tree source.
+        Its compiler and static checks use the repository's recorded Rust toolchain.
     """
     package_target = tmp_path / "producer"
     package = [
@@ -54,6 +55,7 @@ def test_packaged_rust_public_api(tmp_path: Path) -> None:
     client = tmp_path / "client"
     (client / "src").mkdir(parents=True)
     (client / "tests").mkdir()
+    shutil.copy2(ROOT / "rust-toolchain.toml", client / "rust-toolchain.toml")
     (client / "Cargo.toml").write_text(
         '[package]\nname = "witness-package-consumer"\nversion = "0.0.0"\n'
         'edition = "2024"\npublish = false\n\n[dependencies]\n'

@@ -45,8 +45,9 @@ from typing import Any, Final
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
+from referencing.exceptions import Unresolvable
 
-from .manifest_io import load_json_object
+from .manifest_io import JsonInputRefusalError, load_json_object
 
 PROJECT: Final = "LOOP-TIMING-WITNESS"
 GROUP: Final = "SC-NEUROMORPHIC-COMPUTING-SYSTEMS"
@@ -59,6 +60,14 @@ NANOSECONDS_PER_SECOND: Final = 1_000_000_000
 PERIODIC_PROFILE: Final = "CONTROL"
 MIN_GRAY_FIFO_DEPTH: Final = 2
 MAX_GRAY_FIFO_DEPTH: Final = 1 << 14
+
+
+class RegistryInputRefusalError(ValueError):
+    """An intentionally authored refusal of a malformed project-registry list."""
+
+
+class MeasurementInputRefusalError(ValueError):
+    """An intentionally authored refusal of a manifest or schema input file."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +109,8 @@ def schema_findings(manifest: dict[str, Any], schema: dict[str, Any]) -> list[st
     ------
     jsonschema.exceptions.SchemaError
         If the schema itself is not a valid Draft 2020-12 schema.
+    referencing.exceptions.Unresolvable
+        If a schema reference cannot be resolved.
     """
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema)
@@ -446,8 +457,37 @@ def _registry_list(registry: dict[str, Any], key: str) -> list[dict[str, Any]]:
     value = registry.get(key)
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         message = f"{key} must be a list of objects"
-        raise ValueError(message)
+        raise RegistryInputRefusalError(message)
     return value
+
+
+def _registry_inputs(registry_path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load the registry's complete group and project lists with authored refusals.
+
+    Parameters
+    ----------
+    registry_path
+        Actual project-registry input file.
+
+    Returns
+    -------
+    tuple of lists of dictionaries
+        Complete admitted group and project entries.
+
+    Raises
+    ------
+    RegistryInputRefusalError
+        If JSON or registry-list data is invalid, or the file cannot be read.
+    """
+    try:
+        registry = load_json_object(registry_path)
+        return _registry_list(registry, "groups"), _registry_list(registry, "projects")
+    except (JsonInputRefusalError, RegistryInputRefusalError) as exc:
+        message = f"registry: {exc}"
+        raise RegistryInputRefusalError(message) from exc
+    except (OSError, ValueError) as exc:
+        message = "registry: cannot read the project registry"
+        raise RegistryInputRefusalError(message) from exc
 
 
 def registry_cross_check(manifest: dict[str, Any], registry_path: Path) -> RegistryResult:
@@ -467,11 +507,9 @@ def registry_cross_check(manifest: dict[str, Any], registry_path: Path) -> Regis
         findings.
     """
     try:
-        registry = load_json_object(registry_path)
-        groups = _registry_list(registry, "groups")
-        projects = _registry_list(registry, "projects")
-    except (OSError, ValueError) as exc:
-        return RegistryResult("invalid", (f"registry: {exc}",))
+        groups, projects = _registry_inputs(registry_path)
+    except RegistryInputRefusalError as exc:
+        return RegistryResult("invalid", (str(exc),))
     findings: list[str] = []
     canonical_path = manifest["canonical_path"]
     group = next((item for item in groups if item.get("group_id") == manifest["group"]), None)
@@ -516,6 +554,38 @@ def registry_cross_check(manifest: dict[str, Any], registry_path: Path) -> Regis
     return RegistryResult("registered" if entry is not None else "pending_registration")
 
 
+def _measurement_inputs(
+    manifest_path: Path, schema_path: Path
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load complete manifest and schema objects with authored input refusals.
+
+    Parameters
+    ----------
+    manifest_path
+        Actual measurement-domain input.
+    schema_path
+        Selected JSON Schema input.
+
+    Returns
+    -------
+    tuple of dictionaries
+        Complete decoded manifest and schema objects.
+
+    Raises
+    ------
+    MeasurementInputRefusalError
+        If either JSON document is invalid or cannot be read.
+    """
+    try:
+        return load_json_object(manifest_path), load_json_object(schema_path)
+    except JsonInputRefusalError as exc:
+        message = f"input: {exc}"
+        raise MeasurementInputRefusalError(message) from exc
+    except (OSError, ValueError) as exc:
+        message = "input: cannot read measurement-domain inputs"
+        raise MeasurementInputRefusalError(message) from exc
+
+
 def validate(
     manifest_path: Path, schema_path: Path, registry_path: Path | None
 ) -> tuple[list[str], str]:
@@ -534,19 +604,27 @@ def validate(
     -------
     tuple[list[str], str]
         Findings (empty when valid) and the registry state.
+
+    Notes
+    -----
+    A caller-selected schema can admit values outside the semantic contract.
+    Missing fields, invalid types and arithmetic failures then produce a
+    fixed input finding before the registry is consulted.
     """
     try:
-        manifest = load_json_object(manifest_path)
-        schema = load_json_object(schema_path)
-    except (OSError, ValueError) as exc:
-        return [f"input: {exc}"], "not_checked"
+        manifest, schema = _measurement_inputs(manifest_path, schema_path)
+    except MeasurementInputRefusalError as exc:
+        return [str(exc)], "not_checked"
     try:
         structural = schema_findings(manifest, schema)
-    except SchemaError as exc:
-        return [f"input: {schema_path}: invalid JSON Schema: {exc.message}"], "not_checked"
+    except (SchemaError, Unresolvable):
+        return ["input: invalid JSON Schema"], "not_checked"
     if structural:
         return structural, "not_checked"
-    findings = semantic_findings(manifest)
+    try:
+        findings = semantic_findings(manifest)
+    except (ArithmeticError, AttributeError, KeyError, TypeError):
+        return ["input: invalid measurement-domain semantic fields"], "not_checked"
     if registry_path is None:
         return findings, "not_checked"
     registry = registry_cross_check(manifest, registry_path)

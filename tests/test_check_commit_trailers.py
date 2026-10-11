@@ -145,4 +145,30 @@ def test_unreadable_message_file_is_rejected(
     else:
         path.write_bytes(content)
     assert main([str(path)]) == 1
-    assert "commit-message: cannot read" in capsys.readouterr().err
+    assert capsys.readouterr().err == "commit-message: cannot read message file\n"
+
+
+@pytest.mark.parametrize("kind", ["directory", "invalid-utf8", "missing"])
+def test_public_hook_read_failures_have_fixed_output(
+    tmp_path: Path, run_tool: RunTool, kind: str
+) -> None:
+    """Real filesystem refusals retain status and a fixed caller-safe sentence.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive directory containing the actual unreadable input controls.
+    run_tool
+        Runner invoking the real commit-message hook command.
+    kind
+        Directory, undecodable file, or missing-file refusal control.
+    """
+    path = tmp_path / kind
+    if kind == "directory":
+        path.mkdir()
+    elif kind == "invalid-utf8":
+        path.write_bytes(b"\xff\xfe")
+    result = run_tool("check_commit_trailers", str(path))
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "commit-message: cannot read message file\n"

@@ -126,7 +126,7 @@ def _validate_run_schema(manifest: dict[str, Any]) -> None:
         location = "/".join(str(part) for part in first.absolute_path) or "(root)"
         message = f"run manifest {location}: {first.message}"
         raise ValueError(message)
-    started = datetime.fromisoformat(manifest["started_utc"])
+    started = datetime.fromisoformat(manifest["started_utc"].upper())
     if started.utcoffset() != UTC.utcoffset(started):
         message = "started_utc must use UTC"
         raise ValueError(message)

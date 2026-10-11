@@ -389,7 +389,7 @@ def test_public_verifier_refuses_repeated_manifest_member(
     )
     refusal = invoke(str(PYTHON), str(VERIFY), "--verify", str(changed))
     assert refusal.returncode != 0
-    assert "duplicate JSON key: source_commit" in refusal.stderr
+    assert refusal.stderr == "icicle-derivation: FAIL: could not read inputs or create output\n"
 
 
 @pytest.mark.parametrize(
@@ -623,7 +623,7 @@ def test_public_derivation_preserves_competing_destination(
     )
     assert refusal.returncode != 0
     assert marker.is_file()
-    assert "FileExistsError" in refusal.stderr
+    assert refusal.stderr == "icicle-derivation: FAIL: could not read inputs or create output\n"
     assert sorted(path.name for path in output.iterdir()) == ["keep"]
     assert (output / "keep").read_text(encoding="ascii") == "preserved\n"
 
@@ -644,6 +644,27 @@ def test_derivation_module_load_has_no_cli_side_effects() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert not result.stdout
     assert not result.stderr
+
+
+@pytest.mark.parametrize("kind", ["missing", "malformed-json"])
+def test_public_verification_input_failures_have_fixed_output(tmp_path: Path, kind: str) -> None:
+    """Real missing or malformed receipts fail without exposing interpreter details.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive source directory whose receipt cannot be read or decoded.
+    kind
+        Missing receipt or malformed JSON input to the actual verifier.
+    """
+    source = tmp_path / "derived"
+    source.mkdir()
+    if kind == "malformed-json":
+        (source / "witness_derivation.json").write_text("{")
+    result = invoke(str(PYTHON), str(VERIFY), "--verify", str(source))
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "icicle-derivation: FAIL: could not read inputs or create output\n"
 
 
 def test_public_derivation_refuses_ignored_reference_input(
@@ -710,7 +731,7 @@ def test_public_python_derivation_preserves_existing_output(
     sentinel.write_text("unchanged", encoding="utf-8")
     refusal = invoke(str(PYTHON), str(VERIFY), str(official_reference), str(output))
     assert refusal.returncode != 0
-    assert "FileExistsError" in refusal.stderr
+    assert refusal.stderr == "icicle-derivation: FAIL: could not read inputs or create output\n"
     assert sentinel.read_text(encoding="utf-8") == "unchanged"
 
 

@@ -16,10 +16,12 @@ import socket
 import subprocess
 import sys
 import time
+from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
 from linux_load_config import PROFILES
+from process_lifetime_support import finish_process, retain_process
 
 from conftest import REPOSITORY_ROOT
 
@@ -185,39 +187,39 @@ def test_actual_transfer_corruption(tmp_path: Path, profile: str) -> None:
         "4096",
         str(tmp_path),
     ]
-    with subprocess.Popen(
-        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    ) as process:
-        try:
-            assert process.stdout is not None
-            ready = json.loads(process.stdout.readline())
-            assert ready == {"ready": True, "pid": process.pid}
-            if profile == "network":
-                inodes = {
-                    target[8:-1]
-                    for fd in Path(f"/proc/{process.pid}/fd").iterdir()
-                    if (target := str(fd.readlink())).startswith("socket:[")
-                }
-                ports = {
-                    int(fields[1].split(":")[1], 16)
-                    for line in Path(f"/proc/{process.pid}/net/udp").read_text().splitlines()[1:]
-                    if len(fields := line.split()) > 9 and fields[9] in inodes
-                }
-                assert len(inodes) == len(ports) == 2
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
-                    for port in ports:
-                        sender.sendto(b"unexpected peer data", ("127.0.0.1", port))
-            deadline = time.monotonic() + 5
-            while process.poll() is None and time.monotonic() < deadline:
-                if profile == "storage":
-                    with (tmp_path / "storage.bin").open("r+b") as stream:
-                        stream.write(b"\xff" * 4096)
-                time.sleep(0.001)
-            assert process.poll() == 1
-            _, stderr = process.communicate(timeout=5)
-            assert (b"datagram differs" if profile == "network" else b"readback differs") in stderr
-        finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=5)
+    with (
+        subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        ) as process,
+        ExitStack() as resources,
+    ):
+        descriptor = retain_process(process)
+        resources.callback(finish_process, process, descriptor)
+        assert process.stdout is not None
+        ready = json.loads(process.stdout.readline())
+        assert ready == {"ready": True, "pid": process.pid}
+        if profile == "network":
+            inodes = {
+                target[8:-1]
+                for fd in Path(f"/proc/{process.pid}/fd").iterdir()
+                if (target := str(fd.readlink())).startswith("socket:[")
+            }
+            ports = {
+                int(fields[1].split(":")[1], 16)
+                for line in Path(f"/proc/{process.pid}/net/udp").read_text().splitlines()[1:]
+                if len(fields := line.split()) > 9 and fields[9] in inodes
+            }
+            assert len(inodes) == len(ports) == 2
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+                for port in ports:
+                    sender.sendto(b"unexpected peer data", ("127.0.0.1", port))
+        deadline = time.monotonic() + 5
+        while process.poll() is None and time.monotonic() < deadline:
+            if profile == "storage":
+                with (tmp_path / "storage.bin").open("r+b") as stream:
+                    stream.write(b"\xff" * 4096)
+            time.sleep(0.001)
+        assert process.poll() == 1
+        _, stderr = process.communicate(timeout=5)
+        assert (b"datagram differs" if profile == "network" else b"readback differs") in stderr
     assert not (tmp_path / "worker.json").exists()

@@ -7,6 +7,7 @@
 // Loop Timing Witness — separate CPU PAC1934 raw logger
 
 #include "power_journal.h"
+#include "../refusal.h"
 #include "run_policy.h"
 #include <algorithm>
 #include <chrono>
@@ -24,7 +25,7 @@ PowerJournal::PowerJournal(const char *path, const PowerConfiguration &config,
             "snapshot,rail,channel,quantity,attribute,host_before_ns,host_after_ns,fabric_before_ticks,fabric_after_ticks,worker_cpu,scheduler,priority,kernel_release,label_prefix,shunt_microohms,sample_rate,value\n",
             file) < 0 ||
         std::fflush(file) != 0) {
-        throw std::runtime_error("cannot write power journal header");
+        throw witness::RuntimeRefused("cannot write power journal header");
     }
 }
 PowerJournal::~PowerJournal() { stop(); }
@@ -53,14 +54,15 @@ void PowerJournal::acquire() {
                         static_cast<unsigned long long>(fabric_after), configuration.worker_cpu,
                         SCHED_OTHER, configuration.kernel_release.c_str(), rail.label.c_str(),
                         rail.shunt_microohms, configuration.sample_rate, value.c_str()) < 0)
-                    throw std::runtime_error("cannot write power journal reading");
+                    throw witness::RuntimeRefused("cannot write power journal reading");
                 if (host_after < host_before || fabric_after < fabric_before)
-                    throw std::runtime_error("power acquisition clock moved backwards");
+                    throw witness::RuntimeRefused("power acquisition clock moved backwards");
                 if (!scale && std::strcmp(quantity, "energy") == 0) {
                     const auto energy = std::stoull(value);
                     if ((have_energy && energy < previous_energy[index]) ||
                         energy == 214748364799999999ULL)
-                        throw std::runtime_error("PAC1934 energy accumulator reset or saturated");
+                        throw witness::RuntimeRefused(
+                            "PAC1934 energy accumulator reset or saturated");
                     previous_energy[index] = energy;
                 }
             }
@@ -68,9 +70,9 @@ void PowerJournal::acquire() {
     }
     sensor.verify();
     if (host_time() - frame_start > configuration.maximum_read_ns)
-        throw std::runtime_error("power acquisition exceeds configured read span");
+        throw witness::RuntimeRefused("power acquisition exceeds configured read span");
     if (std::fflush(file) != 0)
-        throw std::runtime_error("cannot flush power journal frame");
+        throw witness::RuntimeRefused("cannot flush power journal frame");
     have_energy = true;
     ++snapshot;
 }
@@ -81,17 +83,17 @@ void PowerJournal::collect(std::promise<void> ready) noexcept {
         const auto size = CPU_ALLOC_SIZE(count);
         std::unique_ptr<cpu_set_t, FreeCpuMask> mask(CPU_ALLOC(count));
         if (!mask)
-            throw std::runtime_error("cannot allocate power worker affinity");
+            throw witness::RuntimeRefused("cannot allocate power worker affinity");
         CPU_ZERO_S(size, mask.get());
         CPU_SET_S(static_cast<std::size_t>(configuration.worker_cpu), size, mask.get());
         sched_param parameter{};
         if (sched_setscheduler(0, SCHED_OTHER, &parameter) != 0 ||
             sched_setaffinity(0, size, mask.get()) != 0)
-            throw std::runtime_error("cannot set power worker scheduler/affinity");
+            throw witness::RuntimeRefused("cannot set power worker scheduler/affinity");
         const auto policy = read_host_policy();
         if (policy.scheduler != SCHED_OTHER || policy.priority != 0 ||
             policy.cpus != std::vector<int>{configuration.worker_cpu})
-            throw std::runtime_error("power worker policy readback differs");
+            throw witness::RuntimeRefused("power worker policy readback differs");
         acquire();
         ready.set_value();
         announced = true;
@@ -105,7 +107,7 @@ void PowerJournal::collect(std::promise<void> ready) noexcept {
             acquire();
             if (std::chrono::steady_clock::now() >
                 next + std::chrono::nanoseconds(configuration.period_ns))
-                throw std::runtime_error("power acquisition polling schedule overrun");
+                throw witness::RuntimeRefused("power acquisition polling schedule overrun");
         }
         acquire();
     } catch (...) {
@@ -117,14 +119,14 @@ void PowerJournal::collect(std::promise<void> ready) noexcept {
 }
 void PowerJournal::start() {
     if (!output.is_open())
-        throw std::runtime_error("power journal is closed");
+        throw witness::RuntimeRefused("power journal is closed");
     {
         std::lock_guard<std::mutex> lock(mutex);
         if (stopping)
-            throw std::runtime_error("power worker is stopped");
+            throw witness::RuntimeRefused("power worker is stopped");
     }
     if (worker.joinable())
-        throw std::runtime_error("power worker already started");
+        throw witness::RuntimeRefused("power worker already started");
     std::promise<void> ready;
     auto initial = ready.get_future();
     worker = std::thread(&PowerJournal::collect, this, std::move(ready));
@@ -145,16 +147,16 @@ void PowerJournal::stop() noexcept {
 }
 void PowerJournal::finish() {
     if (!output.is_open())
-        throw std::runtime_error("power journal is closed");
+        throw witness::RuntimeRefused("power journal is closed");
     if (!worker.joinable()) {
         check();
-        throw std::runtime_error("power worker has not started");
+        throw witness::RuntimeRefused("power worker has not started");
     }
     stop();
     check();
     const auto result = output.close("power journal is closed");
     if (result != 0)
-        throw std::runtime_error("cannot finish power journal");
+        throw witness::RuntimeRefused("cannot finish power journal");
 }
 RunHooks PowerJournal::hooks() {
     return {[this] { start(); }, [this] { check(); }, [this] { finish(); }};

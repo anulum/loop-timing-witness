@@ -13,6 +13,7 @@
 #ifndef WITNESS_AMP_LOGGER_H
 #define WITNESS_AMP_LOGGER_H
 #include "run_control.h"
+#include "refusal.h"
 extern "C" {
 #include "bare_metal/amp_contract.h"
 }
@@ -64,16 +65,16 @@ template <class Device> class AmpLogger {
                                                      static_cast<std::uint32_t>(c.integral_max)};
         for (std::size_t index = 0; index < expected.size(); ++index)
             if (memory(offsetof(witness_amp_mailbox, run) + index * 4) != expected[index])
-                throw std::runtime_error(
+                throw witness::RuntimeRefused(
                     "AMP running firmware contract differs from logger configuration");
         if (memory(offsetof(witness_amp_mailbox, run_reserved)))
-            throw std::runtime_error("AMP run contract reserved field changed");
+            throw witness::RuntimeRefused("AMP run contract reserved field changed");
     }
 
     /** Decode one stable firmware-owned record with explicit ABI offsets and value bounds. */
     void consume(std::uint32_t producer) {
         if (producer - consumer > WITNESS_AMP_CAPACITY)
-            throw std::runtime_error("AMP producer advanced beyond telemetry capacity");
+            throw witness::RuntimeRefused("AMP producer advanced beyond telemetry capacity");
         for (unsigned batch = 0; batch < 8 && consumer != producer; ++batch) {
             const auto slot = offsetof(witness_amp_mailbox, records) +
                               (consumer & (WITNESS_AMP_CAPACITY - 1)) * sizeof(witness_amp_sample);
@@ -94,7 +95,8 @@ template <class Device> class AmpLogger {
                 submitted > 1 ||
                 (have_previous && (cycle <= previous_cycle || ticks <= previous_ticks ||
                                    generation <= previous_generation)))
-                throw std::runtime_error("AMP telemetry contradicts the observed sample sequence");
+                throw witness::RuntimeRefused(
+                    "AMP telemetry contradicts the observed sample sequence");
             const witness_command observed{cycle,      command,      integral,
                                            derivative, clipped != 0, held != 0};
             output.sample(reference, position, velocity, observed, submitted != 0, ticks,
@@ -117,32 +119,32 @@ template <class Device> class AmpLogger {
           shared(mailbox_address) {
         validate_configuration(configuration);
         if (!shared || shared % 8 || shared > UINT64_MAX - sizeof(witness_amp_mailbox))
-            throw std::invalid_argument("AMP mailbox address outside bounds");
+            throw witness::ArgumentRefused("AMP mailbox address outside bounds");
     }
 
     /** Poll real owners; start only after firmware arms, finish only after both streams drain. */
     bool poll() {
         if (completed)
-            throw std::runtime_error("AMP logger is already complete");
+            throw witness::RuntimeRefused("AMP logger is already complete");
         if (hooks)
             hooks->check();
         const auto status = memory(offsetof(witness_amp_mailbox, status));
         if (status > WITNESS_AMP_REFUSED)
-            throw std::runtime_error("unknown AMP firmware status");
+            throw witness::RuntimeRefused("unknown AMP firmware status");
         if (status == WITNESS_AMP_REFUSED ||
             memory(offsetof(witness_amp_mailbox, telemetry_overflow)))
-            throw std::runtime_error(
+            throw witness::RuntimeRefused(
                 "AMP firmware refused or telemetry overflowed: cause=" +
                 std::to_string(wide(offsetof(witness_amp_mailbox, trap_cause))) +
                 " value=" + std::to_string(wide(offsetof(witness_amp_mailbox, trap_value))));
         const auto abi = memory(offsetof(witness_amp_mailbox, abi));
         if (!abi) {
             if (ready)
-                throw std::runtime_error("AMP ABI disappeared during the run");
+                throw witness::RuntimeRefused("AMP ABI disappeared during the run");
             return false;
         }
         if (abi != WITNESS_AMP_ABI)
-            throw std::runtime_error("AMP telemetry ABI mismatch");
+            throw witness::RuntimeRefused("AMP telemetry ABI mismatch");
         if (!ready) {
             if (status != WITNESS_AMP_INITIAL || memory(offsetof(witness_amp_mailbox, producer)) ||
                 memory(offsetof(witness_amp_mailbox, consumer)) ||
@@ -151,7 +153,7 @@ template <class Device> class AmpLogger {
                 memory(offsetof(witness_amp_mailbox, samples)) ||
                 memory(offsetof(witness_amp_mailbox, logger_status)) ||
                 memory(offsetof(witness_amp_mailbox, reserved)))
-                throw std::runtime_error("AMP firmware did not initialize a fresh mailbox");
+                throw witness::RuntimeRefused("AMP firmware did not initialize a fresh mailbox");
             verify_run();
             device.write_memory32(shared + offsetof(witness_amp_mailbox, logger_status),
                                   WITNESS_AMP_LOGGER_READY);
@@ -162,35 +164,35 @@ template <class Device> class AmpLogger {
             memory(offsetof(witness_amp_mailbox, logger_status)) != WITNESS_AMP_LOGGER_READY ||
             memory(offsetof(witness_amp_mailbox, reserved)) ||
             memory(offsetof(witness_amp_mailbox, run_reserved)))
-            throw std::runtime_error("AMP shared ownership or reserved fields changed");
+            throw witness::RuntimeRefused("AMP shared ownership or reserved fields changed");
         if (wide(offsetof(witness_amp_mailbox, trap_cause)) ||
             wide(offsetof(witness_amp_mailbox, trap_value)))
-            throw std::runtime_error("AMP trap state contradicts active firmware status");
+            throw witness::RuntimeRefused("AMP trap state contradicts active firmware status");
         if (!started) {
             if (status == WITNESS_AMP_INITIAL)
                 return false;
             if (status != WITNESS_AMP_ARMED || memory(offsetof(witness_amp_mailbox, consumer)) ||
                 memory(offsetof(witness_amp_mailbox, producer)))
-                throw std::runtime_error("AMP firmware did not arm a fresh run");
+                throw witness::RuntimeRefused("AMP firmware did not arm a fresh run");
             if (hooks)
                 hooks->start();
             write_register(device, 0x38, 1);
             started = true;
         }
         if (memory(offsetof(witness_amp_mailbox, consumer)) != consumer)
-            throw std::runtime_error("AMP telemetry consumer ownership changed");
+            throw witness::RuntimeRefused("AMP telemetry consumer ownership changed");
         const auto producer = memory(offsetof(witness_amp_mailbox, producer));
         consume(producer);
         drain_available(device, output, result);
         if (status != WITNESS_AMP_FINISHED)
             return false;
         if (!(read_register(device, 4) & 4))
-            throw std::runtime_error("AMP completion precedes the actual fabric run finish");
+            throw witness::RuntimeRefused("AMP completion precedes the actual fabric run finish");
         if (consumer != memory(offsetof(witness_amp_mailbox, producer)) ||
             !(read_register(device, 0x90) & 8))
             return false;
         if (memory(offsetof(witness_amp_mailbox, samples)) != result.samples)
-            throw std::runtime_error("AMP sample count differs from consumed telemetry");
+            throw witness::RuntimeRefused("AMP sample count differs from consumed telemetry");
         result.misses = read_register(device, 0x34);
         result.overflow = read_register(device, 0x30);
         result.safe = (read_register(device, 4) & 8) != 0;
@@ -206,7 +208,7 @@ template <class Device> class AmpLogger {
     /** Return observed counts only after successful final event and telemetry drain. */
     RunResult completion() const {
         if (!completed)
-            throw std::runtime_error("AMP run is not complete");
+            throw witness::RuntimeRefused("AMP run is not complete");
         return result;
     }
 };

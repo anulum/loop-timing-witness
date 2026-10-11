@@ -292,8 +292,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = _request(args)
         print(json.dumps(result, sort_keys=True))
-    except (ValueError, OSError, http.client.HTTPException) as error:
-        print(f"downloads: {error}", file=sys.stderr)
+    except (ValueError, OSError, http.client.HTTPException):
+        print("downloads: could not validate or import observations", file=sys.stderr)
         return 1
     return 0
 

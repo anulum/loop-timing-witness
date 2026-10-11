@@ -307,9 +307,12 @@ def test_wrong_language_and_overlapping_roots_fail(source_tree: Path, run_tool: 
     text = text.replace(
         '"controllers/c/witness_controller.c",', '"controllers/c/witness_controller.h",'
     )
+    original_profile = (
+        '[profiles.headers]\nchecks = ["controller-build", "tests", "native-format"]\nroots = []'
+    )
+    assert original_profile in text
     text = text.replace(
-        '[profiles.headers]\nchecks = ["controller-build", "tests"]\nroots = []',
-        '[profiles.headers]\nchecks = ["controller-build", "tests"]\nroots = ["controllers"]',
+        original_profile, original_profile.replace("roots = []", 'roots = ["controllers"]')
     )
     catalogue.write_text(text, encoding="utf-8")
     result = run_tool("check_source_gates", "--root", str(source_tree))

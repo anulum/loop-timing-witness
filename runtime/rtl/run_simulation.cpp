@@ -7,6 +7,7 @@
 // Loop Timing Witness — native run controller over in-process production RTL
 
 #include "simulation.h"
+#include "../refusal.h"
 #include "../run_control.h"
 #include "../run_metadata.h"
 #include <iostream>
@@ -21,7 +22,7 @@ int main(int argc, char **argv) {
     try {
         const auto options = witness::read_run_options(argc, argv, 4);
         if (options.power_configuration)
-            throw std::runtime_error("PAC1934 acquisition is physical UIO-only");
+            throw witness::RuntimeRefused("PAC1934 acquisition is physical UIO-only");
         const auto original =
             options.metadata ? witness::file_digest(argv[1]) : witness::FileDigest{};
         const auto configuration = witness::read_configuration(argv[1]);
@@ -46,10 +47,16 @@ int main(int argc, char **argv) {
                   << " misses=" << result.misses << " overflow=" << result.overflow
                   << " safe=" << result.safe << std::endl;
         if (!std::cout)
-            throw std::runtime_error("cannot write run summary");
+            throw witness::RuntimeRefused("cannot write run summary");
         return result.overflow ? 1 : 0;
-    } catch (const std::exception &error) {
+    } catch (const witness::RuntimeRefused &error) {
         std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const witness::ArgumentRefused &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const std::exception &) {
+        std::cerr << "native execution failed\n";
         return 1;
     }
 }

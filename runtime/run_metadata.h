@@ -13,6 +13,7 @@
 #ifndef WITNESS_RUN_METADATA_H
 #define WITNESS_RUN_METADATA_H
 #include "run_control.h"
+#include "refusal.h"
 #include "linux/run_policy.h"
 #include "linux/file_digest.h"
 #include <openssl/crypto.h>
@@ -26,7 +27,7 @@ inline void write_run_metadata(const char *path, const RunConfiguration &config,
     validate_configuration(config);
     std::FILE *file = std::fopen(path, "wx");
     if (!file)
-        throw std::runtime_error("cannot create exclusive native metadata");
+        throw witness::RuntimeRefused("cannot create exclusive native metadata");
     const std::array<const char *, 4> faults = {"drop", "delay", "freeze", "overload_request"};
     const auto &c = config.coefficients;
     const bool failed =
@@ -74,7 +75,7 @@ inline void write_run_metadata(const char *path, const RunConfiguration &config,
     const bool end_failed = std::fprintf(file, "}\n") < 0;
     const int status = std::fclose(file);
     if (failed || artifact_failed || crypto_failed || policy_failed || end_failed || status)
-        throw std::runtime_error("cannot write native metadata");
+        throw witness::RuntimeRefused("cannot write native metadata");
 }
 } // namespace witness
 #endif

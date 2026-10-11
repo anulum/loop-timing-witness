@@ -14,6 +14,7 @@
 #define WITNESS_SIMULATION_H
 
 #include "Vaxi_control_witness.h"
+#include "../refusal.h"
 #include "verilated.h"
 #include <cstdint>
 #include <stdexcept>
@@ -55,7 +56,7 @@ class Simulation {
         if (bus_edge || capture_edge)
             model.eval();
         if (context.gotFinish())
-            throw std::runtime_error("RTL ended during transaction");
+            throw witness::RuntimeRefused("RTL ended during transaction");
         return edge;
     }
 
@@ -95,7 +96,7 @@ class Simulation {
                 return edge;
             }
         }
-        throw std::runtime_error("AXI read timed out");
+        throw witness::RuntimeRefused("AXI read timed out");
     }
 
     /** Submit independent AW/W channels, then retain the actual B response. */
@@ -117,7 +118,7 @@ class Simulation {
                 return edge;
             }
         }
-        throw std::runtime_error("AXI write timed out");
+        throw witness::RuntimeRefused("AXI write timed out");
     }
 
     /** Advance up to a bounded wait, returning the retained bus-domain IRQ level. */

@@ -23,6 +23,30 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Keep complete preflight available on an allocated runner while normal pushes
+  use source enrolment and retain all hosted test, coverage and policy gates.
+- Preserve authored native refusals through explicit exception types and return
+  a fixed failure message for unexpected standard-library errors.
+- Parse native integer arguments without exposing library overflow diagnostics,
+  and preserve Linux scheduling refusals with authored numeric-errno messages.
+- Retain strict Verilator warnings for counter saturation, including a deadline
+  monitor configured to latch on its first miss.
+- Preserve a report destination created during staging using capability-checked
+  Linux atomic publication; also refuse an existing dangling output symlink.
+- Reject native completion receipts whose fault kind, cycle or delay duration
+  contradicts the run's declared schedule, including rehashed metadata.
+- Refuse nonfinite JSON tokens and numeric overflow in run, readiness and receipt
+  inputs through the shared source and installed-package decoder.
+- Bind the actual loaded parent Python producer implementation and environment
+  to each native capture; refuse changed source or context before acceptance.
+- Accept schema-valid UTC timestamps with lowercase RFC3339 separators while
+  preserving the original timestamp in run reports.
+- Show repository-relative source and schema paths in Python API references
+  instead of the documentation builder's absolute filesystem paths.
+- Wrap long documentation links and inline values on narrow screens while
+  retaining formatted code blocks and their own horizontal scrolling.
+- Describe the implemented software and simulation paths in the bug-report form
+  while retaining the pending physical instrument qualification.
 - Declare the original source ZIP's timezone during reconstruction so UTC CI
   runners verify the exact published bytes without changing the frozen digest.
 

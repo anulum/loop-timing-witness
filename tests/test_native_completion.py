@@ -46,6 +46,14 @@ __all__ = ["native_run"]
         "eventsha",
         "eventbytes",
         "configsha",
+        "fault_kind",
+        "fault_cycle",
+        "fault_delay",
+        "fault_absent",
+        "fault_valid_drop",
+        "fault_valid_delay",
+        "fault_valid_freeze",
+        "fault_valid_overload",
     ],
 )
 def test_bound_completion(
@@ -65,7 +73,16 @@ def test_bound_completion(
         Original receipt or deliberate semantic corruption after real execution.
     """
     config = tmp_path / "configuration.txt"
-    config.write_text(configuration("pid", "none"), encoding="utf-8")
+    fault = {
+        "fault_cycle": "drop",
+        "fault_delay": "delay",
+        "fault_absent": "drop",
+        "fault_valid_drop": "drop",
+        "fault_valid_delay": "delay",
+        "fault_valid_freeze": "freeze",
+        "fault_valid_overload": "overload",
+    }.get(mutation, "none")
+    config.write_text(configuration("pid", fault), encoding="utf-8")
     program = tmp_path / "run_simulation"
     shutil.copyfile(native_run, program)
     shutil.copyfile(
@@ -106,6 +123,14 @@ def test_bound_completion(
         facts["result"][field] = value
     elif mutation == "warmup":
         manifest["warmup_cycles"] = 8
+    elif mutation in {"fault_kind", "fault_cycle", "fault_delay", "fault_absent"}:
+        field, value = {
+            "fault_kind": ("kind", "drop"),
+            "fault_cycle": ("cycle", facts["fault"]["cycle"] + 1),
+            "fault_delay": ("duration_periods", facts["fault"]["duration_periods"] + 1),
+            "fault_absent": ("kind", "none"),
+        }[mutation]
+        facts["fault"][field] = value
     elif mutation in {"cycles", "source", "eventsha", "eventbytes", "configsha"}:
         target, key, value = {
             "cycles": (facts, "cycles", facts["cycles"] + 1),
@@ -127,12 +152,14 @@ def test_bound_completion(
             reference["sha256"] = digest
     path.write_text(json.dumps(manifest), encoding="utf-8")
     result = run_tool("analyze_run", str(path), "--output-dir", str(tmp_path / "report"))
-    if mutation in {"none", "warmup"}:
+    if mutation in {"none", "warmup"} or mutation.startswith("fault_valid_"):
         assert result.returncode == 0, result.stdout + result.stderr
         report = json.loads((tmp_path / "report/report.json").read_text())
         assert report["native_completion"] == facts["result"]
         assert report["input_sha256"]["native_metadata"] == digest
-        assert report["tracking_error"]["sample_count"] == (24 if mutation == "warmup" else 32)
+        assert report["tracking_error"]["sample_count"] == (
+            24 if mutation == "warmup" else facts["result"]["samples"]
+        )
     else:
         assert result.returncode == 1
         assert "native" in result.stderr

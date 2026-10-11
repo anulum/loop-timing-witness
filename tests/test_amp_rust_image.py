@@ -113,6 +113,33 @@ def test_public_rust_image_build(rust_image: Path) -> None:
     assert verify_main(["--directory", str(output), *arguments]) == 0
 
 
+def test_missing_rust_platform_compiler_record_refused(
+    rust_image: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refuse an absent actual platform compiler record without changing the prior image receipt.
+
+    Parameters
+    ----------
+    rust_image
+        Original linked Rust firmware with four actual C/assembly dependency records.
+    capsys
+        Public verifier output retained for the explicit missing-record diagnostic.
+    """
+    record = rust_image / "objects/input_0.o.d"
+    original = record.read_bytes()
+    receipt = (rust_image / "image.json").read_bytes()
+    arguments = verification_arguments(REQUEST)
+    arguments[arguments.index("platform.dtb")] = str(rust_image / "platform.dtb")
+    arguments[arguments.index("configuration.txt")] = str(rust_image / "configuration.txt")
+    try:
+        record.unlink()
+        assert verify_main(["--directory", str(rust_image), *arguments]) == 1
+        assert "all four platform compiler dependency records" in capsys.readouterr().err
+        assert (rust_image / "image.json").read_bytes() == receipt
+    finally:
+        record.write_bytes(original)
+
+
 @pytest.mark.parametrize("fault", ["c-selection", "backend", "receipt", "outputs"])
 def test_offline_rust_image_declaration_drift_refused(rust_image: Path, fault: str) -> None:
     """Alter original decoded declarations and require portable Rust/C custody refusal.

@@ -214,7 +214,20 @@ def test_actual_chunked_frame(actual_ready_frame: tuple[bytes, int], *, slow: bo
             pending.result(timeout=1)
 
 
-@pytest.mark.parametrize("violation", ["duplicate_ready", "duplicate_pid", "utf16", "invalid_utf8"])
+@pytest.mark.parametrize(
+    "violation",
+    [
+        "duplicate_ready",
+        "duplicate_pid",
+        "utf16",
+        "invalid_utf8",
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "1e999",
+        "-1e999",
+    ],
+)
 def test_strict_json_frame(actual_ready_frame: tuple[bytes, int], violation: str) -> None:
     """Reject shadowed members and non-UTF-8 encodings of actual worker frames.
 
@@ -225,7 +238,7 @@ def test_strict_json_frame(actual_ready_frame: tuple[bytes, int], violation: str
     violation
         Repeated member or encoding requirement to violate on the actual pipe.
     """
-    frame, _ = actual_ready_frame
+    frame, pid = actual_ready_frame
     if violation == "duplicate_ready":
         frame = frame.replace(b"{", b'{"ready":false,', 1)
         expected = "duplicate JSON key: ready"
@@ -235,9 +248,12 @@ def test_strict_json_frame(actual_ready_frame: tuple[bytes, int], violation: str
     elif violation == "utf16":
         frame = frame.decode().encode("utf-16")
         expected = "not UTF-8"
-    else:
+    elif violation == "invalid_utf8":
         frame = b"\xff" + frame
         expected = "not UTF-8"
+    else:
+        frame = frame.replace(str(pid).encode(), violation.encode())
+        expected = "non-finite JSON number"
     with worker_channels() as channels:
         channels.child_output.write(frame)
         channels.child_output.flush()

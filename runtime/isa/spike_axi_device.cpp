@@ -7,6 +7,7 @@
 // Loop Timing Witness — architectural RISC-V MMIO to production AXI RTL
 
 #include "abstract_device.h"
+#include "../refusal.h"
 #include "dts.h"
 #include "sim.h"
 #include "../rtl/simulation.h"
@@ -33,14 +34,15 @@ std::uint64_t argument(const std::string &text) {
     std::uint64_t value = 0;
     const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
     if (text.empty() || result.ec != std::errc{} || result.ptr != text.data() + text.size())
-        throw std::invalid_argument("Witness device arguments must be unsigned decimal integers");
+        throw witness::ArgumentRefused(
+            "Witness device arguments must be unsigned decimal integers");
     return value;
 }
 
 /** Require the entire functional ISA simulation contract before creating RTL state. */
 Settings settings(const std::vector<std::string> &args) {
     if (args.size() != 8)
-        throw std::invalid_argument(
+        throw witness::ArgumentRefused(
             "Witness device requires base, IRQ, RTC nanoseconds, time limit, mailbox, run configuration, events and tracking");
     const auto base = argument(args[0]);
     const auto interrupt = argument(args[1]);
@@ -49,11 +51,11 @@ Settings settings(const std::vector<std::string> &args) {
     if (base == 0 || base % 256 != 0 || base > std::numeric_limits<reg_t>::max() - 255 ||
         interrupt == 0 || interrupt > std::numeric_limits<std::uint32_t>::max() ||
         rtc_nanoseconds == 0 || rtc_nanoseconds > 1000000 || time_limit < 1000000)
-        throw std::invalid_argument("Witness device simulation contract outside bounds");
+        throw witness::ArgumentRefused("Witness device simulation contract outside bounds");
     const auto shared = argument(args[4]);
     if (!shared || shared % 8 || shared > UINT64_MAX - sizeof(witness_amp_mailbox) ||
         args[5].empty() || args[6].empty() || args[7].empty())
-        throw std::invalid_argument("Witness AMP mailbox or run files outside bounds");
+        throw witness::ArgumentRefused("Witness AMP mailbox or run files outside bounds");
     return {base,
             static_cast<std::uint32_t>(interrupt),
             rtc_nanoseconds,
@@ -81,7 +83,7 @@ class witness_axi_t final : public abstract_device_t {
         simulator.get_intctrl()->set_interrupt_level(configuration.interrupt,
                                                      fabric.wait_interrupt(0) ? 1 : 0);
         if (fabric.time() > configuration.time_limit)
-            throw std::runtime_error("Witness ISA simulation time limit exceeded");
+            throw witness::RuntimeRefused("Witness ISA simulation time limit exceeded");
     }
 
   public:
@@ -93,7 +95,7 @@ class witness_axi_t final : public abstract_device_t {
           output(configuration.event_path.c_str(), configuration.tracking_path.c_str()),
           logger(transport, run, output, configuration.shared) {
         if (run.modeled_overload_ns)
-            throw std::invalid_argument(
+            throw witness::ArgumentRefused(
                 "AMP overload must execute actual target instructions without a synthetic time advance");
         witness::configure_run(transport, run);
         synchronize();
@@ -130,7 +132,7 @@ class witness_axi_t final : public abstract_device_t {
     /** Advance real RTL between instruction batches using the explicitly supplied clock map. */
     void tick(reg_t rtc_ticks) override {
         if (rtc_ticks > 10000000 / configuration.rtc_nanoseconds)
-            throw std::runtime_error("Witness ISA clock advance outside bounds");
+            throw witness::RuntimeRefused("Witness ISA clock advance outside bounds");
         fabric.advance(rtc_ticks * configuration.rtc_nanoseconds);
         synchronize();
         if (!complete) {
@@ -144,7 +146,7 @@ class witness_axi_t final : public abstract_device_t {
                           << (witness::read_register(transport, 0x6c) ? "true" : "false") << "}\n";
                 std::cout.flush();
                 if (!std::cout)
-                    throw std::runtime_error("AMP completion receipt write failed");
+                    throw witness::RuntimeRefused("AMP completion receipt write failed");
             }
         }
         synchronize();
@@ -159,14 +161,14 @@ witness_axi_t *witness_axi_parse(const void *fdt, const sim_t *sim, reg_t *base,
     std::uint32_t interrupts = 0;
     if (fdt_parse_plic(fdt, &plic_base, &interrupts, "riscv,plic0") != 0 ||
         supplied.interrupt > interrupts)
-        throw std::invalid_argument(
+        throw witness::ArgumentRefused(
             "Witness device requires an available architectural PLIC source");
     for (const auto &entry : sim->get_bus().get_devices()) {
         const auto other_base = entry.first;
         const auto other_size = entry.second->size();
         if ((supplied.base >= other_base && supplied.base - other_base < other_size) ||
             (other_base >= supplied.base && other_base - supplied.base < 256))
-            throw std::invalid_argument("Witness device overlaps an existing simulator device");
+            throw witness::ArgumentRefused("Witness device overlaps an existing simulator device");
     }
     *base = supplied.base;
     return new witness_axi_t(*sim, supplied);

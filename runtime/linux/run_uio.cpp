@@ -7,6 +7,7 @@
 // Loop Timing Witness — in-process native controller over actual Linux UIO
 
 #include "uio_device.h"
+#include "../refusal.h"
 #include "power_journal.h"
 #include <algorithm>
 #include "../run_control.h"
@@ -27,7 +28,7 @@ int main(int argc, char **argv) {
         if (options.metadata)
             witness::verify_digest(argv[1], original);
         if (configuration.modeled_overload_ns)
-            throw std::runtime_error("modeled overload delay is simulation-only");
+            throw witness::RuntimeRefused("modeled overload delay is simulation-only");
         std::istringstream arguments(std::string(argv[7]) + " " + argv[8]);
         const auto map = witness::number(arguments, UINT32_MAX);
         const auto physical = witness::number(arguments, UINT64_MAX);
@@ -44,9 +45,9 @@ int main(int argc, char **argv) {
             const auto inherited = witness::read_host_policy();
             if (std::find(inherited.cpus.begin(), inherited.cpus.end(), power.worker_cpu) ==
                 inherited.cpus.end())
-                throw std::runtime_error("power worker CPU is outside inherited affinity");
+                throw witness::RuntimeRefused("power worker CPU is outside inherited affinity");
             if (options.cpu < 0 || options.cpu == power.worker_cpu)
-                throw std::runtime_error(
+                throw witness::RuntimeRefused(
                     "power acquisition requires explicit separate controller and worker CPUs");
             sensor = std::make_unique<witness::Pac1934Device>(power);
         }
@@ -83,10 +84,16 @@ int main(int argc, char **argv) {
                   << " misses=" << result.misses << " overflow=" << result.overflow
                   << " safe=" << result.safe << std::endl;
         if (!std::cout)
-            throw std::runtime_error("cannot write run summary");
+            throw witness::RuntimeRefused("cannot write run summary");
         return result.overflow ? 1 : 0;
-    } catch (const std::exception &error) {
+    } catch (const witness::RuntimeRefused &error) {
         std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const witness::ArgumentRefused &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const std::exception &) {
+        std::cerr << "native execution failed\n";
         return 1;
     }
 }

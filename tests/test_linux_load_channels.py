@@ -14,6 +14,7 @@ import os
 import select
 import subprocess
 import sys
+from contextlib import ExitStack
 
 import pytest
 from linux_load_channels import worker_channels
@@ -92,17 +93,14 @@ def test_context_closes_on_pipe_failure() -> None:
 
 def test_released_descriptor_reuse() -> None:
     """Preserve a newly opened descriptor reusing an already released child-end number."""
-    replacement = -1
-    try:
+    with ExitStack() as resources:
         with worker_channels() as channels:
             released = {channels.child_input.fileno(), channels.child_output.fileno()}
             channels.release_child_ends()
             replacement = os.open("/dev/null", os.O_RDONLY)
+            resources.callback(os.close, replacement)
             assert replacement in released
         assert os.fstat(replacement)
-    finally:
-        if replacement >= 0:
-            os.close(replacement)
 
 
 def test_second_pipe_allocation_failure() -> None:

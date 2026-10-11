@@ -7,6 +7,7 @@
 // Loop Timing Witness — Linux UIO process transport entry point
 
 #include "uio_device.h"
+#include "../refusal.h"
 
 /** Require explicit UIO identity; never auto-select or bind a hardware device. */
 int main(int argc, char **argv) {
@@ -22,8 +23,14 @@ int main(int argc, char **argv) {
         witness::UioDevice device(
             {argv[1], argv[2], argv[3], static_cast<std::uint32_t>(map), physical});
         return witness::serve(device);
-    } catch (const std::exception &error) {
+    } catch (const witness::RuntimeRefused &error) {
         std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const witness::ArgumentRefused &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const std::exception &) {
+        std::cerr << "native execution failed\n";
         return 1;
     }
 }

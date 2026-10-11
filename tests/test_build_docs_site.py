@@ -11,16 +11,21 @@
 from __future__ import annotations
 
 import hashlib
+import html
+import inspect
 import json
+import pydoc
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
-from build_docs_site import main
+from build_docs_site import RepositoryTextDoc, main
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness import validate_measurement_domain
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     import pytest
 
     from conftest import RunTool
@@ -29,7 +34,15 @@ if TYPE_CHECKING:
 def test_actual_website_has_native_api_source_anchors_and_asset(
     tmp_path: Path, run_tool: RunTool
 ) -> None:
-    """The public build contains actual interfaces, working fragments and checked hashes."""
+    """The real website retains API content and hashes without builder paths.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive website output directory.
+    run_tool
+        Runner invoking the repository's actual public build command.
+    """
     output = tmp_path / "site"
     result = run_tool("build_docs_site", "--output", str(output))
     assert result.returncode == 0, result.stdout + result.stderr
@@ -65,6 +78,120 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
     assert 'src="../../docs/assets/anulum_logo.png"' in package_page
     assert 'src="../../docs/assets/anulum_logo_company.jpg"' in package_page
     assert 'src="../../docs/assets/fortis_studio_logo.jpg"' in package_page
+    for module in inventory["python_api_modules"]:
+        page = (output / "api/python" / f"{module}.html").read_text()
+        assert str(REPOSITORY_ROOT) not in html.unescape(page)
+        assert "/media/anulum" not in html.unescape(page)
+        assert "/home/anulum" not in html.unescape(page)
+        assert "Repository paths are shown relative to the source tree." in page
+    assert "src/loop_timing_witness/__init__.py" in package_page
+    schema_page = (
+        output / "api/python/loop_timing_witness.validate_measurement_domain.html"
+    ).read_text()
+    assert "src/loop_timing_witness/data/measurement-domain.schema.json" in schema_page
+
+
+def test_reference_path_values_preserve_actual_repository_boundaries() -> None:
+    """Real source paths become relative while the actual parent path stays external."""
+    renderer = RepositoryTextDoc()
+    assert renderer.repr(REPOSITORY_ROOT) == "PosixPath('.')"
+    assert renderer.repr(REPOSITORY_ROOT / "src/loop_timing_witness/data") == (
+        "PosixPath('src/loop_timing_witness/data')"
+    )
+    assert renderer.repr(REPOSITORY_ROOT.parent) == pydoc.TextDoc().repr(REPOSITORY_ROOT.parent)
+
+
+def test_reference_absolute_defaults_follow_resolved_repository_boundaries(tmp_path: Path) -> None:
+    """Actual parent components and symlinks preserve outside default representations.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive existing directory outside the repository used by the symlink control.
+    """
+    renderer = RepositoryTextDoc()
+    external = REPOSITORY_ROOT / ".."
+    assert renderer.repr(external) == pydoc.TextDoc().repr(external)
+    internal = REPOSITORY_ROOT / "src" / ".." / "src/loop_timing_witness/data"
+    assert renderer.repr(internal) == "PosixPath('src/loop_timing_witness/data')"
+    with TemporaryDirectory(
+        prefix="documentation-path-boundary-", dir=REPOSITORY_ROOT / "build"
+    ) as owned:
+        outside_alias = Path(owned) / "outside-default"
+        outside_alias.symlink_to(tmp_path, target_is_directory=True)
+        assert renderer.repr(outside_alias) == pydoc.TextDoc().repr(outside_alias)
+        inside_alias = Path(owned) / "inside-default"
+        inside_alias.symlink_to(
+            REPOSITORY_ROOT / "src/loop_timing_witness/data", target_is_directory=True
+        )
+        assert renderer.repr(inside_alias) == "PosixPath('src/loop_timing_witness/data')"
+
+
+def test_relative_reference_defaults_are_independent_of_caller_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same genuine relative default keeps its representation in two real directories.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive directory outside the repository.
+    monkeypatch
+        Restoring manager for the actual caller working directory.
+    """
+    renderer = RepositoryTextDoc()
+    relative = Path("src/loop_timing_witness/data")
+    expected = pydoc.TextDoc().repr(relative)
+    monkeypatch.chdir(REPOSITORY_ROOT)
+    assert renderer.repr(relative) == expected
+    monkeypatch.chdir(tmp_path)
+    assert renderer.repr(relative) == expected
+
+
+def test_actual_validator_signature_is_relative_without_changing_its_defaults() -> None:
+    """The real manifest command exposes relative defaults while its callable stays intact."""
+    routine = validate_measurement_domain.main
+    assert inspect.isfunction(routine)
+    before = inspect.signature(routine)
+    before_defaults: object = routine.__kwdefaults__
+    reference = pydoc.plain(RepositoryTextDoc().docroutine(routine))
+    assert str(REPOSITORY_ROOT) not in reference
+    assert "src/loop_timing_witness/data/measurement-domain.json" in reference
+    assert "src/loop_timing_witness/data/measurement-domain.schema.json" in reference
+    assert inspect.signature(routine) == before
+    assert routine.__kwdefaults__ is before_defaults
+
+
+def test_actual_validator_external_and_relative_signature_defaults_are_preserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real routine metadata retains outside and relative defaults during documentation.
+
+    Parameters
+    ----------
+    monkeypatch
+        Restoring manager for the actual command's default metadata.
+    """
+    routine = validate_measurement_domain.main
+    defaults = {
+        "default_manifest": REPOSITORY_ROOT / "..",
+        "default_schema": Path("src/loop_timing_witness/data"),
+    }
+    monkeypatch.setattr(routine, "__kwdefaults__", defaults)
+    expected = pydoc.TextDoc().docroutine(routine)
+    assert RepositoryTextDoc().docroutine(routine) == expected
+
+
+def test_native_pydoc_fallbacks_remain_available_for_actual_runtime_objects() -> None:
+    """Actual runtime routines keep supported signatures and native fallback text."""
+    renderer = RepositoryTextDoc()
+    assert renderer.docroutine(sys.getsizeof) == pydoc.TextDoc().docroutine(sys.getsizeof)
+    assert renderer.docroutine(sys.getrecursionlimit) == pydoc.TextDoc().docroutine(
+        sys.getrecursionlimit
+    )
+    assert renderer.docroutine(validate_measurement_domain) == pydoc.TextDoc().docroutine(
+        validate_measurement_domain
+    )
 
 
 def test_existing_output_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

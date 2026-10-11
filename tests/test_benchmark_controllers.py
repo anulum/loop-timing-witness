@@ -115,6 +115,7 @@ def test_actual_comparison(native_batches: list[str], tmp_path: Path, run_tool: 
     original = output.read_bytes()
     repeated = run_tool("benchmark_controllers", *args)
     assert repeated.returncode == 1
+    assert repeated.stderr == "controller benchmark: FAIL: could not complete measurement\n"
     assert output.read_bytes() == original
 
 
@@ -153,6 +154,32 @@ def test_invalid_parameters(tmp_path: Path, run_tool: RunTool, option: str, valu
         value,
     )
     assert result.returncode == 1
+    assert not output.exists()
+
+
+def test_missing_source_has_fixed_cli_refusal(tmp_path: Path, run_tool: RunTool) -> None:
+    """Actual missing benchmark inputs fail without exposing filesystem exception text.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive empty source tree and result allocation.
+    run_tool
+        Runner invoking the actual comparison command.
+    """
+    output = tmp_path / "refused.json"
+    result = run_tool(
+        "benchmark_controllers",
+        "--source-root",
+        str(tmp_path),
+        "--output",
+        str(output),
+        "--cpu",
+        str(min(os.sched_getaffinity(0))),
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "controller benchmark: FAIL: could not complete measurement\n"
     assert not output.exists()
 
 

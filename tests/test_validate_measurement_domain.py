@@ -194,6 +194,70 @@ def test_unreadable_manifest_is_a_finding(tmp_path: Path) -> None:
     assert findings[0].startswith("input: ")
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing-manifest",
+        "syntax-manifest",
+        "utf8-manifest",
+        "missing-registry",
+        "syntax-registry",
+        "utf8-registry",
+        "invalid-schema",
+        "unresolvable-schema",
+    ],
+)
+def test_cli_input_failures_use_only_authored_messages(
+    tmp_path: Path, run_tool: RunTool, case: str
+) -> None:
+    """Real file, decoder and schema failures produce caller-safe CLI findings.
+
+    Parameters
+    ----------
+    tmp_path
+        Actual missing paths, malformed files and invalid schema documents.
+    run_tool
+        Public validator script entry point.
+    case
+        Manifest, registry or schema input failure exercised without error injection.
+    """
+    path = tmp_path / "input.json"
+    arguments = [str(DEFAULT_MANIFEST)]
+    if case.endswith("registry"):
+        arguments.extend(["--registry", str(path)])
+        prefix = "registry"
+    elif case.endswith("schema"):
+        arguments.extend(["--schema", str(path)])
+        prefix = "input"
+    else:
+        arguments[0] = str(path)
+        prefix = "input"
+    if case.startswith("missing"):
+        finding = (
+            "registry: cannot read the project registry"
+            if prefix == "registry"
+            else "input: cannot read measurement-domain inputs"
+        )
+    elif case.startswith("syntax"):
+        path.write_text("{broken", encoding="utf-8")
+        finding = f"{prefix}: {path}: invalid JSON"
+    elif case.startswith("utf8"):
+        path.write_bytes(b"\xff")
+        finding = f"{prefix}: {path}: not UTF-8"
+    else:
+        schema = (
+            {"$ref": "#/$defs/missing"}
+            if case == "unresolvable-schema"
+            else {"type": "no-such-type"}
+        )
+        write_json(path, schema)
+        finding = "input: invalid JSON Schema"
+    result = run_tool("validate_measurement_domain", *arguments)
+    assert result.returncode == 1
+    assert result.stdout == f"measurement-domain: FAIL findings=1\n- {finding}\n"
+    assert result.stderr == ""
+
+
 def test_repeated_key_in_manifest_is_a_finding(tmp_path: Path) -> None:
     """A manifest that repeats a member name never reaches schema validation."""
     text = DEFAULT_MANIFEST.read_text(encoding="utf-8").replace(
@@ -212,6 +276,88 @@ def test_invalid_schema_document_is_a_finding(tmp_path: Path) -> None:
     findings, _ = validate(DEFAULT_MANIFEST, schema, None)
     assert len(findings) == 1
     assert "invalid JSON Schema" in findings[0]
+
+
+@pytest.mark.parametrize(
+    "case", ["missing-contracts", "invalid-contracts", "invalid-event-codes", "exponent-overflow"]
+)
+def test_permissive_schema_refuses_invalid_semantic_fields(
+    tmp_path: Path, run_tool: RunTool, case: str
+) -> None:
+    """A real CLI with a permissive schema refuses malformed semantic inputs safely.
+
+    Parameters
+    ----------
+    tmp_path
+        Actual malformed manifest and permissive schema files.
+    run_tool
+        Public validator script runner with the maintained package loaded.
+    case
+        Missing structure, wrong types or a finite exponent that overflows arithmetic.
+    """
+    manifest = committed_manifest()
+    if case == "missing-contracts":
+        del manifest["design_contracts"]
+    elif case == "invalid-contracts":
+        manifest["design_contracts"] = None
+    elif case == "invalid-event-codes":
+        contracts(manifest)["event_codes"] = []
+    else:
+        contracts(manifest)["timebase"]["counter_bits"] = 1e308
+    path = write_json(tmp_path / "manifest.json", manifest)
+    schema = write_json(tmp_path / "permissive.schema.json", {"type": "object"})
+    result = run_tool("validate_measurement_domain", str(path), "--schema", str(schema))
+    assert result.returncode == 1
+    assert result.stdout == (
+        "measurement-domain: FAIL findings=1\n- input: invalid measurement-domain semantic fields\n"
+    )
+    assert result.stderr == ""
+    assert validate(path, schema, None) == (
+        ["input: invalid measurement-domain semantic fields"],
+        "not_checked",
+    )
+
+
+def test_permissive_schema_preserves_a_valid_semantic_contract(
+    tmp_path: Path, run_tool: RunTool
+) -> None:
+    """The same public custom-schema selection accepts the complete valid manifest.
+
+    Parameters
+    ----------
+    tmp_path
+        Caller-selected real schema file.
+    run_tool
+        Public validator script runner with the maintained package loaded.
+    """
+    schema = write_json(tmp_path / "permissive.schema.json", {"type": "object"})
+    result = run_tool("validate_measurement_domain", str(DEFAULT_MANIFEST), "--schema", str(schema))
+    assert result.returncode == 0
+    assert result.stdout == "measurement-domain: PASS registry=not_checked\n"
+    assert result.stderr == ""
+
+
+def test_valid_local_schema_reference_reaches_the_semantic_validator(
+    tmp_path: Path, run_tool: RunTool
+) -> None:
+    """A resolvable local reference admits the original complete manifest through CLI and API.
+
+    Parameters
+    ----------
+    tmp_path
+        Actual caller-selected schema with a local definition.
+    run_tool
+        Public validator entry point using the installed schema resolver.
+    """
+    schema = write_json(
+        tmp_path / "local.schema.json",
+        {"$ref": "#/$defs/manifest", "$defs": {"manifest": {"type": "object"}}},
+    )
+    result = run_tool("validate_measurement_domain", str(DEFAULT_MANIFEST), "--schema", str(schema))
+    assert result.returncode == 0
+    assert result.stdout == "measurement-domain: PASS registry=not_checked\n"
+    assert result.stderr == ""
+    assert validate(DEFAULT_MANIFEST, schema, None) == ([], "not_checked")
 
 
 def test_structural_errors_stop_before_cross_field_rules(tmp_path: Path) -> None:

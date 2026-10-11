@@ -272,6 +272,69 @@ def test_invalid_configuration(native_run: Path, invalid: str, tmp_path: Path) -
     assert not tracking.exists()
 
 
+@pytest.mark.parametrize("integer", ["9223372036854775808", "-9223372036854775809", "9" * 200])
+def test_configuration_integer_overflow_has_an_authored_refusal(
+    native_run: Path, tmp_path: Path, integer: str
+) -> None:
+    """The actual native CLI refuses signed decoder overflow before creating outputs.
+
+    Parameters
+    ----------
+    native_run
+        Production native controller compiled for the selected actual RTL plant.
+    tmp_path
+        Actual malformed configuration and exclusive output paths.
+    integer
+        Positive, negative or long decimal outside the signed 64-bit conversion range.
+    """
+    config = tmp_path / "overflow.conf"
+    config.write_text(f"pid {integer} 32768\n", encoding="ascii")
+    events, tracking = tmp_path / "events.bin", tmp_path / "tracking.csv"
+    result = subprocess.run(
+        [str(native_run), str(config), str(events), str(tracking)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "configuration integer outside range\n"
+    assert not events.exists()
+    assert not tracking.exists()
+
+
+def test_configuration_preserves_explicit_positive_signs(native_run: Path, tmp_path: Path) -> None:
+    """Original explicit plus signs still produce a complete real native RTL run.
+
+    Parameters
+    ----------
+    native_run
+        Actual native controller and production RTL plant.
+    tmp_path
+        Full original configuration with explicit positive decimal signs and raw output.
+    """
+    fields = configuration("pid", "none").split()
+    signed = ["+" + field if field.isdecimal() else field for field in fields]
+    config = tmp_path / "signed.conf"
+    config.write_text(" ".join(signed) + "\n", encoding="ascii")
+    events, tracking = tmp_path / "events.bin", tmp_path / "tracking.csv"
+    result = subprocess.run(
+        [str(native_run), str(config), str(events), str(tracking)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stderr == ""
+    summary = dict(item.split("=") for item in result.stdout.split()[1:])
+    assert summary["samples"] == "32"
+    assert summary["misses"] == summary["overflow"] == summary["safe"] == "0"
+    assert events.stat().st_size == int(summary["records"]) * 16
+    assert len(tracking.read_text().splitlines()) == 33
+
+
 def test_run_timer_overflow(native_run: Path, tmp_path: Path) -> None:
     """Refuse a full valid configuration whose declared duration wraps host nanoseconds.
 

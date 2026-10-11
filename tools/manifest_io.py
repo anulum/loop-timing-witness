@@ -9,6 +9,7 @@
 """Preserve the repository manifest_io entry point using the installed package."""
 
 from loop_timing_witness.manifest_io import (
+    JsonInputRefusalError,
     canonical_json_bytes,
     load_json_object,
     parse_json_object,
@@ -17,6 +18,7 @@ from loop_timing_witness.manifest_io import (
 )
 
 __all__ = [
+    "JsonInputRefusalError",
     "canonical_json_bytes",
     "load_json_object",
     "parse_json_object",

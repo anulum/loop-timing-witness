@@ -36,7 +36,7 @@ htmlcov/
 # Generated software inventory (produced by the SBOM workflow, never committed)
 sbom.cdx.json
 
-# Build residues (no build exists; defence in depth)
+# Generated build outputs
 build/
 dist/
 *.egg-info/

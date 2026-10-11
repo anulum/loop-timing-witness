@@ -43,12 +43,19 @@ def startup_admission_fault_sources(
         Diagnostic plugin translation unit and RAM transport header.
     """
     transport = (ROOT / "runtime/isa/spike_amp_transport.h").read_text()
-    transport = transport.replace(
-        '#include "../rtl/simulation.h"',
-        '#include "' + str((ROOT / "runtime/rtl/simulation.h").resolve()) + '"',
-    ).replace(
-        '#include "../bare_metal/amp_contract.h"',
-        '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
+    transport = (
+        transport.replace(
+            '#include "../refusal.h"',
+            '#include "' + str((ROOT / "runtime/refusal.h").resolve()) + '"',
+        )
+        .replace(
+            '#include "../rtl/simulation.h"',
+            '#include "' + str((ROOT / "runtime/rtl/simulation.h").resolve()) + '"',
+        )
+        .replace(
+            '#include "../bare_metal/amp_contract.h"',
+            '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
+        )
     )
     anchor = """    /** Decode actual target little-endian bytes through the real RAM load entry. */
     std::uint32_t read_memory32(std::uint64_t address) {"""
@@ -74,6 +81,7 @@ def startup_admission_fault_sources(
 
     source = (ROOT / "runtime/isa/spike_axi_device.cpp").read_text()
     replacements = {
+        "../refusal.h": str((ROOT / "runtime/refusal.h").resolve()),
         "../rtl/simulation.h": str((ROOT / "runtime/rtl/simulation.h").resolve()),
         "spike_amp_transport.h": str(transport_path.resolve()),
         "../amp_logger.h": str((ROOT / "runtime/amp_logger.h").resolve()),

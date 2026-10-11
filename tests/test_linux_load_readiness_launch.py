@@ -136,7 +136,7 @@ def test_real_startup_refusal(native_run: Path, tmp_path: Path, violation: str) 
         elif violation == "eof":
             payload, expected = frame, "readiness ended"
         else:
-            payload, expected = frame + b"\n{}\n", "Extra data"
+            payload, expected = frame + b"\n{}\n", "worker readiness: invalid JSON"
         with Path(f"/proc/{worker}/fd/1").open("wb", buffering=0) as pipe:
             assert pipe.write(payload) == len(payload)
         if violation == "eof":

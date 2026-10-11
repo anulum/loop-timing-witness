@@ -15,6 +15,7 @@ import signal
 import subprocess
 import sys
 from contextlib import ExitStack
+from pathlib import Path
 
 import pytest
 from process_lifetime_support import finish_process, retain_process
@@ -96,8 +97,18 @@ with subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']) as 
         resource.setrlimit(resource.RLIMIT_NOFILE, limits)
 print('actual EMFILE child cleanup verified')
 """
+    environment = os.environ | {
+        "PYTHONPATH": os.pathsep.join(
+            [str(Path(__file__).parent), os.environ.get("PYTHONPATH", "")]
+        )
+    }
     result = subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True, timeout=10, check=False
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+        env=environment,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == "actual EMFILE child cleanup verified\n"

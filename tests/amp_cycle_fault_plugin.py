@@ -51,6 +51,7 @@ def cycle_fault_source(directory: Path, fault: CycleFault) -> Path:
     """
     source = (ROOT / "runtime/isa/spike_axi_device.cpp").read_text()
     replacements = {
+        "../refusal.h": str((ROOT / "runtime/refusal.h").resolve()),
         "../rtl/simulation.h": str((ROOT / "runtime/rtl/simulation.h").resolve()),
         "spike_amp_transport.h": str((ROOT / "runtime/isa/spike_amp_transport.h").resolve()),
         "../amp_logger.h": str((ROOT / "runtime/amp_logger.h").resolve()),

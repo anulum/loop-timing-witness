@@ -51,7 +51,7 @@ def test_whole_original_native_source_on_public_cli(
     """The real formatter accepts the complete original maintained native cohort."""
     result = run_tool("check_native_format", "--root", str(source_tree), "--formatter", formatter)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "native-format: PASS files=58"
+    assert result.stdout.strip() == "native-format: PASS files=59"
 
 
 def test_environment_selected_formatter_on_public_api(
@@ -63,7 +63,7 @@ def test_environment_selected_formatter_on_public_api(
     """The public environment selects the same real driver for preflight and hooks."""
     monkeypatch.setenv("WITNESS_CLANG_FORMAT", formatter)
     assert main(["--root", str(source_tree)]) == 0
-    assert capsys.readouterr().out.strip() == "native-format: PASS files=58"
+    assert capsys.readouterr().out.strip() == "native-format: PASS files=59"
 
 
 @pytest.mark.parametrize(
@@ -85,7 +85,7 @@ def test_actual_native_whitespace_violation_is_refused(
     source.write_text(changed)
     result = run_tool("check_native_format", "--root", str(source_tree), "--formatter", formatter)
     assert result.returncode == 1
-    assert "native-format: FAIL files=58" in result.stdout
+    assert "native-format: FAIL files=59" in result.stdout
     assert "clang-format-violations" in result.stderr
     assert source.read_text() == changed
 
@@ -110,7 +110,7 @@ def test_invalid_actual_style_is_refused_by_the_real_formatter(
     style.write_text(original.replace("BasedOnStyle: LLVM", "BasedOnStyle: unsupported"))
     result = run_tool("check_native_format", "--root", str(source_tree), "--formatter", formatter)
     assert result.returncode == 1
-    assert "native-format: FAIL files=58" in result.stdout
+    assert "native-format: FAIL files=59" in result.stdout
     assert "Unknown value for BasedOnStyle" in result.stderr
 
 
@@ -189,4 +189,4 @@ def test_original_candidate_inside_a_path_with_spaces_is_formatted(
     source_tree.rename(directory)
     result = run_tool("check_native_format", "--root", str(directory), "--formatter", formatter)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "native-format: PASS files=58"
+    assert result.stdout.strip() == "native-format: PASS files=59"

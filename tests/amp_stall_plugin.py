@@ -33,7 +33,12 @@ def scheduling_source() -> str:
         scheduling anchors must occur once; changed production source fails explicitly.
     """
     source = (ROOT / "runtime/isa/spike_axi_device.cpp").read_text()
-    for include in ["../rtl/simulation.h", "spike_amp_transport.h", "../amp_logger.h"]:
+    for include in [
+        "../refusal.h",
+        "../rtl/simulation.h",
+        "spike_amp_transport.h",
+        "../amp_logger.h",
+    ]:
         source = source.replace(
             '"' + include + '"', '"' + str((ROOT / "runtime/isa" / include).resolve()) + '"'
         )

@@ -63,6 +63,7 @@ def logger_api_plugin(
     original = ROOT / "runtime/isa/spike_axi_device.cpp"
     source = original.read_text()
     for include, header_path in [
+        ("../refusal.h", "runtime/refusal.h"),
         ("../rtl/simulation.h", "runtime/rtl/simulation.h"),
         ("spike_amp_transport.h", "runtime/isa/spike_amp_transport.h"),
         ("../amp_logger.h", "runtime/amp_logger.h"),

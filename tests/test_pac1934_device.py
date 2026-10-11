@@ -79,7 +79,10 @@ def test_actual_iio_refusal(native_uio: Path, tmp_path: Path, kernel: str) -> No
         if controller == worker
         else "kernel release differs"
         if kernel == "mismatch"
-        else "cannot make canonical path"
+        else "native execution failed"
     )
-    assert expected in result.stderr
+    if expected == "native execution failed":
+        assert result.stderr == expected + "\n"
+    else:
+        assert expected in result.stderr
     assert not any(path.exists() for path in outputs)

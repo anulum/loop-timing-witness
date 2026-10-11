@@ -50,12 +50,19 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
         Exact production anchors make source drift fail before compilation.
     """
     logger = (ROOT / "runtime/amp_logger.h").read_text()
-    logger = logger.replace(
-        '#include "run_control.h"',
-        '#include "' + str((ROOT / "runtime/run_control.h").resolve()) + '"',
-    ).replace(
-        '#include "bare_metal/amp_contract.h"',
-        '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
+    logger = (
+        logger.replace(
+            '#include "refusal.h"',
+            '#include "' + str((ROOT / "runtime/refusal.h").resolve()) + '"',
+        )
+        .replace(
+            '#include "run_control.h"',
+            '#include "' + str((ROOT / "runtime/run_control.h").resolve()) + '"',
+        )
+        .replace(
+            '#include "bare_metal/amp_contract.h"',
+            '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
+        )
     )
     ready_write = (
         "            device.write_memory32(shared + "
@@ -86,12 +93,19 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
     logger_path.write_text(logger)
 
     transport = (ROOT / "runtime/isa/spike_amp_transport.h").read_text()
-    transport = transport.replace(
-        '#include "../rtl/simulation.h"',
-        '#include "' + str((ROOT / "runtime/rtl/simulation.h").resolve()) + '"',
-    ).replace(
-        '#include "../bare_metal/amp_contract.h"',
-        '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
+    transport = (
+        transport.replace(
+            '#include "../refusal.h"',
+            '#include "' + str((ROOT / "runtime/refusal.h").resolve()) + '"',
+        )
+        .replace(
+            '#include "../rtl/simulation.h"',
+            '#include "' + str((ROOT / "runtime/rtl/simulation.h").resolve()) + '"',
+        )
+        .replace(
+            '#include "../bare_metal/amp_contract.h"',
+            '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
+        )
     )
     transport_guard = (
         "        if (displacement != offsetof(witness_amp_mailbox, consumer) &&\n"
@@ -110,6 +124,7 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
 
     source = (ROOT / "runtime/isa/spike_axi_device.cpp").read_text()
     replacements = {
+        "../refusal.h": str((ROOT / "runtime/refusal.h").resolve()),
         "../rtl/simulation.h": str((ROOT / "runtime/rtl/simulation.h").resolve()),
         "spike_amp_transport.h": str(transport_path.resolve()),
         "../amp_logger.h": str(logger_path.resolve()),

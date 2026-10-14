@@ -139,6 +139,7 @@ paths = [
     "rtl/run_configuration_registers.sv",
     "rtl/run_reset_control.sv",
     "rtl/sampled_plant.sv",
+    "rtl/shared_event_witness.sv",
     "tests/formal/axi_lite_clock_bridge_proof.sv",
     "tests/formal/control_io_registers_proof.sv",
     "tests/formal/fixed_point_math_proof.sv",
@@ -164,6 +165,7 @@ paths = [
     "tests/rtl/plant_arithmetic_tb.sv",
     "tests/rtl/retained_interrupt_tb.sv",
     "tests/rtl/rtl_counter_saturation.sv",
+    "tests/rtl/shared_event_witness_tb.sv",
 ]
 
 [profiles.rust]

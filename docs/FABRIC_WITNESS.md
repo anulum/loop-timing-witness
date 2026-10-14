@@ -44,6 +44,37 @@ The record payload is unspecified when `drain_valid` is low, including during re
 
 ## Capacity and loss
 
+### Shared-counter channels
+
+`rtl/shared_event_witness.sv` gives independent event FIFOs one common 64-bit capture
+counter. Each channel supplies its own pre-edge valid bit, eight-bit code and 32-bit
+identity. Channel buses are flat: channel `i` occupies bits `i*width +: width`,
+with widths 8 for code, 32 for identity, 64 for run counts and 128 for a record.
+Simultaneous tuples receive the same pre-increment timestamp, with zero
+reserved fields in the existing 128-bit record layout. Codes and identities are supplied
+by the caller's declared profile; the instrument does not interpret a neural state or
+encode it in reserved bits.
+
+The shared capture reset and counter release together. Each registered tuple enters its
+channel FIFO on the next capture edge. `attempt_count` counts those FIFO write attempts;
+`accepted_count` counts accepted writes. A full channel drops its newest record and
+updates its own sticky flag, drop pulse and saturating overflow count. Other channels
+continue independently. Attempt and acceptance counts are 64-bit run counters; the
+admitted run must end before their wrap. Capture-domain status needs a coherent snapshot
+before crossing to a processor or drain clock domain.
+
+`CHANNEL_COUNT` accepts 1 through 32; `ADDRESS_BITS` and `OVERFLOW_COUNTER_BITS` retain
+the FIFO and single-channel witness limits. Every channel has its own drain request,
+valid record and empty flag. An unused channel remains empty. Common reset flushes all
+channels and clears the shared timebase and counts. Reset release, conservative FIFO
+flags, physical CDC constraints and RAM qualification follow the same rules below.
+
+The dedicated simulation exports simultaneous known-edge records, continuously captures
+1,000 records plus two markers per channel at 1,024-record capacity before drain, and
+exercises isolated full-buffer loss, saturation, an empty channel and queued-data reset.
+These are instrument-port controls. Neural wrapper, complete export/report integration
+and board qualification have separate acceptance requirements.
+
 `ADDRESS_BITS` accepts 1 through 14; capacity is `2**ADDRESS_BITS`, with the default 16,384
 records. The capture pipeline is not an extra accepted storage slot. A full FIFO preserves
 stored records and drops the newest pending record. There is no attempt to stall measured

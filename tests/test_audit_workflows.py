@@ -287,7 +287,7 @@ def test_job_policy(tree: Path) -> None:
     edit(
         tree,
         "sbom.yml",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
         "actions/upload-artifact@v7",
     )
     edit(tree, "sbom.yml", "        with:\n          persist-credentials: false\n", "")

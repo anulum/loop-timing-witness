@@ -71,8 +71,9 @@ length and warm-up, load case, fault schedule, file paths and SHA-256 values, in
 operator notes. It includes a hash-bound copy of `measurement-domain.json` in the run directory;
 the host interprets event codes, rails and interval definitions from that verified copy. A board
 declaration additionally requires the hashed bitstream, firmware, Linux image and controller
-binary files, complete tracking and power files, an instrument floor, four
-acceptance flags, room temperature and board-only supply. Those declarations cannot substitute
+binary files, a complete power file, an instrument floor, four acceptance flags, room
+temperature and board-only supply. CONTROL board declarations also require complete tracking;
+COMPUTE declarations require tracking to be `null`. Those declarations cannot substitute
 for actual board acceptance records; independent board qualification remains a separate gate.
 A report from such a declaration is labelled `board_declaration_unverified` until external
 qualification verifies the board evidence.
@@ -102,7 +103,8 @@ observation per analysed control cycle. `reference` and `output` have the unit n
 `timebase_ticks,rail,voltage_v,current_a,energy_j`; energy is a cumulative joule counter, and all
 four rails from the measurement-domain contract must occur at each fabric tick. Voltage, current
 and energy are finite and nonnegative. The run manifest may declare either auxiliary file as
-`null` for an incomplete simulation run. A board run requires both files. Missing data remains
+`null` for an incomplete simulation run. A CONTROL board run requires both files. A COMPUTE
+board run requires power and declares tracking as `null`. Missing data remains
 `unavailable` in the report; it is never substituted.
 
 ## Native simulation capture

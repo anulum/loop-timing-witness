@@ -22,8 +22,9 @@ has exactly one rule:
 - Linker scripts use a C block comment, with each following line prefixed by `` * ``;
 - Markdown files start with an HTML comment that holds the seven lines, so the
   rendered page starts with content and never shows a code-style header;
-- JSON, PDF and licence files cannot carry the text header and are exempt; their
-  licensing is declared in ``REUSE.toml`` and verified by ``reuse lint``.
+- JSON and PDF bodies and full licence texts use ``REUSE.toml`` metadata.
+  JSON attribution sidecars carry the seven ownership lines and both standard
+  copyright records without altering the JSON body.
 
 A file type without a rule is itself a finding: the guard never skips a file
 it does not understand.
@@ -98,6 +99,7 @@ EXEMPT_PATHS: Final = frozenset(
     {
         "LICENSE",
         "controllers/rust/LICENSE",
+        "analysis/rust/LICENSE",
         "docs/assets/loop-timing-witness.webp",
         "fuzz/corpus/zero.bin",
         "fuzz/corpus/extremes-reset.bin",
@@ -263,6 +265,48 @@ def _brand_asset_finding(root: Path, relative: str) -> str | None:
     return _title_finding(relative + ".license", lines[len(HEADER_LINES)])
 
 
+def _json_attribution_finding(root: Path, relative: str) -> str | None:
+    """Validate a JSON sidecar and its original regular-file subject.
+
+    Parameters
+    ----------
+    root
+        Repository containing the original JSON and its attribution.
+    relative
+        Repository-relative sidecar filename.
+
+    Returns
+    -------
+    str or None
+        Located ownership or file-kind finding, or no finding for valid attribution.
+    """
+    path = root / relative
+    original = root / relative.removesuffix(".license")
+    try:
+        if (
+            path.is_symlink()
+            or not path.is_file()
+            or original.is_symlink()
+            or not original.is_file()
+        ):
+            return f"{relative}: JSON and attribution sidecar must be regular original files"
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return f"{relative}: attribution sidecar is unavailable as UTF-8 text"
+    expected = [
+        "SPDX-FileCopyrightText: 1996-2026 Miroslav Šotek <protoscience@anulum.li> (concepts)",
+        "SPDX-FileCopyrightText: 2020-2026 Miroslav Šotek <protoscience@anulum.li> (code)",
+    ]
+    count = len(HEADER_LINES)
+    if (
+        lines[:count] != list(HEADER_LINES)
+        or len(lines) != count + 1 + len(expected)
+        or lines[count + 1 :] != expected
+    ):
+        return f"{relative}: JSON attribution sidecar lacks the canonical ownership fields"
+    return _title_finding(relative, lines[count])
+
+
 def file_finding(root: Path, relative: str) -> str | None:
     """Apply the rule for one file's type.
 
@@ -282,11 +326,15 @@ def file_finding(root: Path, relative: str) -> str | None:
         return _brand_asset_finding(root, relative)
     if relative.endswith(".license") and relative.removesuffix(".license") in BRAND_ASSET_DIGESTS:
         return _brand_asset_finding(root, relative.removesuffix(".license"))
+    if relative.endswith(".license") and relative.removesuffix(".license").lower().endswith(
+        ".json"
+    ):
+        return _json_attribution_finding(root, relative)
     path = PurePosixPath(relative)
     if (
         relative in EXEMPT_PATHS
         or path.parts[0] in EXEMPT_DIRECTORIES
-        or path.suffix in EXEMPT_SUFFIXES
+        or path.suffix.lower() in EXEMPT_SUFFIXES
     ):
         return None
     try:
@@ -321,10 +369,21 @@ def audit(root: Path) -> list[str]:
         Findings in path order; empty when every file complies.
     """
     try:
-        files = candidate_files(root)
+        files = candidate_files(root, include_nonregular=True)
     except RuntimeError as exc:
         return [str(exc)]
-    return [finding for relative in files if (finding := file_finding(root, relative)) is not None]
+    inspected = (
+        relative
+        for relative in files
+        if (root / relative).is_file()
+        or (
+            relative.endswith(".license")
+            and relative.removesuffix(".license").lower().endswith(".json")
+        )
+    )
+    return [
+        finding for relative in inspected if (finding := file_finding(root, relative)) is not None
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:

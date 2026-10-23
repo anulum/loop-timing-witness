@@ -23,19 +23,23 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def candidate_files(root: Path) -> list[str]:
+def candidate_files(root: Path, *, include_nonregular: bool = False) -> list[str]:
     """List tracked and non-ignored untracked files of one Git work tree.
 
     Parameters
     ----------
     root
         Work-tree root.
+    include_nonregular
+        Retain Git-listed pathnames that are missing or no longer regular files
+        so an ownership guard can inspect their filesystem contradictions.
 
     Returns
     -------
     list[str]
-        POSIX paths relative to ``root``, sorted, limited to regular files
-        that exist on disk.
+        Sorted POSIX paths relative to ``root``. The default includes only
+        regular files that exist on disk; the explicit option retains all
+        listed pathnames.
 
     Raises
     ------
@@ -57,4 +61,6 @@ def candidate_files(root: Path) -> list[str]:
         message = f"git ls-files failed in {root}: {detail}"
         raise RuntimeError(message)
     names = {name for name in completed.stdout.decode("utf-8").split("\0") if name}
+    if include_nonregular:
+        return sorted(names)
     return sorted(name for name in names if (root / name).is_file())

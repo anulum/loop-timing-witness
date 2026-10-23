@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
@@ -198,6 +200,7 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
             "README.md": markdown_header() + "\n# Title\n",
             "data.json": "{}\n",
             "LICENSE": "licence text\n",
+            "analysis/rust/LICENSE": "licence text\n",
             "LICENSES/AGPL-3.0-or-later.txt": "licence text\n",
         }
     )
@@ -348,3 +351,180 @@ def test_directory_outside_git_is_a_finding(tmp_path: Path) -> None:
     findings = audit(tmp_path)
     assert len(findings) == 1
     assert "git ls-files failed" in findings[0]
+
+
+def json_attribution() -> bytes:
+    """Build the required ownership records for the original public JSON fixture.
+
+    Returns
+    -------
+    bytes
+        Canonical header and the standard concepts and code copyright records.
+    """
+    return (
+        "\n".join(
+            (
+                *HEADER_LINES,
+                f"{TITLE_PREFIX}JSON attribution",
+                (
+                    "SPDX-FileCopyrightText: 1996-2026 Miroslav Šotek "
+                    "<protoscience@anulum.li> (concepts)"
+                ),
+                "SPDX-FileCopyrightText: 2020-2026 Miroslav Šotek <protoscience@anulum.li> (code)",
+            )
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+@pytest.mark.parametrize("suffix", [".json", ".JSON"])
+def test_original_json_attribution_passes_the_public_cli(
+    make_git_tree: MakeGitTree, run_tool: RunTool, suffix: str
+) -> None:
+    """Keep exact public JSON bytes and ownership outside the JSON body.
+
+    Parameters
+    ----------
+    make_git_tree
+        Actual isolated Git candidate factory.
+    run_tool
+        Production provenance command runner.
+    suffix
+        Original or case-insensitive JSON filename suffix.
+    """
+    original = REPOSITORY_ROOT / "measurement-domain.json"
+    relative = "measurement-domain" + suffix
+    root = make_git_tree(
+        {relative: original.read_bytes(), relative + ".license": json_attribution()}
+    )
+    result = run_tool("check_provenance_headers", str(root))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "provenance-headers: PASS\n"
+    assert result.stderr == ""
+    assert (root / relative).read_bytes() == original.read_bytes()
+
+
+@pytest.fixture
+def json_candidate(make_git_tree: MakeGitTree) -> tuple[Path, bytes]:
+    """Track the original public JSON and its valid ownership sidecar.
+
+    Parameters
+    ----------
+    make_git_tree
+        Factory creating an actual isolated Git repository.
+
+    Returns
+    -------
+    tuple[Path, bytes]
+        Tracked candidate root and original ownership bytes before each fault.
+    """
+    relative = "measurement-domain.json"
+    ownership = json_attribution()
+    root = make_git_tree(
+        {
+            relative: (REPOSITORY_ROOT / relative).read_bytes(),
+            relative + ".license": ownership,
+        }
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "add", "--", relative, relative + ".license"],
+        check=True,
+        capture_output=True,
+    )
+    return root, ownership
+
+
+@pytest.mark.parametrize(
+    ("fault", "finding"),
+    [
+        ("header", "lacks the canonical ownership fields"),
+        ("extra", "lacks the canonical ownership fields"),
+        ("concepts", "lacks the canonical ownership fields"),
+        ("code", "lacks the canonical ownership fields"),
+        ("title", "header line 7 must read"),
+        ("utf8", "unavailable as UTF-8 text"),
+    ],
+)
+def test_json_attribution_faults_refuse_the_public_candidate(
+    json_candidate: tuple[Path, bytes], run_tool: RunTool, fault: str, finding: str
+) -> None:
+    """Refuse real ownership and file-kind contradictions without changing the run.
+
+    Parameters
+    ----------
+    json_candidate
+        Original tracked JSON and its attribution.
+    run_tool
+        Maintained provenance command.
+    fault
+        Actual byte or filesystem contradiction at the JSON/attribution boundary.
+    finding
+        Required authored explanation instead of native exception details.
+    """
+    relative = "measurement-domain.json"
+    root, ownership = json_candidate
+    sidecar = root / (relative + ".license")
+    if fault == "header":
+        sidecar.write_bytes(ownership.replace(b"AGPL-3.0-or-later", b"MIT"))
+    elif fault == "extra":
+        sidecar.write_bytes(ownership + b"unexpected ownership record\n")
+    elif fault == "concepts":
+        sidecar.write_bytes(ownership.replace(b"(concepts)", b"(wrong)"))
+    elif fault == "code":
+        sidecar.write_bytes(ownership.replace(b"(code)", b"(wrong)"))
+    elif fault == "title":
+        lines = ownership.decode().splitlines()
+        lines[6] = TITLE_PREFIX
+        sidecar.write_text("\n".join(lines) + "\n")
+    else:
+        sidecar.write_bytes(b"\xff")
+    result = run_tool("check_provenance_headers", str(root))
+    assert result.returncode == 1
+    assert relative + ".license: " in result.stdout
+    assert finding in result.stdout
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "sidecar-link",
+        "sidecar-missing",
+        "sidecar-directory",
+        "sidecar-fifo",
+        "json-missing",
+        "json-link",
+        "json-directory",
+    ],
+)
+def test_json_attribution_file_kinds_refuse_the_public_candidate(
+    json_candidate: tuple[Path, bytes], run_tool: RunTool, fault: str
+) -> None:
+    """Refuse unavailable or nonregular subjects and attribution without blocking.
+
+    Parameters
+    ----------
+    json_candidate
+        Original tracked JSON and its attribution before filesystem changes.
+    run_tool
+        Production provenance command.
+    fault
+        Actual filesystem contradiction at the JSON or sidecar pathname.
+    """
+    root, _ = json_candidate
+    relative = "measurement-domain.json"
+    is_sidecar = fault.startswith("sidecar-")
+    target = root / (relative + ".license" if is_sidecar else relative)
+    target.unlink()
+    if fault.endswith("link"):
+        original = "docs/assets/anulum_logo_company.jpg.license" if is_sidecar else relative
+        target.symlink_to(REPOSITORY_ROOT / original)
+    elif fault.endswith("directory"):
+        target.mkdir()
+    elif fault.endswith("fifo"):
+        os.mkfifo(target)
+    result = run_tool("check_provenance_headers", str(root))
+    assert result.returncode == 1
+    assert relative + ".license: " in result.stdout
+    assert "must be regular original files" in result.stdout
+    assert result.stderr == ""

@@ -30,8 +30,11 @@ below applies to every change, including the owner's.
 5. **Supply chain.** A new or changed development dependency means regenerating the hashed lock
    with the recorded command and adding a reviewed licence record. Workflow actions and hook
    repositories are pinned to commit objects verified at their source.
-6. **Provenance and licensing.** Every file carries the seven-line provenance header in its native
-   comment syntax (inside an HTML comment in Markdown); JSON files are annotated in `REUSE.toml`.
+6. **Provenance and licensing.** Every comment-compatible file carries the seven-line provenance
+   header in its native syntax (inside an HTML comment in Markdown). JSON bodies retain their
+   schema and `REUSE.toml` annotations. Each new JSON also has an adjacent `<file>.license`
+   containing the seven ownership fields, then the standard concepts and code copyright records.
+   Stage the JSON and its exact sidecar together and verify their staged ownership fields.
 7. **Language.** British English, descriptive names, no self-applied quality labels, no internal
    planning codes.
 

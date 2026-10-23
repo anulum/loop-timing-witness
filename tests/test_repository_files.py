@@ -39,6 +39,12 @@ def test_listing_holds_tracked_and_untracked_but_not_ignored_files(
     subprocess.run(["git", "add", ".gitignore", "README.md", "gone.txt"], cwd=root, check=True)
     (root / "gone.txt").unlink()
     assert candidate_files(root) == [".gitignore", "README.md", "docs/guide.md"]
+    assert candidate_files(root, include_nonregular=True) == [
+        ".gitignore",
+        "README.md",
+        "docs/guide.md",
+        "gone.txt",
+    ]
 
 
 def test_listing_of_the_repository_excludes_private_and_environment_paths() -> None:

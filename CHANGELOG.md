@@ -23,6 +23,8 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Validate JSON attribution sidecars without changing original JSON bytes;
+  reject missing, linked, nonregular or malformed ownership records.
 - Keep complete preflight available on an allocated runner while normal pushes
   use source enrolment and retain all hosted test, coverage and policy gates.
 - Preserve authored native refusals through explicit exception types and return

@@ -10,9 +10,13 @@
 # Regenerate with uv 0.12.21:
 #   uv pip compile requirements-dev.in --python-version 3.13 \
 #     --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header \
-#     --exclude-newer 2026-10-01T23:58:00Z
+#     --exclude-newer 2026-10-01T23:58:00Z \
+#     --exclude-newer-package certifi=2026-10-23T01:40:00Z \
+#     --exclude-newer-package virtualenv=2026-10-23T01:40:00Z \
+#     --output-file requirements-dev.txt
 #
-# The upload cut-off makes the complete dependency resolution repeatable.
+# The general upload cut-off keeps all other dependency versions fixed;
+# the two named exceptions admit the reviewed fixed development releases.
 
 arrow==1.4.0 \
     --hash=sha256:749f0769958ebdc79c173ff0b0670d59051a535fa26e8eba02953dc19eb43205 \
@@ -92,10 +96,12 @@ cachecontrol==0.14.4 \
     --hash=sha256:b7ac014ff72ee199b5f8af1de29d60239954f223e948196fa3d84adaffc71d2b \
     --hash=sha256:e6220afafa4c22a47dd0badb319f84475d79108100d04e26e8542ef7d3ab05a1
     # via pip-audit
-certifi==2026.7.22 \
-    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
-    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
-    # via requests
+certifi==2026.10.19 \
+    --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
+    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
+    # via
+    #   -r requirements-dev.in
+    #   requests
 cfgv==3.5.0 \
     --hash=sha256:a8dc6b26ad22ff227d2634a65cb388215ce6cc96bbcc5cfde7641ae87e8dacc0 \
     --hash=sha256:d5b1034354820651caa73ede66a6294d6e95c1b00acc5e9b098e917404669132
@@ -1552,9 +1558,9 @@ urllib3==2.8.0 \
     # via
     #   -r requirements-dev.in
     #   requests
-virtualenv==21.14.3 \
-    --hash=sha256:4acc848a57a3bdb2ae0873d0689664bccad2230784de3753f57128eb126d3934 \
-    --hash=sha256:cb5cd3a87f12a6cfdc0cef6bc8bead6138221767f7718e0c00fee5fb907f9858
+virtualenv==21.14.9 \
+    --hash=sha256:4d1bee354cd81c820da3bee56e38be3426490f8d1fc54e10ea5b2072ebad8ef8 \
+    --hash=sha256:ac51744da66ae56ff814b087d65096c94de698ec520adc624b108b679655809b
     # via
     #   -r requirements-dev.in
     #   pre-commit

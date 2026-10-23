@@ -23,6 +23,8 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Refresh the development certificate bundle and virtual environment dependencies
+  to their fixed releases while retaining hashes and reproducible upload cut-offs.
 - Validate JSON attribution sidecars without changing original JSON bytes;
   reject missing, linked, nonregular or malformed ownership records.
 - Keep complete preflight available on an allocated runner while normal pushes

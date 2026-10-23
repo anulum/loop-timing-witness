@@ -38,7 +38,7 @@
     },
     "certifi": {
       "licence": "MPL-2.0",
-      "version": "2026.7.22"
+      "version": "2026.10.19"
     },
     "cfgv": {
       "licence": "MIT",
@@ -330,7 +330,7 @@
     },
     "virtualenv": {
       "licence": "MIT",
-      "version": "21.14.3"
+      "version": "21.14.9"
     },
     "webcolors": {
       "licence": "BSD-3-Clause",

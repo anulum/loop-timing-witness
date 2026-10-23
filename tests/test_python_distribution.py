@@ -27,6 +27,14 @@ if TYPE_CHECKING:
     from conftest import MakeRtlRun
 
 ROOT = Path(__file__).resolve().parents[1]
+PROFILE_RESOURCES = frozenset(
+    {
+        "neural-selected-source-contract.json",
+        "neural-selected-checker-policy.json",
+        "neural-selected-checker-runtime.json",
+        "neural-selected-installation.json",
+    }
+)
 
 
 def _run(argv: list[str], cwd: Path, output: Path, name: str) -> subprocess.CompletedProcess[str]:
@@ -119,7 +127,12 @@ def built_distribution(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
             == (ROOT / "src/loop_timing_witness/py.typed").read_bytes()
         )
         for resource in (ROOT / "src/loop_timing_witness/data").glob("*.json"):
-            assert resource.read_bytes() == (ROOT / resource.name).read_bytes()
+            counterpart = (
+                ROOT / "analysis/rust/public-data" / resource.name
+                if resource.name in PROFILE_RESOURCES
+                else ROOT / resource.name
+            )
+            assert resource.read_bytes() == counterpart.read_bytes()
             assert (
                 package.read(f"loop_timing_witness/data/{resource.name}") == resource.read_bytes()
             )

@@ -59,6 +59,10 @@ Software implementation does not qualify a board capability or advance measureme
   for verification scope and coverage limits. Completed locally on 2026-09-27; the atomic
   Linux implementation commit records the software, with board acceptance still open below.
 
+- Repeat campaign manifest and campaign report: ordered hash-bound repeats, configuration
+  agreement, raw-sample pooling of valid repeats, spread between repeats and run-plan
+  conformance. Exercised with RTL simulation repeats; no board campaign exists.
+
 - Source-bound Python coverage publication and a daily download-history importer with
   actual HTTP/TLS transport tests, explicit missing-data handling and a dedicated
   `metrics` data branch. See [repository metrics](docs/METRICS.md).

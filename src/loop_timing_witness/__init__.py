@@ -19,11 +19,23 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .analyze_run import build_report
+    from .campaign_analysis import build_campaign_report
+    from .campaign_manifest import CampaignInputs, load_campaign
     from .run_manifest import RunInputs, load_run
 
-__all__ = ["RunInputs", "build_report", "load_run"]
+__all__ = [
+    "CampaignInputs",
+    "RunInputs",
+    "build_campaign_report",
+    "build_report",
+    "load_campaign",
+    "load_run",
+]
 
 _EXPORT_MODULES = {
+    "CampaignInputs": ".campaign_manifest",
+    "build_campaign_report": ".campaign_analysis",
+    "load_campaign": ".campaign_manifest",
     "RunInputs": ".run_manifest",
     "build_report": ".analyze_run",
     "load_run": ".run_manifest",

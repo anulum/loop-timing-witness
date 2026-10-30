@@ -323,6 +323,69 @@ qualifies a physical instrument or a pooled repeat campaign.
 Each CSV row and SVG title carries the evidence status, so a detached simulation artefact retains
 its provenance. The SVG charts are visual summaries. The JSON and CSV carry numeric results.
 
+## Repeat campaigns
+
+A run manifest describes one repeat; it has no repeat index or reboot record. A
+`loop-timing-witness.repeat-campaign.v1` manifest
+([`repeat-campaign.schema.json`](../repeat-campaign.schema.json)) adds them. It lists repeats
+`1, 2, 3, ...` in order. Each repeat binds one run manifest inside the campaign directory by
+path and SHA-256 and declares `rebooted_before_run`.
+
+```bash
+loop-timing-witness-campaign path/to/campaign.json --output-dir path/to/new-report
+```
+
+```python
+from loop_timing_witness import build_campaign_report, load_campaign
+
+report = build_campaign_report(load_campaign(Path("path/to/campaign.json")))
+```
+
+`load_campaign` verifies each run manifest digest and passes those exact bytes to `load_run`,
+which validates the run as usual. The whole campaign is refused for a schema error, an index
+out of order, a path outside the campaign directory, a run manifest bound twice, a digest
+mismatch or a reused `run_id`. It is also refused when loaded repeats differ in any field that
+must agree before pooling: measurement-domain digest, source kind, tool and version, profile,
+placement, sample period, cycle and warm-up counts, load case, controller, plant, fault schedule,
+tracking sampling, instrument floor and hardware artefact digests and tool versions. Captured
+inputs and per-run receipts differ between repeats by design and are not compared.
+
+A run that its own loader or `build_report` refuses stays in the report as a `refused` repeat
+with the refusal text. A run whose report is invalid, for example after an event FIFO overflow,
+is listed as `invalid` with its reasons. Neither contributes samples.
+
+Pooled statistics use only `valid` repeats:
+
+- each periodic latency distribution is the Type-7 distribution of the concatenated raw
+  interval samples of those repeats; per-repeat percentiles are never averaged;
+- pooled jitter concatenates the absolute adjacent-cycle changes found within each repeat.
+  No pair spans two repeats. Expected pairs sum `analysed_cycles - 1` over the repeats, with the
+  same `available`, `partial` and `unavailable` status rule as a single run;
+- deadline observations and misses are summed and the pooled miss rate is their ratio;
+- fault detection, time to safe state, tracking error and energy stay in the per-repeat
+  entries and the run reports.
+
+`spread` gives, for each periodic interval and for latency and jitter separately, the minimum,
+maximum and range of the per-repeat median, p95, p99, p99.9 and maximum across valid repeats. A
+statistic that any valid repeat could not compute, or one without a valid repeat, is null.
+
+`plan` compares the campaign with `design_contracts.run_plan` of the bound measurement domain.
+Every difference is listed in `nonconformities`: a declared repeat count other than the planned
+count, a repeat without a declared reboot, a repeat that is not valid, or fewer analysed
+post-warm-up cycles per repeat than planned. `status` is `complete` only when that list is
+empty. The command exits 0 for a published complete campaign, 2 for a published incomplete
+campaign and prints each nonconformity, and 1 when the campaign is refused or the report cannot
+be written. A campaign report inherits the evidence status of its runs; complete RTL
+simulation campaigns remain `simulation_only`, and no campaign report qualifies the instrument
+or a board measurement.
+
+| File | Content |
+|---|---|
+| `campaign_report.json` | Canonical JSON with every repeat, pooled statistics, spread, plan conformance and limits |
+| `repeat_summary.csv` | One row per repeat, metric and interval; a refused repeat has one row without statistics |
+| `pooled_summary.csv` | Pooled latency and jitter distributions with repeat count and pair accounting |
+| `repeat_spread.csv` | Minimum, maximum and range of each per-repeat statistic |
+
 ## Linux native and RV64 builds
 
 `make uio-transport run-uio` uses host GCC/G++ and writes to `build/` by default.

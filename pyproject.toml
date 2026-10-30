@@ -34,6 +34,7 @@ dependencies = ["jsonschema==4.26.0"]
 
 [project.scripts]
 loop-timing-witness-analyze = "loop_timing_witness.analyze_run:main"
+loop-timing-witness-campaign = "loop_timing_witness.analyze_campaign:main"
 
 [project.urls]
 Homepage = "https://github.com/anulum/loop-timing-witness"

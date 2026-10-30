@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from loop_timing_witness.report_publication import DirectoryPublication
+from loop_timing_witness.report_publication import DirectoryPublication, publish_report_directory
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -91,3 +91,41 @@ def test_readonly_parent_refuses_before_staging(tmp_path: Path) -> None:
         assert not list(tmp_path.iterdir())
     finally:
         tmp_path.chmod(mode)
+
+
+def test_report_directory_lands_only_when_every_file_is_staged(tmp_path: Path) -> None:
+    """Publish complete contents and remove the staging tree after a failed file.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive parent for the report and its staging directories.
+    """
+    report = tmp_path / "report"
+    publish_report_directory(report, {"a.json": b"{}\n", "b.csv": b"x\r\n"})
+    assert {item.name: item.read_bytes() for item in report.iterdir()} == {
+        "a.json": b"{}\n",
+        "b.csv": b"x\r\n",
+    }
+    failed = tmp_path / "failed"
+    with pytest.raises(FileNotFoundError):
+        publish_report_directory(failed, {"a.json": b"{}", "missing/b.csv": b""})
+    assert sorted(item.name for item in tmp_path.iterdir()) == ["report"]
+
+
+def test_report_directory_refuses_existing_paths(tmp_path: Path) -> None:
+    """Refuse a dangling symlink destination and an absent parent without debris.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive parent holding the dangling link.
+    """
+    link = tmp_path / "linked"
+    link.symlink_to(tmp_path / "absent-target")
+    with pytest.raises(FileExistsError, match="report directory already exists"):
+        publish_report_directory(link, {"a.json": b"{}"})
+    with pytest.raises(FileNotFoundError, match="report parent does not exist"):
+        publish_report_directory(tmp_path / "absent" / "report", {"a.json": b"{}"})
+    assert [item.name for item in tmp_path.iterdir()] == ["linked"]
+    assert not (tmp_path / "absent-target").exists()

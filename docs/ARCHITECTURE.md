@@ -237,6 +237,13 @@ spread and missing-pair coverage; warm-up and gaps are never bridged. This deriv
 metric has no capture-format or controller-kernel counterpart. Inputs and limits are specified in
 [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md). Board qualification and measured results remain absent.
 
+A repeat campaign manifest orders the run manifests of one configuration with their repeat
+indexes and reboot declarations. The campaign analysis loads each run through the same
+validation, refuses runs whose configuration differs, reports every repeat with its outcome,
+pools the raw samples of valid repeats and states the spread between repeats and the
+conformance with the measurement-domain run plan. It adds no capture field and no board
+evidence.
+
 ## Verification of the instrument
 
 1. **Simulation** before hardware: witness, buffer, plant, monitor and fabric controller with a

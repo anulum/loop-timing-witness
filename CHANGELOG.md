@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Repeat campaign manifest and `loop-timing-witness-campaign` command: hash-bound
+  ordered repeats with reboot declarations, refusal of mixed configurations, every
+  repeat listed with its outcome, latency and jitter pooled from raw samples of
+  valid repeats, per-statistic spread between repeats and run-plan conformance,
+  written as JSON and CSV in one atomic directory.
 - Per-run absolute adjacent-cycle latency jitter with Type-7 distributions,
   missing-pair coverage, separate peak-to-peak spread, auditable pair CSV and
   labelled SVG output for both event profiles. Warm-up and gaps are excluded.

@@ -223,6 +223,95 @@ def make_rtl_run(tmp_path: Path) -> MakeRtlRun:
     return make
 
 
+MakeRepeatCampaign = Callable[..., tuple[Path, dict[str, Any]]]
+
+
+def write_bound_json(path: Path, value: dict[str, Any]) -> dict[str, str]:
+    """Write one JSON document and return its reference relative to the campaign.
+
+    Parameters
+    ----------
+    path
+        Destination two levels or one level below the campaign directory.
+    value
+        Document to serialise.
+
+    Returns
+    -------
+    dict[str, str]
+        Path relative to the campaign directory and SHA-256 of the written bytes.
+    """
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    campaign = next(parent for parent in path.parents if parent.name == "campaign")
+    return {
+        "path": path.relative_to(campaign).as_posix(),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+@pytest.fixture
+def make_repeat_campaign(tmp_path: Path, make_rtl_run: MakeRtlRun) -> MakeRepeatCampaign:
+    """Order copies of one real RTL capture as the repeats of a campaign.
+
+    Parameters
+    ----------
+    tmp_path
+        Pytest scratch directory.
+    make_rtl_run
+        Production Icarus witness capture.
+
+    Returns
+    -------
+    MakeRepeatCampaign
+        Factory taking the repeat count, profile and an optional run-plan
+        override for every repeat's measurement-domain copy. It returns the
+        campaign manifest path and its mutable document. Each repeat is a
+        complete run directory with a distinct run ID; the samples are
+        simulation data.
+    """
+
+    def make(
+        repeats: int = 5,
+        profile: str = "CONTROL",
+        run_plan: dict[str, int] | None = None,
+    ) -> tuple[Path, dict[str, Any]]:
+        run, manifest = make_rtl_run(profile)
+        campaign = tmp_path / "campaign"
+        campaign.mkdir()
+        entries = []
+        for index in range(1, repeats + 1):
+            directory = campaign / f"repeat-{index}"
+            shutil.copytree(run, directory)
+            value = {**manifest, "run_id": f"rtl-repeat-{index}"}
+            if run_plan is not None:
+                domain = json.loads((directory / "measurement-domain.json").read_bytes())
+                domain["design_contracts"]["run_plan"] = run_plan
+                value["measurement_domain"] = {
+                    "path": "measurement-domain.json",
+                    "sha256": write_bound_json(directory / "measurement-domain.json", domain)[
+                        "sha256"
+                    ],
+                }
+            entries.append(
+                {
+                    "repeat_index": index,
+                    "run_manifest": write_bound_json(directory / "manifest.json", value),
+                    "rebooted_before_run": True,
+                }
+            )
+        document: dict[str, Any] = {
+            "schema": "loop-timing-witness.repeat-campaign.v1",
+            "campaign_id": "rtl-repeat-campaign",
+            "repeats": entries,
+            "operator_notes": "RTL simulation only",
+        }
+        path = campaign / "campaign.json"
+        path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        return path, document
+
+    return make
+
+
 RunRtl = Callable[[str, dict[str, int], list[str]], subprocess.CompletedProcess[str]]
 
 

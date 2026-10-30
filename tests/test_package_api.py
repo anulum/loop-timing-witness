@@ -46,12 +46,16 @@ value = load_json_object(source)
 destination = source.with_name("json-consumer-manifest.json")
 write_bytes_atomic(destination, canonical_json_bytes(value))
 assert load_json_object(destination) == value
-assert package.__all__ == ["RunInputs", "build_report", "load_run"]
+assert package.__all__ == [
+    "CampaignInputs", "RunInputs", "build_campaign_report", "build_report", "load_campaign",
+    "load_run",
+]
 assert set(package.__all__) <= set(dir(package))
 sentinel = object()
 assert getattr(package, "unregistered_analysis_attribute", sentinel) is sentinel
 assert "loop_timing_witness.analyze_run" not in sys.modules
 assert "loop_timing_witness.run_manifest" not in sys.modules
+assert "loop_timing_witness.campaign_manifest" not in sys.modules
 print(json.dumps(value, sort_keys=True))
 """,
             str(run / "manifest.json"),

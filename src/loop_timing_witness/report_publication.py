@@ -13,8 +13,13 @@ from __future__ import annotations
 import ctypes
 import errno
 import os
+import shutil
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 AT_FDCWD = -100
 RENAME_NOREPLACE = 1
@@ -103,3 +108,45 @@ class DirectoryPublication:
         if result != 0:
             code = ctypes.get_errno()
             raise OSError(code, os.strerror(code), str(target))
+
+
+def publish_report_directory(output_directory: Path, files: Mapping[str, bytes]) -> None:
+    """Create a new report directory only after every file is staged.
+
+    Parameters
+    ----------
+    output_directory
+        New directory for the report. It must not already exist and its
+        parent must exist.
+    files
+        Complete report contents keyed by file name inside the directory.
+
+    Raises
+    ------
+    FileExistsError
+        If the output path already exists, including as a dangling symlink.
+    FileNotFoundError
+        If the parent directory does not exist.
+    OSError
+        If Linux atomic publication is unavailable, a file cannot be staged
+        or the transaction cannot land. The staging directory is removed and
+        an existing destination is never replaced.
+    """
+    target = output_directory.parent.resolve() / output_directory.name
+    if os.path.lexists(target):
+        message = f"report directory already exists: {target}"
+        raise FileExistsError(message)
+    parent = target.parent
+    if not parent.is_dir():
+        message = f"report parent does not exist: {parent}"
+        raise FileNotFoundError(message)
+    publication = DirectoryPublication(ctypes.CDLL(None, use_errno=True))
+    publication.check(parent)
+    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=parent))
+    try:
+        for name, content in files.items():
+            (staging / name).write_bytes(content)
+        publication.publish(staging, target)
+    except BaseException:
+        shutil.rmtree(staging)
+        raise

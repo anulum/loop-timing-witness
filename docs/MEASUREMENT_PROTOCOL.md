@@ -42,6 +42,12 @@ One configuration is one combination of:
    with SHA-256 of each referenced file, the bitstream, firmware, operating-system images and
    controller binary, and the tool versions.
 8. A repeat with any event-buffer overflow is invalid and is reported as invalid, not dropped.
+9. The repeats of one configuration are listed in a repeat campaign manifest
+   ([`repeat-campaign.schema.json`](../repeat-campaign.schema.json)). It numbers the repeats
+   from 1, binds each run manifest by path and SHA-256 and records whether the board rebooted
+   before the repeat. Runs whose configuration differs are refused as one campaign. The
+   campaign report compares the repeats with the measurement-domain run plan; the contract is
+   specified in [host analysis](HOST_ANALYSIS.md#repeat-campaigns).
 
 The buffered RTL witness produces event files for host-tool verification through its actual
 drain stream, including known-period and overflow simulations. Its drop-newest buffer retains
@@ -61,6 +67,10 @@ records required below.
 
 - Latency and jitter are reported as distributions — median, 95th, 99th and 99.9th percentile and
   maximum — per repeat and pooled, with the spread between repeats.
+  Pooled distributions are computed from the concatenated raw samples of valid repeats, never
+  by averaging percentiles; adjacent-cycle jitter pairs never span two repeats. The spread
+  between repeats is the minimum, maximum and range of each per-repeat statistic. Invalid and
+  refused repeats stay listed with their reasons and contribute no samples.
 - Every statistic states its sample count and run duration. No single-run number is presented
   without its distribution.
 - Per-run latency jitter means the absolute change in the same periodic event interval

@@ -277,13 +277,16 @@ def _verify_artifact(run_directory: Path, item: dict[str, str]) -> None:
         raise ValueError(message)
 
 
-def load_run(manifest_path: Path) -> RunInputs:
+def load_run(manifest_path: Path, *, manifest_bytes: bytes | None = None) -> RunInputs:
     """Load a schema-valid run and verify every referenced input file.
 
     Parameters
     ----------
     manifest_path
         Path to one versioned run manifest.
+    manifest_bytes
+        Optional complete root snapshot already acquired by the command dispatcher;
+        referenced domain, source and capture files retain their normal validation.
 
     Returns
     -------
@@ -297,7 +300,11 @@ def load_run(manifest_path: Path) -> RunInputs:
     ValueError
         If JSON, schema, semantic or digest validation fails.
     """
-    manifest = load_json_object(manifest_path)
+    manifest = (
+        load_json_object(manifest_path)
+        if manifest_bytes is None
+        else parse_json_object(manifest_bytes, str(manifest_path))
+    )
     _validate_run_schema(manifest)
     directory = manifest_path.resolve().parent
     domain_item = manifest["measurement_domain"]

@@ -11,21 +11,19 @@
 from __future__ import annotations
 
 import csv
-import ctypes
 import io
-import os
-import shutil
-import tempfile
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from xml.sax.saxutils import escape
 
 from .latency_jitter import jitter_pairs
 from .manifest_io import canonical_json_bytes
-from .report_publication import DirectoryPublication
+from .report_publication import publish_report_directory
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
-def _csv_bytes(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> bytes:
+def csv_table_bytes(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> bytes:
     """Serialise one table with a fixed column order.
 
     Parameters
@@ -191,97 +189,73 @@ def write_report(
         If Linux atomic publication is unavailable, an artefact cannot be
         written or the transaction cannot land.
     """
-    target = output_directory.parent.resolve() / output_directory.name
-    if os.path.lexists(target):
-        message = f"report directory already exists: {target}"
-        raise FileExistsError(message)
-    parent = target.parent
-    if not parent.is_dir():
-        message = f"report parent does not exist: {parent}"
-        raise FileNotFoundError(message)
-    publication = DirectoryPublication(ctypes.CDLL(None, use_errno=True))
-    publication.check(parent)
-    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=parent))
-    try:
-        (staging / "report.json").write_bytes(canonical_json_bytes(report))
-        (staging / "interval_summary.csv").write_bytes(
-            _csv_bytes(
-                (
-                    "run_id",
-                    "evidence_status",
-                    "interval",
-                    "sample_count",
-                    "median_ticks",
-                    "p95_ticks",
-                    "p99_ticks",
-                    "p999_ticks",
-                    "maximum_ticks",
-                    "duration_ticks",
-                ),
-                _interval_summary_rows(report, "intervals"),
-            )
-        )
-        jitter_provenance = {
-            "run_id": report["run_id"],
-            "evidence_status": report["evidence_status"],
-            "jitter_method": report["events"]["jitter_method"],
-            "timebase_resolution_ns": report["timebase_resolution_ns"],
-            "instrument_floor_ticks": report["instrument_floor_ticks"],
-        }
-        provenance_columns = tuple(jitter_provenance)
-        (staging / "jitter_summary.csv").write_bytes(
-            _csv_bytes(
-                (
-                    *provenance_columns,
-                    "interval",
-                    "status",
-                    "latency_sample_count",
-                    "sample_count",
-                    "expected_pair_count",
-                    "missing_pair_count",
-                    "pair_coverage_fraction",
-                    "median_ticks",
-                    "p95_ticks",
-                    "p99_ticks",
-                    "p999_ticks",
-                    "maximum_ticks",
-                    "peak_to_peak_ticks",
-                    "duration_ticks",
-                ),
-                [{**row, **jitter_provenance} for row in _interval_summary_rows(report, "jitter")],
-            )
-        )
-        (staging / "cycle_jitter.csv").write_bytes(
-            _csv_bytes(
-                (
-                    *provenance_columns,
-                    "interval",
-                    "previous_cycle",
-                    "cycle",
-                    "previous_ticks",
-                    "ticks",
-                    "delta_ticks",
-                    "absolute_delta_ticks",
-                ),
-                [{**jitter_provenance, **pair} for pair in jitter_pairs(cycle_rows)],
-            )
-        )
-        (staging / "cycle_intervals.csv").write_bytes(
-            _csv_bytes(
-                ("run_id", "evidence_status", "cycle", "interval", "ticks"),
-                [
-                    {
-                        "run_id": report["run_id"],
-                        "evidence_status": report["evidence_status"],
-                        **row,
-                    }
-                    for row in cycle_rows
-                ],
-            )
-        )
-        for filename, content in _plots(report).items():
-            (staging / filename).write_bytes(content)
-        publication.publish(staging, target)
-    except BaseException:
-        shutil.rmtree(staging)
-        raise
+    files: dict[str, bytes] = {"report.json": canonical_json_bytes(report)}
+    files["interval_summary.csv"] = csv_table_bytes(
+        (
+            "run_id",
+            "evidence_status",
+            "interval",
+            "sample_count",
+            "median_ticks",
+            "p95_ticks",
+            "p99_ticks",
+            "p999_ticks",
+            "maximum_ticks",
+            "duration_ticks",
+        ),
+        _interval_summary_rows(report, "intervals"),
+    )
+    jitter_provenance = {
+        "run_id": report["run_id"],
+        "evidence_status": report["evidence_status"],
+        "jitter_method": report["events"]["jitter_method"],
+        "timebase_resolution_ns": report["timebase_resolution_ns"],
+        "instrument_floor_ticks": report["instrument_floor_ticks"],
+    }
+    provenance_columns = tuple(jitter_provenance)
+    files["jitter_summary.csv"] = csv_table_bytes(
+        (
+            *provenance_columns,
+            "interval",
+            "status",
+            "latency_sample_count",
+            "sample_count",
+            "expected_pair_count",
+            "missing_pair_count",
+            "pair_coverage_fraction",
+            "median_ticks",
+            "p95_ticks",
+            "p99_ticks",
+            "p999_ticks",
+            "maximum_ticks",
+            "peak_to_peak_ticks",
+            "duration_ticks",
+        ),
+        [{**row, **jitter_provenance} for row in _interval_summary_rows(report, "jitter")],
+    )
+    files["cycle_jitter.csv"] = csv_table_bytes(
+        (
+            *provenance_columns,
+            "interval",
+            "previous_cycle",
+            "cycle",
+            "previous_ticks",
+            "ticks",
+            "delta_ticks",
+            "absolute_delta_ticks",
+        ),
+        [{**jitter_provenance, **pair} for pair in jitter_pairs(cycle_rows)],
+    )
+    files["cycle_intervals.csv"] = csv_table_bytes(
+        ("run_id", "evidence_status", "cycle", "interval", "ticks"),
+        [
+            {
+                "run_id": report["run_id"],
+                "evidence_status": report["evidence_status"],
+                **row,
+            }
+            for row in cycle_rows
+        ],
+    )
+    files.update(_plots(report))
+    publish_report_directory(output_directory, files)

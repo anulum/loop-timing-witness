@@ -48,6 +48,7 @@ type Change = Callable[[str, bytes], bytes]
 """Rewrite of one within-run file, given its path and original bytes."""
 
 _DATA = Path(__file__).resolve().parent / "data"
+_PACKAGE = Path(__file__).resolve().parents[1] / "src/loop_timing_witness"
 _SC = "source/SC-NEUROCORE/"
 _LTW = "source/LOOP-TIMING-WITNESS/"
 ENTRY = f"{_SC}scripts/cosim_gen_and_check.py"
@@ -87,7 +88,13 @@ _GENERATE = ["--generate", "--steps", "1000", "--seed", "42"]
 _CHECK = ["--check", "--steps", "1000", "--seed", "42"]
 _EXECUTION_CONTRACT = {
     "profile": "test-image-namespace.v1",
+    "address_space_bytes": 805306368,
+    "cpu_seconds": 30,
     "wall_seconds": 45,
+    "file_bytes": 1048576,
+    "python_site_initialisation": False,
+    "bytecode_writes": False,
+    "bytecode_reads": "owned-empty-prefix",
 }
 
 # The checker program compares whole files; it is the test stand-in for the
@@ -117,6 +124,7 @@ root, work, operation = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
 entry = root / "source/SC-NEUROCORE/scripts/cosim_gen_and_check.py"
 argv = [str(entry), f"--{operation}", "--steps", "1000", "--seed", "42"]
 started = time.time_ns()
+monotonic = time.monotonic_ns()
 status = 0
 sys.argv = argv
 try:
@@ -139,6 +147,7 @@ observation = {
     "phase": "source",
     "started_ns": started,
     "completed_ns": time.time_ns(),
+    "elapsed_ns": time.monotonic_ns() - monotonic,
     "modules": [],
     "files": records,
 }
@@ -401,8 +410,15 @@ def _runtime(image: Path) -> bytes:
         Canonical runtime contract.
     """
     worker = (image / "checker/worker.py").read_bytes()
+    reviewed = json.loads(
+        (_PACKAGE / "data/neural-image-checker-runtime.json").read_text(encoding="utf-8")
+    )
     return canonical_json_bytes(
         {
+            **{
+                name: reviewed[name]
+                for name in ("interpreter", "tracer", "import_namespaces", "platform_baseline")
+            },
             "schema_id": "loop-timing-witness.sc-checker-runtime.v1",
             "files": [
                 {"path": "checker/worker.py", "sha256": sha(worker), "byte_length": len(worker)}

@@ -208,7 +208,9 @@ def load_neural_run(
     except NeuralCaptureRefusalError:
         raise
     except JsonInputRefusalError as exc:
-        raise NeuralCaptureRefusalError(str(exc)) from exc
+        # The native verifier names only the refused document, never decoder detail.
+        message = f"Invalid original {exc.source}."
+        raise NeuralCaptureRefusalError(message) from exc
     except OSError as exc:
         message = "Cannot bind the complete public neural acquisition."
         raise NeuralCaptureRefusalError(message) from exc

@@ -23,8 +23,8 @@ from neural_acquisition_support import (
     sha,
     simulation_file,
 )
+from neural_rust_support import assert_refusal_in_both, assert_report_in_both
 
-from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import build_neural_run_report, load_neural_run
 
 if TYPE_CHECKING:
@@ -249,8 +249,12 @@ _REFUSALS: dict[str, tuple[Change, str]] = {
         "closure contains duplicate roles",
     ),
     "checker-execution-contract": (
-        edit_json("checker-policy.json", _set("execution_contract", value={"profile": "other"})),
+        edit_json("checker-policy.json", _set("execution_contract", "wall_seconds", value=44)),
         "runtime differs from the complete selected installation",
+    ),
+    "checker-execution-contract-shape": (
+        edit_json("checker-policy.json", _set("execution_contract", value={"profile": "other"})),
+        "Invalid original consumer checker policy",
     ),
     "inventory-schema": (
         edit_json("checker/generate/source-inventory.json", _set("schema_id", value="other")),
@@ -333,8 +337,7 @@ def test_uninterpretable_fault_refuses_the_whole_acquisition(tmp_path: Path, fau
     change, message = _REFUSALS[fault]
     acquisition = build_neural_acquisition(tmp_path / "run", change=change)
     try:
-        with pytest.raises(NeuralCaptureRefusalError, match=message):
-            load_neural_run(acquisition.manifest, registry=acquisition.registry)
+        assert_refusal_in_both(acquisition, tmp_path / "rust", message)
     finally:
         make_writable(tmp_path)
 
@@ -352,8 +355,7 @@ def test_reset_requires_all_abandoned_prefix_traces(tmp_path: Path) -> None:
     )
     acquisition = build_neural_acquisition(tmp_path / "run", epoch=1, change=change)
     try:
-        with pytest.raises(NeuralCaptureRefusalError, match="all four original abandoned-prefix"):
-            load_neural_run(acquisition.manifest, registry=acquisition.registry)
+        assert_refusal_in_both(acquisition, tmp_path / "rust", "all four original abandoned-prefix")
     finally:
         make_writable(tmp_path)
 
@@ -382,8 +384,7 @@ def test_generated_output_must_be_a_bounded_regular_file(
     """
     acquisition = build_neural_acquisition(tmp_path / "run", program=program)
     try:
-        with pytest.raises(NeuralCaptureRefusalError, match=message):
-            load_neural_run(acquisition.manifest, registry=acquisition.registry)
+        assert_refusal_in_both(acquisition, tmp_path / "rust", message)
     finally:
         make_writable(tmp_path)
 
@@ -398,8 +399,7 @@ def test_malformed_receipt_json_is_a_named_refusal(tmp_path: Path) -> None:
     """
     acquisition = build_neural_acquisition(tmp_path / "run", change=replace_file(_NATIVE, b"[]"))
     try:
-        with pytest.raises(NeuralCaptureRefusalError, match="native runtime"):
-            load_neural_run(acquisition.manifest, registry=acquisition.registry)
+        assert_refusal_in_both(acquisition, tmp_path / "rust", "native runtime")
     finally:
         make_writable(tmp_path)
 
@@ -635,6 +635,7 @@ def test_interpretable_fault_is_an_exact_dimension_finding(tmp_path: Path, fault
         report = build_neural_run_report(
             load_neural_run(acquisition.manifest, registry=acquisition.registry)
         )
+        assert_report_in_both(report, acquisition, tmp_path / "rust")
     finally:
         make_writable(tmp_path)
     assert report["verification"]["whole"] is False
@@ -670,6 +671,7 @@ def test_reset_prefix_fault_is_a_completion_finding(tmp_path: Path, fault: str) 
         report = build_neural_run_report(
             load_neural_run(acquisition.manifest, registry=acquisition.registry)
         )
+        assert_report_in_both(report, acquisition, tmp_path / "rust")
     finally:
         make_writable(tmp_path)
     assert report["completion"]["pass"] is False
@@ -687,7 +689,6 @@ def test_reset_prefix_identity_sequence_refuses(tmp_path: Path) -> None:
     change = _row("prefix/input.txt", 0, 0, 1)
     acquisition = build_neural_acquisition(tmp_path / "run", epoch=1, change=change)
     try:
-        with pytest.raises(NeuralCaptureRefusalError, match="abandoned epoch/identity sequence"):
-            load_neural_run(acquisition.manifest, registry=acquisition.registry)
+        assert_refusal_in_both(acquisition, tmp_path / "rust", "abandoned epoch/identity sequence")
     finally:
         make_writable(tmp_path)

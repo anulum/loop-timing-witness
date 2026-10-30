@@ -28,7 +28,26 @@ from typing import Any, NoReturn
 
 
 class JsonInputRefusalError(ValueError):
-    """An intentionally authored refusal of invalid JSON input bytes or values."""
+    """An intentionally authored refusal of invalid JSON input bytes or values.
+
+    Attributes
+    ----------
+    source
+        Label of the refused document, or empty when the decoder raised it first.
+    """
+
+    def __init__(self, message: str, source: str = "") -> None:
+        """Keep the authored message and the refused document's label.
+
+        Parameters
+        ----------
+        message
+            Authored diagnostic.
+        source
+            Label of the refused document.
+        """
+        super().__init__(message)
+        self.source = source
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -126,7 +145,7 @@ def parse_json_object(raw: bytes, source: str) -> dict[str, Any]:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         message = f"{source}: not UTF-8"
-        raise JsonInputRefusalError(message) from exc
+        raise JsonInputRefusalError(message, source) from exc
     try:
         value = json.loads(
             text,
@@ -136,16 +155,16 @@ def parse_json_object(raw: bytes, source: str) -> dict[str, Any]:
         )
     except json.JSONDecodeError as exc:
         message = f"{source}: invalid JSON"
-        raise JsonInputRefusalError(message) from exc
+        raise JsonInputRefusalError(message, source) from exc
     except JsonInputRefusalError as exc:
         message = f"{source}: {exc}"
-        raise JsonInputRefusalError(message) from exc
+        raise JsonInputRefusalError(message, source) from exc
     except (RecursionError, ValueError) as exc:
         message = f"{source}: JSON input exceeds decoder limits"
-        raise JsonInputRefusalError(message) from exc
+        raise JsonInputRefusalError(message, source) from exc
     if not isinstance(value, dict):
         message = f"{source}: top-level JSON value must be an object"
-        raise JsonInputRefusalError(message)
+        raise JsonInputRefusalError(message, source)
     return value
 
 

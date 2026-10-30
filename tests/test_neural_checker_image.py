@@ -45,7 +45,12 @@ if operation == "check":
     time.sleep(30)
 if work.endswith("tamper"):
     open(os.path.join(root, "planted"), "w").close()
-json.dump(dict(phase="source", files=[], modules=[]), open("checker-observation.json", "w"))
+observation = dict(
+    schema_id="loop-timing-witness.sc-checker-worker-observation.v1", operation=operation,
+    actual_argv=[], native_returncode=0, phase="source", started_ns=1, completed_ns=2,
+    elapsed_ns=1, files=[], modules=[],
+)
+json.dump(observation, open("checker-observation.json", "w"))
 """
 
 
@@ -339,7 +344,9 @@ def test_real_launcher_substitutes_only_whole_placeholders(tmp_path: Path) -> No
     assert actual.command[-3:] == (str(tmp_path / "image"), str(work), "generate")
     assert actual.stdout == b"operation generate True\n"
     assert actual.stderr == b""
-    assert actual.observation == {"phase": "source", "files": [], "modules": []}
+    assert actual.observation is not None
+    assert actual.observation["phase"] == "source"
+    assert actual.observation["operation"] == "generate"
     assert actual.completed_ns >= actual.started_ns
     assert actual.elapsed_ns > 0
     boundary = json.loads(actual.trace)
@@ -584,3 +591,41 @@ def test_image_profile_requires_operator_binding_and_image(
     monkeypatch.setenv(IMAGE_BINDING_VARIABLE, str(unreviewed))
     with pytest.raises(NeuralCaptureRefusalError, match="differs from its reviewed binding"):
         image_neural_profile()
+
+
+@pytest.mark.parametrize(
+    "runtime",
+    [b"[]", b'{"schema_id": "loop-timing-witness.sc-checker-runtime.v1"}', b"not json"],
+)
+def test_historical_runtime_must_have_its_closed_form(tmp_path: Path, runtime: bytes) -> None:
+    """Refuse a runtime contract that is not a complete closed JSON descriptor.
+
+    Parameters
+    ----------
+    tmp_path
+        Test allocation.
+    runtime
+        Runtime bytes that are not an object, not complete, or not JSON.
+    """
+    root, raw = _binding(tmp_path)
+    with pytest.raises(
+        NeuralCaptureRefusalError, match="Invalid original checker image historical"
+    ):
+        ImageCheckerExecutor(root, raw, runtime)
+
+
+def test_historical_runtime_requires_typed_fields(tmp_path: Path) -> None:
+    """Refuse a complete runtime whose execution limit is not an unsigned integer.
+
+    Parameters
+    ----------
+    tmp_path
+        Test allocation.
+    """
+    root, raw = _binding(tmp_path)
+    runtime = json.loads(_RUNTIME)
+    runtime["execution_contract"]["wall_seconds"] = -1
+    with pytest.raises(
+        NeuralCaptureRefusalError, match="Invalid original checker image historical"
+    ):
+        ImageCheckerExecutor(root, raw, canonical_json_bytes(runtime))

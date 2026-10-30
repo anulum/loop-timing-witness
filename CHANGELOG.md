@@ -47,6 +47,13 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Refuse the same neural acquisitions with the same messages in Python and Rust:
+  malformed JSON names only the refused document; the image runtime contract,
+  checker policy and worker observation must have their closed typed forms in
+  Python too; a linked, nonregular or excessive observation or log is refused
+  instead of ignored; tool receipts, reset prefixes and observed inventories
+  are checked in one order. Hermetic acquisition tests now run the Rust API on
+  every scenario and require the same report or refusal.
 - Pin the development file-lock library to 4.2.4 and the virtual environment tool to
   21.15.1, both fixed releases of reported vulnerabilities, keeping hashes and upload cut-offs.
 - Refresh the development certificate bundle and virtual environment dependencies

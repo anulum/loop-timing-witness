@@ -145,11 +145,13 @@ pub(crate) fn finish(
         ),
     ] {
         if digest(&files[name]) != expected {
-            return Err(format!("Original retained fixture differs: {name}."));
+            return Err("Public neural fixture differs from the selected source contract.".into());
         }
     }
     if sources.get("stimuli.txt") != files.get("original_stimulus") {
-        return Err("Original stimulus source body differs.".into());
+        return Err(
+            "Public neural source stimulus differs from its identified input binding.".into(),
+        );
     }
     let counts: CounterReceipt = decode(&files["counter_receipt"], "actual counters")?;
     if counts.schema_id != "loop-timing-witness.neural-capture-counts.v1"

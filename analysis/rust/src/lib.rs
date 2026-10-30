@@ -50,6 +50,7 @@ mod public_temporary;
 mod public_tools;
 mod public_trace;
 mod selected_profile;
+mod strict_json;
 
 /// Immutable report snapshot returned by the complete source-bound loader.
 pub use public_api::{

@@ -28,7 +28,9 @@ struct CheckerReceipts {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PublicTool {
-    pub schema_id: String,
+    /// Checked with the member names before typed decoding.
+    #[serde(rename = "schema_id")]
+    _schema_id: serde::de::IgnoredAny,
     pub checker_receipts: CheckerReceipts,
     /// Actual original scope text.
     pub scope: String,
@@ -54,7 +56,9 @@ struct PublicTool {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PublicResetTool {
-    pub schema_id: String,
+    /// Checked with the member names before typed decoding.
+    #[serde(rename = "schema_id")]
+    _schema_id: serde::de::IgnoredAny,
     pub checker_receipts: CheckerReceipts,
     /// Actual original scope text.
     pub scope: String,
@@ -80,6 +84,64 @@ struct PublicResetTool {
     pub abandoned_prefix_traces: PrefixRefs,
 }
 
+/// Tool roles every epoch declares, besides the checker receipts.
+const TOOL_FIELDS: [&str; 8] = [
+    "compiler_simulator_runtime",
+    "source_owned_public_model_checker",
+    "counter_receipt",
+    "raw_spike_trace",
+    "original_stimulus",
+    "actual_completion",
+    "existing_trial_analysis",
+    "declared_clock_schedule",
+];
+
+/// Require the closed member names before typed roles, in the Python verifier's order.
+fn shape(raw: &[u8], epoch: u32) -> Result<(), String> {
+    let tool = crate::strict_json::decode_object(raw, "public neural tool receipt")?;
+    let resets: &[&str] = if epoch == 0 {
+        &[]
+    } else {
+        &["reset_epoch_receipt", "abandoned_prefix_traces"]
+    };
+    let expected: std::collections::BTreeSet<&str> = ["schema_id", "scope", "checker_receipts"]
+        .into_iter()
+        .chain(TOOL_FIELDS)
+        .chain(resets.iter().copied())
+        .collect();
+    if tool
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != expected
+        || tool["schema_id"] != "loop-timing-witness.neural-tool-receipt.v1"
+        || !tool["scope"].is_string()
+    {
+        return Err("Public neural tool receipt requires its complete closed successor.".into());
+    }
+    if !named(&tool["checker_receipts"], &["check", "generation"]) {
+        return Err("Public neural tool receipt requires both actual checker invocations.".into());
+    }
+    if epoch != 0
+        && !named(
+            &tool["abandoned_prefix_traces"],
+            &["input", "numerical", "raw_spike", "service"],
+        )
+    {
+        return Err(
+            "Public neural reset requires all four original abandoned-prefix traces.".into(),
+        );
+    }
+    Ok(())
+}
+
+/// Tell whether a value is an object with exactly the sorted member names.
+fn named(value: &Value, names: &[&str]) -> bool {
+    value
+        .as_object()
+        .is_some_and(|object| object.keys().map(String::as_str).eq(names.iter().copied()))
+}
+
 /// Bind every complete original public tool/checker/reset role.
 pub(crate) fn bind(
     root: &Path,
@@ -87,7 +149,8 @@ pub(crate) fn bind(
     files: &mut BTreeMap<String, Vec<u8>>,
 ) -> Result<Value, String> {
     let raw = files["tool_receipt"].clone();
-    let (schema_id, checker) = if epoch == 0 {
+    shape(&raw, epoch)?;
+    let checker = if epoch == 0 {
         let tool: PublicTool = decode(&raw, "public neural tool receipt")?;
         binding::tool_files(
             files,
@@ -104,9 +167,9 @@ pub(crate) fn bind(
                 declared_clock_schedule: tool.declared_clock_schedule,
             },
         )?;
-        (tool.schema_id, tool.checker_receipts)
+        tool.checker_receipts
     } else {
-        let tool: PublicResetTool = decode(&raw, "public reset tool receipt")?;
+        let tool: PublicResetTool = decode(&raw, "public neural tool receipt")?;
         binding::reset_files(
             files,
             root,
@@ -124,11 +187,8 @@ pub(crate) fn bind(
                 abandoned_prefix_traces: tool.abandoned_prefix_traces,
             },
         )?;
-        (tool.schema_id, tool.checker_receipts)
+        tool.checker_receipts
     };
-    if schema_id != "loop-timing-witness.neural-tool-receipt.v1" {
-        return Err("Public neural tool receipt requires its complete closed successor.".into());
-    }
     binding::role(
         files,
         root,

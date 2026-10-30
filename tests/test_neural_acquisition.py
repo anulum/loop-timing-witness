@@ -21,6 +21,7 @@ from neural_acquisition_support import (
     edit_json,
     make_writable,
 )
+from neural_rust_support import assert_report_in_both
 
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import (
@@ -60,17 +61,22 @@ def acquisition(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[Neur
     make_writable(tmp_path)
 
 
-def test_complete_acquisition_passes_every_dimension(acquisition: NeuralAcquisition) -> None:
-    """Pass all five dimensions after really running both checker operations.
+def test_complete_acquisition_passes_every_dimension(
+    acquisition: NeuralAcquisition, tmp_path: Path
+) -> None:
+    """Pass all five dimensions in both languages after really running both checker operations.
 
     Parameters
     ----------
     acquisition
         Complete acquisition admitted by its own registry entry.
+    tmp_path
+        Owned directory for the Rust run.
     """
     report = build_neural_run_report(
         load_neural_run(acquisition.manifest, registry=acquisition.registry)
     )
+    assert_report_in_both(report, acquisition, tmp_path / "rust")
     assert report["verification"]["whole"] is True
     for name in _DIMENSIONS:
         assert report[name]["pass"] is True, report[name]["findings"]
@@ -144,7 +150,7 @@ def host_installation(tmp_path_factory: pytest.TempPathFactory) -> NeuralChecker
 def test_host_installation_passes_under_the_traced_isolated_worker(
     host_installation: NeuralCheckerInstallation, tmp_path: Path
 ) -> None:
-    """Pass every dimension through the traced, isolated host worker.
+    """Pass every dimension in both languages through the traced, isolated host worker.
 
     Parameters
     ----------
@@ -154,10 +160,13 @@ def test_host_installation_passes_under_the_traced_isolated_worker(
         Owned acquisition directory.
     """
     acquisition = build_neural_acquisition(tmp_path / "run", installation=host_installation)
-    report = build_neural_run_report(
-        load_neural_run(acquisition.manifest, registry=acquisition.registry)
-    )
-    make_writable(tmp_path)
+    try:
+        report = build_neural_run_report(
+            load_neural_run(acquisition.manifest, registry=acquisition.registry)
+        )
+        assert_report_in_both(report, acquisition, tmp_path / "rust")
+    finally:
+        make_writable(tmp_path)
     assert report["verification"]["whole"] is True, report["verification"]
     receipt = report["source_binding"]["checker_invocations"]["check"]
     assert receipt["worker_observation"]["phase"] == "source"

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from .manifest_io import parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
+from .neural_json_shapes import checker_policy_closed
 from .neural_run_files import read_neural_run_file
 
 if TYPE_CHECKING:
@@ -46,22 +47,14 @@ def bind_checker_contract(run: BoundNeuralRun) -> dict[str, Any]:
         expected_bytes=contract.checker_policy_bytes,
         mismatch_message="Acquired checker policy differs from its reviewed consumer binding.",
     )
-    checker = parse_json_object(raw, "reviewed checker policy")
-    fields = {
-        "schema_id",
-        "entry_point",
-        "source_files",
-        "runtime_contract_ref",
-        "generate_arguments",
-        "check_arguments",
-        "execution_contract",
-    }
+    checker = parse_json_object(raw, "consumer checker policy")
+    if not checker_policy_closed(checker):
+        message = "Invalid original consumer checker policy."
+        raise NeuralCaptureRefusalError(message)
     if (
-        set(checker) != fields
-        or checker["schema_id"] != "loop-timing-witness.sc-checker-policy.v1"
+        checker["schema_id"] != "loop-timing-witness.sc-checker-policy.v1"
         or checker["generate_arguments"] != ["--generate", "--steps", "1000", "--seed", "42"]
         or checker["check_arguments"] != ["--check", "--steps", "1000", "--seed", "42"]
-        or not isinstance(checker["source_files"], list)
         or not checker["source_files"]
         or checker["entry_point"] not in checker["source_files"]
     ):

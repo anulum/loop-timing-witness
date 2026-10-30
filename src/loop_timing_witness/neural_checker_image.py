@@ -29,10 +29,11 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import canonical_json_bytes, parse_json_object
-from .neural_checker_execution import CheckerInvocation
+from .manifest_io import JsonInputRefusalError, canonical_json_bytes, parse_json_object
+from .neural_checker_execution import CheckerInvocation, bounded_output, read_observation
 from .neural_checker_installation import CheckerInstalledFile
 from .neural_event_stream import NeuralCaptureRefusalError
+from .neural_json_shapes import EXECUTION_FIELDS, REFERENCE_FIELDS, record, records, texts, typed
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -77,6 +78,49 @@ def _refuse(message: str) -> NeuralCaptureRefusalError:
         Refusal carrying only authored text.
     """
     return NeuralCaptureRefusalError(message)
+
+
+_RUNTIME_FIELDS = frozenset(
+    {
+        "schema_id",
+        "interpreter",
+        "tracer",
+        "import_namespaces",
+        "worker_sources",
+        "files",
+        "platform_baseline",
+        "execution_contract",
+    }
+)
+_PLATFORM_NAMES = ("id", "system", "machine", "kernel_release")
+_PLATFORM_FIELDS: dict[str, type] = dict.fromkeys(_PLATFORM_NAMES, str)
+
+
+def _runtime_closed(runtime: dict[str, Any]) -> bool:
+    """Tell whether a historical runtime has the complete closed descriptor form.
+
+    Parameters
+    ----------
+    runtime
+        Decoded runtime contract.
+
+    Returns
+    -------
+    bool
+        Whether every field is present, typed and nothing else is declared.
+    """
+    if set(runtime) != _RUNTIME_FIELDS:
+        return False
+    return (
+        typed(runtime["schema_id"], str)
+        and record(runtime["interpreter"], REFERENCE_FIELDS)
+        and record(runtime["tracer"], REFERENCE_FIELDS)
+        and texts(runtime["import_namespaces"])
+        and records(runtime["worker_sources"], REFERENCE_FIELDS)
+        and records(runtime["files"], REFERENCE_FIELDS)
+        and record(runtime["platform_baseline"], _PLATFORM_FIELDS)
+        and record(runtime["execution_contract"], EXECUTION_FIELDS)
+    )
 
 
 def _placeholders_closed(values: Sequence[object]) -> bool:
@@ -126,7 +170,14 @@ class ImageCheckerExecutor:
             If the binding or runtime contract is not the closed reviewed form.
         """
         binding = parse_json_object(self.binding_bytes, "checker image executor binding")
-        runtime = parse_json_object(self.runtime_bytes, "checker image historical runtime")
+        try:
+            runtime = parse_json_object(self.runtime_bytes, "checker image historical runtime")
+        except JsonInputRefusalError as exc:
+            message = "Invalid original checker image historical runtime."
+            raise _refuse(message) from exc
+        if not _runtime_closed(runtime):
+            message = "Invalid original checker image historical runtime."
+            raise _refuse(message)
         command = binding.get("command")
         environment = binding.get("bootstrap_environment")
         if (
@@ -312,12 +363,7 @@ class ImageCheckerExecutor:
         completed = time.time_ns()
         elapsed = time.monotonic_ns() - monotonic
         self.verify()
-        observation_path = directory / "checker-observation.json"
-        observation = None
-        if observation_path.is_file() and observation_path.stat().st_size <= _FILE_LIMIT:
-            observation = parse_json_object(
-                observation_path.read_bytes(), "actual checker observation"
-            )
+        observation = read_observation(directory / "checker-observation.json")
         boundary = canonical_json_bytes(
             {
                 "schema_id": _BOUNDARY_SCHEMA,
@@ -332,8 +378,8 @@ class ImageCheckerExecutor:
             started,
             completed,
             elapsed,
-            _bounded(stdout_path),
-            _bounded(stderr_path),
+            bounded_output(stdout_path, _FILE_LIMIT),
+            bounded_output(stderr_path, _FILE_LIMIT),
             boundary,
             observation,
             interrupted,
@@ -468,29 +514,3 @@ def _verify_image_file(path: Path, item: dict[str, Any]) -> None:
     if digest.hexdigest() != item["sha256"]:
         message = "Checker image file bytes differ from its binding."
         raise _refuse(message)
-
-
-def _bounded(path: Path) -> bytes:
-    """Read a finite child log written by this consumer.
-
-    Parameters
-    ----------
-    path
-        Consumer-created log file outside the payload's working directory.
-
-    Returns
-    -------
-    bytes
-        Complete log bytes within the fixed allocation.
-
-    Raises
-    ------
-    NeuralCaptureRefusalError
-        If the log exceeds its allocation.
-    """
-    with path.open("rb") as stream:
-        raw = stream.read(_FILE_LIMIT + 1)
-    if len(raw) > _FILE_LIMIT:
-        message = "Actual checker output exceeds its allocation."
-        raise _refuse(message)
-    return raw

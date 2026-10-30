@@ -10,40 +10,68 @@
 
 use crate::files::{FileRef, decode, read_bound};
 use crate::public_binding::PublicRun;
-use crate::public_checker_fields::{Environment, Inventory, Receipt, Roles};
+use crate::public_checker_fields::{Environment, Receipt, Roles};
 use crate::public_policy::same;
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Bind one whole inventory and return actual-path correspondence without execution.
+///
+/// The checks and their order follow the Python verifier, so both refuse a
+/// damaged inventory with the same message.
 fn inventory(
     run: &PublicRun,
     reference: &FileRef,
     expected: &BTreeMap<String, FileRef>,
 ) -> Result<BTreeMap<String, String>, String> {
     let raw = read_bound(&run.core.root, reference, 1048576)?;
-    let observed: Inventory = decode(&raw, "original observed checker inventory")?;
-    if observed.schema_id != "loop-timing-witness.checker-observed-inventory.v1"
-        || observed.files.len() != expected.len()
-    {
-        return Err(
-            "Checker observed inventory requires its complete closed versioned structure.".into(),
-        );
-    }
+    let observed = crate::strict_json::decode_object(&raw, "observed checker inventory")?;
+    let rows = match (observed.get("schema_id"), observed.get("files")) {
+        (Some(Value::String(schema)), Some(Value::Array(rows)))
+            if observed.len() == 2
+                && schema == "loop-timing-witness.checker-observed-inventory.v1" =>
+        {
+            rows
+        }
+        _ => {
+            return Err(
+                "Checker observed inventory requires its closed versioned structure.".into(),
+            );
+        }
+    };
     let mut paths = BTreeMap::new();
     let mut roles = BTreeSet::new();
-    for row in observed.files {
-        let identity = expected
-            .get(&row.path)
-            .ok_or("Checker observed inventory contains an unknown reviewed role.")?;
-        if identity.sha256 != row.sha256
-            || identity.byte_length != row.byte_length
-            || !roles.insert(row.path.clone())
-            || paths.insert(row.actual_path, row.path).is_some()
+    for row in rows {
+        let fields = row.as_object().filter(|fields| {
+            fields.len() == 4
+                && fields.get("path").is_some_and(Value::is_string)
+                && fields.get("actual_path").is_some_and(Value::is_string)
+                && fields.contains_key("sha256")
+                && fields
+                    .get("byte_length")
+                    .is_some_and(|value| value.is_i64() || value.is_u64())
+        });
+        let Some(fields) = fields else {
+            return Err("Checker observed inventory row is malformed.".into());
+        };
+        let (name, actual) = (fields["path"].as_str(), fields["actual_path"].as_str());
+        let (Some(name), Some(actual)) = (name, actual) else {
+            return Err("Checker observed inventory row is malformed.".into());
+        };
+        let identity = expected.get(name);
+        if roles.contains(name)
+            || paths.contains_key(actual)
+            || identity.is_none_or(|identity| {
+                fields["sha256"] != identity.sha256.as_str()
+                    || fields["byte_length"] != identity.byte_length
+            })
         {
             return Err(
                 "Checker observed inventory differs from the complete reviewed roles.".into(),
             );
         }
+        paths.insert(actual.to_owned(), name.to_owned());
+        roles.insert(name.to_owned());
     }
     if roles != expected.keys().cloned().collect() {
         return Err("Checker observed inventory omits a reviewed role.".into());

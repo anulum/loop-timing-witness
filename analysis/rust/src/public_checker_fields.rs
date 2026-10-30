@@ -65,24 +65,6 @@ pub(crate) struct Receipt {
     pub cleanup: String,
 }
 
-/// Original observed role, retaining the original physical path as provenance only.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct InventoryRow {
-    pub path: String,
-    pub actual_path: String,
-    pub sha256: String,
-    pub byte_length: u64,
-}
-
-/// Complete original inventory with every portable admitted role.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Inventory {
-    pub schema_id: String,
-    pub files: Vec<InventoryRow>,
-}
-
 /// Original closed environment keys are also duplicate-rejecting.
 #[derive(Deserialize)]
 #[serde(transparent)]

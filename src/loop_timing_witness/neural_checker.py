@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-import os
-import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,11 +17,10 @@ from typing import TYPE_CHECKING
 
 from .manifest_io import canonical_json_bytes
 from .neural_checker_contract import bind_checker_contract
-from .neural_checker_execution import invoke_source_checker
+from .neural_checker_execution import bounded_output, invoke_source_checker
 from .neural_checker_image import ImageCheckerExecutor
 from .neural_checker_receipts import checker_receipt_findings
 from .neural_checker_trace import checker_trace_findings
-from .neural_event_stream import NeuralCaptureRefusalError
 
 if TYPE_CHECKING:
     from .neural_checker_execution import CheckerInvocation
@@ -177,39 +174,5 @@ def _generation_findings(run: BoundNeuralRun, directory: Path) -> tuple[str, ...
             ("stimuli.txt", "original_stimulus"),
             ("results_expected.txt", "reference_projection"),
         )
-        if _output_bytes(directory / filename) != run.files[role]
+        if bounded_output(directory / filename, _OUTPUT_LIMIT) != run.files[role]
     )
-
-
-def _output_bytes(path: Path) -> bytes:
-    """Read one generated output as a bounded regular file without following a link.
-
-    Parameters
-    ----------
-    path
-        Output inside the owned generation directory.
-
-    Returns
-    -------
-    bytes
-        Complete output bytes.
-
-    Raises
-    ------
-    NeuralCaptureRefusalError
-        If the output is absent, a link, nonregular, unreadable or excessive.
-    """
-    try:
-        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
-        with os.fdopen(os.open(path, flags), "rb") as stream:
-            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                message = "Actual checker output must be a regular file."
-                raise NeuralCaptureRefusalError(message)
-            raw = stream.read(_OUTPUT_LIMIT + 1)
-    except OSError as exc:
-        message = "Actual checker output is unavailable."
-        raise NeuralCaptureRefusalError(message) from exc
-    if len(raw) > _OUTPUT_LIMIT:
-        message = "Actual checker output exceeds its allocation."
-        raise NeuralCaptureRefusalError(message)
-    return raw

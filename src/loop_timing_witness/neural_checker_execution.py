@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import os
 import signal
+import stat
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import parse_json_object
+from .manifest_io import JsonInputRefusalError, parse_json_object
+from .neural_event_stream import NeuralCaptureRefusalError
+from .neural_json_shapes import REFERENCE_FIELDS, records, texts, typed
 
 if TYPE_CHECKING:
     from .neural_checker_installation import NeuralCheckerInstallation
@@ -38,6 +41,118 @@ _BOOTSTRAP = (
     "import runpy,sys; sys.path.insert(0,sys.argv.pop(1)); "
     "runpy.run_module('loop_timing_witness.neural_checker_worker',run_name='__main__')"
 )
+
+
+_I32 = 2**31
+_OBSERVATION_FIELDS = frozenset(
+    {
+        "schema_id",
+        "operation",
+        "actual_argv",
+        "native_returncode",
+        "phase",
+        "started_ns",
+        "completed_ns",
+        "elapsed_ns",
+        "modules",
+        "files",
+    }
+)
+
+
+def bounded_output(path: Path, limit: int) -> bytes:
+    """Read one checker output as a bounded regular file without following a link.
+
+    Parameters
+    ----------
+    path
+        Output inside a consumer-owned directory.
+    limit
+        Largest admitted byte length.
+
+    Returns
+    -------
+    bytes
+        Complete output bytes.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If the output is absent, a link, nonregular, unreadable or excessive.
+    """
+    try:
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+        with os.fdopen(os.open(path, flags), "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                message = "Actual checker output must be a regular file."
+                raise NeuralCaptureRefusalError(message)
+            raw = stream.read(limit + 1)
+    except OSError as exc:
+        message = "Actual checker output is unavailable."
+        raise NeuralCaptureRefusalError(message) from exc
+    if len(raw) > limit:
+        message = "Actual checker output exceeds its allocation."
+        raise NeuralCaptureRefusalError(message)
+    return raw
+
+
+def _observation_closed(observation: dict[str, Any]) -> bool:
+    """Tell whether a worker observation has the complete closed form.
+
+    Parameters
+    ----------
+    observation
+        Decoded observation.
+
+    Returns
+    -------
+    bool
+        Whether every field is present and typed, and nothing else is declared.
+    """
+    return (
+        set(observation) == _OBSERVATION_FIELDS
+        and all(typed(observation[name], str) for name in ("schema_id", "operation", "phase"))
+        and texts(observation["actual_argv"])
+        and type(observation["native_returncode"]) is int
+        and -_I32 <= observation["native_returncode"] < _I32
+        and all(
+            typed(observation[name], int) for name in ("started_ns", "completed_ns", "elapsed_ns")
+        )
+        and records(observation["modules"], {"name": str, "path": str})
+        and records(observation["files"], REFERENCE_FIELDS)
+    )
+
+
+def read_observation(path: Path) -> dict[str, Any] | None:
+    """Read the worker observation the checker left, if it left one.
+
+    Parameters
+    ----------
+    path
+        ``checker-observation.json`` in the owned operation directory.
+
+    Returns
+    -------
+    dict[str, Any] or None
+        Closed observation, or ``None`` when no file exists.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If the file is a link, nonregular, excessive, malformed or not closed.
+    """
+    if not path.exists():
+        return None
+    raw = bounded_output(path, _FILE_LIMIT)
+    try:
+        observation = parse_json_object(raw, "actual checker observation")
+    except JsonInputRefusalError as exc:
+        message = "Invalid original actual checker observation."
+        raise NeuralCaptureRefusalError(message) from exc
+    if not _observation_closed(observation):
+        message = "Invalid original actual checker observation."
+        raise NeuralCaptureRefusalError(message)
+    return observation
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,18 +298,17 @@ def invoke_source_checker(
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
             raise
-    observation_path = directory / "checker-observation.json"
-    observation = None
-    if observation_path.is_file() and observation_path.stat().st_size <= _FILE_LIMIT:
-        observation = parse_json_object(observation_path.read_bytes(), "actual checker observation")
+    completed = time.time_ns()
+    elapsed = time.monotonic_ns() - monotonic
+    observation = read_observation(directory / "checker-observation.json")
     return CheckerInvocation(
         command,
         process.returncode,
         started,
-        time.time_ns(),
-        time.monotonic_ns() - monotonic,
-        (directory / "checker.stdout").read_bytes(),
-        (directory / "checker.stderr").read_bytes(),
+        completed,
+        elapsed,
+        bounded_output(directory / "checker.stdout", _FILE_LIMIT),
+        bounded_output(directory / "checker.stderr", _FILE_LIMIT),
         trace_path.read_bytes() if trace_path.is_file() else b"",
         observation,
         interrupted,

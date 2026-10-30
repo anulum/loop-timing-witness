@@ -82,15 +82,17 @@ pub(crate) fn load(path: &Path, registry: &NeuralRegistry) -> Result<PublicRun, 
     }
     let mut checker_paths = BTreeSet::new();
     for reference in &contract.checker.source_files {
-        if !checker_paths.insert(&reference.path)
-            || sources.get(&reference.path).is_none_or(|body| {
-                body.len() as u64 != reference.byte_length || digest(body) != reference.sha256
-            })
-        {
+        if sources.get(&reference.path).is_none_or(|body| {
+            body.len() as u64 != reference.byte_length || digest(body) != reference.sha256
+        }) {
             return Err(
                 "Checker source closure differs from the admitted whole source population.".into(),
             );
         }
+        checker_paths.insert(&reference.path);
+    }
+    if checker_paths.len() != contract.checker.source_files.len() {
+        return Err("Selected checker source closure contains duplicate roles.".into());
     }
     let source_contract_ref = manifest.source_contract_ref.clone();
     let observations = manifest.into_observations();

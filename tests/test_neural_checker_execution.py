@@ -25,6 +25,7 @@ from loop_timing_witness.neural_checker_installation import (
     CheckerInstalledFile,
     NeuralCheckerInstallation,
 )
+from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -172,20 +173,33 @@ def test_missing_trace_and_observation_are_reported_as_absent(tmp_path: Path) ->
     assert actual.observation is None
 
 
-def test_observation_beyond_its_allocation_is_not_decoded(tmp_path: Path) -> None:
-    """Ignore an observation whose resolved size exceeds the allocation.
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("os.symlink(LARGE, 'checker-observation.json')", "output is unavailable"),
+        ("open('checker-observation.json', 'w').write('[')", "Invalid original actual checker"),
+        ("open('checker-observation.json', 'w').write('{}')", "Invalid original actual checker"),
+    ],
+)
+def test_observation_must_be_a_closed_regular_file(tmp_path: Path, body: str, message: str) -> None:
+    """Refuse a linked, malformed or incomplete worker observation.
+
+    The worker's file-size limit already keeps the checker from writing more than
+    the observation allocation.
 
     Parameters
     ----------
     tmp_path
         Owned program, invocation directory and sparse oversized file.
+    body
+        Program statement leaving the damaged observation.
+    message
+        Expected refusal fragment.
     """
     large = tmp_path / "large.json"
     with large.open("wb") as stream:
         stream.truncate(1048577)
-    body = f"import os\nos.symlink({str(large)!r}, 'checker-observation.json')\nos._exit(0)\n"
-    script, directory = _script(tmp_path, body)
-    actual = invoke_source_checker(_installation(tmp_path), script, "check", directory)
-    assert actual.returncode == 0
-    assert actual.observation is None
-    assert (directory / "checker-observation.json").is_symlink()
+    program = f"import os\nLARGE = {str(large)!r}\n{body}\nos._exit(0)\n"
+    script, directory = _script(tmp_path, program)
+    with pytest.raises(NeuralCaptureRefusalError, match=message):
+        invoke_source_checker(_installation(tmp_path), script, "check", directory)

@@ -15,7 +15,8 @@ pre-commit==4.6.2
 # Security fixes in transitive audit and hook dependencies
 urllib3==2.8.0
 certifi==2026.10.19
-virtualenv==21.14.9
+filelock==4.2.4
+virtualenv==21.15.1
 # Lint, format, strict typing
 ruff==0.16.10
 mypy==2.4.0

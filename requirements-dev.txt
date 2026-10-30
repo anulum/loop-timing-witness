@@ -12,11 +12,12 @@
 #     --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header \
 #     --exclude-newer 2026-10-01T23:58:00Z \
 #     --exclude-newer-package certifi=2026-10-23T01:40:00Z \
-#     --exclude-newer-package virtualenv=2026-10-23T01:40:00Z \
+#     --exclude-newer-package filelock=2026-10-19T02:30:00Z \
+#     --exclude-newer-package virtualenv=2026-10-28T02:00:00Z \
 #     --output-file requirements-dev.txt
 #
 # The general upload cut-off keeps all other dependency versions fixed;
-# the two named exceptions admit the reviewed fixed development releases.
+# the three named exceptions admit the reviewed fixed development releases.
 
 arrow==1.4.0 \
     --hash=sha256:749f0769958ebdc79c173ff0b0670d59051a535fa26e8eba02953dc19eb43205 \
@@ -475,10 +476,11 @@ distlib==0.4.3 \
     --hash=sha256:4b0ce306c966eb73bc3a7b6abad017c556dadd92c44701562cd528ac7fde4d5b \
     --hash=sha256:f152097224a0ae24be5a0f6bae1b9359af82133bce63f98a95f86cae1aede9ed
     # via virtualenv
-filelock==4.0.9 \
-    --hash=sha256:635e7d67fa92654eed444e75e9ca18426d34e77ad9c469bf4373f75a932f7b22 \
-    --hash=sha256:9287fd61b99a806e5202be29a83034c0808a1b9830e820537c2f5773981f7eeb
+filelock==4.2.4 \
+    --hash=sha256:301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e \
+    --hash=sha256:c6d8663535e1650ee430507b4ffbac7b464dd64b7647ea0112a9f406499d163d
     # via
+    #   -r requirements-dev.in
     #   cachecontrol
     #   python-discovery
     #   virtualenv
@@ -1558,9 +1560,9 @@ urllib3==2.8.0 \
     # via
     #   -r requirements-dev.in
     #   requests
-virtualenv==21.14.9 \
-    --hash=sha256:4d1bee354cd81c820da3bee56e38be3426490f8d1fc54e10ea5b2072ebad8ef8 \
-    --hash=sha256:ac51744da66ae56ff814b087d65096c94de698ec520adc624b108b679655809b
+virtualenv==21.15.1 \
+    --hash=sha256:0d14a991689c67600316880eadc0a37b7690cb632e3b4ac67e2bc05b2b2e24a4 \
+    --hash=sha256:e79c90b8f601701599c25905e02839924fede2c798d52325670d24fbdaab74ee
     # via
     #   -r requirements-dev.in
     #   pre-commit

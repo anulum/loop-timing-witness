@@ -28,6 +28,8 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Pin the development file-lock library to 4.2.4 and the virtual environment tool to
+  21.15.1, both fixed releases of reported vulnerabilities, keeping hashes and upload cut-offs.
 - Refresh the development certificate bundle and virtual environment dependencies
   to their fixed releases while retaining hashes and reproducible upload cut-offs.
 - Validate JSON attribution sidecars without changing original JSON bytes;

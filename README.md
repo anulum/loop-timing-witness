@@ -294,6 +294,19 @@ observed tracking coverage. Optional
 [Linux host load profiles](https://github.com/anulum/loop-timing-witness/blob/main/docs/HOST_ANALYSIS.md#linux-host-load-profiles) retain actual bounded
 worker activity and scheduling facts; all captures remain simulation-only.
 
+The source-bound neural verifier is available through the Python API and
+`loop-timing-witness-analyze`, and through the standalone
+[Rust analysis crate](analysis/rust/README.md) and
+`loop-timing-witness-analyze-native`. The [neural analysis contract](docs/HOST_ANALYSIS.md#source-bound-neural-analysis)
+defines exact source/runtime admission and independent source, capture,
+numerical, completion and clock verdicts. This interface verifies simulated
+acquisitions; it does not establish physical device qualification.
+
+`make native-sbom` produces and verifies the complete locked native analysis
+dependency inventory with `cargo-cyclonedx` 0.5.9. See
+[native inventory validation](VALIDATION.md#native-dependency-inventory) for tool
+installation, exclusive output directories and the source-package scope.
+
 ## Support development
 
 Support the project through [GitHub Sponsors](https://github.com/sponsors/anulum),

@@ -85,16 +85,19 @@ def test_actual_native_reference_includes_members_and_enum_values() -> None:
     rendered = "\n".join(page.read_text() for page in pages)
     assert "Monotonic firmware lifecycle state" in rendered
     assert "Terminal refusal" in rendered
+    analysis = native / "rust/doc/witness_analysis"
+    assert (analysis / "public_api/fn.load_neural_run.html").is_file()
+    assert 'href="public_api/fn.load_neural_run.html"' in (analysis / "index.html").read_text()
     assert (native / "rust/doc/witness_controller/struct.Command.html").is_file()
     assert (native / "rust/doc/witness_amp_rust_kernel/index.html").is_file()
 
 
 def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) -> None:
-    """Both real crate references build outside the checkout's local Rust override."""
+    """All real crate references build outside the checkout's local Rust override."""
     captured = tmp_path / "captured"
     captured.mkdir()
     shutil.copyfile(REPOSITORY_ROOT / "rust-toolchain.toml", captured / "rust-toolchain.toml")
-    for relative in ["controllers/rust", "runtime/bare_metal/rust_kernel"]:
+    for relative in ["analysis/rust", "controllers/rust", "runtime/bare_metal/rust_kernel"]:
         shutil.copytree(
             REPOSITORY_ROOT / relative,
             captured / relative,
@@ -113,7 +116,7 @@ def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) ->
     )
     assert version.returncode == 0, version.stdout + version.stderr
     assert version.stdout.startswith("rustc 1.99.0 ")
-    for relative in ["controllers/rust", "runtime/bare_metal/rust_kernel"]:
+    for relative in ["analysis/rust", "controllers/rust", "runtime/bare_metal/rust_kernel"]:
         result = subprocess.run(
             [
                 "cargo",
@@ -135,5 +138,8 @@ def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) ->
         )
         assert result.returncode == 0, result.stdout + result.stderr
     reference = captured / "native-api/rust/doc"
+    analysis = reference / "witness_analysis"
+    assert (analysis / "public_api/fn.load_neural_run.html").is_file()
+    assert 'href="public_api/fn.load_neural_run.html"' in (analysis / "index.html").read_text()
     assert (reference / "witness_controller/struct.Command.html").is_file()
     assert (reference / "witness_amp_rust_kernel/index.html").is_file()

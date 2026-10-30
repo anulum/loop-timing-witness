@@ -20,6 +20,7 @@ from .event_stream import decode_events
 from .host_load_receipt import attach_host_load
 from .latency_jitter import JITTER_METHOD, summarise_jitter
 from .native_completion import attach_completion_statistics
+from .neural_run_dispatch import dispatch_analysis
 from .report_outputs import write_report
 from .run_analysis import analyse_events
 from .run_manifest import RunInputs, load_run
@@ -209,7 +210,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", required=True, type=Path, help="new report directory")
     args = parser.parse_args(argv)
     try:
-        inputs = load_run(args.manifest)
+        neural_status, manifest_bytes = dispatch_analysis(args.manifest, args.output_dir)
+        if neural_status is not None:
+            return neural_status
+        inputs = load_run(args.manifest, manifest_bytes=manifest_bytes)
         report, cycle_rows = build_report(inputs)
         write_report(args.output_dir, report, cycle_rows)
     except (OSError, ValueError) as exc:

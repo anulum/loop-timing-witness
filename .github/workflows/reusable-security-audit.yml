@@ -51,6 +51,7 @@ jobs:
           test "$(cargo-audit --version)" = "cargo-audit 0.22.2"
       - name: Known vulnerabilities in every dependency lock
         run: |
+          cargo audit --file analysis/rust/Cargo.lock
           cargo audit --file controllers/rust/Cargo.lock
           .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
           .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt

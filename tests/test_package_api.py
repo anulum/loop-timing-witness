@@ -47,8 +47,8 @@ destination = source.with_name("json-consumer-manifest.json")
 write_bytes_atomic(destination, canonical_json_bytes(value))
 assert load_json_object(destination) == value
 assert package.__all__ == [
-    "CampaignInputs", "RunInputs", "build_campaign_report", "build_report", "load_campaign",
-    "load_run",
+    "CampaignInputs", "RunInputs", "build_campaign_report", "build_neural_run_report",
+    "build_report", "load_campaign", "load_neural_run", "load_run",
 ]
 assert set(package.__all__) <= set(dir(package))
 sentinel = object()

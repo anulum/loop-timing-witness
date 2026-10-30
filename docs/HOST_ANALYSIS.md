@@ -546,3 +546,161 @@ inventing sysfs devices; positive acquisition and worker lifecycle still require
 Public raw/scale reads require the supplied rail to match the constructor's verified mapping,
 including channel, label and shunt. A different caller-supplied rail is refused before attribute
 access or scale arithmetic; that physical-object boundary remains unexercised without the device.
+
+
+## Neural carrier declarations
+
+`loop_timing_witness.neural_run_manifest.load_neural_manifest(path)` reads the
+closed `loop-timing-witness.neural-step-run.v1` carrier using the bundled schema.
+It requires a regular manifest file of at most 65,536 bytes, rejects a final
+symlink or FIFO, duplicate JSON members, decimal counts, nonportable reference
+paths, malformed run IDs and SHA-256 strings, and repeated source paths. The
+complete source list must fit the manifest byte allocation, with at most 1 MiB
+per source; trace and receipt references are limited to 65,536 bytes. The full
+verifier requires exactly the source population selected by the reviewed policy.
+The root and packaged `neural-step-run.schema.json` files have identical bytes.
+
+The result contains declarations only. This reader does not open referenced
+sources, check their digests, select a runtime, execute a model or establish
+timing, numerical or source acceptance. Its return value must not substitute
+for the complete source-bound run verifier. The retained private native
+acquisition identity is refused by this public carrier reader.
+
+
+## Source-bound neural analysis
+
+The package exports `load_neural_run(path)` and
+`build_neural_run_report(inputs)`. The existing
+`loop-timing-witness-analyze MANIFEST --output-dir NEW_DIR` command dispatches
+versioned neural input before legacy CONTROL/COMPUTE analysis. Dispatch reads
+one strict regular JSON root within 16 MiB; neural carriers additionally have
+the 65,536-byte limit above. Unknown or private neural identities and
+unadmitted source contracts are refused with status 1 and no report output.
+
+Public neural source admission requires an exact consumer-owned registry entry
+binding schema identity, schema digest, cohort and source-contract digest.
+The packaged registry admits the exact simulation source contract
+`ec1236a69fc9e16a4eff1dfa7bdad8aa8b6088fc4ebceb8d8c43d33517199304`
+for cohort `sc-neurocore-neural-step-1n1b16t.v1` and the bundled schema digest.
+Its 57 source bodies include the complete 38-file source-owned checker closure.
+The checker policy and runtime descriptor are pinned package assets. The
+consumer installation descriptor names host files, so it is not packaged: the
+operator selects the reviewed file with `LOOP_TIMING_WITNESS_CHECKER_INSTALLATION`
+and the package pins its digest. A changed, missing, oversized or nonregular
+asset or descriptor is refused, and so is an unset or relative selection. A structurally valid carrier, a copied policy or a private acquisition
+cannot add a registry entry.
+
+The admitted installation is a finite Linux x86-64 simulation baseline with
+kernel `7.0.0-34-generic`, 354 selected runtime files and three exact consumer
+worker sources. It selects the interpreter, tracer and import roots from
+consumer-owned settings. Acquired paths and historical argv never select a
+trusted executable. Unsupported installations and changed worker or runtime
+bytes are refused. Installing the package alone does not qualify another host,
+a physical device, a complete operating system or a different neuron model.
+
+A second registry entry admits the successor source contract
+`5ff959e55f59ca3b1d1993bbc2ed9028c49e08feb6ff15a0fd5af156959d5488`. Its
+source bodies, compiled artifacts and checker closure equal the first entry;
+its checker policy and historical runtime descriptor name the 359-file
+runtime the acquisitions recorded. This entry runs the checker in the source
+owner's immutable executor image instead of a host installation. The operator
+selects the extracted image directory with `LOOP_TIMING_WITNESS_CHECKER_IMAGE`;
+without an absolute directory the entry is refused. The executor binding names
+host launcher files, so the operator also selects it, with
+`LOOP_TIMING_WITNESS_CHECKER_IMAGE_BINDING`, and the package pins its digest. It
+holds the launcher command, the closed environment, the 45-second group
+deadline, the host boundary (kernel, account, seven launcher and loader files,
+five required absent paths) and the complete image inventory of files, modes,
+directories and links. Every operation verifies the host boundary and the whole
+image before and after it runs, and substitutes only the image root, the owned
+working directory and the fixed operation as whole arguments. The image is a
+read-only root, so the worker's loaded-file observation, checked against the
+image inventory and the admitted source digests, replaces the host opened-file
+trace. The historical runtime descriptor is compared with the acquired copy and
+never executed. The first entry and all its refusals are unchanged.
+
+The first entry's runtime binds the package initialiser that was reviewed
+before the public campaign API was added. Because the worker bindings are
+read from the installed package, the current package refuses that entry with
+"Selected checker worker or installation differs from its reviewed runtime";
+the entry is never repinned. `load_neural_run` and the command use the packaged
+registry. A consumer that reviews its own entries can pass them as the
+keyword-only `registry` argument of `load_neural_run`; acquisition data never
+selects a registry or an entry.
+
+For an admitted acquisition, the loader binds complete original sources,
+compiled artifacts, traces, counter receipts and reset observations. It
+recomputes separate source-binding, capture, numerical, completion and clock
+findings. The source-owned checker generates the original seeded fixture and
+compares the complete producer projection in actual child processes. Original
+checker receipts are checked independently; a recorded passing status does
+not replace execution. Consumer-selected interpreter and tracer files, fixed
+arguments, closed environment, complete opened-file observations, resource
+limits and a Linux x86-64 network syscall filter define the selected worker
+profile. Existing Python bytecode caches are bypassed through a private empty
+cache prefix, and worker bytecode writes are disabled. The three worker
+bindings are frozen when the consumer installation is constructed and rechecked
+with the runtime files before and after every source-checker operation.
+Worker and runtime roles must have distinct logical names and physical
+installation paths.
+
+The report identity is
+`loop-timing-witness.neural-step-analysis-report.v1`; its whole verdict is the
+conjunction of the five findings groups. Known failed predicates produce
+status 2 and retain their separate findings. Passing full verification returns
+status 0. Complete reports are bounded to 8 MiB and published atomically into
+a new directory without replacing an existing path. Simulator edges remain
+simulated timing; neither integrity hashes nor a passing numerical comparison
+establish physical calibration or model-family acceptance.
+
+
+## Native neural analysis API
+
+The [standalone Rust crate](../analysis/rust/README.md) exports
+`load_neural_run`, `build_neural_run_report`, `load_neural_manifest` and
+`write_neural_report`. Its `loop-timing-witness-analyze-native` command accepts
+the same manifest and new output directory as the Python command. Both full
+verifiers bind the complete original acquisition and run fresh fixed source
+checker operations. Neither declaration reader substitutes for full admission.
+
+Both file APIs can bind a consumer-owned complete body as well as its file
+reference: Python `read_neural_run_file` accepts `expected_bytes` and a
+`mismatch_message`; Rust exposes `files::read_expected`. The descriptor reader
+compares those bytes before hashing. Source-policy, checker-policy and runtime
+bindings use this independent check with their existing refusal messages.
+Matching expected bytes still requires the declared length and SHA-256 to match;
+path, file-kind and allocation checks also apply.
+
+The Python source-policy view checks the native wire structures: string tool
+versions, nonempty source and compiled-population maps, closed pin/reference
+objects and unsigned 64-bit byte counts. Shape validation does not register a
+new source identity or establish runtime availability.
+
+Integer wire fields interpret the complete JSON integer token `-0` as zero.
+Decimal and exponent forms remain outside the exact integer contract. Decoding
+retains original carrier bytes for provenance and preserves string contents and
+duplicate-field refusals.
+
+Original neural text traces require ASCII signed 64-bit decimal fields,
+single spaces between fields and LF after each row. The readers preserve
+the original bytes and reject CRLF, other control separators, blank rows and
+out-of-range integers. Malformed traces produce authored diagnostics in both
+implementations. An empty service trace remains valid input to population analysis.
+
+Contradictory historical checker, completion, channel, clock and reset fields
+produce separate findings naming each field in the same order in both readers.
+Completion findings compare root declarations first, actual counts second and
+tail quiescence last. Reset findings compare abandoned trace fields before
+receipt predicates. Recorded checker metadata remains separate from fresh
+source execution; consistent metadata cannot replace either checker operation.
+
+Both report snapshots own their completed verification result. Caller
+mutation of a returned JSON report cannot alter the snapshot. Python snapshots
+are created by the complete loader; direct construction and
+`dataclasses.replace` refuse caller-supplied report bytes. An unchanged shallow
+copy retains the verified result. Rust keeps snapshot fields private. These
+API boundaries do not authenticate hostile code running in the consumer process.
+New report
+publication uses Linux atomic no-replacement rename; an existing path is
+preserved. The selected source/runtime profile and all simulation limits above
+apply equally to both implementations.

@@ -274,6 +274,7 @@ def write_page(output: Path, relative: Path, title: str, content: str, revision:
         "Validation": "VALIDATION.html",
         "Python API": "api/python/loop_timing_witness.html",
         "Rust API": "api/rust/witness_controller/index.html",
+        "Rust analysis API": "api/rust/witness_analysis/index.html",
         "C/C++ API": "api/c/index.html",
     }
     navigation = " ".join(f'<a href="{prefix}/{url}">{label}</a>' for label, url in links.items())
@@ -359,11 +360,12 @@ def build(output: Path) -> None:
         raise DocumentationRefusedError(message)
     required = [
         native / "c/html/index.html",
+        native / "rust/doc/witness_analysis/index.html",
         native / "rust/doc/witness_controller/index.html",
         native / "rust/doc/witness_amp_rust_kernel/index.html",
     ]
     if not all(path.is_file() for path in required):
-        message = "required C/C++ and both Rust API references are missing; run make native-api"
+        message = "required C/C++ and Rust API references are missing; run make native-api"
         raise DocumentationRefusedError(message)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     output.mkdir(parents=True, exist_ok=False)
@@ -401,7 +403,7 @@ def build(output: Path) -> None:
         "source_revision": revision,
         "documents": sorted(documents),
         "python_api_modules": modules,
-        "native_api": ["c", "witness_controller", "witness_amp_rust_kernel"],
+        "native_api": ["c", "witness_analysis", "witness_controller", "witness_amp_rust_kernel"],
         "files": {
             str(path.relative_to(output)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(output.rglob("*"))

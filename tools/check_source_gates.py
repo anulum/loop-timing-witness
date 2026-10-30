@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Final
 
+from check_analysis_package import PACKAGE_COPIES, read_package_file
 from preflight import build_plan
 from repository_files import candidate_files
 
@@ -67,12 +68,14 @@ LANGUAGES: Final = {
 }
 SOURCE_NAMES: Final = {"Makefile": "make", "Doxyfile": "doxygen"}
 COVERAGE_THRESHOLD: Final = 100
-PYTHON_CHECKS: Final = frozenset({"ruff-check", "ruff-format", "mypy", "tests"})
+PYTHON_CHECKS: Final = frozenset({"ruff-check", "ruff-format", "mypy", "analysis-build", "tests"})
 LANGUAGE_CHECKS: Final = {
     "python": PYTHON_CHECKS,
     "c": frozenset({"controller-build", "controller-tests", "tests", "native-format"}),
     "headers": frozenset({"controller-build", "tests", "native-format"}),
-    "rust": frozenset({"controller-build", "controller-tests", "tests"}),
+    "rust": frozenset(
+        {"controller-build", "controller-tests", "analysis-build", "analysis-tests", "tests"}
+    ),
     "cxx": frozenset({"tests", "native-format"}),
     "rtl": frozenset({"tests"}),
     "shell": frozenset({"tests"}),
@@ -88,6 +91,7 @@ PYTHON_ROOTS: Final = ("src/loop_timing_witness", "tools", "tests")
 PYTHON_PATHS: Final = ("conftest.py", "controller_test_support.py")
 RUST_CHANNEL: Final = "1.99.0"
 RUST_MANIFESTS: Final = (
+    "analysis/rust/Cargo.toml",
     "controllers/rust/Cargo.toml",
     "runtime/bare_metal/rust_kernel/Cargo.toml",
 )
@@ -203,15 +207,52 @@ def load_profiles(root: Path) -> dict[str, SourceProfile]:
     return profiles
 
 
+def _worker_findings(root: Path) -> list[str]:
+    """Require exact typed worker copies and their complete logical coverage owners.
+
+    Parameters
+    ----------
+    root
+        Actual repository containing the canonical and packaged Python sources.
+
+    Returns
+    -------
+    list[str]
+        Worker byte drift or missing source-package coverage correspondence.
+    """
+    findings = []
+    for copied, owner in PACKAGE_COPIES.items():
+        if copied.endswith(".py") and read_package_file(root / copied) != read_package_file(
+            root / owner
+        ):
+            findings.append(f"{copied}: packaged worker differs from its canonical typed owner")
+    coverage = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["tool"][
+        "coverage"
+    ]
+    if coverage["run"].get("source_pkgs") != ["loop_timing_witness"] or coverage["paths"].get(
+        "package"
+    ) != [
+        "src/loop_timing_witness",
+        "analysis/rust/checker_worker/loop_timing_witness",
+        "*/installation/loop_timing_witness",
+    ]:
+        findings.append("python: packaged workers require their complete logical owner coverage")
+    return findings
+
+
 def _python_findings(root: Path, profile: SourceProfile) -> list[str]:
     config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["tool"]
     findings = []
-    if profile.roots != PYTHON_ROOTS or profile.paths != PYTHON_PATHS:
+    if (
+        profile.roots != (*PYTHON_ROOTS, "analysis/rust/checker_worker")
+        or profile.paths != PYTHON_PATHS
+    ):
         findings.append(
             "python: enrolment must include the maintained package, tools, tests and support"
         )
     if set(profile.checks) != PYTHON_CHECKS:
         findings.append("python: lint, formatting, strict typing and tests are all required")
+    findings.extend(_worker_findings(root))
     mypy = config["mypy"]
     if mypy["strict"] is not True or mypy["files"] != ["src", "tools", "tests", *PYTHON_PATHS]:
         findings.append("python: strict typing must cover every enrolled source")

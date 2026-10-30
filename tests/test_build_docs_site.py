@@ -67,6 +67,7 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
     assert 'aria-label="Loop Timing Witness overview"' in landing
     for page in (
         "api/c/index.html",
+        "api/rust/witness_analysis/index.html",
         "api/rust/witness_controller/index.html",
         "api/rust/witness_amp_rust_kernel/index.html",
         "api/python/loop_timing_witness.html",
@@ -212,7 +213,7 @@ def test_missing_native_reference_is_refused(
     index.rename(saved)
     try:
         assert main(["--output", str(tmp_path / "site")]) == 1
-        assert "required C/C++ and both Rust API references are missing" in capsys.readouterr().err
+        assert "required C/C++ and Rust API references are missing" in capsys.readouterr().err
         assert not (tmp_path / "site").exists()
     finally:
         saved.rename(index)

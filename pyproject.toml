@@ -83,6 +83,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# The checker launcher executes only hash-bound consumer registry tools and fixed
+# worker argv; acquisition command/receipt strings are never executable selectors.
+"src/loop_timing_witness/neural_checker_execution.py" = ["S603"]
+# The image executor runs only the hash-bound launcher command of the consumer
+# binding, with whole-value placeholders for the verified image, owned directory
+# and fixed operation; acquisition data never selects an argument.
+"src/loop_timing_witness/neural_checker_image.py" = ["S603"]
 # assert is the pytest contract surface; tests run the repository's own
 # command-line tools and Git with fixed argument vectors and no shell; the
 # literal numbers in assertions (exit statuses, counts) are the specification
@@ -111,6 +118,8 @@ ignore = [
 "tools/benchmark_controllers.py" = ["S603", "S607"]
 # The site builder invokes only Git with a fixed argument vector to bind source provenance.
 "tools/build_docs_site.py" = ["S603", "S607"]
+# Native SBOM verification uses a resolved Cargo executable and fixed offline metadata argv.
+"tools/check_native_analysis_sbom.py" = ["S603"]
 "tools/repository_files.py" = ["S603", "S607"]
 
 [tool.ruff.lint.flake8-copyright]
@@ -123,6 +132,7 @@ convention = "numpy"
 
 [tool.ruff.lint.isort]
 known-first-party = [
+    "check_analysis_package",
     "audit_workflows",
     "check_commit_trailers",
     "controller_test_support",
@@ -164,11 +174,18 @@ filterwarnings = ["error"]
 [tool.coverage.run]
 branch = true
 source = ["src/loop_timing_witness", "tools", "controller_test_support"]
+source_pkgs = ["loop_timing_witness"]
 patch = ["subprocess"]
 
 # Isolated repository contract controls copy these exact maintained sources.
 # Subprocess coverage keeps their actual trace under the corresponding source root.
+# Package-copy tests run the same maintained sources from */installation.
 [tool.coverage.paths]
+package = [
+    "src/loop_timing_witness",
+    "analysis/rust/checker_worker/loop_timing_witness",
+    "*/installation/loop_timing_witness",
+]
 tools = ["tools", "*/repository-contract-control/tools"]
 tests = ["tests", "*/repository-contract-control/tests"]
 # The control copy also holds the measured root module controller_test_support.py.

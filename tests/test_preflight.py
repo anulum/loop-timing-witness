@@ -46,6 +46,8 @@ PLAN = [
     "ruff-check",
     "ruff-format",
     "mypy",
+    "analysis-build",
+    "analysis-tests",
     "controller-build",
     "controller-tests",
     "tests",

@@ -84,6 +84,7 @@ native-api:
 	test "$$( $(DOXYGEN_BINARY) --version | cut -d' ' -f1 )" = "1.18.0"
 	mkdir -p build/native-api/c
 	$(DOXYGEN_BINARY) Doxyfile
+	RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' cargo doc --offline --locked --no-deps --manifest-path analysis/rust/Cargo.toml --target-dir build/native-api/rust
 	RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' cargo doc --offline --locked --no-deps --manifest-path controllers/rust/Cargo.toml --target-dir build/native-api/rust
 	RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' cargo doc --offline --locked --no-deps --manifest-path runtime/bare_metal/rust_kernel/Cargo.toml --target-dir build/native-api/rust
 
@@ -99,6 +100,7 @@ security:
 	$(VENV)/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
 	$(VENV)/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt
 	test "$$(cargo-audit --version)" = "cargo-audit 0.22.2"
+	cargo audit --file analysis/rust/Cargo.lock
 	cargo audit --file controllers/rust/Cargo.lock
 	cargo audit --file runtime/bare_metal/rust_kernel/Cargo.lock
 
@@ -108,9 +110,39 @@ inventory:
 preflight:
 	$(PREFLIGHT)
 
-# Native kernels have no third-party dependencies. All build files stay here.
+# The native controller kernels have no third-party dependencies.
 CONTROLLER_WARNINGS := -Wall -Wextra -Werror -Wconversion -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 CONTROLLER_CRATE := controllers/rust/Cargo.toml
+
+ANALYSIS_CRATE := analysis/rust/Cargo.toml
+ANALYSIS_WORKERS := analysis/rust/checker_worker
+
+.PHONY: analysis-build analysis-tests
+
+analysis-build:
+	$(VENV)/python tools/check_analysis_package.py
+	$(VENV)/mypy --strict $(ANALYSIS_WORKERS)
+	cargo fmt --check --manifest-path $(ANALYSIS_CRATE)
+	cargo clippy --offline --locked --all-targets --manifest-path $(ANALYSIS_CRATE) -- -D warnings
+	cargo build --offline --locked --manifest-path $(ANALYSIS_CRATE)
+	RUSTDOCFLAGS='-D warnings -D rustdoc::broken_intra_doc_links' cargo doc --no-deps --offline --locked --manifest-path $(ANALYSIS_CRATE)
+
+analysis-tests:
+	cargo test --offline --locked --manifest-path $(ANALYSIS_CRATE)
+
+NATIVE_SBOM_DIRECTORY ?= build/native-analysis-sbom
+
+.PHONY: native-sbom
+
+native-sbom:
+	test "$$(cargo cyclonedx --version)" = "cargo-cyclonedx-cyclonedx 0.5.9"
+	$(VENV)/python tools/check_analysis_package.py
+	$(VENV)/python -c 'from pathlib import Path; import sys; Path(sys.argv[1]).mkdir(parents=True)' "$(NATIVE_SBOM_DIRECTORY)"
+	$(VENV)/python -c 'import shutil, sys; shutil.copytree(sys.argv[1], sys.argv[2], ignore=shutil.ignore_patterns("target", "__pycache__"))' analysis/rust "$(NATIVE_SBOM_DIRECTORY)/crate"
+	cargo metadata --offline --locked --format-version 1 --manifest-path "$(NATIVE_SBOM_DIRECTORY)/crate/Cargo.toml" > "$(NATIVE_SBOM_DIRECTORY)/cargo-metadata.json"
+	CARGO_NET_OFFLINE=true cargo cyclonedx --manifest-path "$(NATIVE_SBOM_DIRECTORY)/crate/Cargo.toml" --all --target all --spec-version 1.5 --format json --override-filename native-analysis-sbom
+	$(VENV)/python tools/check_native_analysis_sbom.py "$(NATIVE_SBOM_DIRECTORY)/crate/native-analysis-sbom.json"
+	mv "$(NATIVE_SBOM_DIRECTORY)/crate/native-analysis-sbom.json" "$(NATIVE_SBOM_DIRECTORY)/native-analysis-sbom.cdx.json"
 
 .PHONY: controller-build controller-tests controller-benchmarks
 

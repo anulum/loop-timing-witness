@@ -32,7 +32,9 @@ PROFILE_RESOURCES = frozenset(
         "neural-selected-source-contract.json",
         "neural-selected-checker-policy.json",
         "neural-selected-checker-runtime.json",
-        "neural-selected-installation.json",
+        "neural-image-source-contract.json",
+        "neural-image-checker-policy.json",
+        "neural-image-checker-runtime.json",
     }
 )
 

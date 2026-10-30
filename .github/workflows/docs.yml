@@ -46,6 +46,8 @@ jobs:
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
           .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
           make documentation-toolchain
+      - name: Fetch exact native analysis dependencies
+        run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
       - name: Build all language-native references and the website
         run: make docs-site
       - name: Retain the exact website for Pages

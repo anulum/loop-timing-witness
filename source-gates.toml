@@ -9,8 +9,8 @@
 schema_version = 1
 
 [profiles.python]
-checks = ["ruff-check", "ruff-format", "mypy", "tests"]
-roots = ["src/loop_timing_witness", "tools", "tests"]
+checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]
+roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]
 paths = ["conftest.py", "controller_test_support.py"]
 
 [profiles.assembly]
@@ -169,8 +169,8 @@ paths = [
 ]
 
 [profiles.rust]
-checks = ["controller-build", "controller-tests", "tests"]
-roots = []
+checks = ["controller-build", "controller-tests", "analysis-build", "analysis-tests", "tests"]
+roots = ["analysis/rust/src", "analysis/rust/tests"]
 paths = [
     "controllers/rust/src/bin/controller_benchmark.rs",
     "controllers/rust/src/lib.rs",

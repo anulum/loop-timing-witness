@@ -282,6 +282,8 @@ def build_plan(root: Path) -> list[Gate]:
         command("ruff-check", [str(venv / "ruff"), "check", "."]),
         command("ruff-format", [str(venv / "ruff"), "format", "--check", "."]),
         command("mypy", [str(venv / "mypy")]),
+        command("analysis-build", ["make", "analysis-build"]),
+        command("analysis-tests", ["make", "analysis-tests"]),
         command("controller-build", ["make", "controller-build"]),
         command("controller-tests", ["make", "controller-tests"]),
         command(

@@ -1,0 +1,268 @@
+{
+  "schema_id": "loop-timing-witness.private-native-neural-step-run.v2",
+  "profile": "neural-step-capture",
+  "evidence_class": "simulated-timing",
+  "run_id": "private-native-completion-positive-original",
+  "epoch": 0,
+  "step_count": 1000,
+  "counter_bits": 64,
+  "encoder_timestamp_bits": 16,
+  "encoder_id_width": 1,
+  "fifo_capacity_records": 1024,
+  "capture_horizon_edges": 4096,
+  "encoder_tail_edges": 4,
+  "source_files": [
+    {
+      "path": "source/SC-NEUROCORE/hdl/sc_lif_neuron.v",
+      "sha256": "ad43e063741558048a96143341d74499f98004f11a5b3b2f3a329ff3d5a119b6",
+      "byte_length": 3948
+    },
+    {
+      "path": "source/SC-NEUROCORE/hdl/tb_sc_lif_neuron.v",
+      "sha256": "999c2e0c65d7a3b72ddda71984a38870eaf8a2afdaa81d611c8fd1962d1519ab",
+      "byte_length": 3830
+    },
+    {
+      "path": "source/SC-NEUROCORE/hdl/sc_aer_encoder.v",
+      "sha256": "0b2ab4c58f7d889c1f33973562dcde7e213515849d59bc2e1a35d019210cf959",
+      "byte_length": 3282
+    },
+    {
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/fixed_point_lif.py",
+      "sha256": "ee7a4da29078537ca6356cf9098b8c628de805b3a63dfa3c74eba91ac642a623",
+      "byte_length": 6539
+    },
+    {
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/constants.py",
+      "sha256": "57598c74eab8baca33da7c228a2b2db4d03ce462b9f1640810c9d29959f5ecbc",
+      "byte_length": 5570
+    },
+    {
+      "path": "source/SC-NEUROCORE/scripts/cosim_gen_and_check.py",
+      "sha256": "7acfe1ff9d69b5138f323c064733d928b7a67c54a52ef334539c4a2921a803c0",
+      "byte_length": 8536
+    },
+    {
+      "path": "source/SC-NEUROCORE/tests/test_cosim_gen_and_check.py",
+      "sha256": "89f77674991e4b60461237fa43bf79eae4757d9b8ef826fa05c7e249ca5da51d",
+      "byte_length": 5839
+    },
+    {
+      "path": "source/LOOP-TIMING-WITNESS/rtl/clock_reset_release.sv",
+      "sha256": "3e3d87b113486c684b35bada2d04ca5bc1e551a1adfe8615da8e279f8086fb4c",
+      "byte_length": 919
+    },
+    {
+      "path": "source/LOOP-TIMING-WITNESS/rtl/shared_event_witness.sv",
+      "sha256": "1b80a54c3262b2f53ce4c24d3a4b1e19ecaa2d76b43fce55432b911bdc4ad53a",
+      "byte_length": 5282
+    },
+    {
+      "path": "source/LOOP-TIMING-WITNESS/rtl/event_record_fifo.sv",
+      "sha256": "bb6a1ced8cec4328c7b9d765b082cf8eab604561b9f1f8e0ca800ebd6949ea26",
+      "byte_length": 3950
+    },
+    {
+      "path": "source/proposed_neural_wrapper.sv",
+      "sha256": "051661519617333259b9ae75d768fae177744a99ac2760e367f467fe7803c699",
+      "byte_length": 3297
+    },
+    {
+      "path": "native_neural_dut.sv",
+      "sha256": "c62245bf71f89519718d2deb1d98aee1353817b10f6f93714894067b4adb9858",
+      "byte_length": 3203
+    },
+    {
+      "path": "stimuli.txt",
+      "sha256": "8f0e0a2ced3e5170c78c5ee058eb90faea1ceb77cece2f940568851fe9ed64f8",
+      "byte_length": 12335
+    },
+    {
+      "path": "native/capture_receipts.h",
+      "sha256": "43970e8588641dcc71e4b85ae8be3e79b6a9c8ace0495eb24f4cf19e731975e6",
+      "byte_length": 4060
+    },
+    {
+      "path": "native/channel_output.h",
+      "sha256": "9c44cae639f248afde856ecbf70581dda7708d1828c0e3d845351185f956de8b",
+      "byte_length": 2736
+    },
+    {
+      "path": "native/native_trial.cpp",
+      "sha256": "0cdeaceedc2e3a42c7d5822409cffbba4679d37f655ee2210511913ca103e75c",
+      "byte_length": 7780
+    },
+    {
+      "path": "native/neural_simulation.h",
+      "sha256": "5cbab75dc65771ec489db3879af33555cda874525a90a2cf033bce9de657ca41",
+      "byte_length": 3518
+    },
+    {
+      "path": "native/reset_receipt.h",
+      "sha256": "f5ae4df5eb049751e9c518d7b742155b5ccb3dd323055bb11495fc9314f8e9ac",
+      "byte_length": 4604
+    },
+    {
+      "path": "native/source_trace_output.h",
+      "sha256": "25af4203af1c3157ef2893c941715680ce67e6892323ff21b12666f862cc6c31",
+      "byte_length": 6116
+    },
+    {
+      "path": "native/stimulus_rows.h",
+      "sha256": "4ff2da75625d01160184c8d0ffa372cefa39e89693cb3852e710d0b15cdb0e81",
+      "byte_length": 2620
+    },
+    {
+      "path": "source/LOOP-TIMING-WITNESS/runtime/refusal.h",
+      "sha256": "08a3d5b8d1ca79a4043afc20a1cc4d338569ca21cb314d4b06be449b181a9515",
+      "byte_length": 972
+    },
+    {
+      "path": "source/LOOP-TIMING-WITNESS/runtime/exclusive_output.h",
+      "sha256": "0e8dde43e685e82960b2e15781d2b80ded4594fb867a17fda3572e775a5f904b",
+      "byte_length": 2181
+    }
+  ],
+  "accepted_oracle_commit": "0593c3df906d9493ac5c1da5c5e528f6078d275e",
+  "sc_body_pins": {
+    "hdl/sc_lif_neuron.v": "ad43e063741558048a96143341d74499f98004f11a5b3b2f3a329ff3d5a119b6",
+    "hdl/tb_sc_lif_neuron.v": "999c2e0c65d7a3b72ddda71984a38870eaf8a2afdaa81d611c8fd1962d1519ab",
+    "hdl/sc_aer_encoder.v": "0b2ab4c58f7d889c1f33973562dcde7e213515849d59bc2e1a35d019210cf959",
+    "src/sc_neurocore/neurons/fixed_point_lif.py": "ee7a4da29078537ca6356cf9098b8c628de805b3a63dfa3c74eba91ac642a623",
+    "src/sc_neurocore/constants.py": "57598c74eab8baca33da7c228a2b2db4d03ce462b9f1640810c9d29959f5ecbc",
+    "scripts/cosim_gen_and_check.py": "7acfe1ff9d69b5138f323c064733d928b7a67c54a52ef334539c4a2921a803c0",
+    "tests/test_cosim_gen_and_check.py": "89f77674991e4b60461237fa43bf79eae4757d9b8ef826fa05c7e249ca5da51d"
+  },
+  "tool_receipt": {
+    "path": "tool-receipt.json",
+    "sha256": "166bd6ecffb88ba2edf56802817dda1c3a6e84c0bc75dc00788c3409e3a13863",
+    "byte_length": 1612
+  },
+  "input_trace": {
+    "path": "input.txt",
+    "sha256": "e35a8fd0969e2b26d3556b7912acd1c330212e0aa40ff05053aafc6e771ef795",
+    "byte_length": 22165
+  },
+  "numerical_trace": {
+    "path": "numerical.txt",
+    "sha256": "5bf1e20752dd9061c349f6e1bc9c7df656ac51407b665e7366d22a78a4a3d041",
+    "byte_length": 15044
+  },
+  "numerical_projection": {
+    "path": "observed-projection.txt",
+    "sha256": "c405de711cdbf8fae3a0c668ecfa643e7a6e460bad60c05b5bd0bfca208a3dd2",
+    "byte_length": 5212
+  },
+  "reference_projection": {
+    "path": "results_expected.txt",
+    "sha256": "c405de711cdbf8fae3a0c668ecfa643e7a6e460bad60c05b5bd0bfca208a3dd2",
+    "byte_length": 5212
+  },
+  "service_trace": {
+    "path": "service.txt",
+    "sha256": "c57a19bca3ff1225f8f0545a27354e55f7cecba45feebfe429610fbba13b9e76",
+    "byte_length": 790
+  },
+  "channels": [
+    {
+      "role": "input",
+      "capture": {
+        "path": "channel-0.bin",
+        "sha256": "abbb344f5658bf7bbcf07e465f3e400b450aa521b3827540e1a067f3d57f8450",
+        "byte_length": 16032
+      },
+      "payload": {
+        "path": "payload-0.bin",
+        "sha256": "3e9ba0da2d78a03333957fa3726423508c2c6e143bc48bc5bd674eb1d07dd7aa",
+        "byte_length": 16000
+      },
+      "markers": {
+        "path": "markers-0.bin",
+        "sha256": "ef2766159898293ccd3b20174fff9688b99de162971ecc26fa826543b5434918",
+        "byte_length": 32
+      },
+      "attempts": 1002,
+      "accepted": 1002,
+      "dropped": 0,
+      "drained": 1002,
+      "payload_records": 1000,
+      "marker_records": 2,
+      "overflowed": false,
+      "drop_counter_saturated": false
+    },
+    {
+      "role": "state",
+      "capture": {
+        "path": "channel-1.bin",
+        "sha256": "9d6256dd0acb304ce64f5b6388cb3e231f0d275d4bc5b06936faf13dbbb7f32a",
+        "byte_length": 16032
+      },
+      "payload": {
+        "path": "payload-1.bin",
+        "sha256": "8cd374ecbb3a93a13d5b341a2e2a48089aa9767483f926d322975eb73f2bf68b",
+        "byte_length": 16000
+      },
+      "markers": {
+        "path": "markers-1.bin",
+        "sha256": "ef2766159898293ccd3b20174fff9688b99de162971ecc26fa826543b5434918",
+        "byte_length": 32
+      },
+      "attempts": 1002,
+      "accepted": 1002,
+      "dropped": 0,
+      "drained": 1002,
+      "payload_records": 1000,
+      "marker_records": 2,
+      "overflowed": false,
+      "drop_counter_saturated": false
+    },
+    {
+      "role": "service",
+      "capture": {
+        "path": "channel-2.bin",
+        "sha256": "e0642d9b7226676c1caabdd8342a43000dd26b3ad6130fd7106a4f5c2b2eeb33",
+        "byte_length": 896
+      },
+      "payload": {
+        "path": "payload-2.bin",
+        "sha256": "b348e800435caa80ae04829142553dabd0542c1363ee6fbc4c2550f459f0a03f",
+        "byte_length": 864
+      },
+      "markers": {
+        "path": "markers-2.bin",
+        "sha256": "ef2766159898293ccd3b20174fff9688b99de162971ecc26fa826543b5434918",
+        "byte_length": 32
+      },
+      "attempts": 56,
+      "accepted": 56,
+      "dropped": 0,
+      "drained": 56,
+      "payload_records": 54,
+      "marker_records": 2,
+      "overflowed": false,
+      "drop_counter_saturated": false
+    }
+  ],
+  "completion": {
+    "requested_steps": 1000,
+    "observed_states": 1000,
+    "raw_spikes": 54,
+    "observed_service_packets": 54,
+    "pending_empty": true,
+    "service_valid_quiescent": true,
+    "pipeline_quiescent": true,
+    "finalized": true
+  },
+  "event_codes": {
+    "input_step_applied": 14,
+    "state_and_raw_spike_observed": 15,
+    "encoder_packet_serviced": 16,
+    "alignment_marker": 17
+  },
+  "clock_schedule_ref": {
+    "path": "clock-schedule.json",
+    "sha256": "97932b147ba4cef8158d74c9435dcbec1b97ecb93b435726a61a1b186c3fd5e9",
+    "byte_length": 754
+  },
+  "native_source_cohort": "private-unadopted-explicit-width-SV2012-native-completion-r3"
+}

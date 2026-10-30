@@ -68,6 +68,12 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+      - id: analysis-build
+        name: native analysis package and strict checks
+        entry: .venv/bin/python tools/preflight.py --only analysis-build
+        language: system
+        pass_filenames: false
+        files: ^(analysis/|src/loop_timing_witness/neural_|tools/check_analysis_package\.py$|Makefile$|rust-toolchain\.toml$)
       - id: controller-build
         name: native controller build and strict checks
         entry: .venv/bin/python tools/preflight.py --only controller-build

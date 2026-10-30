@@ -1,0 +1,408 @@
+{
+  "checker_policy_ref": {
+    "byte_length": 8610,
+    "path": "checker-policy.json",
+    "sha256": "be96f75a8f2f43ceeaae212bc481348e5d05b3ca795f7f97ee75c6cf11d691ce"
+  },
+  "cohort": "sc-neurocore-neural-step-1n1b16t.v1",
+  "compiled_artifacts": {
+    "0,0,0,10:0": {
+      "generated_model_archive": {
+        "byte_length": 34738,
+        "path": "compiled/positive/Vnative_neural_dut__ALL.a",
+        "sha256": "5138169b778afcc5d1c015a6ddcc6aefe8895e3b86aa15f51225d89559957eea"
+      },
+      "generated_model_header": {
+        "byte_length": 4408,
+        "path": "compiled/positive/Vnative_neural_dut.h",
+        "sha256": "069fa98137e963a0f162a807b2d00e67bb9a4e434db8d695f74438151d5d5f26"
+      },
+      "native_executable": {
+        "byte_length": 867448,
+        "path": "compiled/positive/native_trial",
+        "sha256": "2b98fe17ea6710813c997e24aa561f964bb70c87b4386138cefba1fb61e8fed7"
+      },
+      "verilated_runtime_object": {
+        "byte_length": 210896,
+        "path": "compiled/positive/verilated.o",
+        "sha256": "6371ab4c64eacb8f310198256120e539556ffcf99a848fbeb6e9f6a7838fa82a"
+      },
+      "verilated_threads_object": {
+        "byte_length": 31752,
+        "path": "compiled/positive/verilated_threads.o",
+        "sha256": "7b329cb59ddf986aa0b9991d864cf24c3d4d63955e156816d17bb5e47438cd8e"
+      }
+    },
+    "0,0,0,10:1": {
+      "generated_model_archive": {
+        "byte_length": 34738,
+        "path": "compiled/positive/Vnative_neural_dut__ALL.a",
+        "sha256": "5138169b778afcc5d1c015a6ddcc6aefe8895e3b86aa15f51225d89559957eea"
+      },
+      "generated_model_header": {
+        "byte_length": 4408,
+        "path": "compiled/positive/Vnative_neural_dut.h",
+        "sha256": "069fa98137e963a0f162a807b2d00e67bb9a4e434db8d695f74438151d5d5f26"
+      },
+      "native_executable": {
+        "byte_length": 867448,
+        "path": "compiled/positive/native_trial",
+        "sha256": "2b98fe17ea6710813c997e24aa561f964bb70c87b4386138cefba1fb61e8fed7"
+      },
+      "verilated_runtime_object": {
+        "byte_length": 210896,
+        "path": "compiled/positive/verilated.o",
+        "sha256": "6371ab4c64eacb8f310198256120e539556ffcf99a848fbeb6e9f6a7838fa82a"
+      },
+      "verilated_threads_object": {
+        "byte_length": 31752,
+        "path": "compiled/positive/verilated_threads.o",
+        "sha256": "7b329cb59ddf986aa0b9991d864cf24c3d4d63955e156816d17bb5e47438cd8e"
+      }
+    },
+    "0,0,0,3:0": {
+      "generated_model_archive": {
+        "byte_length": 34322,
+        "path": "compiled/real-fifo-loss/Vnative_neural_dut__ALL.a",
+        "sha256": "6fe8073c8fdfb1df87d43cb2f607a6ad0ebab254e2ac53555ed755b7ba10ad69"
+      },
+      "generated_model_header": {
+        "byte_length": 4408,
+        "path": "compiled/real-fifo-loss/Vnative_neural_dut.h",
+        "sha256": "069fa98137e963a0f162a807b2d00e67bb9a4e434db8d695f74438151d5d5f26"
+      },
+      "native_executable": {
+        "byte_length": 867456,
+        "path": "compiled/real-fifo-loss/native_trial",
+        "sha256": "008797d739aee8b9ca7e3229074378fbfa232cd85e347d84d714d8645f9329c1"
+      },
+      "verilated_runtime_object": {
+        "byte_length": 210896,
+        "path": "compiled/real-fifo-loss/verilated.o",
+        "sha256": "6371ab4c64eacb8f310198256120e539556ffcf99a848fbeb6e9f6a7838fa82a"
+      },
+      "verilated_threads_object": {
+        "byte_length": 31752,
+        "path": "compiled/real-fifo-loss/verilated_threads.o",
+        "sha256": "7b329cb59ddf986aa0b9991d864cf24c3d4d63955e156816d17bb5e47438cd8e"
+      }
+    },
+    "0,0,1,10:0": {
+      "generated_model_archive": {
+        "byte_length": 34666,
+        "path": "compiled/suppressed-encoder-feed/Vnative_neural_dut__ALL.a",
+        "sha256": "8c67820d606aa0a2bd8cb1c56b1eb2c24b43e1bdb1a4b91b196dbfffcbeda141"
+      },
+      "generated_model_header": {
+        "byte_length": 4408,
+        "path": "compiled/suppressed-encoder-feed/Vnative_neural_dut.h",
+        "sha256": "069fa98137e963a0f162a807b2d00e67bb9a4e434db8d695f74438151d5d5f26"
+      },
+      "native_executable": {
+        "byte_length": 867464,
+        "path": "compiled/suppressed-encoder-feed/native_trial",
+        "sha256": "b299aa28760e49790fb216558fee31a964f3c504364a13e66147dc263c19c511"
+      },
+      "verilated_runtime_object": {
+        "byte_length": 210896,
+        "path": "compiled/suppressed-encoder-feed/verilated.o",
+        "sha256": "6371ab4c64eacb8f310198256120e539556ffcf99a848fbeb6e9f6a7838fa82a"
+      },
+      "verilated_threads_object": {
+        "byte_length": 31752,
+        "path": "compiled/suppressed-encoder-feed/verilated_threads.o",
+        "sha256": "7b329cb59ddf986aa0b9991d864cf24c3d4d63955e156816d17bb5e47438cd8e"
+      }
+    },
+    "0,1,0,10:0": {
+      "generated_model_archive": {
+        "byte_length": 34738,
+        "path": "compiled/encoder-offset1/Vnative_neural_dut__ALL.a",
+        "sha256": "6d7d502d09061837c572145eb9d28ccf62728b6e5ba03cba16f4aa3ca8271327"
+      },
+      "generated_model_header": {
+        "byte_length": 4408,
+        "path": "compiled/encoder-offset1/Vnative_neural_dut.h",
+        "sha256": "069fa98137e963a0f162a807b2d00e67bb9a4e434db8d695f74438151d5d5f26"
+      },
+      "native_executable": {
+        "byte_length": 867456,
+        "path": "compiled/encoder-offset1/native_trial",
+        "sha256": "83242248ba72d6fcd783fbd617c71f284faceaa27828d8b4bcba5f982c63c128"
+      },
+      "verilated_runtime_object": {
+        "byte_length": 210896,
+        "path": "compiled/encoder-offset1/verilated.o",
+        "sha256": "6371ab4c64eacb8f310198256120e539556ffcf99a848fbeb6e9f6a7838fa82a"
+      },
+      "verilated_threads_object": {
+        "byte_length": 31752,
+        "path": "compiled/encoder-offset1/verilated_threads.o",
+        "sha256": "7b329cb59ddf986aa0b9991d864cf24c3d4d63955e156816d17bb5e47438cd8e"
+      }
+    },
+    "1,0,0,10:0": {
+      "generated_model_archive": {
+        "byte_length": 34922,
+        "path": "compiled/observer-delay2/Vnative_neural_dut__ALL.a",
+        "sha256": "a132742312aa2d8cf286cf61287b0ca5d9b7fc564e09c173388021f53ab2ef8f"
+      },
+      "generated_model_header": {
+        "byte_length": 4408,
+        "path": "compiled/observer-delay2/Vnative_neural_dut.h",
+        "sha256": "069fa98137e963a0f162a807b2d00e67bb9a4e434db8d695f74438151d5d5f26"
+      },
+      "native_executable": {
+        "byte_length": 867456,
+        "path": "compiled/observer-delay2/native_trial",
+        "sha256": "a642a54bef77e7a554855880ab70ef329c8fcaaaada67486fa711c6bb411af11"
+      },
+      "verilated_runtime_object": {
+        "byte_length": 210896,
+        "path": "compiled/observer-delay2/verilated.o",
+        "sha256": "6371ab4c64eacb8f310198256120e539556ffcf99a848fbeb6e9f6a7838fa82a"
+      },
+      "verilated_threads_object": {
+        "byte_length": 31752,
+        "path": "compiled/observer-delay2/verilated_threads.o",
+        "sha256": "7b329cb59ddf986aa0b9991d864cf24c3d4d63955e156816d17bb5e47438cd8e"
+      }
+    }
+  },
+  "schema_id": "loop-timing-witness.neural-step-run.v1",
+  "schema_sha256": "846d131e51cff0dee88d8c9484e435eb02444e0f0a18b58e9d5f053633164f8f",
+  "sources": {
+    "native/capture_receipts.h": {
+      "byte_length": 4060,
+      "sha256": "43970e8588641dcc71e4b85ae8be3e79b6a9c8ace0495eb24f4cf19e731975e6"
+    },
+    "native/channel_output.h": {
+      "byte_length": 2736,
+      "sha256": "9c44cae639f248afde856ecbf70581dda7708d1828c0e3d845351185f956de8b"
+    },
+    "native/native_trial.cpp": {
+      "byte_length": 7780,
+      "sha256": "0cdeaceedc2e3a42c7d5822409cffbba4679d37f655ee2210511913ca103e75c"
+    },
+    "native/neural_simulation.h": {
+      "byte_length": 3518,
+      "sha256": "5cbab75dc65771ec489db3879af33555cda874525a90a2cf033bce9de657ca41"
+    },
+    "native/reset_receipt.h": {
+      "byte_length": 4604,
+      "sha256": "f5ae4df5eb049751e9c518d7b742155b5ccb3dd323055bb11495fc9314f8e9ac"
+    },
+    "native/source_trace_output.h": {
+      "byte_length": 6116,
+      "sha256": "25af4203af1c3157ef2893c941715680ce67e6892323ff21b12666f862cc6c31"
+    },
+    "native/stimulus_rows.h": {
+      "byte_length": 2620,
+      "sha256": "4ff2da75625d01160184c8d0ffa372cefa39e89693cb3852e710d0b15cdb0e81"
+    },
+    "native_neural_dut.sv": {
+      "byte_length": 3203,
+      "sha256": "c62245bf71f89519718d2deb1d98aee1353817b10f6f93714894067b4adb9858"
+    },
+    "source/LOOP-TIMING-WITNESS/rtl/clock_reset_release.sv": {
+      "byte_length": 919,
+      "sha256": "3e3d87b113486c684b35bada2d04ca5bc1e551a1adfe8615da8e279f8086fb4c"
+    },
+    "source/LOOP-TIMING-WITNESS/rtl/event_record_fifo.sv": {
+      "byte_length": 3950,
+      "sha256": "bb6a1ced8cec4328c7b9d765b082cf8eab604561b9f1f8e0ca800ebd6949ea26"
+    },
+    "source/LOOP-TIMING-WITNESS/rtl/shared_event_witness.sv": {
+      "byte_length": 5282,
+      "sha256": "1b80a54c3262b2f53ce4c24d3a4b1e19ecaa2d76b43fce55432b911bdc4ad53a"
+    },
+    "source/LOOP-TIMING-WITNESS/runtime/exclusive_output.h": {
+      "byte_length": 2181,
+      "sha256": "0e8dde43e685e82960b2e15781d2b80ded4594fb867a17fda3572e775a5f904b"
+    },
+    "source/LOOP-TIMING-WITNESS/runtime/refusal.h": {
+      "byte_length": 972,
+      "sha256": "08a3d5b8d1ca79a4043afc20a1cc4d338569ca21cb314d4b06be449b181a9515"
+    },
+    "source/SC-NEUROCORE/hdl/sc_aer_encoder.v": {
+      "byte_length": 3282,
+      "sha256": "0b2ab4c58f7d889c1f33973562dcde7e213515849d59bc2e1a35d019210cf959"
+    },
+    "source/SC-NEUROCORE/hdl/sc_lif_neuron.v": {
+      "byte_length": 4424,
+      "sha256": "68e99ce4b0de732cd2f48b4545a0f6f2b16a5d341eeb0ea8d2867c4c45e6e1ff"
+    },
+    "source/SC-NEUROCORE/hdl/tb_sc_lif_neuron.v": {
+      "byte_length": 3830,
+      "sha256": "999c2e0c65d7a3b72ddda71984a38870eaf8a2afdaa81d611c8fd1962d1519ab"
+    },
+    "source/SC-NEUROCORE/scripts/cosim_gen_and_check.py": {
+      "byte_length": 8536,
+      "sha256": "7acfe1ff9d69b5138f323c064733d928b7a67c54a52ef334539c4a2921a803c0"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/__init__.py": {
+      "byte_length": 7180,
+      "sha256": "a1bff2b31a396a968a07abc797f9f16b5f67190d1a73679b4bc6c0de3fe755d4"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/constants.py": {
+      "byte_length": 5570,
+      "sha256": "57598c74eab8baca33da7c228a2b2db4d03ce462b9f1640810c9d29959f5ecbc"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/exceptions.py": {
+      "byte_length": 4147,
+      "sha256": "f9cdede6a8d79192f68c808ccb297f6552a2db719a3c74bace9c8c40aefb56bc"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/__init__.py": {
+      "byte_length": 7397,
+      "sha256": "a27b960e16776ce16f9bd70d9441a92cb808bdcffc3ebb5df32018b0e7b66598"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/_stochastic_threshold.py": {
+      "byte_length": 4492,
+      "sha256": "e8197e9fb1a2127c9c1bd18c9b2bee902d6dcf3bd85c06dcdd56358d43f3475a"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/_units.py": {
+      "byte_length": 8068,
+      "sha256": "096035d8c6c73c56cb4e3bc250e3be949e657e0aa0d58aec07a5a6979d503390"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/base.py": {
+      "byte_length": 1143,
+      "sha256": "0cb339b37aaf52c3eb66b44ad186d432d76326c3ead5ef99bb9276bda22557b3"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/dendritic.py": {
+      "byte_length": 1461,
+      "sha256": "0599007b6f7ba07b7e247458d017204e0a67d65fea51733b27a7d59ba3dacaf0"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_builder.py": {
+      "byte_length": 33085,
+      "sha256": "1ca25a5aa0d14e036b6baf0e282f92973492edc9be63399cdad122c033b1a5a9"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_evaluation.py": {
+      "byte_length": 5709,
+      "sha256": "80e47b4c07a1b8e4c0a9c20dbe82098aaba8ca5754b840fc2c7bca77aa227d06"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_namespace.py": {
+      "byte_length": 2723,
+      "sha256": "2861f0717f52480cd3d46ecbaf93763795020414dbc23b337a4638fab8db641f"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_program.py": {
+      "byte_length": 17449,
+      "sha256": "4064ae6a7b2d77586ea311f318947b2c918bc287f65cf502f1cfe0a53d6daeb8"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_refusals.py": {
+      "byte_length": 1964,
+      "sha256": "5ebb46ecaaf66f8108c05bbb3207d5e6b82d70138c6ba11cc4c2848197156692"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_safety.py": {
+      "byte_length": 12185,
+      "sha256": "472e281032f7eaae3a94c8fb6759952b7b42414dec7a14b650914f0594aa57da"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_units_runtime.py": {
+      "byte_length": 6663,
+      "sha256": "72580bbef9d6a1b056c83f299912ab1713de73ffe09a5e9247b6b27b239165ac"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/fixed_point_lif.py": {
+      "byte_length": 6539,
+      "sha256": "ee7a4da29078537ca6356cf9098b8c628de805b3a63dfa3c74eba91ac642a623"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/homeostatic_lif.py": {
+      "byte_length": 2883,
+      "sha256": "d8ca8274da7f2c5919fd8d143a4635ffaaa2ef57ed7790f6676e7e04eda7dbda"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/model_profile.py": {
+      "byte_length": 52774,
+      "sha256": "a325bc11161c53188c02104ba34f1842a7f944c97614d81bf91733db92ce517b"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_contracts.py": {
+      "byte_length": 5951,
+      "sha256": "7238a0f0474042f2634ba337d2f804ca5fb53e63d43c578d2e89172ebd5d42c1"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_io.py": {
+      "byte_length": 13707,
+      "sha256": "8f47c9041470cb0fedd1b3c07a29519cc3c8ba4d0966b05f8f72d68cb3efb01a"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_mutations.py": {
+      "byte_length": 16158,
+      "sha256": "321e51f6a687772dd180f1992de7499afa88f877a7bf5e3ff660946fac9692df"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_provenance.py": {
+      "byte_length": 13378,
+      "sha256": "6796b3464bcda95842a2b5a604ac44efe514674def12b245457978b2927c5a92"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_runner.py": {
+      "byte_length": 5887,
+      "sha256": "5c75e5c218ded505269492964882b1d7fc57e301299e8c7c6efc2de9955003e1"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_traces.py": {
+      "byte_length": 2635,
+      "sha256": "83d4b9de4747ffac66f527396b270eed55d0186ba7ac9b24a652566bf4b60da1"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/sc_izhikevich.py": {
+      "byte_length": 5057,
+      "sha256": "c393663a47eafec8fa42b6125580948b12fb37a140431de41a3a957040cd797e"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/schema_contracts.py": {
+      "byte_length": 2118,
+      "sha256": "264caf838d10c54c4318b7a8815b332feecf3dfc2946b275ab0ba1ef09193962"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/seed_domain.py": {
+      "byte_length": 4669,
+      "sha256": "8cefbd73dfc0db178971d8940d8f53a70e1f484ae64f67c1a96c3dc0e9b6dea4"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/stochastic_lif.py": {
+      "byte_length": 6462,
+      "sha256": "7ccf1c9674bbcbf970c7316ec9d4ee98c213c66591d3fc078e6647d7dbb98091"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/neurons/universal_dsl.py": {
+      "byte_length": 20061,
+      "sha256": "d6c4cbea0154545450f634fa6238e127518f592beafde4280c0c73452d040870"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/refusals.py": {
+      "byte_length": 777,
+      "sha256": "46b712526927edda5cd091c80030c2f96ebab57cc53ed9fe6e772be377261de6"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/__init__.py": {
+      "byte_length": 1097,
+      "sha256": "301540262a3a2c244f22d4c850168c207dcac0f7c9355eba3bdf03acd8c56249"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/bitstreams.py": {
+      "byte_length": 14797,
+      "sha256": "19561afd3c6b78e5fc3b84e098789f3765f2218f5cd3d1fa0a004f3705274b12"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/deprecation.py": {
+      "byte_length": 1987,
+      "sha256": "eb0b9a78f202f48ecc7e2b9447b7a73b2568a95f3d043c1ca193a775907161af"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/logging.py": {
+      "byte_length": 2326,
+      "sha256": "198383a577f9d7d4eb527b0d90499d4ff28f0210f88934b2d8cfecd43f4a2131"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/profiling.py": {
+      "byte_length": 2345,
+      "sha256": "0f3708770206e19348bfa8c4302c965e90494f330fe4271db535aded280fe364"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/registry.py": {
+      "byte_length": 2866,
+      "sha256": "0e6d58fb6eaf4e109dad16dbadc57c218dfe33aea51387fe9bb01d7cbdaa5291"
+    },
+    "source/SC-NEUROCORE/src/sc_neurocore/utils/rng.py": {
+      "byte_length": 6965,
+      "sha256": "610c917915ffd3b41b1932c9b5ae14dce0efeaba81b4d89cffd168fa7839bc04"
+    },
+    "source/SC-NEUROCORE/tests/test_cosim_gen_and_check.py": {
+      "byte_length": 5839,
+      "sha256": "89f77674991e4b60461237fa43bf79eae4757d9b8ef826fa05c7e249ca5da51d"
+    },
+    "source/proposed_neural_wrapper.sv": {
+      "byte_length": 3297,
+      "sha256": "051661519617333259b9ae75d768fae177744a99ac2760e367f467fe7803c699"
+    },
+    "stimuli.txt": {
+      "byte_length": 12335,
+      "sha256": "8f0e0a2ced3e5170c78c5ee058eb90faea1ceb77cece2f940568851fe9ed64f8"
+    }
+  },
+  "tool_versions": {
+    "g++": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "verilator": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)"
+  }
+}

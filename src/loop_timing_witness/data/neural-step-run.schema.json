@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gotm:loop-timing-witness:neural-step-run:v1",
+  "title": "Loop Timing Witness simulated single-neuron step carrier v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_id": {
+      "const": "loop-timing-witness.neural-step-run.v1"
+    },
+    "profile": {
+      "const": "neural-step-capture"
+    },
+    "evidence_class": {
+      "const": "simulated-timing"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "step_count": {
+      "const": 1000
+    },
+    "counter_bits": {
+      "const": 64
+    },
+    "encoder_timestamp_bits": {
+      "const": 16
+    },
+    "encoder_id_width": {
+      "const": 1
+    },
+    "fifo_capacity_records": {
+      "enum": [
+        8,
+        1024
+      ]
+    },
+    "capture_horizon_edges": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "encoder_tail_edges": {
+      "const": 4
+    },
+    "source_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
+    "accepted_oracle_commit": {
+      "const": "0593c3df906d9493ac5c1da5c5e528f6078d275e"
+    },
+    "sc_body_pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hdl/sc_lif_neuron.v": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "hdl/tb_sc_lif_neuron.v": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "hdl/sc_aer_encoder.v": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "src/sc_neurocore/neurons/fixed_point_lif.py": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "src/sc_neurocore/constants.py": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scripts/cosim_gen_and_check.py": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "tests/test_cosim_gen_and_check.py": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "hdl/sc_lif_neuron.v",
+        "hdl/tb_sc_lif_neuron.v",
+        "hdl/sc_aer_encoder.v",
+        "src/sc_neurocore/neurons/fixed_point_lif.py",
+        "src/sc_neurocore/constants.py",
+        "scripts/cosim_gen_and_check.py",
+        "tests/test_cosim_gen_and_check.py"
+      ]
+    },
+    "tool_receipt": {
+      "$ref": "#/$defs/file"
+    },
+    "input_trace": {
+      "$ref": "#/$defs/file"
+    },
+    "numerical_trace": {
+      "$ref": "#/$defs/file"
+    },
+    "numerical_projection": {
+      "$ref": "#/$defs/file"
+    },
+    "reference_projection": {
+      "$ref": "#/$defs/file"
+    },
+    "service_trace": {
+      "$ref": "#/$defs/file"
+    },
+    "channels": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "role": {
+                  "enum": [
+                    "input",
+                    "state",
+                    "service"
+                  ]
+                },
+                "capture": {
+                  "$ref": "#/$defs/file"
+                },
+                "payload": {
+                  "$ref": "#/$defs/file"
+                },
+                "markers": {
+                  "$ref": "#/$defs/file"
+                },
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "accepted": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "dropped": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "drained": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "payload_records": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "marker_records": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "overflowed": {
+                  "type": "boolean"
+                },
+                "drop_counter_saturated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "role",
+                "capture",
+                "payload",
+                "markers",
+                "attempts",
+                "accepted",
+                "dropped",
+                "drained",
+                "payload_records",
+                "marker_records",
+                "overflowed",
+                "drop_counter_saturated"
+              ]
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "input"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "role": {
+                  "enum": [
+                    "input",
+                    "state",
+                    "service"
+                  ]
+                },
+                "capture": {
+                  "$ref": "#/$defs/file"
+                },
+                "payload": {
+                  "$ref": "#/$defs/file"
+                },
+                "markers": {
+                  "$ref": "#/$defs/file"
+                },
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "accepted": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "dropped": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "drained": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "payload_records": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "marker_records": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "overflowed": {
+                  "type": "boolean"
+                },
+                "drop_counter_saturated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "role",
+                "capture",
+                "payload",
+                "markers",
+                "attempts",
+                "accepted",
+                "dropped",
+                "drained",
+                "payload_records",
+                "marker_records",
+                "overflowed",
+                "drop_counter_saturated"
+              ]
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "state"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "role": {
+                  "enum": [
+                    "input",
+                    "state",
+                    "service"
+                  ]
+                },
+                "capture": {
+                  "$ref": "#/$defs/file"
+                },
+                "payload": {
+                  "$ref": "#/$defs/file"
+                },
+                "markers": {
+                  "$ref": "#/$defs/file"
+                },
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "accepted": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "dropped": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "drained": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "payload_records": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "marker_records": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "overflowed": {
+                  "type": "boolean"
+                },
+                "drop_counter_saturated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "role",
+                "capture",
+                "payload",
+                "markers",
+                "attempts",
+                "accepted",
+                "dropped",
+                "drained",
+                "payload_records",
+                "marker_records",
+                "overflowed",
+                "drop_counter_saturated"
+              ]
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "service"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requested_steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "observed_states": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "raw_spikes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "observed_service_packets": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "pending_empty": {
+          "type": "boolean"
+        },
+        "service_valid_quiescent": {
+          "type": "boolean"
+        },
+        "pipeline_quiescent": {
+          "type": "boolean"
+        },
+        "finalized": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "requested_steps",
+        "observed_states",
+        "raw_spikes",
+        "observed_service_packets",
+        "pending_empty",
+        "service_valid_quiescent",
+        "pipeline_quiescent",
+        "finalized"
+      ]
+    },
+    "event_codes": {
+      "const": {
+        "input_step_applied": 14,
+        "state_and_raw_spike_observed": 15,
+        "encoder_packet_serviced": 16,
+        "alignment_marker": 17
+      }
+    },
+    "clock_schedule_ref": {
+      "$ref": "#/$defs/file"
+    },
+    "native_source_cohort": {
+      "const": "sc-neurocore-neural-step-1n1b16t.v1"
+    },
+    "source_contract_ref": {
+      "$ref": "#/$defs/file"
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "byte_length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "byte_length"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "profile",
+    "evidence_class",
+    "run_id",
+    "epoch",
+    "step_count",
+    "counter_bits",
+    "encoder_timestamp_bits",
+    "encoder_id_width",
+    "fifo_capacity_records",
+    "capture_horizon_edges",
+    "encoder_tail_edges",
+    "source_files",
+    "accepted_oracle_commit",
+    "sc_body_pins",
+    "tool_receipt",
+    "input_trace",
+    "numerical_trace",
+    "numerical_projection",
+    "reference_projection",
+    "service_trace",
+    "channels",
+    "completion",
+    "event_codes",
+    "clock_schedule_ref",
+    "native_source_cohort",
+    "source_contract_ref"
+  ],
+  "description": "Prospective public carrier shape. Schema validity alone is not trusted source admission or whole verification."
+}

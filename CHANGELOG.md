@@ -19,6 +19,19 @@ Loop Timing Witness — changelog
   repeat listed with its outcome, latency and jitter pooled from raw samples of
   valid repeats, per-statistic spread between repeats and run-plan conformance,
   written as JSON and CSV in one atomic directory.
+- Neural step-run analysis (`load_neural_run`, `build_neural_run_report`) in Python
+  and in the Rust analysis crate: hash-bound source, capture and checker receipts,
+  a consumer-owned registry of reviewed checker profiles, and a second registry
+  entry that runs the checker inside an immutable extracted image selected by the
+  operator. The image is verified file by file before and after each run, under a
+  deadline, and every opened source must match the reviewed digests.
+  Host-specific installation and executor descriptors are selected by the
+  operator (`LOOP_TIMING_WITNESS_CHECKER_INSTALLATION`,
+  `LOOP_TIMING_WITNESS_CHECKER_IMAGE_BINDING`) and checked against pinned
+  digests; they are not packaged.
+  Consumers may pass their own reviewed entries as the keyword-only `registry`
+  argument; the hermetic test acquisition runs the whole chain through both the
+  image and a traced host installation.
 - Per-run absolute adjacent-cycle latency jitter with Type-7 distributions,
   missing-pair coverage, separate peak-to-peak spread, auditable pair CSV and
   labelled SVG output for both event profiles. Warm-up and gaps are excluded.

@@ -21,14 +21,17 @@ if TYPE_CHECKING:
     from .analyze_run import build_report
     from .campaign_analysis import build_campaign_report
     from .campaign_manifest import CampaignInputs, load_campaign
+    from .neural_run_api import build_neural_run_report, load_neural_run
     from .run_manifest import RunInputs, load_run
 
 __all__ = [
     "CampaignInputs",
     "RunInputs",
     "build_campaign_report",
+    "build_neural_run_report",
     "build_report",
     "load_campaign",
+    "load_neural_run",
     "load_run",
 ]
 
@@ -39,6 +42,8 @@ _EXPORT_MODULES = {
     "RunInputs": ".run_manifest",
     "build_report": ".analyze_run",
     "load_run": ".run_manifest",
+    "load_neural_run": ".neural_run_api",
+    "build_neural_run_report": ".neural_run_api",
 }
 
 

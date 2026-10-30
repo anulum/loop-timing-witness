@@ -4,7 +4,7 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — software inventory of the development lock (no release)
+# Loop Timing Witness — locked Python and native dependency inventories
 
 name: SBOM
 
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   inventory:
-    name: CycloneDX inventory of the hashed development lock
+    name: CycloneDX inventories of Python and native dependency locks
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -42,11 +42,21 @@ jobs:
         run: |
           .venv/bin/cyclonedx-py requirements requirements-dev.txt --output-file sbom.cdx.json
           .venv/bin/cyclonedx-py requirements requirements-runtime.txt --output-file runtime-sbom.cdx.json
+      - name: Install the pinned native inventory generator
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup default 1.99.0
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
+      - name: Fetch exact native analysis dependencies
+        run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
+      - name: Generate and verify the complete native dependency inventory
+        run: make native-sbom
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-cyclonedx
           path: |
             sbom.cdx.json
             runtime-sbom.cdx.json
+            build/native-analysis-sbom/native-analysis-sbom.cdx.json
           retention-days: 30
           if-no-files-found: error

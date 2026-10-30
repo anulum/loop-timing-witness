@@ -153,6 +153,7 @@ def test_advisory_configuration_cannot_silently_suppress_findings(tree: Path) ->
 def test_missing_lock_surface_is_refused(tree: Path) -> None:
     """Removing every maintained lock never produces a vacuous green audit."""
     for name in (
+        "analysis/rust/Cargo.lock",
         "controllers/rust/Cargo.lock",
         "runtime/bare_metal/rust_kernel/Cargo.lock",
         "requirements-dev.txt",
@@ -160,6 +161,29 @@ def test_missing_lock_surface_is_refused(tree: Path) -> None:
     ):
         (tree / name).unlink()
     assert "dependency audits: no maintained Python or Cargo locks" in audit(tree)
+
+
+def test_native_analysis_lock_requires_its_own_blocking_command(
+    tree: Path, run_tool: RunTool
+) -> None:
+    """Reject omission of the new native analysis lock from the actual audit graph.
+
+    Parameters
+    ----------
+    tree
+        Complete actual workflow candidate with all three native and two Python locks.
+    run_tool
+        Public workflow audit command runner.
+    """
+    assert audit(tree) == []
+    edit(tree, AUDIT, "          cargo audit --file analysis/rust/Cargo.lock\n", "")
+    assert "dependency audits: every lock needs one exact unconditional audit block" in audit(tree)
+    result = run_tool("audit_workflows", str(tree))
+    assert result.returncode == 1
+    assert (
+        "dependency audits: every lock needs one exact unconditional audit block" in result.stdout
+    )
+    assert result.stderr == ""
 
 
 def test_lock_enumeration_error_fails_closed(tree: Path) -> None:

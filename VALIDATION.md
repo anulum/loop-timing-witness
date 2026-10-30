@@ -53,7 +53,7 @@ truthfulness of the `architecture_only` state.
   is not evidence of board acceptance.
 - Rust 1.99.0 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs.
   The repository's `rust-toolchain.toml` pins the compiler, rustfmt and Clippy in relocated checkouts;
-  source enrolment rejects drift between this pin and either maintained crate's Rust version.
+  source enrolment rejects drift between this pin and each maintained crate's Rust version.
   C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
   Tool versions are printed by the jobs. The controller kernels have no third-party native dependencies.
 - Verilator 5.020 (`verilator`), Ubuntu noble package `5.020-1`, builds the native controller
@@ -135,6 +135,8 @@ their original explicit positive and negative signs.
 | `ruff-check` | `ruff check .` | every Python file; all rule groups enabled, exclusions listed with reasons in `pyproject.toml` |
 | `ruff-format` | `ruff format --check .` | every Python file |
 | `mypy` | `mypy` | `src/`, `tools/`, `tests/`, `conftest.py` and native build support in strict mode |
+| `analysis-build` | `make analysis-build` | exact packaged Python worker/schema/profile correspondence, reviewed Cargo archives/notices, strict worker typing, native analysis rustfmt/Clippy/build and rustdoc |
+| `analysis-tests` | `make analysis-tests` | actual recorded neural declarations, malformed input, unsupported source refusal and command output integrity; selected complete-acquisition mode additionally verifies real checker execution, report parity and immutable snapshots |
 | `controller-build` | `make controller-build` | strict C build, Rust format/Clippy, dependency-free release build and native API documentation |
 | `controller-tests` | `make controller-tests` | public C APIs under undefined-behaviour sanitization and Rust public state/refusal tests |
 | `controller-fuzz` | `make controller-fuzz` | bounded public C API sequences under ASan/UBSan; retained engine log, corpus and crash inputs, with reproducible controlled defects in the test suite |
@@ -280,7 +282,7 @@ archive only after verifying SHA-256
 `14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90`.
 Local and hosted builds use that same archive and Rust 1.99.0.
 `make native-api` treats Doxygen warnings, undocumented public members and enum
-values as errors. Both Rust crates deny missing public documentation; Rustdoc
+values as errors. All Rust crates deny missing public documentation; Rustdoc
 also denies warnings and broken intra-doc links. Tests remove descriptions from
 actual C and Rust public fields and require the native builders to refuse them.
 
@@ -422,3 +424,48 @@ contradictory native exit receipt. `tests/test_host_load_receipt.py` validates a
 and rejects altered policy, operation counts, scopes and time brackets. These host workload
 checks do not establish board timing or power, NIC traffic, uncached storage access or native
 hardware branch coverage.
+
+
+## Native neural analysis installation
+
+The source-bound analyser is a standalone crate at `analysis/rust`. Its Cargo
+lock pins all transitive dependencies. CI fetches those exact archives before
+the offline build; archive/licence correspondence and complete third-party
+notices are checked by `tools/check_analysis_package.py`. Packaged worker
+copies must equal their canonical Python owners. Ruff checks every physical
+copy, the analysis build strictly types the copied package, and coverage maps
+those identical worker bodies to their complete canonical logical owners.
+
+Default crate tests require fail-closed interpretation of the recorded public
+manifest without its absent acquisition referents. They also exercise closed
+manifest grammar, complete source populations, unsupported admission and the
+actual command's no-output refusal. They do not claim numerical acceptance.
+For the selected finite Linux runtime, supply `PUBLIC_NEURAL_MANIFEST` and
+`PUBLIC_NEURAL_PYTHON_REPORT` to the `public_api_consumer` target to exercise
+fresh full source-owned checks, complete report correspondence and snapshot
+isolation. See [the crate](analysis/rust/README.md#verification-fixtures).
+
+### Native dependency inventory
+
+Install the pinned generator with `cargo install cargo-cyclonedx --version 0.5.9 --locked`,
+fetch the analysis lock with `cargo fetch --locked --manifest-path analysis/rust/Cargo.toml`,
+then run `make native-sbom`. The target stages the complete crate in a new
+`build/native-analysis-sbom` directory and generates CycloneDX 1.5 JSON offline for
+all dependency targets. Choose a new `NATIVE_SBOM_DIRECTORY` for subsequent runs;
+an existing directory is refused before any of its files are replaced.
+
+The output `build/native-analysis-sbom/native-analysis-sbom.cdx.json` includes the
+native library and executable target names, every locked registry package with its
+original archive SHA-256 and declared SPDX licence expression, and the complete
+dependency graph. `tools/check_native_analysis_sbom.py` checks the official
+CycloneDX schema, fresh locked offline Cargo metadata, exact package population,
+archive identities and graph, after source-copy and reviewed-licence checks.
+The generator interprets Cargo's legacy `MIT/Apache-2.0` declaration as
+`MIT OR Apache-2.0`. Retained `cargo-metadata.json` and the staged crate permit
+inspection of the actual inputs and local package paths.
+
+The SBOM workflow uploads this native inventory alongside both Python inventories.
+This is a source-package and logical target inventory; archive hashes identify
+registry source packages. It does not attest compiled executable bytes. The owning
+tests use the actual pinned generator and public checker, including malformed
+files, unavailable Cargo, source drift and inventory or graph contradictions.

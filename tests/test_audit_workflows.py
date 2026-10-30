@@ -44,6 +44,7 @@ def tree(tmp_path: Path) -> Path:
     shutil.copytree(REPOSITORY_ROOT / WORKFLOWS, root / WORKFLOWS)
     shutil.copyfile(REPOSITORY_ROOT / INVENTORY, root / INVENTORY)
     for name in (
+        "analysis/rust/Cargo.lock",
         "controllers/rust/Cargo.lock",
         "runtime/bare_metal/rust_kernel/Cargo.lock",
         "requirements-dev.txt",

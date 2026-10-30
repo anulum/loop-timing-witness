@@ -1,0 +1,229 @@
+{
+  "check_arguments": [
+    "--check",
+    "--steps",
+    "1000",
+    "--seed",
+    "42"
+  ],
+  "entry_point": {
+    "byte_length": 8536,
+    "path": "source/SC-NEUROCORE/scripts/cosim_gen_and_check.py",
+    "sha256": "7acfe1ff9d69b5138f323c064733d928b7a67c54a52ef334539c4a2921a803c0"
+  },
+  "execution_contract": {
+    "address_space_bytes": 805306368,
+    "bytecode_reads": "owned-empty-prefix",
+    "bytecode_writes": false,
+    "cpu_seconds": 30,
+    "file_bytes": 1048576,
+    "profile": "linux-x86_64-seccomp-no-network.v1",
+    "python_site_initialisation": false,
+    "wall_seconds": 45
+  },
+  "generate_arguments": [
+    "--generate",
+    "--steps",
+    "1000",
+    "--seed",
+    "42"
+  ],
+  "runtime_contract_ref": {
+    "byte_length": 58574,
+    "path": "checker-runtime.json",
+    "sha256": "7f37448dcd18d9c2b41b2f1966154a5cff9f96081195a79b6dd5a5c8596b4890"
+  },
+  "schema_id": "loop-timing-witness.sc-checker-policy.v1",
+  "source_files": [
+    {
+      "byte_length": 8536,
+      "path": "source/SC-NEUROCORE/scripts/cosim_gen_and_check.py",
+      "sha256": "7acfe1ff9d69b5138f323c064733d928b7a67c54a52ef334539c4a2921a803c0"
+    },
+    {
+      "byte_length": 7180,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/__init__.py",
+      "sha256": "a1bff2b31a396a968a07abc797f9f16b5f67190d1a73679b4bc6c0de3fe755d4"
+    },
+    {
+      "byte_length": 5570,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/constants.py",
+      "sha256": "57598c74eab8baca33da7c228a2b2db4d03ce462b9f1640810c9d29959f5ecbc"
+    },
+    {
+      "byte_length": 4147,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/exceptions.py",
+      "sha256": "f9cdede6a8d79192f68c808ccb297f6552a2db719a3c74bace9c8c40aefb56bc"
+    },
+    {
+      "byte_length": 7397,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/__init__.py",
+      "sha256": "a27b960e16776ce16f9bd70d9441a92cb808bdcffc3ebb5df32018b0e7b66598"
+    },
+    {
+      "byte_length": 4492,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/_stochastic_threshold.py",
+      "sha256": "e8197e9fb1a2127c9c1bd18c9b2bee902d6dcf3bd85c06dcdd56358d43f3475a"
+    },
+    {
+      "byte_length": 8068,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/_units.py",
+      "sha256": "096035d8c6c73c56cb4e3bc250e3be949e657e0aa0d58aec07a5a6979d503390"
+    },
+    {
+      "byte_length": 1143,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/base.py",
+      "sha256": "0cb339b37aaf52c3eb66b44ad186d432d76326c3ead5ef99bb9276bda22557b3"
+    },
+    {
+      "byte_length": 1461,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/dendritic.py",
+      "sha256": "0599007b6f7ba07b7e247458d017204e0a67d65fea51733b27a7d59ba3dacaf0"
+    },
+    {
+      "byte_length": 33085,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_builder.py",
+      "sha256": "1ca25a5aa0d14e036b6baf0e282f92973492edc9be63399cdad122c033b1a5a9"
+    },
+    {
+      "byte_length": 5709,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_evaluation.py",
+      "sha256": "80e47b4c07a1b8e4c0a9c20dbe82098aaba8ca5754b840fc2c7bca77aa227d06"
+    },
+    {
+      "byte_length": 2723,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_namespace.py",
+      "sha256": "2861f0717f52480cd3d46ecbaf93763795020414dbc23b337a4638fab8db641f"
+    },
+    {
+      "byte_length": 17449,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_program.py",
+      "sha256": "4064ae6a7b2d77586ea311f318947b2c918bc287f65cf502f1cfe0a53d6daeb8"
+    },
+    {
+      "byte_length": 1964,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_refusals.py",
+      "sha256": "5ebb46ecaaf66f8108c05bbb3207d5e6b82d70138c6ba11cc4c2848197156692"
+    },
+    {
+      "byte_length": 12185,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_safety.py",
+      "sha256": "472e281032f7eaae3a94c8fb6759952b7b42414dec7a14b650914f0594aa57da"
+    },
+    {
+      "byte_length": 6663,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/equation_units_runtime.py",
+      "sha256": "72580bbef9d6a1b056c83f299912ab1713de73ffe09a5e9247b6b27b239165ac"
+    },
+    {
+      "byte_length": 6539,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/fixed_point_lif.py",
+      "sha256": "ee7a4da29078537ca6356cf9098b8c628de805b3a63dfa3c74eba91ac642a623"
+    },
+    {
+      "byte_length": 2883,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/homeostatic_lif.py",
+      "sha256": "d8ca8274da7f2c5919fd8d143a4635ffaaa2ef57ed7790f6676e7e04eda7dbda"
+    },
+    {
+      "byte_length": 52774,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/model_profile.py",
+      "sha256": "a325bc11161c53188c02104ba34f1842a7f944c97614d81bf91733db92ce517b"
+    },
+    {
+      "byte_length": 5951,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_contracts.py",
+      "sha256": "7238a0f0474042f2634ba337d2f804ca5fb53e63d43c578d2e89172ebd5d42c1"
+    },
+    {
+      "byte_length": 13707,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_io.py",
+      "sha256": "8f47c9041470cb0fedd1b3c07a29519cc3c8ba4d0966b05f8f72d68cb3efb01a"
+    },
+    {
+      "byte_length": 16158,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_mutations.py",
+      "sha256": "321e51f6a687772dd180f1992de7499afa88f877a7bf5e3ff660946fac9692df"
+    },
+    {
+      "byte_length": 13378,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_provenance.py",
+      "sha256": "6796b3464bcda95842a2b5a604ac44efe514674def12b245457978b2927c5a92"
+    },
+    {
+      "byte_length": 5887,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_trace_runner.py",
+      "sha256": "5c75e5c218ded505269492964882b1d7fc57e301299e8c7c6efc2de9955003e1"
+    },
+    {
+      "byte_length": 2635,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/reference_traces.py",
+      "sha256": "83d4b9de4747ffac66f527396b270eed55d0186ba7ac9b24a652566bf4b60da1"
+    },
+    {
+      "byte_length": 5057,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/sc_izhikevich.py",
+      "sha256": "c393663a47eafec8fa42b6125580948b12fb37a140431de41a3a957040cd797e"
+    },
+    {
+      "byte_length": 2118,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/schema_contracts.py",
+      "sha256": "264caf838d10c54c4318b7a8815b332feecf3dfc2946b275ab0ba1ef09193962"
+    },
+    {
+      "byte_length": 4669,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/seed_domain.py",
+      "sha256": "8cefbd73dfc0db178971d8940d8f53a70e1f484ae64f67c1a96c3dc0e9b6dea4"
+    },
+    {
+      "byte_length": 6462,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/stochastic_lif.py",
+      "sha256": "7ccf1c9674bbcbf970c7316ec9d4ee98c213c66591d3fc078e6647d7dbb98091"
+    },
+    {
+      "byte_length": 20061,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/neurons/universal_dsl.py",
+      "sha256": "d6c4cbea0154545450f634fa6238e127518f592beafde4280c0c73452d040870"
+    },
+    {
+      "byte_length": 777,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/refusals.py",
+      "sha256": "46b712526927edda5cd091c80030c2f96ebab57cc53ed9fe6e772be377261de6"
+    },
+    {
+      "byte_length": 1097,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/__init__.py",
+      "sha256": "301540262a3a2c244f22d4c850168c207dcac0f7c9355eba3bdf03acd8c56249"
+    },
+    {
+      "byte_length": 14797,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/bitstreams.py",
+      "sha256": "19561afd3c6b78e5fc3b84e098789f3765f2218f5cd3d1fa0a004f3705274b12"
+    },
+    {
+      "byte_length": 1987,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/deprecation.py",
+      "sha256": "eb0b9a78f202f48ecc7e2b9447b7a73b2568a95f3d043c1ca193a775907161af"
+    },
+    {
+      "byte_length": 2326,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/logging.py",
+      "sha256": "198383a577f9d7d4eb527b0d90499d4ff28f0210f88934b2d8cfecd43f4a2131"
+    },
+    {
+      "byte_length": 2345,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/profiling.py",
+      "sha256": "0f3708770206e19348bfa8c4302c965e90494f330fe4271db535aded280fe364"
+    },
+    {
+      "byte_length": 2866,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/registry.py",
+      "sha256": "0e6d58fb6eaf4e109dad16dbadc57c218dfe33aea51387fe9bb01d7cbdaa5291"
+    },
+    {
+      "byte_length": 6965,
+      "path": "source/SC-NEUROCORE/src/sc_neurocore/utils/rng.py",
+      "sha256": "610c917915ffd3b41b1932c9b5ae14dce0efeaba81b4d89cffd168fa7839bc04"
+    }
+  ]
+}

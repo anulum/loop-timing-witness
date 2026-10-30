@@ -75,6 +75,58 @@ exercises isolated full-buffer loss, saturation, an empty channel and queued-dat
 These are instrument-port controls. Neural wrapper, complete export/report integration
 and board qualification have separate acceptance requirements.
 
+`loop_timing_witness.neural_event_stream.decode_neural_channel` decodes the separate
+input, state and service capture streams, retaining original payload and alignment-marker
+bytes. Its neural record vocabulary uses data codes 14, 15 and 16 respectively and marker
+code 17; it does not register a neural profile in the CONTROL/COMPUTE domain. Missing
+markers, identity gaps and empty streams remain visible. A marker-only service stream has
+an empty payload; this alone does not establish that the encoder tail or export completed.
+Reserved bits, marker positions, population bounds, record order and the 16-bit no-wrap
+horizon are checked independently of file-digest and source binding.
+
+`loop_timing_witness.neural_timing.correlate_neural_steps` joins decoded input and state
+records by their original step identities. It checks the complete requested populations,
+continuous input cadence, one-tick registered observation phase and matching dedicated
+markers across all three channels. Available pairs retain their original ticks and signed
+intervals even when a run fails those checks. The result contains explicit refusals and
+does not establish numerical equality, encoder provenance, loss-counter reconciliation,
+export finalisation or physical timing. The separate RTL port controls exercise complete
+1,000-step phased streams before drain and a service channel containing only markers.
+
+`loop_timing_witness.neural_capture_counts.decode_neural_capture_counts` reads the closed
+versioned counter receipt in input/state/service order. Each channel retains the actual
+attempt, accepted, dropped and drained counts, sticky overflow flag and compiled drop-counter
+width. `reconcile_neural_capture` checks the original decoded record count against those
+snapshots. Loss, mismatched totals, incomplete drain and missing exported records produce
+explicit refusals. A drop count at its maximum remains a lower bound. A channel can satisfy
+count reconciliation while missing alignment markers or an encoder tail; those independent
+run predicates still require verification. The real RTL controls exercise both three-bit
+saturation and exact unsaturated loss at the default 32-bit width.
+
+`loop_timing_witness.neural_capture_files.read_neural_bound_file` checks a closed relative-path,
+SHA-256 and byte-length reference against one caller-admitted finite allocation. It reads a
+complete regular file inside the source-custodied run directory and returns exactly the bytes
+whose whole length and digest passed. The declared length plus the extra boundary byte must
+fit the host's index-sized read limit; oversized declarations are refused before opening the
+file. Decoders reuse those bytes. A present zero-byte service
+payload can be bound with a zero-byte allocation; an absent file is refused. The source
+directory and its files must remain frozen throughout verification and reporting.
+
+`loop_timing_witness.neural_capture.load_neural_capture` combines these checks for all three
+channels. It takes the original full/payload/marker references, a bound counter receipt and
+the requested step count, service-ordinal population and no-wrap horizon. It verifies exact
+projection bytes, reconciles counts and expected attempts including both markers, checks the
+complete service-ordinal population and joins the original input/state observations. Known
+loss, population, projection and phase failures remain located findings alongside available
+observations. Unsupported declarations or unreadable/malformed bound inputs are refused.
+
+`loop_timing_witness.neural_capture_report.neural_capture_report` produces the capture component
+of a report from those retained bytes. It preserves the requested populations, all original
+observations, their raw record byte offsets, actual source hashes, declared and derived
+projection hashes, alignment markers, counter bounds and refusal locations. Missing markers
+remain null and an absent service population remains empty. The component reports shared-counter
+ticks and makes no numerical, encoder-tail, source-qualification or whole-run acceptance claim.
+
 `ADDRESS_BITS` accepts 1 through 14; capacity is `2**ADDRESS_BITS`, with the default 16,384
 records. The capture pipeline is not an extra accepted storage slot. A full FIFO preserves
 stored records and drops the newest pending record. There is no attempt to stall measured

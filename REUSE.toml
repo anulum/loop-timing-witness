@@ -8,8 +8,8 @@
 
 version = 1
 
-# JSON cannot carry comments, so the repository's JSON documents are annotated
-# here. Every other file carries its licence in its own provenance header.
+# JSON bodies retain these licence annotations and their original schema.
+# New JSON also carries an adjacent attribution sidecar for the staged-blob guard.
 [[annotations]]
 path = [
     ".github/workflow-inventory.json",
@@ -26,10 +26,21 @@ path = [
     "docs/assets/loop-timing-witness-system-block-diagram.pdf",
     "docs/assets/loop-timing-witness.webp",
     "controllers/rust/LICENSE",
+    "analysis/rust/LICENSE",
+    "analysis/rust/dependency-licences.json",
+    "analysis/rust/neural-step-run.schema.json",
+    "analysis/rust/public-data/*.json",
+    "analysis/rust/tests/data/*.json",
     "measurement-domain.json",
     "measurement-domain.schema.json",
     "run-manifest.schema.json",
     "native-run.schema.json",
+    "neural-step-run.schema.json",
+    "src/loop_timing_witness/data/neural-step-run.schema.json",
+    "src/loop_timing_witness/data/neural-selected-*.json",
+    "tests/data/neural-native-original.run.json",
+    "tests/data/neural-selected-original.run.json",
+    "tests/data/neural-simulation-original.json",
     "amp-capture.schema.json",
     "amp-plugin-build.schema.json",
     "host-load.schema.json",

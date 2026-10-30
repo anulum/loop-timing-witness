@@ -50,6 +50,15 @@ def source_tree(make_git_tree: MakeGitTree) -> Path:
         "controllers/rust/Cargo.toml",
         "runtime/bare_metal/rust_kernel/Cargo.toml",
     }
+    paths.update(
+        str(path.relative_to(REPOSITORY_ROOT))
+        for path in (REPOSITORY_ROOT / "analysis/rust").rglob("*")
+        if path.is_file()
+    )
+    paths.update(
+        f"src/loop_timing_witness/{name}"
+        for name in ("__init__.py", "neural_checker_worker.py", "neural_checker_isolation.py")
+    )
     for profile in profiles.values():
         paths.update(profile["paths"])
     paths.update(
@@ -129,31 +138,82 @@ def test_new_python_inside_the_existing_gate_scopes_is_admitted(
         ),
         ('checks = ["tests", "native-format"]', 'checks = ["tests"]'),
         ("schema_version = 1", "schema_version = 2"),
-        ('checks = ["controller-build", "controller-tests", "tests"]', 'checks = ["source-gates"]'),
         (
-            'checks = ["ruff-check", "ruff-format", "mypy", "tests"]',
-            'checks = ["ruff-check", "ruff-format", "mypy", "tests", "documentation"]',
+            (
+                'checks = ["controller-build", "controller-tests", '
+                '"analysis-build", "analysis-tests", "tests"]'
+            ),
+            'checks = ["source-gates"]',
+        ),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            (
+                'checks = ["ruff-check", "ruff-format", "mypy", '
+                '"analysis-build", "tests", "documentation"]'
+            ),
         ),
         ("[profiles.python]", "[profiles.vhdl]"),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', 'checks = ["mypy"]'),
-        ('roots = ["src/loop_timing_witness", "tools", "tests"]', 'roots = ["."]'),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            'checks = ["mypy"]',
+        ),
+        (
+            'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
+            'roots = ["."]',
+        ),
         ('paths = [\n    "runtime/bare_metal/entry.S",\n]', "paths = []"),
         ("schema_version = 1", 'schema_version = 1\nextra = "unexpected"'),
         ("[profiles.python]", "[profiles.unknown]"),
         ("[profiles.python]", 'profiles = "invalid"\n[other.python]'),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', 'checks = ["absent"]'),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', 'checks = "mypy"'),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', "checks = [1]"),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', 'checks = [""]'),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', "checks = []"),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', 'checks = ["mypy", "mypy"]'),
-        ('roots = ["src/loop_timing_witness", "tools", "tests"]', 'roots = ["../outside"]'),
-        ('roots = ["src/loop_timing_witness", "tools", "tests"]', 'roots = ["/outside"]'),
-        ('roots = ["src/loop_timing_witness", "tools", "tests"]', 'roots = ["./tools"]'),
-        ('roots = ["src/loop_timing_witness", "tools", "tests"]', 'roots = [""]'),
-        ('roots = ["src/loop_timing_witness", "tools", "tests"]', "roots = []"),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            'checks = ["absent"]',
+        ),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            'checks = "mypy"',
+        ),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            "checks = [1]",
+        ),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            'checks = [""]',
+        ),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            "checks = []",
+        ),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            'checks = ["mypy", "mypy"]',
+        ),
+        (
+            'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
+            'roots = ["../outside"]',
+        ),
+        (
+            'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
+            'roots = ["/outside"]',
+        ),
+        (
+            'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
+            'roots = ["./tools"]',
+        ),
+        (
+            'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
+            'roots = [""]',
+        ),
+        (
+            'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
+            "roots = []",
+        ),
         ('paths = ["conftest.py", "controller_test_support.py"]', "paths = []"),
-        ('checks = ["ruff-check", "ruff-format", "mypy", "tests"]', "unexpected = true"),
+        (
+            'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
+            "unexpected = true",
+        ),
     ],
 )
 def test_invalid_catalogue_is_refused_by_the_cli(
@@ -341,3 +401,84 @@ def test_invalid_or_empty_profile_table_fails(
     result = run_tool("check_source_gates", "--root", str(source_tree))
     assert result.returncode == 1
     assert "missing or invalid" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "worker", ["__init__.py", "neural_checker_worker.py", "neural_checker_isolation.py"]
+)
+def test_packaged_analysis_worker_drift_refuses_the_real_source_candidate(
+    source_tree: Path, run_tool: RunTool, worker: str
+) -> None:
+    """Reject a packaged worker that diverges from its canonical typed source.
+
+    Parameters
+    ----------
+    source_tree
+        Complete original source candidate.
+    run_tool
+        Actual source-enrolment command.
+    worker
+        One of the exact three shipped source-checker worker bodies.
+    """
+    copied = source_tree / "analysis/rust/checker_worker/loop_timing_witness" / worker
+    copied.write_bytes(copied.read_bytes() + b"\n")
+    result = run_tool("check_source_gates", "--root", str(source_tree))
+    assert result.returncode == 1
+    assert "packaged worker differs from its canonical typed owner" in result.stdout
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ('source_pkgs = ["loop_timing_witness"]', "source_pkgs = []"),
+        ('"analysis/rust/checker_worker/loop_timing_witness"', '"unsupported/worker"'),
+        ('"*/installation/loop_timing_witness"', '"*/unsupported/loop_timing_witness"'),
+    ],
+)
+def test_packaged_worker_logical_coverage_cannot_be_removed(
+    source_tree: Path, run_tool: RunTool, before: str, after: str
+) -> None:
+    """Retain measured source ownership for the exact packaged Python copies.
+
+    Parameters
+    ----------
+    source_tree
+        Original candidate with complete coverage configuration.
+    run_tool
+        Public source-enrolment command.
+    before
+        Original maintained package coverage declaration.
+    after
+        Deliberate omission or incorrect owner correspondence.
+    """
+    path = source_tree / "pyproject.toml"
+    raw = path.read_text(encoding="utf-8")
+    assert before in raw
+    path.write_text(raw.replace(before, after), encoding="utf-8")
+    result = run_tool("check_source_gates", "--root", str(source_tree))
+    assert result.returncode == 1
+    assert "packaged workers require their complete logical owner coverage" in result.stdout
+    assert result.stderr == ""
+
+
+def test_analysis_crate_executable_gates_cannot_be_dropped(
+    source_tree: Path, run_tool: RunTool
+) -> None:
+    """Require both the real analysis build and its owning input tests.
+
+    Parameters
+    ----------
+    source_tree
+        Actual source candidate containing the maintained Rust profile.
+    run_tool
+        Public enrolment command.
+    """
+    path = source_tree / "source-gates.toml"
+    raw = path.read_text(encoding="utf-8")
+    assert '"analysis-build", "analysis-tests", ' in raw
+    path.write_text(raw.replace('"analysis-build", "analysis-tests", ', ""), encoding="utf-8")
+    result = run_tool("check_source_gates", "--root", str(source_tree))
+    assert result.returncode == 1
+    assert result.stdout.startswith("source-gates: FAIL")
+    assert result.stderr == ""

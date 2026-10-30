@@ -73,6 +73,8 @@ jobs:
           gcc --version
           rustc --version
           cargo --version
+      - name: Install the pinned native inventory generator used by its owning tests
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
       - name: Install the hashed development lock
         run: |
           python -m venv .venv
@@ -121,6 +123,8 @@ jobs:
         run: make controller-tests
       - name: Native Linux UIO adapter build
         run: make run-uio
+      - name: Fetch exact native analysis dependencies
+        run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
       - name: Build strict documentation references used by website tests
         run: make documentation-toolchain native-api
       - name: Tests with coverage

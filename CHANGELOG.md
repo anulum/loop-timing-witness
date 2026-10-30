@@ -39,6 +39,12 @@ Loop Timing Witness — changelog
   `v0.1.0` source archive and provenance manifest, with separate verification,
   signing and release-attachment jobs and portable verification instructions.
 
+### Changed
+
+- Run the hosted Python tests in four duration-balanced shards with one coverage
+  union holding the unchanged 100 % threshold; restore the pinned Spike build
+  from an exact-input cache.
+
 ### Fixed
 
 - Pin the development file-lock library to 4.2.4 and the virtual environment tool to

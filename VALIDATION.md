@@ -253,7 +253,7 @@ Every action is pinned to a verified commit object.
 |---|---|---|
 | `ci.yml` | coordinator: calls the three reusable workflows and holds the one required gate | coordinator and required gate |
 | `reusable-static-policy.yml` | lint, format, typing, manifest, inventory, headers, licences, workflow policy | static analysis and policy |
-| `reusable-tests.yml` | tests with 100 % statement and branch coverage | unit and component quality |
+| `reusable-tests.yml` | four duration-balanced pytest shards; one coverage union holds the 100 % statement and branch threshold | unit and component quality |
 | `pre-commit.yml` | every pre-commit stage hook on all files | static analysis and policy |
 | `codeql.yml` | code scanning of C, Rust, Python and the workflow definitions | security and supply chain |
 | `security-audit.yml` | invokes the shared security audit on push, pull request, schedule and manual dispatch | security and supply chain |
@@ -266,6 +266,15 @@ Every action is pinned to a verified commit object.
 | `publish.yml` | manually dispatched exact-revision validation, real wheel/sdist consumers and PyPI OIDC publication | release and registry publication |
 | `publish-rust.yml` | manually dispatched exact-revision validation, independent packaged API consumers and crates.io OIDC publication | release and registry publication |
 | `pypi-downloads.yml` | exact-revision green checks, validated official PyPI observations and one CSV on the `metrics` branch | download statistics and repository metrics |
+
+The test workflow plans the shards from the complete discovered module list
+(`tools/pytest_shards.py`). Measured module durations from the latest main run
+only order the assignment; a missing snapshot gives a deterministic round
+robin. The aggregate job refuses a failed, skipped or missing shard, checks that
+the shards ran every discovered module exactly once, combines their coverage
+data and applies the 100 % threshold once to the union. The Spike simulator is
+restored from a cache keyed by the runner image, compiler and workflow digest,
+or rebuilt from the pinned commit.
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.

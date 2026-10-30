@@ -22,10 +22,13 @@ ruff==0.16.10
 mypy==2.4.0
 types-PyYAML==6.0.12.20260906
 types-jsonschema==4.26.0.20260518
+types-defusedxml==0.7.0.20260504
 # Tests and coverage
 pytest==9.1.1
 pytest-cov==7.1.0
 coverage==7.16.2
+# Safe parsing of JUnit reports for shard timing
+defusedxml==0.7.1
 # Manifest schema validation and workflow parsing
 jsonschema==4.26.0
 PyYAML==6.0.3

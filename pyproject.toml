@@ -142,6 +142,7 @@ known-first-party = [
     "generate_capability_inventory",
     "manifest_io",
     "preflight",
+    "pytest_shards",
     "repository_files",
     "validate_measurement_domain",
 ]

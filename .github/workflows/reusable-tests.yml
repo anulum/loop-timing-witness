@@ -4,7 +4,7 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — tests with complete coverage (reusable)
+# Loop Timing Witness — sharded tests with complete coverage (reusable)
 
 name: Tests with complete coverage
 
@@ -14,10 +14,47 @@ on:
 permissions: {}
 
 jobs:
-  run:
-    name: Pytest with 100 % statement and branch coverage
+  plan:
+    name: Plan duration-balanced test shards
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 15
+    permissions:
+      contents: read # read the repository and its test inventory
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13.15"
+      - name: Install the hashed development lock
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+      - name: Restore the latest measured module durations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/pytest-timings/timings.json
+          key: pytest-module-timings-${{ github.sha }}
+          restore-keys: pytest-module-timings-
+      - name: Assign every discovered test module to exactly one shard
+        run: .venv/bin/python tools/pytest_shards.py plan --count 4 --timings build/pytest-timings/timings.json --output build/pytest-plan
+      - name: Retain the plan for every shard and the aggregate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pytest-plan-${{ github.sha }}
+          path: build/pytest-plan
+          if-no-files-found: error
+          retention-days: 7
+  shard:
+    name: Pytest shard ${{ matrix.shard }} of 4
+    needs: [plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       WITNESS_RV64_CC: /usr/bin/riscv64-linux-gnu-gcc-13
       WITNESS_SPIKE_SOURCE: ${{ github.workspace }}/build/amp-ci/spike-source
@@ -83,8 +120,23 @@ jobs:
       - name: Prepare hash-verified wheels for isolated Python package consumers
         run: make python-wheelhouse
       - name: Rust core and C ABI source coverage with matching LLVM tools
+        if: matrix.shard == 1
         run: .venv/bin/pytest -q tests/test_amp_rust_branch_coverage.py
+      - name: Identify every Spike build input
+        id: spike-key
+        run: |
+          compiler="$(gcc --version | head -n 1; g++ --version | head -n 1)"
+          printf 'key=spike-%s-%s-%s\n' "$ImageOS" \
+            "$(printf '%s' "$compiler" | sha256sum | cut -c 1-16)" \
+            "$(sha256sum .github/workflows/reusable-tests.yml | cut -c 1-64)" >> "$GITHUB_OUTPUT"
+      - name: Restore the exact Spike build
+        id: spike-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/amp-ci/spike-*
+          key: ${{ steps.spike-key.outputs.key }}
       - name: Build the exact original Spike simulator and SDK
+        if: steps.spike-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$WITNESS_SPIKE_SOURCE" "$WITNESS_SPIKE_BUILD"
           git -C "$WITNESS_SPIKE_SOURCE" init
@@ -101,6 +153,15 @@ jobs:
           cd "$WITNESS_SPIKE_BUILD"
           "$WITNESS_SPIKE_SOURCE/configure" --prefix="$WITNESS_SPIKE_BUILD/install"
           make -j2 spike
+          "$WITNESS_SPIKE" --help
+      - name: Retain the exact Spike build for later runs
+        if: matrix.shard == 1 && steps.spike-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/amp-ci/spike-*
+          key: ${{ steps.spike-key.outputs.key }}
+      - name: Check the restored or built Spike simulator
+        run: |
           "$WITNESS_SPIKE" --help
       - name: Build the actual RV64 firmware and both production RTL plugins
         run: |
@@ -120,6 +181,7 @@ jobs:
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Native controller public API tests
+        if: matrix.shard == 2
         run: make controller-tests
       - name: Native Linux UIO adapter build
         run: make run-uio
@@ -127,9 +189,89 @@ jobs:
         run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
       - name: Build strict documentation references used by website tests
         run: make documentation-toolchain native-api
-      - name: Tests with coverage
+      - name: Download the run's shard plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pytest-plan-${{ github.sha }}
+          path: build/pytest-plan
+      - name: Tests with coverage in this shard
+        env:
+          SHARD: ${{ matrix.shard }}
         run: |
-          PATH="$(go env GOPATH)/bin:${PATH}" .venv/bin/pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100
+          mkdir -p build/coverage
+          mapfile -t modules < "build/pytest-plan/shard-${SHARD}.txt"
+          test "${#modules[@]}" -gt 0
+          cp "build/pytest-plan/shard-${SHARD}.txt" "build/coverage/shard-${SHARD}.txt"
+          # The complete threshold applies once to the union in the aggregate job.
+          PATH="$(go env GOPATH)/bin:${PATH}" COVERAGE_FILE="build/coverage/shard-${SHARD}.coverage" \
+            .venv/bin/pytest --cov --cov-branch --cov-report= --cov-fail-under=0 \
+            --junitxml="build/coverage/junit-${SHARD}.xml" "${modules[@]}"
+      - name: Retain this shard's coverage, timing and module list
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pytest-shard-${{ matrix.shard }}-${{ github.sha }}
+          path: |
+            build/coverage/shard-${{ matrix.shard }}.coverage
+            build/coverage/shard-${{ matrix.shard }}.txt
+            build/coverage/junit-${{ matrix.shard }}.xml
+          if-no-files-found: error
+          retention-days: 7
+  run:
+    name: Pytest with 100 % statement and branch coverage
+    needs: [plan, shard]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # read the repository for the coverage union
+    steps:
+      - name: Require the plan and every shard to succeed
+        env:
+          PLAN: ${{ needs.plan.result }}
+          SHARDS: ${{ needs.shard.result }}
+        run: |
+          echo "plan: $PLAN; shards: $SHARDS"
+          test "$PLAN" = success
+          test "$SHARDS" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13.15"
+      - name: Install the hashed development lock
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
+      - name: Download the run's shard plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pytest-plan-${{ github.sha }}
+          path: build/pytest-plan
+      - name: Download every shard's results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: pytest-shard-*-${{ github.sha }}
+          path: build/shards
+      - name: Verify that the shards ran the complete inventory exactly once
+        run: |
+          mkdir build/executed
+          cp build/pytest-plan/inventory.txt build/executed/
+          for index in 1 2 3 4; do
+            cmp "build/pytest-plan/shard-${index}.txt" "build/shards/pytest-shard-${index}-${GITHUB_SHA}/shard-${index}.txt"
+            cp "build/shards/pytest-shard-${index}-${GITHUB_SHA}/shard-${index}.txt" build/executed/
+          done
+          .venv/bin/python tools/pytest_shards.py verify --plan build/executed --count 4
+      - name: Combine all shards and apply the complete threshold once
+        run: |
+          .venv/bin/coverage combine --keep \
+            build/shards/pytest-shard-1-"$GITHUB_SHA"/shard-1.coverage \
+            build/shards/pytest-shard-2-"$GITHUB_SHA"/shard-2.coverage \
+            build/shards/pytest-shard-3-"$GITHUB_SHA"/shard-3.coverage \
+            build/shards/pytest-shard-4-"$GITHUB_SHA"/shard-4.coverage
+          .venv/bin/coverage report --show-missing --fail-under=100
+          mkdir -p build/coverage
           .venv/bin/python tools/export_python_coverage.py build/coverage/coverage.xml
       - name: Bind the Python report to the tested source
         run: |
@@ -145,6 +287,17 @@ jobs:
             build/coverage/source-revision.txt
           if-no-files-found: error
           retention-days: 7
+      - name: Record the measured module durations for later plans
+        run: |
+          mkdir -p build/pytest-timings
+          .venv/bin/python tools/pytest_shards.py record --reports build/shards \
+            --previous build/pytest-plan/timings.json --output build/pytest-timings/timings.json
+      - name: Retain the durations measured on main
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/pytest-timings/timings.json
+          key: pytest-module-timings-${{ github.run_id }}-${{ github.run_attempt }}
   coverage:
     name: Publish the verified Python report to Codecov
     needs: [run]

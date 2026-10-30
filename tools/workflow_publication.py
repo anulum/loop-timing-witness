@@ -140,9 +140,20 @@ def coverage_identity_findings(file: str, jobs: dict[str, Any]) -> list[str]:
                 "ci.yml: coverage caller must use the exact reusable and permission ceiling"
             )
     if file == "reusable-tests.yml":
-        run = jobs.get("run")
-        if not isinstance(run, dict) or run.get("permissions") != {"contents": "read"}:
+        read_only = {"contents": "read"}
+        if any(
+            not isinstance(jobs.get(name), dict) or jobs[name].get("permissions") != read_only
+            for name in ("plan", "shard", "run")
+        ):
             findings.append("reusable-tests.yml: test execution must have only contents: read")
+        elif (
+            jobs["shard"].get("needs") != ["plan"]
+            or jobs["run"].get("needs") != ["plan", "shard"]
+            or jobs["run"].get("if") != "always()"
+        ):
+            findings.append(
+                "reusable-tests.yml: the coverage union must always follow the plan and every shard"
+            )
     return findings
 
 

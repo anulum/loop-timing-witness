@@ -41,11 +41,13 @@
       "category": 4,
       "file": "reusable-tests.yml",
       "jobs": [
+        "plan",
+        "shard",
         "run",
         "coverage"
       ],
       "kind": "reusable",
-      "owner": "tests with complete statement and branch coverage and source-bound Codecov publication"
+      "owner": "duration-balanced test shards, one complete statement and branch coverage union and source-bound Codecov publication"
     },
     {
       "category": 8,

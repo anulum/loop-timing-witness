@@ -471,7 +471,9 @@ cyclonedx-python-lib==11.12.0 \
 defusedxml==0.7.1 \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
-    # via py-serializable
+    # via
+    #   -r requirements-dev.in
+    #   py-serializable
 distlib==0.4.3 \
     --hash=sha256:4b0ce306c966eb73bc3a7b6abad017c556dadd92c44701562cd528ac7fde4d5b \
     --hash=sha256:f152097224a0ae24be5a0f6bae1b9359af82133bce63f98a95f86cae1aede9ed
@@ -1522,6 +1524,10 @@ tomlkit==0.15.1 \
     --hash=sha256:177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304 \
     --hash=sha256:e25bbf38843005246210a12982776f27f99cb9be67160e14434d0c0d21ee1e97
     # via reuse
+types-defusedxml==0.7.0.20260504 \
+    --hash=sha256:2ab2828a3f97111ba1c16cee273ad4124a831fc9198c41bf8368ff6ea48ad300 \
+    --hash=sha256:a959e3a0a43b93e464bd625d91ec9193a2703ddc10443bdd627792485fae0b10
+    # via -r requirements-dev.in
 types-jsonschema==4.26.0.20260518 \
     --hash=sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307 \
     --hash=sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6

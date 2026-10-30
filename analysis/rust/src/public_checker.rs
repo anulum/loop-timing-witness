@@ -11,7 +11,7 @@
 use crate::files::digest;
 use crate::public_binding::PublicRun;
 use crate::public_execution::{Invocation, invoke, output_bytes};
-use crate::public_image::Executor;
+use crate::public_image::NeuralExecutor;
 use crate::public_temporary::OwnedDirectory;
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -72,7 +72,7 @@ pub(crate) fn verify(run: &mut PublicRun) -> Result<Findings, String> {
             .map_err(|_| "Cannot preserve the original full checker projection.".to_owned())?;
         }
         let actual = match &run.contract.installation {
-            Executor::Host(installation) => {
+            NeuralExecutor::Host(installation) => {
                 let actual = invoke(installation, &script, operation, &directory)?;
                 source.extend(crate::public_trace::findings(
                     &actual,
@@ -82,7 +82,7 @@ pub(crate) fn verify(run: &mut PublicRun) -> Result<Findings, String> {
                 )?);
                 actual
             }
-            Executor::Image(image) => {
+            NeuralExecutor::Image(image) => {
                 let actual = image.invoke(operation, &directory)?;
                 source.extend(image.findings(&actual, &digests));
                 actual

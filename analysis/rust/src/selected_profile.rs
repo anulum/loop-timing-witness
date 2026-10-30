@@ -9,7 +9,7 @@
 //! Bind the reviewed ec123 source freeze to the SC-selected finite installation.
 
 use crate::files::{decode, digest, read_regular};
-use crate::public_image::{Executor, ImageExecutor};
+use crate::public_image::{ImageExecutor, NeuralExecutor};
 use crate::public_runtime::{Installation, InstalledFile};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -58,7 +58,7 @@ fn operator_file(variable: &str, expected: &str, missing: &str) -> Result<Vec<u8
 }
 
 /// Construct only the exact SC-selected installation and exact embedded worker sources.
-pub(crate) fn installation() -> Result<Executor, String> {
+pub(crate) fn installation() -> Result<NeuralExecutor, String> {
     let runtime = include_bytes!("../public-data/neural-selected-checker-runtime.json");
     if digest(runtime) != "7f37448dcd18d9c2b41b2f1966154a5cff9f96081195a79b6dd5a5c8596b4890" {
         return Err(
@@ -100,7 +100,7 @@ pub(crate) fn installation() -> Result<Executor, String> {
             ),
         ],
     )?;
-    Ok(Executor::Host(Box::new(installation)))
+    Ok(NeuralExecutor::Host(Box::new(installation)))
 }
 
 /// Operator variable selecting the extracted immutable checker image directory.
@@ -110,7 +110,7 @@ pub(crate) const IMAGE_ROOT_VARIABLE: &str = "LOOP_TIMING_WITNESS_CHECKER_IMAGE"
 ///
 /// The image directory and the executor binding come from the operator, never
 /// from acquisition data; both are verified against pinned digests and inventory.
-pub(crate) fn image() -> Result<Executor, String> {
+pub(crate) fn image() -> Result<NeuralExecutor, String> {
     let runtime = include_bytes!("../public-data/neural-image-checker-runtime.json");
     if digest(runtime) != "5e3f47b55576fc977f339d994e746ee23166d93e03ad4e6f33b90ca15b04dd9a" {
         return Err("Selected checker image descriptor differs from its reviewed binding.".into());
@@ -124,7 +124,7 @@ pub(crate) fn image() -> Result<Executor, String> {
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .ok_or("No immutable checker image is selected for this neural registration.")?;
-    Ok(Executor::Image(Box::new(ImageExecutor::new(
+    Ok(NeuralExecutor::Image(Box::new(ImageExecutor::new(
         selected,
         &binding,
         runtime.to_vec(),

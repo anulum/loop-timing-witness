@@ -113,6 +113,15 @@ them are verified before and after each operation. Only the image root, the
 owned working directory and the fixed operation are substituted. Python and
 Rust share the same binding bytes, refusals and closure findings.
 
+`load_neural_run` uses `NeuralRegistry::reviewed()`, the two packaged
+entries. A consumer that reviews its own source policy, checker policy and
+executor builds a `NeuralRegistry` keyed by `neural_key` and calls
+`load_neural_run_with_registry`; an entry combines the policy bytes with an
+`Installation` or an `ImageExecutor`. The Python keyword-only `registry`
+argument has the same keys and checks. Each entry's factory runs before the
+acquired policy copies are compared, in both languages; acquisition data never
+selects a registry or an entry.
+
 Reports preserve actual checker argv, timing, native status, observed modules
 and file identities. The checker uses a closed environment, finite CPU,
 address-space, file and wall-time limits, no Python site initialisation or

@@ -32,9 +32,11 @@ fn public_source_admission_and_snapshot() {
             .join("tests/data/neural-selected-original.run.json");
         let refusal = load_neural_run(&recorded)
             .err()
-            .expect("missing original acquisition files must refuse");
-        assert!(refusal.contains("source-contract.json"), "{refusal}");
-        assert!(!refusal.contains("panic"), "{refusal}");
+            .expect("the packaged entry needs an operator-selected descriptor");
+        assert_eq!(
+            refusal,
+            "No reviewed checker installation descriptor is selected for this neural registration."
+        );
         return;
     }
     let manifest = PathBuf::from(

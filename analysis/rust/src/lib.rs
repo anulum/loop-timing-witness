@@ -41,6 +41,8 @@ mod public_image;
 mod public_policy;
 /// Atomic whole-report file publication without replacing existing data.
 pub mod public_publication;
+/// Consumer-owned reviewed registrations selected by admission identity.
+pub mod public_registry;
 mod public_report;
 /// Complete source-checker installation binding, separate from source admission.
 pub mod public_runtime;
@@ -50,8 +52,14 @@ mod public_trace;
 mod selected_profile;
 
 /// Immutable report snapshot returned by the complete source-bound loader.
-pub use public_api::{NeuralRunInputs, build_neural_run_report, load_neural_run};
+pub use public_api::{
+    NeuralRunInputs, build_neural_run_report, load_neural_run, load_neural_run_with_registry,
+};
+/// Executors a consumer registration may bind.
+pub use public_image::{ImageExecutor, NeuralExecutor};
 /// Closed declaration reader, independent of full source admission.
 pub use public_manifest::load_neural_manifest;
 /// Atomic no-replacement publication of a complete report.
 pub use public_publication::write_neural_report;
+/// Consumer-owned reviewed registry types.
+pub use public_registry::{NeuralEntry, NeuralKey, NeuralRegistry, neural_key};

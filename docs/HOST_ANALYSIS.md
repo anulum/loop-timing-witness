@@ -625,8 +625,9 @@ read from the installed package, the current package refuses that entry with
 "Selected checker worker or installation differs from its reviewed runtime";
 the entry is never repinned. `load_neural_run` and the command use the packaged
 registry. A consumer that reviews its own entries can pass them as the
-keyword-only `registry` argument of `load_neural_run`; acquisition data never
-selects a registry or an entry.
+keyword-only `registry` argument of `load_neural_run`; the Rust crate takes
+the same entries through `load_neural_run_with_registry`. Acquisition data
+never selects a registry or an entry.
 
 For an admitted acquisition, the loader binds complete original sources,
 compiled artifacts, traces, counter receipts and reset observations. It

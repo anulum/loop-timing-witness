@@ -30,7 +30,7 @@ Loop Timing Witness — changelog
   `LOOP_TIMING_WITNESS_CHECKER_IMAGE_BINDING`) and checked against pinned
   digests; they are not packaged.
   Consumers may pass their own reviewed entries as the keyword-only `registry`
-  argument; the hermetic test acquisition runs the whole chain through both the
+  argument in Python or through `load_neural_run_with_registry` in Rust; the hermetic test acquisition runs the whole chain through both the
   image and a traced host installation.
 - Per-run absolute adjacent-cycle latency jitter with Type-7 distributions,
   missing-pair coverage, separate peak-to-peak spread, auditable pair CSV and

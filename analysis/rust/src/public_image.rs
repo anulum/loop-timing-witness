@@ -103,7 +103,7 @@ struct Binding {
 }
 
 /// Consumer-selected immutable checker image with its fixed launcher contract.
-pub(crate) struct ImageExecutor {
+pub struct ImageExecutor {
     root: PathBuf,
     binding_digest: String,
     binding: Binding,
@@ -118,7 +118,14 @@ fn closed<'a>(mut values: impl Iterator<Item = &'a String>) -> bool {
 
 impl ImageExecutor {
     /// Decode and close the binding and historical runtime contract.
-    pub(crate) fn new(
+    ///
+    /// The image directory and binding come from the consumer; the image is
+    /// verified file by file against the binding before and after each run.
+    ///
+    /// # Errors
+    ///
+    /// Refuses a binding or runtime contract that is not its closed reviewed form.
+    pub fn new(
         root: PathBuf,
         binding_bytes: &[u8],
         contract_bytes: Vec<u8>,
@@ -424,14 +431,14 @@ fn image_file(path: &Path, item: &ImageFile) -> Result<(), String> {
 }
 
 /// A consumer registration's executor: a verified host installation or an image.
-pub(crate) enum Executor {
+pub enum NeuralExecutor {
     /// Reviewed host interpreter, tracer and import roots.
     Host(Box<Installation>),
     /// Source owner's qualified immutable executor image.
     Image(Box<ImageExecutor>),
 }
 
-impl Executor {
+impl NeuralExecutor {
     /// Return the exact runtime contract the acquisition must carry.
     pub(crate) fn contract_bytes(&self) -> &[u8] {
         match self {

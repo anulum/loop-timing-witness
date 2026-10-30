@@ -12,6 +12,7 @@ use crate::binding::{self, BoundRun};
 use crate::files::{FileRef, digest, read_bound};
 use crate::public_manifest;
 use crate::public_policy::{self, Contract};
+use crate::public_registry::NeuralRegistry;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -25,7 +26,7 @@ pub(crate) struct PublicRun {
 }
 
 /// Bind complete public sources and all original acquisition bytes.
-pub(crate) fn load(path: &Path) -> Result<PublicRun, String> {
+pub(crate) fn load(path: &Path, registry: &NeuralRegistry) -> Result<PublicRun, String> {
     let (raw, _, manifest) = public_manifest::acquire(path)?;
     let root = path
         .parent()
@@ -33,7 +34,7 @@ pub(crate) fn load(path: &Path) -> Result<PublicRun, String> {
         .unwrap_or_else(|| Path::new("."))
         .canonicalize()
         .map_err(|_| "Public neural acquisition directory is unavailable.".to_owned())?;
-    let contract = public_policy::admit(&root, &manifest)?;
+    let contract = public_policy::admit(&root, &manifest, registry)?;
     let expected = &contract.policy.sources;
     let paths: BTreeSet<_> = manifest
         .source_files
@@ -106,7 +107,7 @@ pub(crate) fn load(path: &Path) -> Result<PublicRun, String> {
         binding::role(&mut files, &root, name, reference, 65536)?;
     }
     let tool = crate::public_tools::bind(&root, observations.epoch, &mut files)?;
-    files.insert("checker_policy".into(), contract.checker_bytes.to_vec());
+    files.insert("checker_policy".into(), contract.checker_bytes.clone());
     files.insert(
         "checker_runtime_contract".into(),
         contract.installation.contract_bytes().to_vec(),

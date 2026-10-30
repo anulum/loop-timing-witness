@@ -10,8 +10,9 @@
 
 use crate::files::{FileRef, decode, digest, read_expected};
 use crate::native_policy::{Artifacts, Pin, Policy};
-use crate::public_image::Executor;
+use crate::public_image::NeuralExecutor;
 use crate::public_manifest_fields::PublicManifest;
+use crate::public_registry::NeuralRegistry;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -58,47 +59,37 @@ pub(crate) struct CheckerPolicy {
     pub execution_contract: crate::public_runtime::ExecutionContract,
 }
 
-/// Immutable consumer registration, never an acquisition-selected installation.
-pub(crate) struct Registration {
-    pub source_digest: &'static str,
-    pub policy: &'static [u8],
-    pub checker: &'static [u8],
-    pub installation: fn() -> Result<Executor, String>,
-}
-
 /// Fully decoded and installation-bound reviewed source contract.
 pub(crate) struct Contract {
-    pub policy_bytes: &'static [u8],
-    pub checker_bytes: &'static [u8],
+    pub policy_bytes: Vec<u8>,
+    pub checker_bytes: Vec<u8>,
     pub policy: PublicPolicy,
     pub checker: CheckerPolicy,
-    pub installation: Executor,
+    pub installation: NeuralExecutor,
 }
 
 /// Bind only a consumer-reviewed exact identity before any checker operation.
-pub(crate) fn admit(root: &Path, manifest: &PublicManifest) -> Result<Contract, String> {
-    static REVIEWED: &[Registration] = &[
-        Registration {
-            source_digest: "ec1236a69fc9e16a4eff1dfa7bdad8aa8b6088fc4ebceb8d8c43d33517199304",
-            policy: include_bytes!("../public-data/neural-selected-source-contract.json"),
-            checker: include_bytes!("../public-data/neural-selected-checker-policy.json"),
-            installation: crate::selected_profile::installation,
-        },
-        Registration {
-            source_digest: "5ff959e55f59ca3b1d1993bbc2ed9028c49e08feb6ff15a0fd5af156959d5488",
-            policy: include_bytes!("../public-data/neural-image-source-contract.json"),
-            checker: include_bytes!("../public-data/neural-image-checker-policy.json"),
-            installation: crate::selected_profile::image,
-        },
-    ];
-    let registration = REVIEWED
-        .iter()
-        .find(|entry| entry.source_digest == manifest.source_contract_ref.sha256)
+pub(crate) fn admit(
+    root: &Path,
+    manifest: &PublicManifest,
+    registry: &NeuralRegistry,
+) -> Result<Contract, String> {
+    let key = (
+        manifest.schema_id.clone(),
+        crate::public_manifest::SCHEMA_SHA256.to_owned(),
+        manifest.native_source_cohort.clone(),
+        manifest.source_contract_ref.sha256.clone(),
+    );
+    let factory = registry
+        .get(&key)
         .ok_or("No reviewed source contract is admitted for this neural run.")?;
-    if digest(registration.policy) != registration.source_digest {
-        return Err("Consumer public source policy differs from its reviewed identity.".into());
+    let entry = factory()?;
+    if digest(&entry.policy) != key.3 {
+        return Err(
+            "Selected neural source registration differs from its reviewed identity.".into(),
+        );
     }
-    let policy: PublicPolicy = decode(registration.policy, "consumer public source policy")?;
+    let policy: PublicPolicy = decode(&entry.policy, "consumer public source policy")?;
     if policy.schema_id != ID
         || policy.schema_sha256 != crate::public_manifest::SCHEMA_SHA256
         || policy.cohort != COHORT
@@ -113,17 +104,17 @@ pub(crate) fn admit(root: &Path, manifest: &PublicManifest) -> Result<Contract, 
         root,
         &manifest.source_contract_ref,
         65536,
-        registration.policy,
+        &entry.policy,
         "Acquired neural source contract differs from its reviewed consumer policy.",
     )?;
     read_expected(
         root,
         &policy.checker_policy_ref,
         65536,
-        registration.checker,
+        &entry.checker,
         "Acquired checker policy differs from its reviewed consumer binding.",
     )?;
-    let checker: CheckerPolicy = decode(registration.checker, "consumer checker policy")?;
+    let checker: CheckerPolicy = decode(&entry.checker, "consumer checker policy")?;
     let expected_generate = ["--generate", "--steps", "1000", "--seed", "42"];
     let expected_check = ["--check", "--steps", "1000", "--seed", "42"];
     if checker.schema_id != "loop-timing-witness.sc-checker-policy.v1"
@@ -137,7 +128,7 @@ pub(crate) fn admit(root: &Path, manifest: &PublicManifest) -> Result<Contract, 
     {
         return Err("Selected checker requires its complete closed fixed-operation policy.".into());
     }
-    let installation = (registration.installation)()?;
+    let installation = entry.executor;
     installation.verify()?;
     read_expected(
         root,
@@ -152,8 +143,8 @@ pub(crate) fn admit(root: &Path, manifest: &PublicManifest) -> Result<Contract, 
         );
     }
     Ok(Contract {
-        policy_bytes: registration.policy,
-        checker_bytes: registration.checker,
+        policy_bytes: entry.policy,
+        checker_bytes: entry.checker,
         policy,
         checker,
         installation,

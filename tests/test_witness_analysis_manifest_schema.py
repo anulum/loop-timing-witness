@@ -103,7 +103,8 @@ def test_native_binary_manifest_schema_identity_is_enforced(tmp_path: Path) -> N
         [str(binary), str(manifest), "--output-dir", str(output)], environment, expected=1
     )
     assert baseline.stdout == ""
-    assert "source-contract.json" in baseline.stderr
+    # The declaration passes the schema check and reaches the registry entry factory.
+    assert "No reviewed checker installation descriptor is selected" in baseline.stderr
     assert "Installed neural manifest schema differs" not in baseline.stderr
     assert not output.exists()
     schema = (CRATE / "neural-step-run.schema.json").read_bytes()

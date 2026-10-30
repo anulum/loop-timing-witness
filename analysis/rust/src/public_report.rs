@@ -118,7 +118,7 @@ pub(crate) fn analyze(mut run: PublicRun) -> Result<Value, String> {
         crate::public_policy::ID,
         crate::public_manifest::SCHEMA_SHA256,
         crate::public_policy::COHORT,
-        &digest(run.contract.policy_bytes),
+        &digest(&run.contract.policy_bytes),
     ];
     Ok(json!({
         "schema_id":"loop-timing-witness.neural-step-analysis-report.v1",

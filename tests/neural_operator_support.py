@@ -15,8 +15,10 @@ pins their digests in an isolated package copy, as an operator review would.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import os
 from typing import TYPE_CHECKING
 
 from loop_timing_witness.manifest_io import canonical_json_bytes
@@ -122,3 +124,28 @@ def adopt_operator_descriptors(
     monkeypatch.setenv(INSTALLATION_VARIABLE, str(installation))
     monkeypatch.setenv(IMAGE_BINDING_VARIABLE, str(binding))
     return installation, binding
+
+
+def measure_package_copy(package: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Measure one package copy in subprocesses started by the calling test.
+
+    Subprocess coverage passes its configuration in ``COVERAGE_PROCESS_CONFIG``.
+    Only this copy joins the measured sources; the ``installation`` path alias
+    reports its lines under the maintained package. Without coverage, nothing
+    changes.
+
+    Parameters
+    ----------
+    package
+        Copied ``installation/loop_timing_witness`` directory.
+    monkeypatch
+        Restores the inherited configuration after the test.
+    """
+    encoded = os.environ.get("COVERAGE_PROCESS_CONFIG")
+    if encoded is None:
+        return
+    config = json.loads(base64.b64decode(encoded))
+    config["source"] = [*config["source"], str(package)]
+    monkeypatch.setenv(
+        "COVERAGE_PROCESS_CONFIG", base64.b64encode(json.dumps(config).encode()).decode()
+    )

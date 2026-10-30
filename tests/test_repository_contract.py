@@ -135,7 +135,7 @@ def test_forbidden_path_is_absent(relative: str) -> None:
 
 
 def test_ignore_rules_keep_private_and_backup_trees_out() -> None:
-    """The ignore file carries the defensive and private-content lines, without re-includes."""
+    """The ignore file keeps private, backup and native build trees out, without re-includes."""
     lines = {line.strip() for line in publishable_text(".gitignore").splitlines()}
     for required in (
         "/BACKUP/",
@@ -145,6 +145,8 @@ def test_ignore_rules_keep_private_and_backup_trees_out() -> None:
         "docs/internal/",
         "docs/internal/**",
         ".venv/",
+        "/controllers/rust/target/",
+        "/analysis/rust/target/",
     ):
         assert required in lines, required
     assert not [line for line in lines if line.startswith("!")]
@@ -327,11 +329,37 @@ def test_licence_record_lists_the_lock_file_and_json_is_reuse_annotated() -> Non
     """The licence record points at the lock, and every JSON document is annotated in REUSE.toml."""
     record = json.loads(publishable_text("development-dependency-licences.json"))
     assert record["lock_file"] == "requirements-dev.txt"
-    reuse = publishable_text("REUSE.toml")
+    reuse = tomllib.loads(publishable_text("REUSE.toml"))
+    patterns = [_reuse_pattern(item) for entry in reuse["annotations"] for item in entry["path"]]
     json_files = [name for name in candidate_files(REPOSITORY_ROOT) if name.endswith(".json")]
     assert json_files
     for name in json_files:
-        assert f'"{name}"' in reuse, name
+        assert any(pattern.fullmatch(name) for pattern in patterns), name
+
+
+def _reuse_pattern(path: str) -> re.Pattern[str]:
+    """Translate a REUSE annotation path, where only ``**`` crosses directories.
+
+    Parameters
+    ----------
+    path
+        Literal path or glob from ``REUSE.toml``.
+
+    Returns
+    -------
+    re.Pattern[str]
+        Expression matching the same repository paths.
+    """
+    parts = (re.escape(part).replace(r"\*", "[^/]*") for part in path.split("**"))
+    return re.compile(".*".join(parts))
+
+
+def test_reuse_globs_follow_the_specification() -> None:
+    """A single star stays inside one directory and a double star crosses them."""
+    assert _reuse_pattern("data/*.json").fullmatch("data/a.json")
+    assert not _reuse_pattern("data/*.json").fullmatch("data/deep/a.json")
+    assert _reuse_pattern("data/**.json").fullmatch("data/deep/a.json")
+    assert not _reuse_pattern("data/a.json").fullmatch("data/ab.json")
 
 
 def test_public_wording_guard_rejects_an_actual_bad_readme(tmp_path: Path) -> None:

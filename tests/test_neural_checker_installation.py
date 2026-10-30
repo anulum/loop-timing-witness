@@ -22,6 +22,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from neural_operator_support import measure_package_copy
 
 from loop_timing_witness.neural_checker_installation import (
     CheckerInstalledFile,
@@ -387,18 +388,23 @@ def test_installation_import_roots_require_actual_resolved_directories(
         selected.verify()
 
 
-def test_excessive_worker_source_refuses_installation(tmp_path: Path) -> None:
+def test_excessive_worker_source_refuses_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Refuse an installation whose package worker source exceeds its allocation.
 
     Parameters
     ----------
     tmp_path
         Owned package copy with an oversized worker source.
+    monkeypatch
+        Measures the package copy.
     """
     installed = tmp_path / "installation/loop_timing_witness"
     shutil.copytree(
         _ROOT / "src/loop_timing_witness", installed, ignore=shutil.ignore_patterns("__pycache__")
     )
+    measure_package_copy(installed, monkeypatch)
     worker = installed / "neural_checker_worker.py"
     worker.write_bytes(worker.read_bytes() + b"#" * 1048576)
     client = (

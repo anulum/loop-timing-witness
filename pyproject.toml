@@ -173,13 +173,20 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/loop_timing_witness", "tools", "controller_test_support"]
-source_pkgs = ["loop_timing_witness"]
+# The packaged worker copy is listed by directory. A package-name source would
+# also measure every temporary package copy that a test imports.
+source = [
+    "src/loop_timing_witness",
+    "analysis/rust/checker_worker/loop_timing_witness",
+    "tools",
+    "controller_test_support",
+]
 patch = ["subprocess"]
 
 # Isolated repository contract controls copy these exact maintained sources.
 # Subprocess coverage keeps their actual trace under the corresponding source root.
-# Package-copy tests run the same maintained sources from */installation.
+# Package-copy tests opt in through tests/neural_operator_support.measure_package_copy;
+# their */installation copies report under the maintained package. Other copies stay unmeasured.
 [tool.coverage.paths]
 package = [
     "src/loop_timing_witness",

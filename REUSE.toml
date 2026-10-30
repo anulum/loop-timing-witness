@@ -38,6 +38,7 @@ path = [
     "neural-step-run.schema.json",
     "src/loop_timing_witness/data/neural-step-run.schema.json",
     "src/loop_timing_witness/data/neural-selected-*.json",
+    "src/loop_timing_witness/data/neural-image-*.json",
     "tests/data/neural-native-original.run.json",
     "tests/data/neural-selected-original.run.json",
     "tests/data/neural-simulation-original.json",

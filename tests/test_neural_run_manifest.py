@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from neural_operator_support import measure_package_copy
 
 from loop_timing_witness import load_neural_run
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
@@ -386,13 +387,15 @@ def test_nul_manifest_path_uses_authored_refusal(tmp_path: Path) -> None:
         load_neural_manifest(tmp_path / "invalid\0manifest")
 
 
-def _package_copy(tmp_path: Path) -> Path:
-    """Copy the maintained package into an isolated installation.
+def _package_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Copy the maintained package into an isolated, measured installation.
 
     Parameters
     ----------
     tmp_path
         Owned directory.
+    monkeypatch
+        Adds the copy to subprocess coverage for this test.
 
     Returns
     -------
@@ -402,6 +405,7 @@ def _package_copy(tmp_path: Path) -> Path:
     source = Path(__file__).resolve().parents[1] / "src/loop_timing_witness"
     installed = tmp_path / "installation/loop_timing_witness"
     shutil.copytree(source, installed, ignore=shutil.ignore_patterns("__pycache__"))
+    measure_package_copy(installed, monkeypatch)
     return installed
 
 
@@ -410,7 +414,7 @@ def _package_copy(tmp_path: Path) -> Path:
     [("absent", "schema is unavailable"), ("changed", "schema differs from its admitted body")],
 )
 def test_installed_schema_must_be_present_and_admitted(
-    tmp_path: Path, damage: str, message: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str, message: str
 ) -> None:
     """Refuse every manifest when the installed carrier schema is absent or changed.
 
@@ -418,12 +422,14 @@ def test_installed_schema_must_be_present_and_admitted(
     ----------
     tmp_path
         Owned package copy.
+    monkeypatch
+        Measures the package copy.
     damage
         Removal or a one-byte change of the installed schema.
     message
         Expected refusal fragment.
     """
-    installed = _package_copy(tmp_path)
+    installed = _package_copy(tmp_path, monkeypatch)
     schema = installed / "data/neural-step-run.schema.json"
     if damage == "absent":
         schema.unlink()

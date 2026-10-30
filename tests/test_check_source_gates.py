@@ -242,9 +242,10 @@ def test_invalid_catalogue_is_refused_by_the_cli(
             "excluded",
         ),
         ('extend-exclude = ["docs/internal"]', 'exclude = ["tools"]', "excluded"),
+        ('    "src/loop_timing_witness",\n    "analysis', '    "analysis', "coverage must include"),
         (
-            'source = ["src/loop_timing_witness", "tools", "controller_test_support"]',
-            'source = ["tools"]',
+            '    "analysis/rust/checker_worker/loop_timing_witness",\n    "tools",',
+            '    "tools",',
             "coverage must include",
         ),
         ("branch = true", "branch = false", "threshold must remain 100"),
@@ -431,8 +432,11 @@ def test_packaged_analysis_worker_drift_refuses_the_real_source_candidate(
 @pytest.mark.parametrize(
     ("before", "after"),
     [
-        ('source_pkgs = ["loop_timing_witness"]', "source_pkgs = []"),
-        ('"analysis/rust/checker_worker/loop_timing_witness"', '"unsupported/worker"'),
+        ('patch = ["subprocess"]', 'source_pkgs = ["loop_timing_witness"]\npatch = ["subprocess"]'),
+        (
+            '    "analysis/rust/checker_worker/loop_timing_witness",\n    "*/installation',
+            '    "unsupported/worker",\n    "*/installation',
+        ),
         ('"*/installation/loop_timing_witness"', '"*/unsupported/loop_timing_witness"'),
     ],
 )

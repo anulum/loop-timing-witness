@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from neural_operator_support import adopt_operator_descriptors
+from neural_operator_support import adopt_operator_descriptors, measure_package_copy
 
 _ROOT = Path(__file__).resolve().parents[1]
 _ASSETS = (
@@ -106,8 +106,7 @@ def _reviewed_initialiser() -> bytes:
     return raw
 
 
-@pytest.fixture
-def selected_installation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+def _installation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """Copy the real package and retain an exact original acquisition declaration.
 
     The copy adopts test operator descriptors; the real ones name host files.
@@ -137,6 +136,48 @@ def selected_installation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tu
     manifest = tmp_path / "run.json"
     manifest.write_bytes(original)
     return installed, manifest
+
+
+@pytest.fixture
+def selected_installation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """Return a package copy measured by subprocess coverage.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned isolated installation and recorded declaration allocation.
+    monkeypatch
+        Selects the operator descriptors and measures the copy.
+
+    Returns
+    -------
+    tuple[Path, Path]
+        Complete package directory and exact public manifest.
+    """
+    installed, manifest = _installation(tmp_path, monkeypatch)
+    measure_package_copy(installed, monkeypatch)
+    return installed, manifest
+
+
+@pytest.fixture
+def unmeasured_installation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """Return a package copy whose worker files may become foreign links.
+
+    Coverage reports a linked file at its target, so this copy stays unmeasured.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned isolated installation and recorded declaration allocation.
+    monkeypatch
+        Selects the operator descriptors.
+
+    Returns
+    -------
+    tuple[Path, Path]
+        Complete package directory and exact public manifest.
+    """
+    return _installation(tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize("asset", _ASSETS)
@@ -458,7 +499,7 @@ def test_unsupported_source_identity_refuses_before_package_asset_access(
 @pytest.mark.parametrize("worker", ["neural_checker_worker.py", "neural_checker_isolation.py"])
 @pytest.mark.parametrize("kind", ["fifo", "symlink", "directory", "missing", "oversized"])
 def test_actual_selected_worker_file_refusals_are_bounded(
-    tmp_path: Path, selected_installation: tuple[Path, Path], worker: str, kind: str
+    tmp_path: Path, unmeasured_installation: tuple[Path, Path], worker: str, kind: str
 ) -> None:
     """Refuse nonregular or excessive worker sources before any checker can start.
 
@@ -466,14 +507,14 @@ def test_actual_selected_worker_file_refusals_are_bounded(
     ----------
     tmp_path
         Owned report destination and replacement file.
-    selected_installation
+    unmeasured_installation
         Actual copied package and recorded selected public manifest.
     worker
         Installed source inspected while constructing the selected runtime.
     kind
         Actual worker filesystem or finite-size contradiction.
     """
-    installed, manifest = selected_installation
+    installed, manifest = unmeasured_installation
     path = installed / worker
     original = path.read_bytes()
     path.unlink()

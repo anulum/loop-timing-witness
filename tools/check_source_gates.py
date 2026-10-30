@@ -229,9 +229,7 @@ def _worker_findings(root: Path) -> list[str]:
     coverage = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["tool"][
         "coverage"
     ]
-    if coverage["run"].get("source_pkgs") != ["loop_timing_witness"] or coverage["paths"].get(
-        "package"
-    ) != [
+    if "source_pkgs" in coverage["run"] or coverage["paths"].get("package") != [
         "src/loop_timing_witness",
         "analysis/rust/checker_worker/loop_timing_witness",
         "*/installation/loop_timing_witness",
@@ -262,7 +260,12 @@ def _python_findings(root: Path, profile: SourceProfile) -> list[str]:
     if ruff.get("extend-exclude", []) != ["docs/internal"] or "exclude" in ruff:
         findings.append("python: maintained files cannot be excluded from lint or formatting")
     coverage = config["coverage"]
-    if coverage["run"]["source"] != [*PYTHON_ROOTS[:2], "controller_test_support"]:
+    if coverage["run"]["source"] != [
+        PYTHON_ROOTS[0],
+        "analysis/rust/checker_worker/loop_timing_witness",
+        PYTHON_ROOTS[1],
+        "controller_test_support",
+    ]:
         findings.append(
             "python: coverage must include the maintained package, tools and build support"
         )

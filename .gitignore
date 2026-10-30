@@ -51,3 +51,6 @@ dist/
 /controllers/rust/target/
 *.gcda
 *.gcno
+
+# Native analysis build outputs
+/analysis/rust/target/

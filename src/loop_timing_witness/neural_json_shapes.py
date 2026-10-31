@@ -16,11 +16,17 @@ languages refuse the same documents with the same message.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 _U64: Final = 2**64
+_U32: Final = 2**32
+UNSIGNED32: Final = "unsigned32"
+"""Field kind of an unsigned 32-bit integer, as the native ``u32`` reads it."""
 
-EXECUTION_FIELDS: Final[dict[str, type]] = {
+EXECUTION_FIELDS: Final[dict[str, object]] = {
     "profile": str,
     "address_space_bytes": int,
     "cpu_seconds": int,
@@ -30,10 +36,10 @@ EXECUTION_FIELDS: Final[dict[str, type]] = {
     "bytecode_writes": bool,
     "bytecode_reads": str,
 }
-REFERENCE_FIELDS: Final[dict[str, type]] = {"path": str, "sha256": str, "byte_length": int}
+REFERENCE_FIELDS: Final[dict[str, object]] = {"path": str, "sha256": str, "byte_length": int}
 
 
-def typed(value: object, kind: type) -> bool:
+def typed(value: object, kind: object) -> bool:
     """Tell whether one value has the exact closed type.
 
     Parameters
@@ -41,19 +47,22 @@ def typed(value: object, kind: type) -> bool:
     value
         Decoded JSON value.
     kind
-        ``str``, ``bool`` or ``int`` (an unsigned 64-bit integer).
+        ``str``, ``bool``, ``list``, ``dict``, ``int`` (an unsigned 64-bit
+        integer) or :data:`UNSIGNED32`.
 
     Returns
     -------
     bool
         Whether the value has that type and range.
     """
+    if kind == UNSIGNED32:
+        return type(value) is int and 0 <= value < _U32
     if kind is int:
         return type(value) is int and 0 <= value < _U64
     return type(value) is kind
 
 
-def record(value: object, fields: dict[str, type]) -> bool:
+def record(value: object, fields: Mapping[str, object]) -> bool:
     """Tell whether one value holds exactly the typed fields.
 
     Parameters
@@ -75,7 +84,7 @@ def record(value: object, fields: dict[str, type]) -> bool:
     )
 
 
-def records(value: object, fields: dict[str, type]) -> bool:
+def records(value: object, fields: Mapping[str, object]) -> bool:
     """Tell whether one value is a list of closed typed records.
 
     Parameters

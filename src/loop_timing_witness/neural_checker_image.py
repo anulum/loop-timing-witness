@@ -38,7 +38,15 @@ from .neural_checker_execution import (
 )
 from .neural_checker_installation import CheckerInstalledFile
 from .neural_event_stream import NeuralCaptureRefusalError
-from .neural_json_shapes import EXECUTION_FIELDS, REFERENCE_FIELDS, record, records, texts, typed
+from .neural_json_shapes import (
+    EXECUTION_FIELDS,
+    REFERENCE_FIELDS,
+    UNSIGNED32,
+    record,
+    records,
+    texts,
+    typed,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -53,6 +61,15 @@ _WORK = PurePosixPath("/work")
 _WORK_DATA = frozenset(
     {"stimuli.txt", "results_expected.txt", "results_verilog.txt", "checker-observation.json"}
 )
+_HOST_FIELDS: dict[str, object] = {
+    "system": str,
+    "machine": str,
+    "kernel_release": str,
+    "uid": UNSIGNED32,
+    "gid": UNSIGNED32,
+    "files": list,
+    "absent_paths": list,
+}
 _BINDING_FIELDS = frozenset(
     {
         "schema_id",
@@ -128,6 +145,42 @@ def _runtime_closed(runtime: dict[str, Any]) -> bool:
     )
 
 
+def _binding_closed(binding: dict[str, Any]) -> bool:
+    """Tell whether every binding member has the closed type the native reader decodes.
+
+    Parameters
+    ----------
+    binding
+        Decoded binding holding exactly the binding members.
+
+    Returns
+    -------
+    bool
+        Whether the host boundary, image inventory, command, environment,
+        deadline and file lists are all typed; the supplier and historical
+        contracts are free-form.
+    """
+    host = binding["host_boundary"]
+    image = binding["image"]
+    environment = binding["bootstrap_environment"]
+    return (
+        record(host, _HOST_FIELDS)
+        and records(host["files"], REFERENCE_FIELDS)
+        and texts(host["absent_paths"])
+        and record(image, {"files": list, "directories": list, "symlinks": list})
+        and records(image["files"], {**REFERENCE_FIELDS, "mode": UNSIGNED32})
+        and texts(image["directories"])
+        and records(image["symlinks"], {"path": str, "target": str})
+        and typed(binding["schema_id"], str)
+        and texts(binding["command"])
+        and isinstance(environment, dict)
+        and texts(list(environment.values()))
+        and typed(binding["deadline_seconds"], int)
+        and texts(binding["source_files"])
+        and texts(binding["worker_files"])
+    )
+
+
 def _placeholders_closed(values: Sequence[object]) -> bool:
     """Require each placeholder to be a whole value and no other braces.
 
@@ -187,6 +240,7 @@ class ImageCheckerExecutor:
         environment = binding.get("bootstrap_environment")
         if (
             set(binding) != _BINDING_FIELDS
+            or not _binding_closed(binding)
             or binding["schema_id"] != IMAGE_EXECUTOR_SCHEMA
             or not isinstance(command, list)
             or not command

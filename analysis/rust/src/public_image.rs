@@ -130,8 +130,11 @@ impl ImageExecutor {
         binding_bytes: &[u8],
         contract_bytes: Vec<u8>,
     ) -> Result<Self, String> {
-        let binding: Binding = decode(binding_bytes, "checker image executor binding")?;
+        let object =
+            crate::strict_json::decode_object(binding_bytes, "checker image executor binding")?;
         let runtime: Runtime = decode(&contract_bytes, "checker image historical runtime")?;
+        let binding: Binding = serde_json::from_value(serde_json::Value::Object(object))
+            .map_err(|_| "Checker image executor binding is not its closed reviewed form.")?;
         if binding.schema_id != SCHEMA
             || binding.command.is_empty()
             || !closed(binding.command.iter())
@@ -202,9 +205,10 @@ impl ImageExecutor {
 
     /// Verify that the image tree holds exactly the bound entries and bytes.
     fn verify_image(&self) -> Result<(), String> {
-        let metadata = std::fs::symlink_metadata(&self.root)
-            .map_err(|_| "Checker image root must be an absolute real directory.")?;
-        if !self.root.is_absolute() || !metadata.is_dir() {
+        // The metadata does not follow links, so a linked root is not a directory.
+        if !self.root.is_absolute()
+            || !std::fs::symlink_metadata(&self.root).is_ok_and(|metadata| metadata.is_dir())
+        {
             return Err("Checker image root must be an absolute real directory.".into());
         }
         let mut files = BTreeSet::new();
@@ -355,7 +359,25 @@ impl ImageExecutor {
     }
 }
 
+/// The refusal of an image tree whose entries differ from the bound inventory.
+const ENTRIES: &str = "Checker image entries differ from the bound image inventory.";
+
+/// List one image directory's entries with their names and kinds.
+fn list(
+    directory: &Path,
+) -> std::io::Result<Vec<(std::ffi::OsString, std::fs::FileType, PathBuf)>> {
+    std::fs::read_dir(directory)?
+        .map(|entry| {
+            let entry = entry?;
+            Ok((entry.file_name(), entry.file_type()?, entry.path()))
+        })
+        .collect()
+}
+
 /// Collect every entry under one image directory without following links.
+///
+/// An unreadable directory or a name that is not UTF-8 cannot match the bound
+/// inventory, as in the Python walk.
 fn walk(
     root: &Path,
     prefix: &str,
@@ -363,33 +385,22 @@ fn walk(
     directories: &mut BTreeSet<String>,
     links: &mut BTreeMap<String, String>,
 ) -> Result<(), String> {
-    let entries = std::fs::read_dir(root.join(prefix))
-        .map_err(|_| "Checker image entries differ from the bound image inventory.")?;
-    for entry in entries {
-        let entry =
-            entry.map_err(|_| "Checker image entries differ from the bound image inventory.")?;
-        let name = entry
-            .file_name()
-            .into_string()
-            .map_err(|_| "Checker path requires exact UTF-8.")?;
+    for (name, kind, path) in list(&root.join(prefix)).map_err(|_| ENTRIES)? {
+        let Ok(name) = name.into_string() else {
+            return Err(ENTRIES.into());
+        };
         let relative = if prefix.is_empty() {
             name
         } else {
             format!("{prefix}/{name}")
         };
-        let kind = entry
-            .file_type()
-            .map_err(|_| "Checker image entries differ from the bound image inventory.")?;
         if kind.is_symlink() {
-            let target = std::fs::read_link(entry.path())
-                .map_err(|_| "Checker image links differ from the bound image inventory.")?;
-            links.insert(
-                relative,
-                target
-                    .into_os_string()
-                    .into_string()
-                    .map_err(|_| "Checker path requires exact UTF-8.")?,
-            );
+            let target = std::fs::read_link(&path)
+                .map_err(|_| "Cannot bind the complete public neural acquisition.")?;
+            let Ok(target) = target.into_os_string().into_string() else {
+                return Err("Checker image links differ from the bound image inventory.".into());
+            };
+            links.insert(relative, target);
         } else if kind.is_dir() {
             directories.insert(relative.clone());
             walk(root, &relative, files, directories, links)?;
@@ -400,28 +411,32 @@ fn walk(
     Ok(())
 }
 
-/// Verify one image file's type, mode, length and digest without following links.
-fn image_file(path: &Path, item: &ImageFile) -> Result<(), String> {
+/// Read one image file whose type, mode and length match; `None` when they differ.
+fn image_bytes(path: &Path, item: &ImageFile) -> std::io::Result<Option<Vec<u8>>> {
     let file = OpenOptions::new()
         .read(true)
         .custom_flags(0o400000 | 0o4000)
-        .open(path)
-        .map_err(|_| "Checker image file is unavailable.")?;
-    let metadata = file
-        .metadata()
-        .map_err(|_| "Checker image file is unavailable.")?;
+        .open(path)?;
+    let metadata = file.metadata()?;
     if !metadata.is_file()
         || metadata.permissions().mode() & 0o7777 != item.mode
         || metadata.len() != item.byte_length
         || metadata.len() > 256 * 1024 * 1024
     {
-        return Err("Checker image file type, mode or length differs from its binding.".into());
+        return Ok(None);
     }
     let mut raw = Vec::new();
-    file.take(item.byte_length + 1)
-        .read_to_end(&mut raw)
-        .map_err(|_| "Checker image file is unavailable.")?;
-    if raw.len() as u64 != item.byte_length || digest(&raw) != item.sha256 {
+    file.take(item.byte_length + 1).read_to_end(&mut raw)?;
+    Ok(Some(raw))
+}
+
+/// Verify one image file's type, mode, length and digest without following links.
+fn image_file(path: &Path, item: &ImageFile) -> Result<(), String> {
+    let raw = image_bytes(path, item)
+        .map_err(|_| "Checker image file is unavailable.")?
+        .ok_or("Checker image file type, mode or length differs from its binding.")?;
+    // The length was checked before reading; any other change alters the digest.
+    if digest(&raw) != item.sha256 {
         return Err("Checker image file bytes differ from its binding.".into());
     }
     Ok(())

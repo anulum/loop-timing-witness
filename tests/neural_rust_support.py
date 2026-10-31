@@ -81,7 +81,7 @@ def consumer() -> Path:
     raise AssertionError(message)
 
 
-def _executor(entry: Any, directory: Path) -> dict[str, Any]:  # noqa: ANN401
+def _executor(entry: Any, directory: Path, binding: bytes | None) -> dict[str, Any]:  # noqa: ANN401
     """Describe the entry's executor with its exact bytes written to files.
 
     Parameters
@@ -90,6 +90,8 @@ def _executor(entry: Any, directory: Path) -> dict[str, Any]:  # noqa: ANN401
         Image executor or host installation of the registry entry.
     directory
         Owned directory for the written bytes.
+    binding
+        Image executor binding bytes in place of the entry's, or ``None``.
 
     Returns
     -------
@@ -97,7 +99,9 @@ def _executor(entry: Any, directory: Path) -> dict[str, Any]:  # noqa: ANN401
         Executor description for the Rust consumer.
     """
     if isinstance(entry, ImageCheckerExecutor):
-        (directory / "binding.json").write_bytes(entry.binding_bytes)
+        (directory / "binding.json").write_bytes(
+            entry.binding_bytes if binding is None else binding
+        )
         (directory / "runtime.json").write_bytes(entry.runtime_bytes)
         return {
             "image": {
@@ -130,6 +134,7 @@ def rust_outcome(
     directory: Path,
     command: Path | None = None,
     wrapper: Sequence[str] = (),
+    binding: bytes | None = None,
 ) -> dict[str, Any]:
     """Run the Rust API or command against the acquisition and its own registry entry.
 
@@ -143,6 +148,9 @@ def rust_outcome(
         New report directory for the analysis command, or ``None`` for the API.
     wrapper
         Argument vector that runs the consumer under a host condition.
+    binding
+        Image executor binding bytes in place of the entry's, which the
+        consumer's own factory then constructs.
 
     Returns
     -------
@@ -162,7 +170,7 @@ def rust_outcome(
         ],
         "policy": str(directory / "policy.json"),
         "checker": str(directory / "checker.json"),
-        "executor": _executor(executor, directory),
+        "executor": _executor(executor, directory, binding),
         "command": None if command is None else str(command),
     }
     (directory / "spec.json").write_text(json.dumps(spec))

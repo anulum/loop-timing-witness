@@ -52,6 +52,13 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Check the checker image executor alike in Python and Rust: the binding must be its
+  closed typed form in both (host boundary, image inventory, command, environment,
+  deadline and file lists), invalid JSON is refused by name, an unreadable image
+  directory or a name or link target that is not UTF-8 cannot match the bound
+  inventory, and any operating-system failure reading an image file or a link is the
+  same refusal. Image tests now change the binding, the host boundary, the image
+  tree and the worker observation in both languages.
 - Read the traced checker opens and run the checker alike in Python and Rust: one
   open-record grammar, shared by both test suites, with plain or hexadecimal path
   characters and lines ending only at a line feed; a non-UTF-8 trace, path or

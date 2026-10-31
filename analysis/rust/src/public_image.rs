@@ -234,9 +234,6 @@ impl ImageExecutor {
 
     /// Run one fixed operation in the image and verify it stayed unchanged.
     pub(crate) fn invoke(&self, operation: &str, directory: &Path) -> Result<Invocation, String> {
-        if !["generate", "check"].contains(&operation) {
-            return Err("Unsupported fixed source-checker operation.".into());
-        }
         self.verify()?;
         let text = |path: &Path| -> Result<String, String> {
             path.to_str()

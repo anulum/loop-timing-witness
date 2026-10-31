@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from .neural_checker_installation import NeuralCheckerInstallation
 
 _FILE_LIMIT = 1048576
+_TRACE_LIMIT = 8 * 1048576
 _TRACE_LIMIT = 8 * _FILE_LIMIT
 _WALL_SECONDS = 45
 _LIMIT_BOOTSTRAP = (
@@ -181,6 +182,33 @@ class CheckerInvocation:
     interrupted: bool
 
 
+def exact_text(path: Path) -> str:
+    """Return a path as exact UTF-8 text for a recorded command.
+
+    Parameters
+    ----------
+    path
+        Host path placed in a command or environment.
+
+    Returns
+    -------
+    str
+        The path text.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If the path bytes are not UTF-8, so a report could not record them exactly.
+    """
+    text = str(path)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        message = "Checker path requires exact UTF-8."
+        raise NeuralCaptureRefusalError(message) from exc
+    return text
+
+
 def checker_environment(directory: Path) -> dict[str, str]:
     """Construct the closed checker environment without inherited executable selectors.
 
@@ -203,7 +231,7 @@ def checker_environment(directory: Path) -> dict[str, str]:
         "OMP_NUM_THREADS": "1",
         "MKL_NUM_THREADS": "1",
         "NUMEXPR_NUM_THREADS": "1",
-        "TMPDIR": str(directory),
+        "TMPDIR": exact_text(directory),
     }
 
 
@@ -238,15 +266,15 @@ def invoke_source_checker(
     """
     trace_path = directory / "checker-open.log"
     command = (
-        str(installation.interpreter.path),
+        exact_text(installation.interpreter.path),
         "-X",
-        f"pycache_prefix={directory / 'bytecode'}",
+        f"pycache_prefix={exact_text(directory / 'bytecode')}",
         "-I",
         "-B",
         "-S",
         "-c",
         _LIMIT_BOOTSTRAP,
-        str(installation.tracer.path),
+        exact_text(installation.tracer.path),
         "--kill-on-exit",
         "-f",
         "-qq",
@@ -257,19 +285,19 @@ def invoke_source_checker(
         "-e",
         "trace=openat,openat2,execve",
         "-o",
-        str(trace_path),
-        str(installation.interpreter.path),
+        exact_text(trace_path),
+        exact_text(installation.interpreter.path),
         "-X",
-        f"pycache_prefix={directory / 'bytecode'}",
+        f"pycache_prefix={exact_text(directory / 'bytecode')}",
         "-I",
         "-B",
         "-S",
         "-c",
         _BOOTSTRAP,
-        str(Path(__file__).resolve().parents[1]),
-        str(script),
+        exact_text(Path(__file__).resolve().parents[1]),
+        exact_text(script),
         operation,
-        *(str(path) for path in installation.import_roots),
+        *(exact_text(path) for path in installation.import_roots),
     )
     started = time.time_ns()
     monotonic = time.monotonic_ns()
@@ -309,7 +337,7 @@ def invoke_source_checker(
         elapsed,
         bounded_output(directory / "checker.stdout", _FILE_LIMIT),
         bounded_output(directory / "checker.stderr", _FILE_LIMIT),
-        trace_path.read_bytes() if trace_path.is_file() else b"",
+        bounded_output(trace_path, _TRACE_LIMIT) if trace_path.exists() else b"",
         observation,
         interrupted,
     )

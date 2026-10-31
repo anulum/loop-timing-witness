@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import platform
 import shutil
 import sys
@@ -26,6 +27,12 @@ from loop_timing_witness.neural_checker_installation import (
 )
 from loop_timing_witness.neural_checker_trace import checker_opened_files, checker_trace_findings
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
+
+_CORPUS: dict[str, Any] = json.loads(
+    (
+        Path(__file__).resolve().parents[1] / "analysis/rust/tests/data/neural-checker-traces.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _installation(root: Path) -> NeuralCheckerInstallation:
@@ -196,3 +203,32 @@ def test_unavailable_trace_or_observation_is_a_finding(
         _invocation(trace, observation), tmp_path, frozenset(), _installation(tmp_path)
     )
     assert findings == ("Actual source checker opened-file observation is unavailable.",)
+
+
+@pytest.mark.parametrize("case", _CORPUS["cases"], ids=[case["name"] for case in _CORPUS["cases"]])
+def test_shared_trace_corpus_reads_alike(tmp_path: Path, case: dict[str, Any]) -> None:
+    """Read each shared trace case exactly as the Rust verifier's unit test does.
+
+    Parameters
+    ----------
+    tmp_path
+        Working directory holding the corpus files.
+    case
+        Trace lines with their opened files or refusal.
+    """
+    root = tmp_path.resolve()
+    for name in _CORPUS["files"]:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_bytes(b"")
+    escaped = "".join(f"\\x{byte:02x}" for byte in str(root).encode())
+    text = "".join(
+        line.replace("{root_hex}", escaped).replace("{root}", str(root)) + "\n"
+        for line in case["lines"]
+    )
+    raw = text.encode() + (b"\xff\n" if case.get("invalid_utf8") else b"")
+    if "refusal" in case:
+        with pytest.raises(NeuralCaptureRefusalError) as refused:
+            checker_opened_files(raw, root)
+        assert str(refused.value) == case["refusal"]
+    else:
+        assert checker_opened_files(raw, root) == {root / name for name in case["opened"]}

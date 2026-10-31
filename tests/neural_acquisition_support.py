@@ -24,7 +24,7 @@ import platform
 import shutil
 import stat
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -995,3 +995,33 @@ def make_writable(root: Path) -> None:
     for path in root.rglob("*"):
         if not path.is_symlink():
             path.chmod(path.stat().st_mode | stat.S_IWUSR)
+
+
+def rebind_image(
+    acquisition: NeuralAcquisition, edit: Callable[[dict[str, Any]], object]
+) -> NeuralAcquisition:
+    """Return the acquisition admitted by an image executor with an edited binding.
+
+    The binding belongs to the consumer, so the acquisition's own files stay
+    unchanged; only the reviewed entry's executor is rebuilt.
+
+    Parameters
+    ----------
+    acquisition
+        Acquisition admitted by the test image executor.
+    edit
+        Mutates the decoded executor binding in place; its result is ignored.
+
+    Returns
+    -------
+    NeuralAcquisition
+        The same acquisition with the rebuilt executor.
+    """
+    policy, checker, executor = acquisition.entry
+    assert isinstance(executor, ImageCheckerExecutor)
+    binding = json.loads(executor.binding_bytes)
+    edit(binding)
+    rebuilt = ImageCheckerExecutor(
+        executor.image_root, canonical_json_bytes(binding), executor.runtime_bytes
+    )
+    return replace(acquisition, entry=(policy, checker, rebuilt))

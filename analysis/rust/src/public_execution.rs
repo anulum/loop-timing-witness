@@ -18,7 +18,7 @@ use std::io::Read;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const LIMIT_BOOTSTRAP: &str = "import os,resource,sys; resource.setrlimit(resource.RLIMIT_AS,(805306368,805306368)); resource.setrlimit(resource.RLIMIT_CORE,(0,0)); resource.setrlimit(resource.RLIMIT_CPU,(30,30)); resource.setrlimit(resource.RLIMIT_FSIZE,(8388608,8388608)); os.execv(sys.argv[1],sys.argv[1:])";
@@ -114,34 +114,35 @@ fn path_text(path: &Path) -> Result<&str, String> {
         .ok_or_else(|| "Checker path requires exact UTF-8.".into())
 }
 
-/// Return a finite current epoch timestamp with no numeric truncation.
-fn timestamp() -> Result<u64, String> {
-    SystemTime::now()
+/// Return the current epoch time in nanoseconds, as the Python verifier reads it.
+fn timestamp() -> u64 {
+    let since = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| "Checker system clock precedes its supported epoch.".to_owned())?
-        .as_nanos()
-        .try_into()
-        .map_err(|_| "Checker timestamp exceeds its allocation.".into())
+        .unwrap_or_default();
+    u64::try_from(since.as_nanos()).unwrap_or(u64::MAX)
 }
 
-/// Read an owned completed output through a finite regular no-follow descriptor.
-pub(crate) fn output_bytes(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
+/// Read one regular output through a no-follow, nonblocking descriptor; `None` if not regular.
+fn regular_output(path: &Path, limit: u64) -> std::io::Result<Option<Vec<u8>>> {
     let file = OpenOptions::new()
         .read(true)
         .custom_flags(0o400000 | 0o4000)
-        .open(path)
-        .map_err(|_| "Actual checker output is unavailable.".to_owned())?;
-    if !file
-        .metadata()
-        .map_err(|_| "Cannot inspect checker output.".to_owned())?
-        .is_file()
-    {
-        return Err("Actual checker output must be a regular file.".into());
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Ok(None);
     }
     let mut raw = Vec::new();
-    file.take(limit + 1)
-        .read_to_end(&mut raw)
-        .map_err(|_| "Cannot read actual checker output.".to_owned())?;
+    file.take(limit + 1).read_to_end(&mut raw)?;
+    Ok(Some(raw))
+}
+
+/// Read an owned completed output through a finite regular no-follow descriptor.
+///
+/// Any operating-system failure is the one refusal the Python reader gives.
+pub(crate) fn output_bytes(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
+    let raw = regular_output(path, limit)
+        .map_err(|_| "Actual checker output is unavailable.".to_owned())?
+        .ok_or("Actual checker output must be a regular file.")?;
     if raw.len() as u64 > limit {
         return Err("Actual checker output exceeds its allocation.".into());
     }
@@ -155,9 +156,6 @@ pub(crate) fn invoke(
     operation: &str,
     directory: &Path,
 ) -> Result<Invocation, String> {
-    if !["generate", "check"].contains(&operation) {
-        return Err("Unsupported fixed source-checker operation.".into());
-    }
     installation.verify()?;
     let interpreter = path_text(installation.interpreter()?)?;
     let tracer = path_text(installation.tracer()?)?;
@@ -212,10 +210,7 @@ pub(crate) fn invoke(
         ),
         Duration::from_secs(installation.runtime.execution_contract.wall_seconds),
     )?;
-    let trace = if trace_path
-        .try_exists()
-        .map_err(|_| "Cannot inspect the actual checker trace.".to_owned())?
-    {
+    let trace = if trace_path.exists() {
         output_bytes(&trace_path, 8388608)?
     } else {
         Vec::new()
@@ -254,24 +249,20 @@ impl Completed {
     }
 }
 
-/// Spawn one owned process group, enforce its deadline and reap it completely.
+/// Start the owned process group and wait for it, stopping the whole group at the deadline.
 ///
-/// The child gets only the given environment, a null stdin and exclusive log
-/// files. A deadline stops the whole group; the process is never restarted.
-pub(crate) fn run_group(
+/// Returns the reaped status and whether the deadline stopped it. An error at
+/// any step stops and reaps the group before it is returned.
+fn supervise(
     argv: &[String],
     directory: &Path,
     environment: BTreeMap<String, String>,
     logs: (&Path, &Path),
-    deadline: Duration,
-) -> Result<Completed, String> {
-    let stdout = File::create_new(logs.0)
-        .map_err(|_| "Cannot create exclusive checker output.".to_owned())?;
-    let stderr = File::create_new(logs.1)
-        .map_err(|_| "Cannot create exclusive checker diagnostic.".to_owned())?;
-    let started_ns = timestamp()?;
-    let monotonic = Instant::now();
-    let mut child = Command::new(&argv[0])
+    deadline: (Instant, Duration),
+) -> std::io::Result<(ExitStatus, bool)> {
+    let stdout = File::create_new(logs.0)?;
+    let stderr = File::create_new(logs.1)?;
+    let child = Command::new(&argv[0])
         .args(&argv[1..])
         .current_dir(directory)
         .env_clear()
@@ -280,57 +271,52 @@ pub(crate) fn run_group(
         .stdout(stdout)
         .stderr(stderr)
         .process_group(0)
-        .spawn()
-        .map_err(|_| "Cannot start the selected source checker.".to_owned())?;
-    let raw_pid = i32::try_from(child.id()).ok().filter(|pid| *pid > 1);
-    let Some(group) = raw_pid.and_then(Pid::from_raw) else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err("Source checker did not obtain an owned process group.".into());
-    };
+        .spawn()?;
     let mut running = RunningChecker {
+        group: Pid::from_child(&child),
         child,
-        group,
         reaped: false,
     };
-    let mut interrupted = false;
-    let status = loop {
-        if let Some(status) = running
-            .child
-            .try_wait()
-            .map_err(|_| "Cannot observe the actual source checker.".to_owned())?
-        {
+    loop {
+        if let Some(status) = running.child.try_wait()? {
             running.reaped = true;
-            break status;
+            return Ok((status, false));
         }
-        if monotonic.elapsed() >= deadline {
-            interrupted = true;
-            kill_process_group(running.group, Signal::KILL)
-                .map_err(|_| "Cannot stop the owned checker process group.".to_owned())?;
-            let status = running
-                .child
-                .wait()
-                .map_err(|_| "Cannot reap the interrupted source checker.".to_owned())?;
+        if deadline.0.elapsed() >= deadline.1 {
+            kill_process_group(running.group, Signal::KILL)?;
+            let status = running.child.wait()?;
             running.reaped = true;
-            break status;
+            return Ok((status, true));
         }
         std::thread::sleep(Duration::from_millis(20));
-    };
+    }
+}
+
+/// Spawn one owned process group, enforce its deadline and reap it completely.
+///
+/// The child gets only the given environment, a null stdin and exclusive log
+/// files. A deadline stops the whole group; the process is never restarted.
+/// Any operating-system failure is the refusal the Python verifier gives.
+pub(crate) fn run_group(
+    argv: &[String],
+    directory: &Path,
+    environment: BTreeMap<String, String>,
+    logs: (&Path, &Path),
+    deadline: Duration,
+) -> Result<Completed, String> {
+    let started_ns = timestamp();
+    let monotonic = Instant::now();
+    let (status, interrupted) =
+        supervise(argv, directory, environment, logs, (monotonic, deadline))
+            .map_err(|_| "Cannot bind the complete public neural acquisition.".to_owned())?;
+    // A status without an exit code was a signal; the Python status negates it.
     let returncode = status
         .code()
-        .or_else(|| status.signal().map(|signal| -signal))
-        .ok_or("Actual checker native status is unavailable.")?;
-    let completed_ns = timestamp()?;
-    let elapsed_ns = monotonic
-        .elapsed()
-        .as_nanos()
-        .try_into()
-        .map_err(|_| "Checker elapsed time exceeds its allocation.".to_owned())?;
+        .unwrap_or_else(|| -status.signal().unwrap_or_default());
+    let completed_ns = timestamp();
+    let elapsed_ns = u64::try_from(monotonic.elapsed().as_nanos()).unwrap_or(u64::MAX);
     let observation_path: PathBuf = directory.join("checker-observation.json");
-    let observation = if observation_path
-        .try_exists()
-        .map_err(|_| "Cannot inspect the actual checker observation.".to_owned())?
-    {
+    let observation = if observation_path.exists() {
         Some(decode(
             &output_bytes(&observation_path, 1048576)?,
             "actual checker observation",

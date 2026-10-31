@@ -171,7 +171,14 @@ def rust_outcome(
     if profiles:
         environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
     result = subprocess.run(
-        [*wrapper, str(consumer()), "--exact", "consumer_registry_acquisition", "--nocapture"],
+        [
+            *wrapper,
+            str(consumer()),
+            "--exact",
+            "consumer_registry_acquisition",
+            "--nocapture",
+            "--test-threads=1",
+        ],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,

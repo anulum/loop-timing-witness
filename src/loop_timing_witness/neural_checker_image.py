@@ -30,7 +30,12 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from .manifest_io import JsonInputRefusalError, canonical_json_bytes, parse_json_object
-from .neural_checker_execution import CheckerInvocation, bounded_output, read_observation
+from .neural_checker_execution import (
+    CheckerInvocation,
+    bounded_output,
+    exact_text,
+    read_observation,
+)
 from .neural_checker_installation import CheckerInstalledFile
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_json_shapes import EXECUTION_FIELDS, REFERENCE_FIELDS, record, records, texts, typed
@@ -325,8 +330,8 @@ class ImageCheckerExecutor:
             raise _refuse(message)
         self.verify()
         values = {
-            "{image_root}": str(self.image_root),
-            "{work_directory}": str(directory),
+            "{image_root}": exact_text(self.image_root),
+            "{work_directory}": exact_text(directory),
             "{operation}": operation,
         }
         command = tuple(values.get(item, item) for item in self._binding["command"])

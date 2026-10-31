@@ -52,6 +52,13 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Read the traced checker opens and run the checker alike in Python and Rust: one
+  open-record grammar, shared by both test suites, with plain or hexadecimal path
+  characters and lines ending only at a line feed; a non-UTF-8 trace, path or
+  working directory, or an opened file that is gone, is a named refusal; the trace
+  is read bounded and without links; runtime paths are compared resolved; any
+  operating-system failure starting, waiting for or stopping the checker is one
+  refusal, after the whole process group is stopped.
 - Refuse damaged capture, counter, receipt, policy, reset and trace inputs with the
   same message in Python and Rust: capture records and counter receipts name the
   exact defect; the producer completion, native clock, native runtime, joint reset

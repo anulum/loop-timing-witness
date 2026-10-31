@@ -15,10 +15,13 @@ use std::collections::BTreeMap;
 
 /// Return deterministic UTF-8 JSON bytes with the complete trailing newline.
 pub(crate) fn canonical(value: &Value) -> Result<Vec<u8>, String> {
-    let mut raw = serde_json::to_vec_pretty(value)
-        .map_err(|_| "Cannot serialise the complete neural report.".to_owned())?;
-    raw.push(b'\n');
-    Ok(raw)
+    // The alternate form is the pretty serialiser, which cannot fail for a JSON value.
+    Ok(format!("{value:#}\n").into_bytes())
+}
+
+/// Return bytes the analysis already admitted through their typed form as a JSON value.
+fn admitted(raw: &[u8]) -> Value {
+    serde_json::from_slice(raw).unwrap_or(Value::Null)
 }
 
 /// Preserve a whole original byte identity without exposing content-derived execution.
@@ -93,27 +96,17 @@ pub(crate) fn analyze(mut run: PublicRun) -> Result<Value, String> {
         .into_iter()
         .map(|operation| {
             let raw = &run.core.files[&format!("fresh_checker_{operation}_execution_receipt")];
-            decode(raw, "fresh checker execution receipt").map(|value| (operation, value))
+            (operation, admitted(raw))
         })
-        .collect::<Result<_, _>>()?;
-    let compiled: Value = decode(
-        &run.core.files["compiler_simulator_runtime"],
-        "bound native runtime receipt",
-    )?;
-    let actual_done: Value = decode(
-        &run.core.files["actual_completion"],
-        "bound actual completion receipt",
-    )?;
-    let clock_schedule: Value = decode(
-        &run.core.files["clock_schedule_ref"],
-        "bound original clock schedule",
-    )?;
+        .collect();
+    let compiled = admitted(&run.core.files["compiler_simulator_runtime"]);
+    let actual_done = admitted(&run.core.files["actual_completion"]);
+    let clock_schedule = admitted(&run.core.files["clock_schedule_ref"]);
     let reset_receipt: Option<Value> = run
         .core
         .files
         .get("reset_epoch_receipt")
-        .map(|raw| decode(raw, "bound actual reset receipt"))
-        .transpose()?;
+        .map(|raw| admitted(raw));
     let source_identity = [
         crate::public_policy::ID,
         crate::public_manifest::SCHEMA_SHA256,

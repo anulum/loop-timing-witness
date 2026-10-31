@@ -379,7 +379,7 @@ def test_image_registration_requires_operator_image_then_original_files(
     assert result.returncode == 1
     assert result.stdout == ""
     expected = (
-        "Cannot read a public neural file"
+        "Cannot open original file without symlinks"
         if selection == "absolute"
         else "No immutable checker image is selected"
     )
@@ -438,7 +438,7 @@ def test_host_registration_refuses_worker_sources_changed_after_review(
     assert result.returncode == 1
     assert result.stdout == ""
     assert "Selected checker worker or installation differs" in result.stderr
-    assert "Cannot read a public neural file" not in result.stderr
+    assert "Cannot open original file without symlinks" not in result.stderr
 
 
 def test_reviewed_package_admission_requires_original_acquisition_files(
@@ -459,7 +459,7 @@ def test_reviewed_package_admission_requires_original_acquisition_files(
     result = _analysis(installed.parent, manifest, output)
     assert result.returncode == 1
     assert result.stdout == ""
-    assert "Cannot read a public neural file" in result.stderr
+    assert "Cannot open original file without symlinks" in result.stderr
     assert "Selected neural profile" not in result.stderr
     assert "Traceback" not in result.stderr
     assert not output.exists()

@@ -93,8 +93,6 @@ pub(crate) fn admit(
     if policy.schema_id != ID
         || policy.schema_sha256 != crate::public_manifest::SCHEMA_SHA256
         || policy.cohort != COHORT
-        || manifest.schema_id != policy.schema_id
-        || manifest.native_source_cohort != policy.cohort
         || policy.sources.is_empty()
         || policy.compiled_artifacts.is_empty()
     {

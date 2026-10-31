@@ -10,7 +10,7 @@
 
 use crate::binding::BoundRun;
 use crate::capture::Role;
-use crate::files::decode;
+use crate::files::receipt;
 use crate::receipts::ProducerCompletion;
 use crate::traces::TraceFindings;
 
@@ -19,7 +19,7 @@ pub(crate) fn completion(
     run: &BoundRun,
     traces: &TraceFindings,
 ) -> Result<(ProducerCompletion, Vec<String>), String> {
-    let d: ProducerCompletion = decode(&run.files["actual_completion"], "producer completion")?;
+    let d: ProducerCompletion = receipt(&run.files["actual_completion"], "producer completion")?;
     let values = [
         d.requested_steps,
         d.observed_states,

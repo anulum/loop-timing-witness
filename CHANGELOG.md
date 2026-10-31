@@ -52,6 +52,14 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Refuse damaged capture, counter, receipt, policy, reset and trace inputs with the
+  same message in Python and Rust: capture records and counter receipts name the
+  exact defect; the producer completion, native clock, native runtime, joint reset
+  and historical checker receipts refuse invalid JSON by name and any other shape
+  as an incomplete receipt; file reads name the file and the step that failed;
+  checker sources are bound from the run as their own files; any operating-system
+  failure while staging the checker is one refusal. Hermetic acquisition tests now
+  run 159 further single faults, including real host faults, through both languages.
 - Refuse the same neural acquisitions with the same messages in Python and Rust:
   malformed JSON names only the refused document; the image runtime contract,
   checker policy and worker observation must have their closed typed forms in

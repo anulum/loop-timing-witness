@@ -341,7 +341,7 @@ def test_actual_registered_contract_binds_its_original_bytes(tmp_path: Path) -> 
     ):
         admitted_neural_contract(tmp_path, manifest, registry)
     target.write_bytes(policy + b" ")
-    with pytest.raises(NeuralCaptureRefusalError, match="exceeds its byte allocation"):
+    with pytest.raises(NeuralCaptureRefusalError, match="Original file exceeds allocation"):
         admitted_neural_contract(tmp_path, manifest, registry)
 
 

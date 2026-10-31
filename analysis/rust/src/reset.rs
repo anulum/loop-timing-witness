@@ -9,7 +9,7 @@
 //! Complete actual abandoned-prefix/reset receipt interpretation, distinct from epoch0.
 
 use crate::binding::BoundRun;
-use crate::files::decode;
+use crate::files::receipt;
 use crate::rows;
 use serde::Deserialize;
 
@@ -62,7 +62,7 @@ pub(crate) fn analyze(run: &BoundRun, original_rows: &rows::Rows) -> Result<Vec<
     let Some(raw) = run.files.get("reset_epoch_receipt") else {
         return Ok(Vec::new());
     };
-    let r: Reset = decode(raw, "actual joint reset")?;
+    let r: Reset = receipt(raw, "actual joint reset")?;
     let counts = [
         r.abandoned_epoch,
         r.next_epoch,

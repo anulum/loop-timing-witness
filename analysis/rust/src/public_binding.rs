@@ -33,7 +33,7 @@ pub(crate) fn load(path: &Path, registry: &NeuralRegistry) -> Result<PublicRun, 
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."))
         .canonicalize()
-        .map_err(|_| "Public neural acquisition directory is unavailable.".to_owned())?;
+        .map_err(|_| "Cannot bind the complete public neural acquisition.".to_owned())?;
     let contract = public_policy::admit(&root, &manifest, registry)?;
     let expected = &contract.policy.sources;
     let paths: BTreeSet<_> = manifest
@@ -41,9 +41,8 @@ pub(crate) fn load(path: &Path, registry: &NeuralRegistry) -> Result<PublicRun, 
         .iter()
         .map(|reference| reference.path.as_str())
         .collect();
-    if paths.len() != manifest.source_files.len()
-        || paths != expected.keys().map(String::as_str).collect()
-    {
+    // Declarations already refused a repeated source path.
+    if paths != expected.keys().map(String::as_str).collect() {
         return Err(
             "Complete public neural source population differs from its reviewed policy.".into(),
         );
@@ -82,9 +81,9 @@ pub(crate) fn load(path: &Path, registry: &NeuralRegistry) -> Result<PublicRun, 
     }
     let mut checker_paths = BTreeSet::new();
     for reference in &contract.checker.source_files {
-        if sources.get(&reference.path).is_none_or(|body| {
-            body.len() as u64 != reference.byte_length || digest(body) != reference.sha256
-        }) {
+        // Each checker role is bound from the run as its own file, then to the admitted body.
+        let body = read_bound(&root, reference, 1048576)?;
+        if sources.get(&reference.path) != Some(&body) {
             return Err(
                 "Checker source closure differs from the admitted whole source population.".into(),
             );

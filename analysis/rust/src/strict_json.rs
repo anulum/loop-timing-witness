@@ -87,3 +87,7 @@ pub(crate) fn decode_object(raw: &[u8], name: &str) -> Result<Map<String, Value>
         _ => Err(format!("Invalid original {name}.")),
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/strict_json.rs"]
+mod tests;

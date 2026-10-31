@@ -33,6 +33,8 @@ from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import build_neural_run_report, load_neural_run
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from neural_acquisition_support import NeuralAcquisition
 
 CRATE = Path(__file__).resolve().parents[1] / "analysis/rust"
@@ -124,7 +126,10 @@ def _executor(entry: Any, directory: Path) -> dict[str, Any]:  # noqa: ANN401
 
 
 def rust_outcome(
-    acquisition: NeuralAcquisition, directory: Path, command: Path | None = None
+    acquisition: NeuralAcquisition,
+    directory: Path,
+    command: Path | None = None,
+    wrapper: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Run the Rust API or command against the acquisition and its own registry entry.
 
@@ -136,6 +141,8 @@ def rust_outcome(
         Owned directory for the description and outcome, created when absent.
     command
         New report directory for the analysis command, or ``None`` for the API.
+    wrapper
+        Argument vector that runs the consumer under a host condition.
 
     Returns
     -------
@@ -164,7 +171,7 @@ def rust_outcome(
     if profiles:
         environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
     result = subprocess.run(
-        [str(consumer()), "--exact", "consumer_registry_acquisition", "--nocapture"],
+        [*wrapper, str(consumer()), "--exact", "consumer_registry_acquisition", "--nocapture"],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,

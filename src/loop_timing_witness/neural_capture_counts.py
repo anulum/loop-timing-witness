@@ -173,7 +173,9 @@ def decode_neural_capture_counts(
     try:
         root = parse_json_object(content, "neural capture counts")
     except JsonInputRefusalError as exc:
-        raise NeuralCaptureRefusalError(str(exc)) from exc
+        # The native verifier names only the refused document, never decoder detail.
+        message = f"Invalid original {exc.source}."
+        raise NeuralCaptureRefusalError(message) from exc
     if set(root) != {"schema_id", "drop_counter_bits", "channels"} or (
         root["schema_id"] != COUNTS_SCHEMA_ID
     ):

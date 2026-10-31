@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from .neural_event_stream import NeuralCaptureRefusalError
 
 _PATH_LIMIT = 4096
+_MANIFEST_LIMIT = 65536
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -58,29 +59,35 @@ def _read(directory: Path, name: str, limit: int, *, portable: bool = True) -> b
             for part in name.split("/")
         )
     ):
-        message = "Public neural files require canonical portable within-run paths."
+        message = f"Invalid within-run original path: {name}."
         raise NeuralCaptureRefusalError(message)
+    # Each failure names the step it interrupted, as the native reader does.
+    stage = "Run directory descriptor unavailable."
     try:
         with ExitStack() as stack:
             flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
             descriptor = os.open(directory, flags | os.O_DIRECTORY)
             stack.callback(os.close, descriptor)
+            stage = f"Cannot open original parent without symlinks: {name}."
             for part in name.split("/")[:-1]:
                 descriptor = os.open(part, flags | os.O_DIRECTORY, dir_fd=descriptor)
                 stack.callback(os.close, descriptor)
+            stage = f"Cannot open original file without symlinks: {name}."
             target = os.open(
                 name.rsplit("/", maxsplit=1)[-1], flags | os.O_NONBLOCK, dir_fd=descriptor
             )
             with os.fdopen(target, "rb") as stream:
-                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                    message = "Public neural input must be a regular file."
+                stage = f"Cannot inspect original file descriptor: {name}."
+                mode = os.fstat(stream.fileno()).st_mode
+                if not stat.S_ISREG(mode):
+                    message = f"Original file is not regular within the run: {name}."
                     raise NeuralCaptureRefusalError(message)
+                stage = f"Cannot read full original file: {name}."
                 raw = stream.read(limit + 1)
     except OSError as exc:
-        message = "Cannot read a public neural file without following symlinks."
-        raise NeuralCaptureRefusalError(message) from exc
+        raise NeuralCaptureRefusalError(stage) from exc
     if len(raw) > limit:
-        message = "Public neural file exceeds its byte allocation."
+        message = f"Original file exceeds allocation: {name}."
         raise NeuralCaptureRefusalError(message)
     return raw
 
@@ -130,7 +137,12 @@ def read_neural_run_file(
         or type(reference["byte_length"]) is not int
         or not 0 <= reference["byte_length"] <= maximum_bytes
     ):
-        message = "Invalid complete public neural file reference or allocation."
+        name = reference.get("path") if isinstance(reference, dict) else None
+        message = (
+            f"Invalid original file reference: {name}."
+            if type(name) is str
+            else "Invalid original file reference."
+        )
         raise NeuralCaptureRefusalError(message)
     raw = _read(directory, reference["path"], reference["byte_length"])
     if expected_bytes is not None and raw != expected_bytes:
@@ -139,7 +151,7 @@ def read_neural_run_file(
         len(raw) != reference["byte_length"]
         or hashlib.sha256(raw).hexdigest() != reference["sha256"]
     ):
-        message = "Public neural file differs from its complete length or SHA-256."
+        message = f"Original whole length/SHA-256 differs: {reference['path']}."
         raise NeuralCaptureRefusalError(message)
     return raw
 
@@ -162,11 +174,24 @@ def read_neural_manifest_root(path: Path) -> bytes:
     NeuralCaptureRefusalError
         If the original cannot be acquired through a no-follow finite descriptor.
     """
+    # Each failure names the step it interrupted, as the native reader does.
+    stage = "Cannot read neural manifest as a regular file without symlinks."
     try:
-        return _read(path.parent.resolve(strict=True), path.name, 65536, portable=False)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(descriptor, "rb") as stream:
+            stage = "Cannot inspect neural manifest descriptor."
+            regular = stat.S_ISREG(os.fstat(stream.fileno()).st_mode)
+            stage = "Cannot read neural manifest bytes."
+            raw = stream.read(_MANIFEST_LIMIT + 1) if regular else b""
     except (OSError, ValueError) as exc:
-        message = "Cannot acquire the public neural root manifest."
-        raise NeuralCaptureRefusalError(message) from exc
+        raise NeuralCaptureRefusalError(stage) from exc
+    if not regular:
+        message = "Neural manifest must be a regular file."
+        raise NeuralCaptureRefusalError(message)
+    if len(raw) > _MANIFEST_LIMIT:
+        message = "Neural manifest exceeds its byte allocation."
+        raise NeuralCaptureRefusalError(message)
+    return raw
 
 
 def read_run_dispatch_bytes(path: Path) -> bytes:

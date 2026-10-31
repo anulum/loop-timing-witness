@@ -8,15 +8,20 @@
 
 //! Copy exact admitted sources, execute both real operations and retain original observations.
 
-use crate::files::digest;
 use crate::public_binding::PublicRun;
 use crate::public_execution::{Invocation, invoke, output_bytes};
 use crate::public_image::NeuralExecutor;
 use crate::public_temporary::OwnedDirectory;
 use serde_json::json;
 use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 /// Independent source, numerical and process-completion findings.
+/// Map a failed owned staging operation to the refusal Python gives any OS error here.
+fn staged<T>(result: std::io::Result<T>) -> Result<T, String> {
+    result.map_err(|_| "Cannot bind the complete public neural acquisition.".to_owned())
+}
+
 pub(crate) struct Findings {
     pub source: Vec<String>,
     pub numerical: Vec<String>,
@@ -39,38 +44,37 @@ pub(crate) fn verify(run: &mut PublicRun) -> Result<Findings, String> {
     let mut executed = true;
     let temporary = OwnedDirectory::create(&std::env::temp_dir(), "neural-checker-")?;
     let source_root = temporary.path.join("source-closure");
-    let mut copied = BTreeSet::new();
-    for reference in &run.contract.checker.source_files {
-        let path = source_root.join(&reference.path);
-        let parent = path
-            .parent()
-            .ok_or("Checker source parent is unavailable.")?;
-        std::fs::create_dir_all(parent)
-            .map_err(|_| "Cannot create an owned checker source directory.".to_owned())?;
-        let body = run
-            .core
-            .sources
-            .get(&reference.path)
-            .ok_or("Selected checker source body is unavailable.")?;
-        if digest(body) != reference.sha256 || body.len() as u64 != reference.byte_length {
-            return Err("Selected checker source body changed before execution.".into());
-        }
-        std::fs::write(&path, body)
-            .map_err(|_| "Cannot preserve the complete checker source copy.".to_owned())?;
-        copied.insert(path);
+    // Binding admitted every checker source body against its reference.
+    let mut files: Vec<(PathBuf, &[u8])> = run
+        .contract
+        .checker
+        .source_files
+        .iter()
+        .map(|reference| {
+            let body = run.core.sources[&reference.path].as_slice();
+            (source_root.join(&reference.path), body)
+        })
+        .collect();
+    let copied: BTreeSet<_> = files.iter().map(|(path, _)| path.clone()).collect();
+    files.push((
+        temporary.path.join("check/results_verilog.txt"),
+        &run.core.files["numerical_projection"],
+    ));
+    let directories: BTreeSet<_> = files
+        .iter()
+        .filter_map(|(path, _)| path.parent())
+        .chain([temporary.path.join("generate").as_path()])
+        .map(Path::to_path_buf)
+        .collect();
+    for directory in &directories {
+        staged(std::fs::create_dir_all(directory))?;
+    }
+    for (path, body) in &files {
+        staged(std::fs::write(path, body))?;
     }
     let script = source_root.join(&run.contract.checker.entry_point.path);
     for operation in ["generate", "check"] {
         let directory = temporary.path.join(operation);
-        std::fs::create_dir(&directory)
-            .map_err(|_| "Cannot create the exclusive checker operation directory.".to_owned())?;
-        if operation == "check" {
-            std::fs::write(
-                directory.join("results_verilog.txt"),
-                &run.core.files["numerical_projection"],
-            )
-            .map_err(|_| "Cannot preserve the original full checker projection.".to_owned())?;
-        }
         let actual = match &run.contract.installation {
             NeuralExecutor::Host(installation) => {
                 let actual = invoke(installation, &script, operation, &directory)?;

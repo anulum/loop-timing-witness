@@ -9,7 +9,7 @@
 //! Historical checker custody without source execution.
 
 use crate::binding::BoundRun;
-use crate::files::{decode, digest};
+use crate::files::{digest, receipt};
 use crate::traces::TraceFindings;
 use serde::Deserialize;
 
@@ -41,7 +41,7 @@ struct Checker {
 
 /// Recompute historical receipt coherence without claiming fresh model execution.
 pub(crate) fn checker(run: &BoundRun, traces: &TraceFindings) -> Result<Vec<String>, String> {
-    let c: Checker = decode(
+    let c: Checker = receipt(
         &run.files["source_owned_public_model_checker"],
         "historical source checker",
     )?;

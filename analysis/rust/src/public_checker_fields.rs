@@ -64,11 +64,3 @@ pub(crate) struct Receipt {
     pub elapsed_ns: u64,
     pub cleanup: String,
 }
-
-/// Original closed environment keys are also duplicate-rejecting.
-#[derive(Deserialize)]
-#[serde(transparent)]
-pub(crate) struct Environment(
-    #[serde(deserialize_with = "crate::native_jobs::unique_paths")]
-    pub  std::collections::BTreeMap<String, String>,
-);

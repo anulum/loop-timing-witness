@@ -10,7 +10,7 @@
 
 use crate::files::{FileRef, decode, read_bound};
 use crate::public_binding::PublicRun;
-use crate::public_checker_fields::{Environment, Receipt, Roles};
+use crate::public_checker_fields::{Receipt, Roles};
 use crate::public_policy::same;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -42,20 +42,21 @@ fn inventory(
     let mut paths = BTreeMap::new();
     let mut roles = BTreeSet::new();
     for row in rows {
-        let fields = row.as_object().filter(|fields| {
-            fields.len() == 4
-                && fields.get("path").is_some_and(Value::is_string)
-                && fields.get("actual_path").is_some_and(Value::is_string)
-                && fields.contains_key("sha256")
-                && fields
-                    .get("byte_length")
-                    .is_some_and(|value| value.is_i64() || value.is_u64())
+        let shaped = row.as_object().and_then(|fields| {
+            match (fields.get("path"), fields.get("actual_path")) {
+                (Some(Value::String(name)), Some(Value::String(actual)))
+                    if fields.len() == 4
+                        && fields.contains_key("sha256")
+                        && fields
+                            .get("byte_length")
+                            .is_some_and(|value| value.is_i64() || value.is_u64()) =>
+                {
+                    Some((fields, name.as_str(), actual.as_str()))
+                }
+                _ => None,
+            }
         });
-        let Some(fields) = fields else {
-            return Err("Checker observed inventory row is malformed.".into());
-        };
-        let (name, actual) = (fields["path"].as_str(), fields["actual_path"].as_str());
-        let (Some(name), Some(actual)) = (name, actual) else {
+        let Some((fields, name, actual)) = shaped else {
             return Err("Checker observed inventory row is malformed.".into());
         };
         let identity = expected.get(name);
@@ -177,15 +178,16 @@ pub(crate) fn findings(run: &mut PublicRun) -> Result<Vec<String>, String> {
                     .into(),
             );
         }
-        let observed: Environment = decode(
+        let observed = crate::strict_json::decode_object(
             &read_bound(&run.core.root, &receipt.environment_ref, 65536)?,
-            "original checker environment",
+            "actual checker environment",
         )?;
         let expected = crate::public_execution::environment(&run.core.root)?;
-        if observed.0.keys().collect::<BTreeSet<_>>() != expected.keys().collect::<BTreeSet<_>>()
+        if observed.keys().collect::<BTreeSet<_>>() != expected.keys().collect::<BTreeSet<_>>()
             || expected
                 .iter()
-                .any(|(key, value)| key != "TMPDIR" && observed.0.get(key) != Some(value))
+                .any(|(key, value)| key != "TMPDIR" && observed[key] != value.as_str())
+            || !observed["TMPDIR"].is_string()
         {
             failures.push(
                 "Original checker environment differs from the selected closed worker profile."

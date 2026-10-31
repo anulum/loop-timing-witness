@@ -9,7 +9,7 @@
 //! Actual native producer source and nanosecond/picosecond clock admission.
 
 use crate::binding::BoundRun;
-use crate::files::{FileRef, decode, digest};
+use crate::files::{FileRef, digest, receipt};
 use crate::receipts::ProducerCompletion;
 use serde::Deserialize;
 
@@ -36,7 +36,7 @@ struct Clock {
 
 /// Bind native driver/precision and compare common original edge predicates.
 pub(crate) fn analyze(run: &BoundRun, done: &ProducerCompletion) -> Result<Vec<String>, String> {
-    let c: Clock = decode(&run.files["clock_schedule_ref"], "native clock")?;
+    let c: Clock = receipt(&run.files["clock_schedule_ref"], "native clock")?;
     let _scope = c.scope;
     let values = [
         c.capture_half_period_units,

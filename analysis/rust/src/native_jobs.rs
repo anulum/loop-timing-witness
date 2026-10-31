@@ -10,7 +10,6 @@
 
 use crate::files::FileRef;
 use serde::Deserialize;
-use std::collections::BTreeMap;
 
 /// Complete actual build job.
 #[derive(Deserialize)]
@@ -54,30 +53,4 @@ impl Job {
             Self::Execution(j) => vec![("stdout", &j.stdout), ("stderr", &j.stderr)],
         }
     }
-}
-
-/// Reject duplicate recorded source-path keys, including inside JSON maps.
-pub(crate) fn unique_paths<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> Result<BTreeMap<String, String>, D::Error> {
-    struct Paths;
-    impl<'de> serde::de::Visitor<'de> for Paths {
-        type Value = BTreeMap<String, String>;
-        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str("distinct recorded source paths")
-        }
-        fn visit_map<A: serde::de::MapAccess<'de>>(
-            self,
-            mut a: A,
-        ) -> Result<Self::Value, A::Error> {
-            let mut paths = BTreeMap::new();
-            while let Some((k, v)) = a.next_entry::<String, String>()? {
-                if paths.insert(k, v).is_some() {
-                    return Err(serde::de::Error::custom("duplicate recorded source path"));
-                }
-            }
-            Ok(paths)
-        }
-    }
-    d.deserialize_map(Paths)
 }

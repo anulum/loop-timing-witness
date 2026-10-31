@@ -102,7 +102,7 @@ def test_expected_body_does_not_waive_the_declared_reference(tmp_path: Path, fie
     """
     raw, reference = _original(tmp_path / "data/run.json")
     reference[field] = "0" * 64 if field == "sha256" else len(raw) + 1
-    with pytest.raises(NeuralCaptureRefusalError, match="complete length or SHA-256"):
+    with pytest.raises(NeuralCaptureRefusalError, match="Original whole length/SHA-256 differs"):
         read_neural_run_file(tmp_path, reference, len(raw) + 1, expected_bytes=raw)
 
 
@@ -124,8 +124,12 @@ def test_internal_symlink_is_refused_at_each_component(tmp_path: Path, *, parent
     else:
         (tmp_path / "alias.json").symlink_to("data/run.json")
         reference["path"] = "alias.json"
-    with pytest.raises(NeuralCaptureRefusalError, match="without following symlinks"):
+    step = "parent" if parent else "file"
+    with pytest.raises(NeuralCaptureRefusalError) as refused:
         read_neural_run_file(tmp_path, reference, len(raw))
+    assert str(refused.value) == (
+        f"Cannot open original {step} without symlinks: {reference['path']}."
+    )
     assert (tmp_path / "data/run.json").read_bytes() == raw
 
 
@@ -189,11 +193,11 @@ def test_reference_names_require_complete_portable_components(tmp_path: Path, pa
     """
     raw, reference = _original(tmp_path / "data/run.json")
     reference["path"] = path
-    with pytest.raises(NeuralCaptureRefusalError, match="canonical portable"):
+    with pytest.raises(NeuralCaptureRefusalError, match="Invalid within-run original path"):
         read_neural_run_file(tmp_path, reference, len(raw))
 
 
-@pytest.mark.parametrize("kind", ["bool", "float", "upper", "newline", "extra"])
+@pytest.mark.parametrize("kind", ["bool", "float", "upper", "newline", "extra", "path"])
 def test_reference_fields_remain_exact_and_closed(tmp_path: Path, kind: str) -> None:
     """Refuse coerced scalar fields or unknown members through the actual reader.
 
@@ -213,10 +217,15 @@ def test_reference_fields_remain_exact_and_closed(tmp_path: Path, kind: str) -> 
         reference["sha256"] = _ORIGINAL_SHA.upper()
     elif kind == "newline":
         reference["sha256"] = _ORIGINAL_SHA + "\n"
+    elif kind == "path":
+        reference["path"] = 1
     else:
         reference["extra"] = 0
-    with pytest.raises(NeuralCaptureRefusalError, match="Invalid complete"):
+    # A reference without a text path cannot be named in the refusal.
+    named = "" if kind == "path" else ": data/run.json"
+    with pytest.raises(NeuralCaptureRefusalError) as refused:
         read_neural_run_file(tmp_path, reference, len(raw))
+    assert str(refused.value) == f"Invalid original file reference{named}."
 
 
 def test_root_readers_preserve_original_bytes_with_host_filename(tmp_path: Path) -> None:
@@ -267,6 +276,7 @@ def test_root_path_failures_use_authored_refusals(tmp_path: Path, *, dispatch: b
         Real dispatch or neural root acquisition entry point.
     """
     reader = read_run_dispatch_bytes if dispatch else read_neural_manifest_root
+    refusal = r"^Cannot acquire" if dispatch else r"^Cannot read neural manifest as a regular"
     for root in (tmp_path / "invalid\x00.json", tmp_path / "absent/run.json"):
-        with pytest.raises(NeuralCaptureRefusalError, match=r"^Cannot acquire"):
+        with pytest.raises(NeuralCaptureRefusalError, match=refusal):
             reader(root)

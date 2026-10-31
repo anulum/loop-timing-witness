@@ -9,7 +9,7 @@
 //! Full native manifest loading; no Python prevalidation or substitute envelope.
 
 use crate::capture::{self, Channel, CounterReceipt};
-use crate::files::{FileRef, decode, digest, read_bound};
+use crate::files::{FileRef, digest, read_bound};
 use crate::manifest::Manifest;
 use crate::receipts::{ResetTool, Tool};
 const JSON_LIMIT: usize = 65536;
@@ -153,12 +153,7 @@ pub(crate) fn finish(
             "Public neural source stimulus differs from its identified input binding.".into(),
         );
     }
-    let counts: CounterReceipt = decode(&files["counter_receipt"], "actual counters")?;
-    if counts.schema_id != "loop-timing-witness.neural-capture-counts.v1"
-        || !(1..=32).contains(&counts.drop_counter_bits)
-    {
-        return Err("Invalid original counter receipt version/width.".into());
-    }
+    let counts = crate::capture::counter_receipt(&files["counter_receipt"])?;
     let mut channels = Vec::new();
     for (index, declaration) in manifest.channels.iter().enumerate() {
         let population = if index == 2 {
@@ -166,10 +161,6 @@ pub(crate) fn finish(
         } else {
             manifest.step_count
         };
-        let c = &counts.channels[index];
-        if c.role != declaration.role || c.dropped > (1_u64 << counts.drop_counter_bits) - 1 {
-            return Err("Original counter role/value outside admitted range.".into());
-        }
         let raw = read_bound(root, &declaration.capture, (population as usize + 2) * 16)?;
         let payload = read_bound(root, &declaration.payload, population as usize * 16)?;
         let markers = read_bound(root, &declaration.markers, 32)?;

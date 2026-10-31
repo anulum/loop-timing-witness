@@ -160,3 +160,54 @@ fn the_installed_command_runs_the_packaged_registry() {
         usage_error("manifest is required").2
     );
 }
+
+#[test]
+fn a_relative_manifest_binds_the_working_directory() {
+    let fixture = Declaration::recorded();
+    fixture.write("run.json", Declaration::raw());
+    let actual = Command::new(env!("CARGO_BIN_EXE_loop-timing-witness-analyze-native"))
+        .args(["run.json", "--output-dir", "report"])
+        .current_dir(fixture.root())
+        .env_remove("LOOP_TIMING_WITNESS_CHECKER_INSTALLATION")
+        .output()
+        .expect("installed command");
+    assert_eq!(actual.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(actual.stderr).expect("authored UTF-8"),
+        "run analysis: FAIL: No reviewed checker installation descriptor is selected for this \
+         neural registration.\n"
+    );
+    assert!(!fixture.root().join("report").exists());
+}
+
+#[test]
+fn an_unresolvable_acquisition_directory_is_a_binding_refusal() {
+    let fixture = Declaration::recorded();
+    let manifest = fixture.write("run.json", Declaration::raw());
+    let trace = std::env::temp_dir().join(format!("witness-readlink-{}.trace", std::process::id()));
+    let actual = Command::new("strace")
+        .args(["-f", "-P"])
+        .arg(fixture.root())
+        .args([
+            "-e",
+            "trace=readlink",
+            "-e",
+            "inject=readlink:error=EIO",
+            "-o",
+        ])
+        .arg(&trace)
+        .arg(env!("CARGO_BIN_EXE_loop-timing-witness-analyze-native"))
+        .arg(&manifest)
+        .arg("--output-dir")
+        .arg(fixture.root().join("report"))
+        .output()
+        .expect("traced installed command");
+    let recorded = std::fs::read_to_string(&trace).expect("trace");
+    std::fs::remove_file(&trace).expect("remove only this test's trace");
+    assert!(recorded.contains("INJECTED"), "{recorded}");
+    assert_eq!(actual.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(actual.stderr).expect("authored UTF-8"),
+        "run analysis: FAIL: Cannot bind the complete public neural acquisition.\n"
+    );
+}

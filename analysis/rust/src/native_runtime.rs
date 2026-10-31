@@ -9,8 +9,8 @@
 //! Complete recorded native source/configuration/object/run predicates.
 
 use crate::binding::BoundRun;
-use crate::files::{FileRef, decode, read_bound};
-use crate::native_jobs::{Job, unique_paths};
+use crate::files::{FileRef, read_bound, receipt};
+use crate::native_jobs::Job;
 use crate::native_policy::{ARTIFACT_LIMIT, Artifacts, Policy};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -49,7 +49,6 @@ struct Runtime {
     parameters: Parameters,
     tool_versions: Versions,
     source_files: Vec<FileRef>,
-    #[serde(deserialize_with = "unique_paths")]
     actual_source_paths: BTreeMap<String, String>,
     jobs: Vec<Job>,
     compiled_artifacts: Artifacts,
@@ -66,21 +65,43 @@ pub(crate) fn analyze(
     run: &mut BoundRun,
     p: &Policy,
 ) -> Result<(Vec<String>, Vec<String>), String> {
-    let r: Runtime = decode(&run.files["compiler_simulator_runtime"], "native runtime")?;
-    if r.backend != "verilator-native-cpp" || r.dialect != "1800-2012" {
-        return Err("Unsupported actual native backend or dialect.".into());
-    }
-    let _scopes = (&r.scope, &r.runtime_object_source_scope);
+    let r: Runtime = receipt(&run.files["compiler_simulator_runtime"], "native runtime")?;
     let params = [
         r.parameters.state,
         r.parameters.timestamp,
         r.parameters.feed,
         r.parameters.address,
     ];
-    if params.iter().any(|v| *v > 65535) || r.epoch > 65535 || r.steps > 65535 || r.jobs.len() != 5
+    // The remaining constraints of the closed receipt schema the Python reader applies.
+    let mut files = r
+        .source_files
+        .iter()
+        .chain(
+            r.compiled_artifacts
+                .entries()
+                .map(|(_, reference)| reference),
+        )
+        .chain(
+            r.jobs
+                .iter()
+                .flat_map(|job| job.logs().into_iter().map(|(_, log)| log)),
+        );
+    if params.iter().any(|v| *v > 65535)
+        || r.epoch > 65535
+        || r.steps > 65535
+        || r.source_files.len() != p.sources.len()
+        || r.jobs.len() != 5
+        || r.jobs.iter().enumerate().any(|(index, job)| {
+            job.command().1.is_empty() || (index == 4) != matches!(job, Job::Execution(_))
+        })
+        || files.any(|reference| reference.byte_length > ARTIFACT_LIMIT as u64)
     {
-        return Err("Invalid complete native receipt ranges/populations.".into());
+        return Err("Invalid complete actual receipt: native runtime.".into());
     }
+    if r.backend != "verilator-native-cpp" || r.dialect != "1800-2012" {
+        return Err("Unsupported actual native backend or dialect.".into());
+    }
+    let _scopes = (&r.scope, &r.runtime_object_source_scope);
     let key = format!(
         "{},{},{},{}:{}",
         params[0], params[1], params[2], params[3], r.epoch
@@ -103,11 +124,18 @@ pub(crate) fn analyze(
             read_bound(&run.root, actual, ARTIFACT_LIMIT)?,
         );
     }
-    if r.source_files.len() != run.manifest.source_files.len()
-        || r.source_files
-            .iter()
-            .zip(&run.manifest.source_files)
-            .any(|(a, b)| !same(a, b))
+    let key = |reference: &FileRef| {
+        (
+            reference.path.clone(),
+            reference.sha256.clone(),
+            reference.byte_length,
+        )
+    };
+    if !r
+        .source_files
+        .iter()
+        .map(key)
+        .eq(run.manifest.source_files.iter().map(key))
     {
         return Err("Native runtime source references differ from root.".into());
     }
@@ -125,8 +153,8 @@ pub(crate) fn analyze(
         "native_execution",
     ];
     for (i, j) in r.jobs.iter().enumerate() {
-        let (kind, argv, _) = j.command();
-        if kind != roles[i] || argv.is_empty() || (i == 4) != matches!(j, Job::Execution(_)) {
+        let (kind, _, _) = j.command();
+        if kind != roles[i] {
             return Err("Actual native command sequence differs.".into());
         }
         for (name, reference) in j.logs() {
@@ -191,9 +219,8 @@ pub(crate) fn analyze(
     {
         findings.push("Actual native compiler versions differ.".into());
     }
-    if r.backend != "verilator-native-cpp"
-        || r.dialect != "1800-2012"
-        || r.epoch != u64::from(run.manifest.epoch)
+    // The backend and dialect were refused above; the identity covers the remaining fields.
+    if r.epoch != u64::from(run.manifest.epoch)
         || r.steps != 1000
         || u64::from(run.manifest.fifo_capacity_records) != 1_u64 << params[3]
     {

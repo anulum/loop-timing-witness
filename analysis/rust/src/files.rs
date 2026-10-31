@@ -183,3 +183,13 @@ pub(crate) fn decode<T: serde::de::DeserializeOwned>(raw: &[u8], name: &str) -> 
     serde_json::from_slice(&crate::json_integer::integer_zeroes(raw))
         .map_err(|_| format!("Invalid original {name}."))
 }
+
+/// Decode a closed actual receipt as the Python receipt reader does.
+///
+/// A document that is not one strict JSON object names the document; any other
+/// departure from the closed typed form refuses the receipt as incomplete.
+pub(crate) fn receipt<T: serde::de::DeserializeOwned>(raw: &[u8], name: &str) -> Result<T, String> {
+    let object = crate::strict_json::decode_object(raw, name)?;
+    serde_json::from_value(serde_json::Value::Object(object))
+        .map_err(|_| format!("Invalid complete actual receipt: {name}."))
+}

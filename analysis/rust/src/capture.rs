@@ -10,6 +10,7 @@
 
 use crate::files::FileRef;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Closed semantic channel role; untrusted names are rejected during root decoding.
 #[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -83,15 +84,83 @@ pub(crate) struct Counts {
 }
 
 /// Actual original three-counter receipt.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct CounterReceipt {
-    /// Original receipt version.
-    pub schema_id: String,
     /// Actual compiled drop-counter width.
     pub drop_counter_bits: u32,
     /// Actual input/state/service snapshots.
     pub channels: [Counts; 3],
+}
+
+/// Read one bounded unsigned count, refusing booleans, decimals and negatives.
+fn unsigned(value: &Value, maximum: u64, field: &str) -> Result<u64, String> {
+    value
+        .as_u64()
+        .filter(|count| *count <= maximum)
+        .ok_or_else(|| format!("Invalid neural capture counter: {field}."))
+}
+
+/// Decode one closed channel snapshot in its required position.
+fn counts(value: &Value, role: Role, bits: u32) -> Result<Counts, String> {
+    let fields = value
+        .as_object()
+        .filter(|fields| {
+            fields.keys().map(String::as_str).eq(COUNT_FIELDS) && fields["role"] == role.to_string()
+        })
+        .ok_or_else(|| format!("Invalid neural capture counter channel: {role}."))?;
+    let overflowed = fields["overflowed"]
+        .as_bool()
+        .ok_or_else(|| format!("Invalid neural capture overflow flag: {role}."))?;
+    Ok(Counts {
+        role,
+        attempts: unsigned(&fields["attempts"], u64::MAX, &format!("{role}.attempts"))?,
+        accepted: unsigned(&fields["accepted"], u64::MAX, &format!("{role}.accepted"))?,
+        dropped: unsigned(
+            &fields["dropped"],
+            (1 << bits) - 1,
+            &format!("{role}.dropped"),
+        )?,
+        drained: unsigned(&fields["drained"], u64::MAX, &format!("{role}.drained"))?,
+        overflowed,
+    })
+}
+
+/// Sorted member names of one channel snapshot.
+const COUNT_FIELDS: [&str; 6] = [
+    "accepted",
+    "attempts",
+    "drained",
+    "dropped",
+    "overflowed",
+    "role",
+];
+
+/// Decode the complete counter receipt in the order and with the refusals of the Python reader.
+pub(crate) fn counter_receipt(raw: &[u8]) -> Result<CounterReceipt, String> {
+    let root = crate::strict_json::decode_object(raw, "neural capture counts")?;
+    if !root
+        .keys()
+        .map(String::as_str)
+        .eq(["channels", "drop_counter_bits", "schema_id"])
+        || root["schema_id"] != "loop-timing-witness.neural-capture-counts.v1"
+    {
+        return Err("Invalid neural capture counter receipt schema.".into());
+    }
+    let bits = unsigned(&root["drop_counter_bits"], 32, "drop_counter_bits")? as u32;
+    if bits == 0 {
+        return Err("Invalid neural capture counter width.".into());
+    }
+    let channels = root["channels"]
+        .as_array()
+        .filter(|channels| channels.len() == 3)
+        .ok_or("Neural capture counter receipt requires three channels.")?;
+    Ok(CounterReceipt {
+        drop_counter_bits: bits,
+        channels: [
+            counts(&channels[0], Role::Input, bits)?,
+            counts(&channels[1], Role::State, bits)?,
+            counts(&channels[2], Role::Service, bits)?,
+        ],
+    })
 }
 
 /// One original record with its original offset and identity.
@@ -129,7 +198,7 @@ pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel,
         Role::Service => 16,
     };
     if !raw.len().is_multiple_of(16) {
-        return Err(format!("{role}: incomplete original 16byte record."));
+        return Err("Neural capture is not a whole sequence of 16-byte records.".into());
     }
     let mut channel = Channel {
         role,
@@ -147,8 +216,13 @@ pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel,
             record[8], record[9], record[10], record[11], record[12], record[13], record[14],
             record[15],
         ]);
-        if record[1..4] != [0, 0, 0] || tick >= 65536 || previous_tick.is_some_and(|v| tick <= v) {
-            return Err(format!("{role}: original reserved/tick fields differ."));
+        if record[1..4] != [0, 0, 0] {
+            return Err("Neural capture reserved bits must be zero.".into());
+        }
+        if tick >= 65536 || previous_tick.is_some_and(|v| tick <= v) {
+            return Err(
+                "Neural capture ticks regress, repeat or exceed the no-wrap horizon.".into(),
+            );
         }
         previous_tick = Some(tick);
         if record[0] == 17 {
@@ -157,16 +231,19 @@ pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel,
             } else if id == 1 && index + 1 == raw.len() / 16 {
                 channel.end = Some(tick);
             } else {
-                return Err(format!(
-                    "{role}: original marker identity or placement differs."
-                ));
+                return Err("Neural alignment marker has an invalid identity or position.".into());
             }
             channel.markers.extend_from_slice(record);
         } else {
-            if record[0] != code || id >= population || previous_id.is_some_and(|v| id <= v) {
-                return Err(format!(
-                    "{role}: original code/identity population differs."
-                ));
+            if record[0] != code {
+                return Err(
+                    "Neural capture contains a code from another channel or profile.".into(),
+                );
+            }
+            if id >= population || previous_id.is_some_and(|v| id <= v) {
+                return Err(
+                    "Neural capture identities repeat, regress or exceed the population.".into(),
+                );
             }
             previous_id = Some(id);
             channel.events.push(Event {

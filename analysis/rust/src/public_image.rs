@@ -172,7 +172,7 @@ impl ImageExecutor {
         let host = &self.binding.host_boundary;
         let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease")
             .map_err(|_| "Checker image host platform or account differs from its boundary.")?;
-        if !cfg!(all(target_os = "linux", target_arch = "x86_64"))
+        if cfg!(not(all(target_os = "linux", target_arch = "x86_64")))
             || host.system != "Linux"
             || host.machine != "x86_64"
             || host.kernel_release != kernel.trim_end()

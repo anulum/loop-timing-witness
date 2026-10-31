@@ -119,6 +119,13 @@ pub(crate) struct Runtime {
     pub execution_contract: ExecutionContract,
 }
 
+/// The exact worker roles every selected runtime binds, relative to the worker root.
+const WORKERS: [&str; 3] = [
+    "loop_timing_witness/__init__.py",
+    "loop_timing_witness/neural_checker_worker.py",
+    "loop_timing_witness/neural_checker_isolation.py",
+];
+
 /// An external verified package or an owned copy of its exact reviewed source bytes.
 enum WorkerRoot {
     External(PathBuf),
@@ -162,17 +169,22 @@ impl Installation {
         Ok(installation)
     }
 
-    /// Materialise the exact reviewed worker sources without an external analyzer dependency.
-    pub(crate) fn with_embedded_workers(
+    /// Bind a complete selected descriptor and an owned copy of exact worker sources.
+    ///
+    /// Each worker body is checked against the descriptor before it is written to
+    /// a new owned directory, so no external analyzer package is required. The
+    /// owned copy is removed with the installation.
+    ///
+    /// # Errors
+    ///
+    /// Refuses a worker population, role or body that differs from the descriptor,
+    /// an unwritable owned copy, and everything [`Self::from_selected_contract`] refuses.
+    pub fn with_embedded_workers(
         contract_bytes: Vec<u8>,
         files: Vec<InstalledFile>,
         import_roots: Vec<PathBuf>,
         workers: &[(&str, &[u8])],
     ) -> Result<Self, String> {
-        let owned = crate::public_temporary::OwnedDirectory::create(
-            &std::env::temp_dir(),
-            "neural-worker-",
-        )?;
         let runtime: Runtime = decode(&contract_bytes, "selected embedded-worker descriptor")?;
         if workers.len() != runtime.worker_sources.len() {
             return Err("Embedded checker worker source population differs.".into());
@@ -182,20 +194,22 @@ impl Installation {
                 .worker_sources
                 .iter()
                 .find(|reference| reference.path == *name)
+                .filter(|_| WORKERS.contains(name))
                 .ok_or("Embedded checker worker role is not admitted.")?;
             if body.len() as u64 != expected.byte_length || digest(body) != expected.sha256 {
                 return Err(
                     "Embedded checker worker body differs from its reviewed binding.".into(),
                 );
             }
-            let destination = owned.path.join(name);
-            std::fs::create_dir_all(
-                destination
-                    .parent()
-                    .ok_or("Invalid embedded worker path.")?,
-            )
+        }
+        let owned = crate::public_temporary::OwnedDirectory::create(
+            &std::env::temp_dir(),
+            "neural-worker-",
+        )?;
+        std::fs::create_dir(owned.path.join("loop_timing_witness"))
             .map_err(|_| "Cannot create the owned checker worker package.".to_owned())?;
-            std::fs::write(destination, body)
+        for (name, body) in workers {
+            std::fs::write(owned.path.join(name), body)
                 .map_err(|_| "Cannot preserve exact embedded checker worker bytes.".to_owned())?;
         }
         let mut installation =
@@ -256,13 +270,7 @@ impl Installation {
         let expected_namespaces: Vec<_> = (0..self.import_roots.len())
             .map(|index| format!("imports/{index}"))
             .collect();
-        let expected_workers: BTreeSet<_> = [
-            "loop_timing_witness/__init__.py",
-            "loop_timing_witness/neural_checker_worker.py",
-            "loop_timing_witness/neural_checker_isolation.py",
-        ]
-        .into_iter()
-        .collect();
+        let expected_workers: BTreeSet<_> = WORKERS.into_iter().collect();
         let workers: BTreeSet<_> = runtime
             .worker_sources
             .iter()
@@ -270,7 +278,7 @@ impl Installation {
             .collect();
         if runtime.schema_id != "loop-timing-witness.sc-checker-runtime.v1"
             || platform.id.is_empty()
-            || !cfg!(all(target_os = "linux", target_arch = "x86_64"))
+            || cfg!(not(all(target_os = "linux", target_arch = "x86_64")))
             || platform.system != "Linux"
             || platform.machine != "x86_64"
             || platform.kernel_release != kernel.trim_end()
@@ -311,7 +319,8 @@ impl Installation {
         {
             let metadata = std::fs::symlink_metadata(directory)
                 .map_err(|_| "Selected checker runtime import roots are unavailable.".to_owned())?;
-            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            // The metadata does not follow links, so a symlink is not a directory.
+            if !metadata.is_dir() {
                 return Err("Selected checker runtime import roots are unavailable.".into());
             }
         }

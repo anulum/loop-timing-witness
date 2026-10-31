@@ -21,7 +21,7 @@ from neural_acquisition_support import (
     edit_json,
     make_writable,
 )
-from neural_rust_support import assert_report_in_both
+from neural_rust_support import assert_command_in_both, assert_report_in_both
 
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import (
@@ -106,7 +106,17 @@ def test_dispatch_publishes_the_passing_report(
     assert status == 0
     assert raw == acquisition.manifest.read_bytes()
     assert json.loads((output / "report.json").read_bytes())["verification"]["whole"] is True
-    assert capsys.readouterr().out == f"run analysis: PASS: {output}\n"
+    printed = capsys.readouterr()
+    assert printed.out == f"run analysis: PASS: {output}\n"
+    rust = tmp_path / "rust"
+    assert_command_in_both((status, printed.out, printed.err), output, acquisition, rust)
+    # A second publication into either existing directory is refused alike.
+    status, _ = dispatch_analysis(acquisition.manifest, output, registry=acquisition.registry)
+    printed = capsys.readouterr()
+    assert printed.err == "run analysis: FAIL: Neural report output directory already exists.\n"
+    again = tmp_path / "rust-again"
+    (again / "report").mkdir(parents=True)
+    assert_command_in_both((status, printed.out, printed.err), output, acquisition, again)
 
 
 def test_reviewed_registry_does_not_admit_a_test_acquisition(
@@ -264,7 +274,13 @@ def test_dispatch_returns_legacy_roots_and_invalid_neural_verdicts(
     acquisition = build_neural_acquisition(tmp_path / "run", change=change)
     output = tmp_path / "report"
     status, _ = dispatch_analysis(acquisition.manifest, output, registry=acquisition.registry)
-    make_writable(tmp_path)
+    printed = capsys.readouterr()
+    try:
+        assert_command_in_both(
+            (status, printed.out, printed.err), output, acquisition, tmp_path / "rust"
+        )
+    finally:
+        make_writable(tmp_path)
     assert status == 2
-    assert capsys.readouterr().out == f"run analysis: INVALID: {output}\n"
+    assert printed.out == f"run analysis: INVALID: {output}\n"
     assert json.loads((output / "report.json").read_bytes())["clock"]["pass"] is False

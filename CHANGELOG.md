@@ -41,6 +41,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The Rust analysis command runs through `public_command::run`, which also takes a
+  consumer's own registry; `Installation::with_embedded_workers` is public and
+  checks every worker role and body before writing an owned copy. Operator
+  descriptors are read as in Python: unavailable, not regular or differing.
+  The packaged host entry refuses the current workers with the Python message.
 - Run the hosted Python tests in four duration-balanced shards with one coverage
   union holding the unchanged 100 % threshold; restore the pinned Spike build
   from an exact-input cache.

@@ -11,14 +11,16 @@
 //! The two actual tools and three packaged worker bodies exercise construction only.
 //! This inventory is not a complete SC execution closure or a trusted source registration.
 
+use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 
+const CHILD: &str = "WITNESS_EMBEDDED_WORKER_CHILD";
 const INVENTORY: &str = "Selected checker runtime inventory or platform baseline differs.";
 const ROOTS: &str = "Selected checker runtime import roots are unavailable.";
 const WORKERS: &[(&str, &[u8])] = &[
@@ -139,21 +141,29 @@ impl SelectedInstallation {
     }
 
     fn files(&self) -> Vec<InstalledFile> {
-        self.descriptor["files"]
-            .as_array()
-            .expect("actual tool references")
-            .iter()
-            .zip(&self.tools)
-            .map(|(reference, path)| InstalledFile {
-                name: reference["path"].as_str().expect("tool role").into(),
-                path: path.clone(),
-                sha256: reference["sha256"]
-                    .as_str()
-                    .expect("whole tool hash")
-                    .into(),
-                byte_length: reference["byte_length"].as_u64().expect("tool length"),
-            })
-            .collect()
+        installed(&self.descriptor, &self.tools)
+    }
+
+    /// Construct with owned copies of the given worker bodies.
+    fn embed(&self, descriptor: &Value, workers: &[(&str, &[u8])]) -> Result<Installation, String> {
+        Installation::with_embedded_workers(
+            serde_json::to_vec(descriptor).expect("complete caller descriptor"),
+            self.files(),
+            vec![self.workers.clone()],
+            workers,
+        )
+    }
+
+    /// Record what a child process needs to construct the same installation.
+    fn request(&self) -> PathBuf {
+        let path = self.root.join("request.json");
+        let request = json!({
+            "descriptor": self.descriptor,
+            "tools": self.tools,
+            "workers": self.workers,
+        });
+        std::fs::write(&path, serde_json::to_vec(&request).expect("JSON")).expect("request");
+        path
     }
 
     fn construct(&self, descriptor: &Value) -> Result<Installation, String> {
@@ -164,6 +174,90 @@ impl SelectedInstallation {
             self.workers.clone(),
         )
     }
+}
+
+/// Bind the descriptor's tool references to the actual tool paths.
+fn installed(descriptor: &Value, tools: &[PathBuf]) -> Vec<InstalledFile> {
+    descriptor["files"]
+        .as_array()
+        .expect("actual tool references")
+        .iter()
+        .zip(tools)
+        .map(|(reference, path)| InstalledFile {
+            name: reference["path"].as_str().expect("tool role").into(),
+            path: path.clone(),
+            sha256: reference["sha256"]
+                .as_str()
+                .expect("whole tool hash")
+                .into(),
+            byte_length: reference["byte_length"].as_u64().expect("tool length"),
+        })
+        .collect()
+}
+
+/// Worker roles and bodies as a packaged selection embeds them.
+fn embedded() -> Vec<(String, &'static [u8])> {
+    WORKERS
+        .iter()
+        .map(|(name, raw)| (format!("loop_timing_witness/{name}"), *raw))
+        .collect()
+}
+
+/// Borrow embedded worker roles for the constructor.
+fn borrowed<'a>(workers: &'a [(String, &'static [u8])]) -> Vec<(&'a str, &'static [u8])> {
+    workers
+        .iter()
+        .map(|(name, raw)| (name.as_str(), *raw))
+        .collect()
+}
+
+/// Construct from a parent's request inside a child process.
+fn embed_requested(path: &Path) -> Result<Installation, String> {
+    let request: Value =
+        serde_json::from_slice(&std::fs::read(path).expect("request")).expect("request JSON");
+    let tools: Vec<PathBuf> = serde_json::from_value(request["tools"].clone()).expect("tool paths");
+    let workers = embedded();
+    Installation::with_embedded_workers(
+        serde_json::to_vec(&request["descriptor"]).expect("descriptor"),
+        installed(&request["descriptor"], &tools),
+        vec![PathBuf::from(
+            request["workers"].as_str().expect("worker root"),
+        )],
+        &borrowed(&workers),
+    )
+}
+
+/// Construct with the external worker root inside a child process.
+fn construct_requested(path: &Path) -> Result<Installation, String> {
+    let request: Value =
+        serde_json::from_slice(&std::fs::read(path).expect("request")).expect("request JSON");
+    let tools: Vec<PathBuf> = serde_json::from_value(request["tools"].clone()).expect("tool paths");
+    let workers = PathBuf::from(request["workers"].as_str().expect("worker root"));
+    Installation::from_selected_contract(
+        serde_json::to_vec(&request["descriptor"]).expect("descriptor"),
+        installed(&request["descriptor"], &tools),
+        vec![workers.clone()],
+        workers,
+    )
+}
+
+/// Run one test of this binary as a child with a request and wrapper.
+fn child(name: &str, request: &Path, wrapper: &[&str], temporary: &Path) {
+    let executable = std::env::current_exe().expect("current test executable");
+    let output = Command::new("timeout")
+        .args(["--signal=TERM", "--kill-after=1s", "20s"])
+        .args(wrapper)
+        .arg(executable)
+        .args(["--exact", name, "--test-threads=1"])
+        .env(CHILD, request)
+        .env("TMPDIR", temporary)
+        .output()
+        .expect("owned child test process");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 impl Drop for SelectedInstallation {
@@ -467,4 +561,208 @@ fn installation_import_and_worker_roots_must_be_actual_resolved_directories() {
         .as_deref(),
         Some(INVENTORY)
     );
+}
+
+#[test]
+fn embedded_workers_are_verified_before_an_owned_copy_is_written() {
+    let selected = SelectedInstallation::create();
+    let workers = embedded();
+    let installation = selected
+        .embed(&selected.descriptor, &borrowed(&workers))
+        .expect("exact embedded worker bodies");
+    assert_eq!(installation.verify(), Ok(()));
+    let mut unknown = borrowed(&workers);
+    unknown[0].0 = "loop_timing_witness/unknown.py";
+    let mut changed = borrowed(&workers);
+    changed[1].1 = b"changed";
+    let mut same_length = borrowed(&workers);
+    let mut altered = WORKERS[2].1.to_vec();
+    altered[0] ^= 1;
+    same_length[2].1 = altered.leak();
+    let mut outside = selected.descriptor.clone();
+    outside["worker_sources"][0]["path"] = json!("/outside/__init__.py");
+    let mut escaping = borrowed(&workers);
+    escaping[0].0 = "/outside/__init__.py";
+    let mut kernel = selected.descriptor.clone();
+    kernel["platform_baseline"]["kernel_release"] = json!("unsupported-kernel");
+    for (descriptor, workers, message) in [
+        (
+            json!({}),
+            borrowed(&workers),
+            "Invalid original selected embedded-worker descriptor.",
+        ),
+        (
+            selected.descriptor.clone(),
+            borrowed(&workers[..2]),
+            "Embedded checker worker source population differs.",
+        ),
+        (
+            selected.descriptor.clone(),
+            unknown,
+            "Embedded checker worker role is not admitted.",
+        ),
+        (
+            outside,
+            escaping,
+            "Embedded checker worker role is not admitted.",
+        ),
+        (
+            selected.descriptor.clone(),
+            changed,
+            "Embedded checker worker body differs from its reviewed binding.",
+        ),
+        (
+            selected.descriptor.clone(),
+            same_length,
+            "Embedded checker worker body differs from its reviewed binding.",
+        ),
+        (kernel, borrowed(&workers), INVENTORY),
+    ] {
+        assert_eq!(
+            selected.embed(&descriptor, &workers).err().as_deref(),
+            Some(message)
+        );
+    }
+}
+
+#[test]
+fn an_unavailable_temporary_parent_refuses_the_owned_copy() {
+    if let Some(request) = std::env::var_os(CHILD) {
+        assert_eq!(
+            embed_requested(Path::new(&request)).err().as_deref(),
+            Some("Consumer temporary parent is unavailable.")
+        );
+        return;
+    }
+    let selected = SelectedInstallation::create();
+    child(
+        "an_unavailable_temporary_parent_refuses_the_owned_copy",
+        &selected.request(),
+        &[],
+        &selected.root.join("absent"),
+    );
+}
+
+#[test]
+fn an_unwritable_owned_copy_refuses_the_worker_package() {
+    if let Some(request) = std::env::var_os(CHILD) {
+        assert_eq!(
+            embed_requested(Path::new(&request)).err().as_deref(),
+            Some("Cannot create the owned checker worker package.")
+        );
+        return;
+    }
+    let selected = SelectedInstallation::create();
+    let temporary = selected.root.join("temporary");
+    std::fs::create_dir(&temporary).expect("owned temporary parent");
+    // The owned copy is created without write permission for its owner.
+    child(
+        "an_unwritable_owned_copy_refuses_the_worker_package",
+        &selected.request(),
+        &["sh", "-c", "umask 277; exec \"$@\"", "sh"],
+        &temporary,
+    );
+    for entry in std::fs::read_dir(&temporary).expect("owned temporary parent") {
+        let path = entry.expect("entry").path();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o700))
+            .expect("allow removal of the refused copy");
+    }
+}
+
+#[test]
+fn a_file_size_limit_refuses_the_worker_bytes() {
+    if let Some(request) = std::env::var_os(CHILD) {
+        let limit = getrlimit(Resource::Fsize);
+        setrlimit(
+            Resource::Fsize,
+            Rlimit {
+                current: Some(16),
+                maximum: limit.maximum,
+            },
+        )
+        .expect("lower the file-size limit of this child");
+        let result = embed_requested(Path::new(&request));
+        setrlimit(Resource::Fsize, limit).expect("restore the file-size limit");
+        assert_eq!(
+            result.err().as_deref(),
+            Some("Cannot preserve exact embedded checker worker bytes.")
+        );
+        return;
+    }
+    let selected = SelectedInstallation::create();
+    let temporary = selected.root.join("temporary");
+    std::fs::create_dir(&temporary).expect("owned temporary parent");
+    // An ignored SIGXFSZ survives exec, so the write fails with EFBIG instead.
+    child(
+        "a_file_size_limit_refuses_the_worker_bytes",
+        &selected.request(),
+        &["sh", "-c", "trap '' XFSZ; exec \"$@\"", "sh"],
+        &temporary,
+    );
+    assert_eq!(std::fs::read_dir(&temporary).expect("parent").count(), 0);
+}
+
+#[test]
+fn runtime_file_and_kernel_read_failures_are_named_refusals() {
+    if let Some(request) = std::env::var_os(CHILD) {
+        let expected = std::env::var("WITNESS_EXPECTED_REFUSAL").expect("expected refusal");
+        assert_eq!(
+            construct_requested(Path::new(&request)).err().as_deref(),
+            Some(expected.as_str())
+        );
+        return;
+    }
+    let selected = SelectedInstallation::create();
+    let request = selected.request();
+    let interpreter = selected.tools[0].to_str().expect("UTF-8 interpreter path");
+    for (path, syscall, expected) in [
+        (
+            interpreter,
+            "statx",
+            "Cannot inspect selected checker runtime file.",
+        ),
+        (
+            interpreter,
+            "read",
+            "Selected checker runtime file is unavailable.",
+        ),
+        (
+            "/proc/sys/kernel/osrelease",
+            "openat",
+            "Selected checker kernel baseline is unavailable.",
+        ),
+    ] {
+        let trace = selected.root.join(format!("{syscall}.trace"));
+        let output = Command::new("timeout")
+            .args([
+                "--signal=TERM",
+                "--kill-after=1s",
+                "20s",
+                "strace",
+                "-f",
+                "-P",
+                path,
+            ])
+            .args(["-e", &format!("trace={syscall}")])
+            .args(["-e", &format!("inject={syscall}:error=EIO")])
+            .arg("-o")
+            .arg(&trace)
+            .arg(std::env::current_exe().expect("current test executable"))
+            .args([
+                "--exact",
+                "runtime_file_and_kernel_read_failures_are_named_refusals",
+                "--test-threads=1",
+            ])
+            .env(CHILD, &request)
+            .env("WITNESS_EXPECTED_REFUSAL", expected)
+            .output()
+            .expect("traced child test process");
+        assert!(
+            output.status.success(),
+            "{syscall}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let recorded = std::fs::read_to_string(&trace).expect("trace");
+        assert!(recorded.contains("INJECTED"), "{recorded}");
+    }
 }

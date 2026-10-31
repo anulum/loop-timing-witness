@@ -36,6 +36,8 @@ mod public_capture;
 mod public_checker;
 mod public_checker_fields;
 mod public_checker_receipts;
+/// The analysis command, run against a caller-selected registry.
+pub mod public_command;
 mod public_execution;
 mod public_image;
 mod public_policy;

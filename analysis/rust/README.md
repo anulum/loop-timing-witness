@@ -120,7 +120,18 @@ executor builds a `NeuralRegistry` keyed by `neural_key` and calls
 `Installation` or an `ImageExecutor`. The Python keyword-only `registry`
 argument has the same keys and checks. Each entry's factory runs before the
 acquired policy copies are compared, in both languages; acquisition data never
-selects a registry or an entry.
+selects a registry or an entry. `public_command::run` runs the command, with
+its arguments, messages and statuses, against a registry the caller passes; the
+installed command passes `NeuralRegistry::reviewed()`.
+`Installation::with_embedded_workers` checks each worker body against the
+descriptor and writes it to a new owned directory, removed with the installation.
+
+The first entry's runtime binds the package initialiser that was reviewed
+before the public campaign API was added. The current workers therefore refuse
+that entry with "Selected checker worker or installation differs from its
+reviewed runtime", as in Python; the entry is never repinned. An unreadable
+operator descriptor is refused as unavailable, a directory or other special
+file as not regular, and changed bytes as differing from the reviewed binding.
 
 Reports preserve actual checker argv, timing, native status, observed modules
 and file identities. The checker uses a closed environment, finite CPU,

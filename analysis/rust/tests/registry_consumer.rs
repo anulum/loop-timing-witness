@@ -11,7 +11,9 @@
 //! The Python parity tests write a registry description naming the reviewed
 //! policy bytes and the executor, run this test with
 //! `NEURAL_REGISTRY_SPEC`, and compare the recorded outcome with the Python
-//! result for the same acquisition. Without the variable the test has no input.
+//! result for the same acquisition. With `command` set, the analysis command
+//! runs against the same registry and publishes into that new directory.
+//! Without the variable the test has no input.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -19,7 +21,7 @@ use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
     ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report,
-    load_neural_run_with_registry, neural_key,
+    load_neural_run_with_registry, neural_key, public_command,
 };
 
 /// Registry description written by the Python parity helper.
@@ -32,6 +34,7 @@ struct Spec {
     policy: PathBuf,
     checker: PathBuf,
     executor: Executor,
+    command: Option<PathBuf>,
 }
 
 /// The reviewed executor of the single registry entry.
@@ -116,14 +119,26 @@ fn consumer_registry_acquisition() {
     let spec: Spec =
         serde_json::from_slice(&read(&PathBuf::from(path))).expect("closed registry description");
     let (manifest, outcome) = (spec.manifest.clone(), spec.outcome.clone());
+    let command = spec.command.clone();
     let mut registry = NeuralRegistry::new();
     registry.insert(
         neural_key(spec.source_sha256.clone()),
         Box::new(move || entry(&spec)),
     );
-    let rendered: Value = match load_neural_run_with_registry(&manifest, &registry) {
-        Ok(inputs) => json!({ "report": build_neural_run_report(&inputs) }),
-        Err(refusal) => json!({ "refusal": refusal }),
+    let rendered: Value = if let Some(output) = command {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let arguments = [manifest.into(), "--output-dir".into(), output.into()];
+        let status = public_command::run(&arguments, &registry, &mut stdout, &mut stderr);
+        json!({
+            "status": status,
+            "stdout": String::from_utf8(stdout).expect("authored UTF-8"),
+            "stderr": String::from_utf8(stderr).expect("authored UTF-8"),
+        })
+    } else {
+        match load_neural_run_with_registry(&manifest, &registry) {
+            Ok(inputs) => json!({ "report": build_neural_run_report(&inputs) }),
+            Err(refusal) => json!({ "refusal": refusal }),
+        }
     };
     std::fs::write(
         outcome,

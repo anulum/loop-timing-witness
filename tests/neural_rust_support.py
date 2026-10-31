@@ -123,22 +123,27 @@ def _executor(entry: Any, directory: Path) -> dict[str, Any]:  # noqa: ANN401
     }
 
 
-def rust_outcome(acquisition: NeuralAcquisition, directory: Path) -> dict[str, Any]:
-    """Run the Rust API against the acquisition and its own registry entry.
+def rust_outcome(
+    acquisition: NeuralAcquisition, directory: Path, command: Path | None = None
+) -> dict[str, Any]:
+    """Run the Rust API or command against the acquisition and its own registry entry.
 
     Parameters
     ----------
     acquisition
         Written acquisition and reviewed entry.
     directory
-        New owned directory for the description and outcome.
+        Owned directory for the description and outcome, created when absent.
+    command
+        New report directory for the analysis command, or ``None`` for the API.
 
     Returns
     -------
     dict[str, Any]
-        ``{"report": ...}`` or ``{"refusal": message}``.
+        ``{"report": ...}`` or ``{"refusal": message}`` from the API, or the
+        command's ``status``, ``stdout`` and ``stderr``.
     """
-    directory.mkdir()
+    directory.mkdir(exist_ok=True)
     policy, checker, executor = acquisition.entry
     (directory / "policy.json").write_bytes(policy)
     (directory / "checker.json").write_bytes(checker)
@@ -151,6 +156,7 @@ def rust_outcome(acquisition: NeuralAcquisition, directory: Path) -> dict[str, A
         "policy": str(directory / "policy.json"),
         "checker": str(directory / "checker.json"),
         "executor": _executor(executor, directory),
+        "command": None if command is None else str(command),
     }
     (directory / "spec.json").write_text(json.dumps(spec))
     environment = {**os.environ, "NEURAL_REGISTRY_SPEC": str(directory / "spec.json")}
@@ -262,3 +268,39 @@ def assert_report_in_both(
         New owned directory for the Rust run.
     """
     assert_same_outcome({"report": report}, rust_outcome(acquisition, directory))
+
+
+def assert_command_in_both(
+    python: tuple[int | None, str, str],
+    output: Path,
+    acquisition: NeuralAcquisition,
+    directory: Path,
+) -> None:
+    """Require the Rust command to match the Python dispatch of the same acquisition.
+
+    Status, printed lines and the published report's original observations must
+    agree; each language publishes into its own new directory.
+
+    Parameters
+    ----------
+    python
+        Python status with its standard output and error.
+    output
+        Python report directory.
+    acquisition
+        Written acquisition and reviewed entry.
+    directory
+        Owned directory for the Rust run; the Rust report is ``report`` in it.
+    """
+    rust_output = directory / "report"
+    rust = rust_outcome(acquisition, directory, command=rust_output)
+    status, stdout, stderr = python
+    assert rust == {
+        "status": status,
+        "stdout": stdout.replace(str(output), str(rust_output)),
+        "stderr": stderr,
+    }
+    if status != 1:
+        assert _observations(json.loads((rust_output / "report.json").read_bytes())) == (
+            _observations(json.loads((output / "report.json").read_bytes()))
+        )

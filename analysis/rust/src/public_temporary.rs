@@ -25,22 +25,19 @@ impl OwnedDirectory {
         let parent = parent
             .canonicalize()
             .map_err(|_| "Consumer temporary parent is unavailable.".to_owned())?;
+        // The process identity and call ordinal already make the name unique.
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| "Consumer temporary clock is unavailable.".to_owned())?
+            .unwrap_or_default()
             .as_nanos();
-        for _ in 0..16 {
-            let ordinal = SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let path = parent.join(format!("{prefix}{}-{epoch}-{ordinal}", std::process::id()));
-            match std::fs::DirBuilder::new().mode(0o700).create(&path) {
-                Ok(()) => return Ok(Self { path }),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(_) => {
-                    return Err("Cannot create an exclusive consumer temporary directory.".into());
-                }
-            }
-        }
-        Err("Cannot allocate a distinct consumer temporary directory.".into())
+        let ordinal = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let path = parent.join(format!("{prefix}{}-{epoch}-{ordinal}", std::process::id()));
+        // The name is unique to this process and call; an occupied name is refused, never reused.
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&path)
+            .map_err(|_| "Cannot create an exclusive consumer temporary directory.".to_owned())?;
+        Ok(Self { path })
     }
 }
 

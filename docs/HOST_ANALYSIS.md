@@ -660,7 +660,9 @@ establish physical calibration or model-family acceptance.
 The [standalone Rust crate](../analysis/rust/README.md) exports
 `load_neural_run`, `build_neural_run_report`, `load_neural_manifest` and
 `write_neural_report`. Its `loop-timing-witness-analyze-native` command accepts
-the same manifest and new output directory as the Python command. Both full
+the same manifest and new output directory as the Python command, and
+`public_command::run` runs that command against a caller's own registry with
+the same statuses and messages as the Python `dispatch_analysis`. Both full
 verifiers bind the complete original acquisition and run fresh fixed source
 checker operations. Neither declaration reader substitutes for full admission.
 

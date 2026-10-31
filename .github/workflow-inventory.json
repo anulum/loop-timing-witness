@@ -42,12 +42,13 @@
       "file": "reusable-tests.yml",
       "jobs": [
         "plan",
+        "native",
         "shard",
         "run",
         "coverage"
       ],
       "kind": "reusable",
-      "owner": "duration-balanced test shards, one complete statement and branch coverage union and source-bound Codecov publication"
+      "owner": "duration-balanced test shards, one instrumented native build, one complete Python and native coverage union and source-bound Codecov publication"
     },
     {
       "category": 8,

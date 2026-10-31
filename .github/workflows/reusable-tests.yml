@@ -4,7 +4,7 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — sharded tests with complete coverage (reusable)
+# Loop Timing Witness — sharded tests with complete Python and native coverage (reusable)
 
 name: Tests with complete coverage
 
@@ -46,9 +46,58 @@ jobs:
           path: build/pytest-plan
           if-no-files-found: error
           retention-days: 7
+  native:
+    name: Instrumented native analysis tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # read the repository for the instrumented native build
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/build/native-target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain with its LLVM tools
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --component llvm-tools-preview
+          rustup default 1.99.0
+      - name: Fetch exact native analysis dependencies
+        run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
+      - name: Build every native analysis test once with branch coverage instrumentation
+        env:
+          RUSTC_BOOTSTRAP: "1"
+          RUSTFLAGS: -C instrument-coverage -Z coverage-options=branch
+          CARGO_PROFILE_DEV_DEBUG: "0"
+          # Instrumented procedural macros write profiles while compiling; they are not tests.
+          LLVM_PROFILE_FILE: ${{ github.workspace }}/build/native-build-profiles/build-%p-%m.profraw
+        run: |
+          mkdir -p build/native-analysis/bin build/native-analysis/profiles
+          cargo test --offline --locked --manifest-path analysis/rust/Cargo.toml --no-run --message-format=json \
+            | jq -r 'select(.reason == "compiler-artifact" and .executable != null) | .executable' \
+            | sort -u > build/native-executables.txt
+          test -s build/native-executables.txt
+          while read -r executable; do cp "$executable" build/native-analysis/bin/; done < build/native-executables.txt
+      - name: Run every instrumented native analysis test
+        working-directory: analysis/rust
+        env:
+          LLVM_PROFILE_FILE: ${{ github.workspace }}/build/native-analysis/profiles/native-%p-%m.profraw
+        run: |
+          # Test harnesses live under deps; the installed command is run by its own tests.
+          grep '/deps/' "$GITHUB_WORKSPACE/build/native-executables.txt" | while read -r executable; do
+            "$executable" --test-threads=2
+          done
+          test -n "$(ls "$GITHUB_WORKSPACE"/build/native-analysis/profiles)"
+      - name: Retain the instrumented tests and their profiles for the shards and the union
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-analysis-${{ github.sha }}
+          path: build/native-analysis
+          if-no-files-found: error
+          retention-days: 7
   shard:
     name: Pytest shard ${{ matrix.shard }} of 4
-    needs: [plan]
+    needs: [plan, native]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
@@ -194,11 +243,22 @@ jobs:
         with:
           name: pytest-plan-${{ github.sha }}
           path: build/pytest-plan
+      - name: Download the instrumented native analysis tests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-analysis-${{ github.sha }}
+          path: build/native-analysis
       - name: Tests with coverage in this shard
         env:
           SHARD: ${{ matrix.shard }}
         run: |
-          mkdir -p build/coverage
+          mkdir -p build/coverage/native-profiles
+          # Parity tests run the one instrumented registry consumer and keep its profiles.
+          consumers=(build/native-analysis/bin/registry_consumer-*)
+          test "${#consumers[@]}" -eq 1
+          chmod +x "${consumers[0]}"
+          export WITNESS_RUST_REGISTRY_CONSUMER="$PWD/${consumers[0]}"
+          export WITNESS_RUST_PROFILE_DIRECTORY="$PWD/build/coverage/native-profiles"
           mapfile -t modules < "build/pytest-plan/shard-${SHARD}.txt"
           test "${#modules[@]}" -gt 0
           cp "build/pytest-plan/shard-${SHARD}.txt" "build/coverage/shard-${SHARD}.txt"
@@ -214,24 +274,27 @@ jobs:
             build/coverage/shard-${{ matrix.shard }}.coverage
             build/coverage/shard-${{ matrix.shard }}.txt
             build/coverage/junit-${{ matrix.shard }}.xml
+            build/coverage/native-profiles
           if-no-files-found: error
           retention-days: 7
   run:
     name: Pytest with 100 % statement and branch coverage
-    needs: [plan, shard]
+    needs: [plan, native, shard]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read # read the repository for the coverage union
     steps:
-      - name: Require the plan and every shard to succeed
+      - name: Require the plan, the native tests and every shard to succeed
         env:
           PLAN: ${{ needs.plan.result }}
+          NATIVE: ${{ needs.native.result }}
           SHARDS: ${{ needs.shard.result }}
         run: |
-          echo "plan: $PLAN; shards: $SHARDS"
+          echo "plan: $PLAN; native: $NATIVE; shards: $SHARDS"
           test "$PLAN" = success
+          test "$NATIVE" = success
           test "$SHARDS" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -273,6 +336,38 @@ jobs:
           .venv/bin/coverage report --show-missing --fail-under=100
           mkdir -p build/coverage
           .venv/bin/python tools/export_python_coverage.py build/coverage/coverage.xml
+      - name: Install the pinned Rust toolchain with its LLVM tools
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --component llvm-tools-preview
+          rustup default 1.99.0
+      - name: Download the instrumented native analysis tests and their profiles
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-analysis-${{ github.sha }}
+          path: build/native-analysis
+      - name: Merge every native profile and require complete native coverage
+        run: |
+          tools="$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin"
+          mkdir -p build/native-coverage
+          find build/native-analysis/profiles build/shards -name '*.profraw' | sort > build/native-coverage/profiles.txt
+          test -s build/native-coverage/profiles.txt
+          "$tools/llvm-profdata" merge -sparse --input-files=build/native-coverage/profiles.txt \
+            -o build/native-coverage/merged.profdata
+          mapfile -t binaries < <(find build/native-analysis/bin -type f | sort)
+          objects=()
+          for binary in "${binaries[@]:1}"; do objects+=("-object=$binary"); done
+          "$tools/llvm-cov" export -summary-only "${binaries[0]}" "${objects[@]}" \
+            -instr-profile=build/native-coverage/merged.profdata "$PWD/analysis/rust/src" \
+            > build/native-coverage/summary.json
+          .venv/bin/python tools/rust_coverage_gate.py --crate analysis/rust \
+            --summary build/native-coverage/summary.json
+      - name: Retain the native coverage summary
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-coverage-${{ github.sha }}
+          path: build/native-coverage/summary.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Bind the Python report to the tested source
         run: |
           printf '%s\n' "$GITHUB_SHA" > build/coverage/source-revision.txt

@@ -143,16 +143,18 @@ def coverage_identity_findings(file: str, jobs: dict[str, Any]) -> list[str]:
         read_only = {"contents": "read"}
         if any(
             not isinstance(jobs.get(name), dict) or jobs[name].get("permissions") != read_only
-            for name in ("plan", "shard", "run")
+            for name in ("plan", "native", "shard", "run")
         ):
             findings.append("reusable-tests.yml: test execution must have only contents: read")
         elif (
-            jobs["shard"].get("needs") != ["plan"]
-            or jobs["run"].get("needs") != ["plan", "shard"]
+            jobs["native"].get("needs") is not None
+            or jobs["shard"].get("needs") != ["plan", "native"]
+            or jobs["run"].get("needs") != ["plan", "native", "shard"]
             or jobs["run"].get("if") != "always()"
         ):
             findings.append(
-                "reusable-tests.yml: the coverage union must always follow the plan and every shard"
+                "reusable-tests.yml: the coverage union must always follow the plan, "
+                "the native tests and every shard"
             )
     return findings
 

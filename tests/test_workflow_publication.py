@@ -88,9 +88,11 @@ def test_authorised_publication_tree_passes(
             "test execution",
         ),
         ("reusable-tests.yml", "plan", "permissions", {}, "test execution"),
+        ("reusable-tests.yml", "native", "permissions", {}, "test execution"),
         ("reusable-tests.yml", "shard", "permissions", {"actions": "read"}, "test execution"),
-        ("reusable-tests.yml", "shard", "needs", ["run"], "always follow the plan"),
-        ("reusable-tests.yml", "run", "needs", ["shard"], "always follow the plan"),
+        ("reusable-tests.yml", "native", "needs", ["plan"], "always follow the plan"),
+        ("reusable-tests.yml", "shard", "needs", ["plan"], "always follow the plan"),
+        ("reusable-tests.yml", "run", "needs", ["plan", "shard"], "always follow the plan"),
         ("reusable-tests.yml", "run", "if", "success()", "always follow the plan"),
         (
             "reusable-tests.yml",

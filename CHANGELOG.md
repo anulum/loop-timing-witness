@@ -46,6 +46,9 @@ Loop Timing Witness — changelog
   checks every worker role and body before writing an owned copy. Operator
   descriptors are read as in Python: unavailable, not regular or differing.
   The packaged host entry refuses the current workers with the Python message.
+- The hosted tests build the native analysis crate once with branch coverage
+  instrumentation, run its tests and the Python parity tests against it, and
+  require every line and branch of every crate source to be covered.
 - Run the hosted Python tests in four duration-balanced shards with one coverage
   union holding the unchanged 100 % threshold; restore the pinned Spike build
   from an exact-input cache.

@@ -144,6 +144,7 @@ known-first-party = [
     "preflight",
     "pytest_shards",
     "repository_files",
+    "rust_coverage_gate",
     "validate_measurement_domain",
 ]
 

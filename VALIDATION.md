@@ -253,7 +253,7 @@ Every action is pinned to a verified commit object.
 |---|---|---|
 | `ci.yml` | coordinator: calls the three reusable workflows and holds the one required gate | coordinator and required gate |
 | `reusable-static-policy.yml` | lint, format, typing, manifest, inventory, headers, licences, workflow policy | static analysis and policy |
-| `reusable-tests.yml` | four duration-balanced pytest shards; one coverage union holds the 100 % statement and branch threshold | unit and component quality |
+| `reusable-tests.yml` | four duration-balanced pytest shards and one instrumented native analysis build; one union holds the 100 % Python statement and branch threshold and one the 100 % native line and branch threshold | unit and component quality |
 | `pre-commit.yml` | every pre-commit stage hook on all files | static analysis and policy |
 | `codeql.yml` | code scanning of C, Rust, Python and the workflow definitions | security and supply chain |
 | `security-audit.yml` | invokes the shared security audit on push, pull request, schedule and manual dispatch | security and supply chain |
@@ -275,6 +275,14 @@ the shards ran every discovered module exactly once, combines their coverage
 data and applies the 100 % threshold once to the union. The Spike simulator is
 restored from a cache keyed by the runner image, compiler and workflow digest,
 or rebuilt from the pinned commit.
+
+The native analysis crate is built once with branch coverage instrumentation
+and its own tests run in that job. The shards run the Python parity tests
+against the same instrumented registry consumer, so Python and Rust meet every
+acquisition, fault and host condition together. The aggregate job merges every
+native profile and `tools/rust_coverage_gate.py` requires every line and branch
+of every crate source to be covered; a source missing from the summary fails
+unless it declares no function.
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.

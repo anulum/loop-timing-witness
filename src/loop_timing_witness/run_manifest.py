@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from .manifest_io import load_json_object, parse_json_object
+from .manifest_io import load_json_object, parse_bounded_json_object
 from .validate_measurement_domain import schema_locations, semantic_findings
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parent / "data"
@@ -86,7 +86,7 @@ def _load_domain(raw: bytes, source: str) -> dict[str, Any]:
     ValueError
         If the domain contract is invalid.
     """
-    domain = parse_json_object(raw, source)
+    domain = parse_bounded_json_object(raw, source)
     schema = load_json_object(DOMAIN_SCHEMA_PATH)
     findings = [
         f"schema: {location}: does not satisfy the measurement-domain schema"
@@ -204,7 +204,7 @@ def _validate_run_domain(manifest: dict[str, Any], domain: dict[str, Any]) -> No
     period = manifest["sample_period_ticks"]
     if rate is not None:
         clock_hz = contracts["timebase"]["clock_hz"]
-        if not (rate["minimum"] * period <= clock_hz <= rate["maximum"] * period):
+        if period is None or not (rate["minimum"] * period <= clock_hz <= rate["maximum"] * period):
             message = "sample_period_ticks falls outside the declared control rate range"
             raise ValueError(message)
     if manifest["warmup_cycles"] >= manifest["cycle_count"]:
@@ -324,11 +324,8 @@ def load_run(manifest_path: Path, *, manifest_bytes: bytes | None = None) -> Run
     ValueError
         If JSON, schema, semantic or digest validation fails.
     """
-    manifest = (
-        load_json_object(manifest_path)
-        if manifest_bytes is None
-        else parse_json_object(manifest_bytes, str(manifest_path))
-    )
+    raw = manifest_path.read_bytes() if manifest_bytes is None else manifest_bytes
+    manifest = parse_bounded_json_object(raw, str(manifest_path))
     _validate_run_schema(manifest)
     directory = manifest_path.resolve().parent
     domain_item = manifest["measurement_domain"]

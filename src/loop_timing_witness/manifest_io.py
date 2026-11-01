@@ -168,6 +168,160 @@ def parse_json_object(raw: bytes, source: str) -> dict[str, Any]:
     return value
 
 
+MAX_BOUNDED_DEPTH = 64
+"""Deepest array or object nesting a bounded document may use."""
+MAX_INTEGER_DIGITS = 20
+"""Most digits of any integer within the signed and unsigned 64-bit ranges."""
+
+
+def _bounded_json_int(value: str) -> int:
+    """Decode one JSON integer that fits a signed or unsigned 64-bit field.
+
+    Parameters
+    ----------
+    value
+        Integer token supplied by the JSON decoder.
+
+    Returns
+    -------
+    int
+        Decoded value between -2**63 and 2**64 - 1.
+
+    Raises
+    ------
+    JsonInputRefusalError
+        If the value is outside that range.
+    """
+    if len(value.removeprefix("-")) <= MAX_INTEGER_DIGITS:
+        number = int(value)
+        if -(2**63) <= number <= 2**64 - 1:
+            return number
+    message = f"integer outside the 64-bit range: {value}"
+    raise JsonInputRefusalError(message)
+
+
+def nesting_depth(text: str) -> int:
+    """Return the deepest bracket nesting outside JSON strings.
+
+    The scan only counts ``[``, ``{``, ``]`` and ``}`` outside double-quoted
+    strings, honouring backslash escapes; it does not validate the document.
+
+    Parameters
+    ----------
+    text
+        Decoded document text.
+
+    Returns
+    -------
+    int
+        Greatest number of simultaneously open brackets.
+    """
+    depth = deepest = 0
+    in_string = escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            deepest = max(deepest, depth)
+        elif character in "]}":
+            depth -= 1
+    return deepest
+
+
+def _holds_unpaired_surrogate(value: object) -> bool:
+    """Tell whether any decoded member name or string holds an unpaired surrogate.
+
+    Parameters
+    ----------
+    value
+        Decoded JSON value.
+
+    Returns
+    -------
+    bool
+        Whether an escape between U+D800 and U+DFFF remained unpaired.
+    """
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            if any("\ud800" <= character <= "\udfff" for character in item):
+                return True
+        elif isinstance(item, dict):
+            pending.extend(item)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return False
+
+
+def parse_bounded_json_object(raw: bytes, source: str) -> dict[str, Any]:
+    """Decode a strict JSON object whose limits an independent decoder can share.
+
+    Beyond :func:`parse_json_object`, nesting is at most ``MAX_BOUNDED_DEPTH``
+    (checked before decoding), integers fit 64 bits, and no string holds an
+    unpaired surrogate escape (checked after decoding). The run analysis uses
+    it for every run-bound JSON document, so the native analysis refuses the
+    same documents with the same text.
+
+    Parameters
+    ----------
+    raw
+        Complete bytes already read from one source.
+    source
+        Source label for refusal messages.
+
+    Returns
+    -------
+    dict[str, Any]
+        The decoded top-level object.
+
+    Raises
+    ------
+    JsonInputRefusalError
+        If the bytes are not UTF-8, nest too deeply, are not valid JSON, repeat
+        a member name, hold a nonfinite number, an out-of-range integer or an
+        unpaired surrogate, or the top level is not an object.
+    """
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        message = f"{source}: not UTF-8"
+        raise JsonInputRefusalError(message, source) from exc
+    if nesting_depth(text) > MAX_BOUNDED_DEPTH:
+        message = f"{source}: JSON input exceeds decoder limits"
+        raise JsonInputRefusalError(message, source)
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_finite_json_float,
+            parse_int=_bounded_json_int,
+        )
+    except json.JSONDecodeError as exc:
+        message = f"{source}: invalid JSON"
+        raise JsonInputRefusalError(message, source) from exc
+    except JsonInputRefusalError as exc:
+        message = f"{source}: {exc}"
+        raise JsonInputRefusalError(message, source) from exc
+    if _holds_unpaired_surrogate(value):
+        message = f"{source}: JSON text holds an unpaired surrogate escape"
+        raise JsonInputRefusalError(message, source)
+    if not isinstance(value, dict):
+        message = f"{source}: top-level JSON value must be an object"
+        raise JsonInputRefusalError(message, source)
+    return value
+
+
 def load_json_object(path: Path) -> dict[str, Any]:
     """Read a strict JSON object from a filesystem path.
 

@@ -38,6 +38,8 @@ _COPIED = (
     *(f"checker_worker/loop_timing_witness/{name}" for name in _WORKERS),
     *(f"public-data/{name}" for name in _ASSETS),
     "neural-step-run.schema.json",
+    "run-manifest.schema.json",
+    "measurement-domain.schema.json",
     "tests/data/neural-selected-original.run.json",
 )
 
@@ -61,6 +63,8 @@ def analysis_package(tmp_path: Path) -> Path:
         *(f"src/loop_timing_witness/{name}" for name in _WORKERS),
         *(f"src/loop_timing_witness/data/{name}" for name in _ASSETS),
         "neural-step-run.schema.json",
+        "run-manifest.schema.json",
+        "measurement-domain.schema.json",
         "tests/data/neural-selected-original.run.json",
     )
     for name in owners:

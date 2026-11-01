@@ -12,6 +12,17 @@ mod binding;
 mod capture;
 mod checker_receipt;
 mod clock_completion;
+/// Public CONTROL and COMPUTE run loading and event decoding.
+pub mod control_api;
+mod control_domain;
+mod control_events;
+mod control_json;
+mod control_manifest;
+mod control_number;
+mod control_pattern;
+mod control_printable;
+mod control_schema;
+mod control_text;
 /// Whole original file reference and finite complete-byte acquisition.
 pub mod files;
 mod json_integer;
@@ -54,11 +65,14 @@ mod public_trace;
 mod selected_profile;
 mod strict_json;
 
+/// Executors a consumer registration may bind.
+pub use control_api::{
+    ControlEvent, ControlInputs, decode_control_events, load_control_run, load_control_run_bytes,
+};
 /// Immutable report snapshot returned by the complete source-bound loader.
 pub use public_api::{
     NeuralRunInputs, build_neural_run_report, load_neural_run, load_neural_run_with_registry,
 };
-/// Executors a consumer registration may bind.
 pub use public_image::{ImageExecutor, NeuralExecutor};
 /// Closed declaration reader, independent of full source admission.
 pub use public_manifest::load_neural_manifest;

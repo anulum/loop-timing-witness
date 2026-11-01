@@ -14,14 +14,20 @@
 //! result for the same acquisition. With `command` set, the analysis command
 //! runs against the same registry and publishes into that new directory.
 //! Without the variable the test has no input.
+//!
+//! With `CONTROL_RUN_SPEC` the second test loads one CONTROL or COMPUTE run,
+//! optionally from root bytes the description names, decodes its events and
+//! records the inputs, the events or the refusal for the same comparison.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
-    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report,
-    load_neural_run_with_registry, neural_key, public_command,
+    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, decode_control_events,
+    load_control_run, load_control_run_bytes, load_neural_run_with_registry, neural_key,
+    public_command,
 };
 
 /// Registry description written by the Python parity helper.
@@ -142,6 +148,57 @@ fn consumer_registry_acquisition() {
     };
     std::fs::write(
         outcome,
+        serde_json::to_vec(&rendered).expect("outcome JSON"),
+    )
+    .expect("outcome file");
+}
+
+/// Run description written by the Python control-run parity helper.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ControlSpec {
+    manifest: PathBuf,
+    outcome: PathBuf,
+    root: Option<PathBuf>,
+}
+
+#[test]
+fn control_run_acquisition() {
+    let Some(path) = std::env::var_os("CONTROL_RUN_SPEC") else {
+        return;
+    };
+    let spec: ControlSpec =
+        serde_json::from_slice(&read(&PathBuf::from(path))).expect("closed run description");
+    let loaded = match &spec.root {
+        Some(root) => load_control_run_bytes(&spec.manifest, &read(root)),
+        None => load_control_run(&spec.manifest),
+    };
+    let rendered = match loaded {
+        Err(refusal) => json!({ "refusal": refusal }),
+        Ok(inputs) => {
+            let files: serde_json::Map<String, Value> = inputs
+                .files()
+                .iter()
+                .map(|(name, bytes)| (name.clone(), json!(format!("{:x}", Sha256::digest(bytes)))))
+                .collect();
+            let events = decode_control_events(&inputs).map(|events| {
+                events
+                    .iter()
+                    .map(|event| json!([event.name, event.cycle, event.ticks]))
+                    .collect::<Vec<_>>()
+            });
+            json!({
+                "manifest": inputs.manifest(),
+                "domain": inputs.domain(),
+                "files": files,
+                "directory": inputs.directory(),
+                "events": events.as_ref().ok(),
+                "events_refusal": events.err(),
+            })
+        }
+    };
+    std::fs::write(
+        spec.outcome,
         serde_json::to_vec(&rendered).expect("outcome JSON"),
     )
     .expect("outcome file");

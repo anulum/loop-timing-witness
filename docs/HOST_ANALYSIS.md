@@ -663,6 +663,28 @@ simulated timing; neither integrity hashes nor a passing numerical comparison
 establish physical calibration or model-family acceptance.
 
 
+## Native control-run loading
+
+The [standalone Rust crate](../analysis/rust/README.md) also loads CONTROL and
+COMPUTE runs. `load_control_run` reads a run manifest; `load_control_run_bytes`
+takes manifest bytes already read for its path, as the command dispatcher does.
+Both validate the run schema, the UTC timestamp, the hash-bound measurement
+domain with its schema, cross-field rules and 16-byte wire layout, the run's
+agreement with the domain, every source and hardware artefact, the optional
+receipts and the declared files, in the declaration's own member order.
+`decode_control_events` decodes the run's event records for its profile and
+cycle count. Each step refuses with the same text as the Python `load_run` and
+`decode_events`, including the failing schema locations, the cross-field
+findings with Python's number text, and `[Errno <n>] <message>: <path>` for an
+operating-system failure. Report statistics and outputs remain Python-only.
+
+Every run-bound JSON document is decoded with three limits that both analyses
+share: arrays and objects nest at most 64 deep, checked before decoding;
+integers fit the signed or unsigned 64-bit range (`integer outside the 64-bit
+range: <token>`); and an unpaired surrogate escape is refused once the whole
+document has decoded (`JSON text holds an unpaired surrogate escape`). When a
+document has several defects, both analyses report the same first one.
+
 ## Native neural analysis API
 
 The [standalone Rust crate](../analysis/rust/README.md) exports

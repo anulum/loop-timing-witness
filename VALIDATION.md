@@ -284,6 +284,16 @@ native profile and `tools/rust_coverage_gate.py` requires every line and branch
 of every crate source to be covered; a source missing from the summary fails
 unless it declares no function.
 
+The native control-run loader is held to the Python analysis twice. Shared
+corpora under `analysis/rust/tests/data/` record Python's outcomes for
+schema-location mutations of every run variant and the measurement domain,
+bounded JSON documents, and cross-field domain rules with integral floats; the
+Python tests rebuild each corpus and require the committed file, and the crate's
+unit tests require the same outcomes. `tests/test_control_run_parity.py` loads
+real RTL captures through both analyses, including refused declarations,
+malformed documents, files read in declaration order, unreadable files and read
+errors injected by the kernel, and requires identical outcomes.
+
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.
 

@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native control-run loading in the Rust analysis crate: `load_control_run`,
+  `load_control_run_bytes` and `decode_control_events` validate a CONTROL or COMPUTE
+  run, its hash-bound measurement domain and every input, and decode its events,
+  refusing with the same texts as the Python `load_run` and `decode_events`.
 - Complete C controller coverage gate: `make controller-tests` ends with
   `make controller-coverage`, which runs the C API test and the stream and refusal tests
   against GCC-instrumented programs. `tools/c_coverage_gate.py` adds their counts and
@@ -45,6 +49,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Run-bound JSON documents nest at most 64 deep, hold integers within the 64-bit
+  ranges and no unpaired surrogate escape; the shared decoding limits keep the
+  Python and native refusals identical.
 - A run manifest that breaks its schema is refused with its first failing location and
   an authored sentence, and a run-bound measurement domain with every distinct failing
   location, instead of the schema validator's wording. `started_utc` is checked by one
@@ -68,6 +75,9 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- A measurement domain with a Gray-pointer buffer depth written as an integral
+  float, and a COMPUTE run whose domain gives COMPUTE a sample rate, raised an
+  internal error; they are now checked and refused like other declarations.
 - Check the checker image executor alike in Python and Rust: the binding must be its
   closed typed form in both (host boundary, image inventory, command, environment,
   deadline and file lists), invalid JSON is refused by name, an unreadable image

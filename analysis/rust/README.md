@@ -81,6 +81,17 @@ findings remain independent. The whole verdict is their conjunction.
 Numerically equal output does not override missing records, invalid phases,
 inconsistent sources or failed producer publication.
 
+## Control-run loading
+
+`load_control_run(path)` and `load_control_run_bytes(path, root)` validate a
+CONTROL or COMPUTE run and keep its hash-bound input bytes, available through
+`ControlInputs::manifest`, `domain`, `files` and `directory`.
+`decode_control_events(&inputs)` returns the run's `ControlEvent` records.
+Every refusal is the text of the Python `load_run` and `decode_events` for the
+same files; the parity tests run both on real RTL captures, malformed
+documents and injected read failures, and shared corpora hold the schema
+locations, JSON decoding and measurement-domain rules to Python's outcomes.
+
 ## Selected installation
 
 The compiled registry admits source contract

@@ -38,6 +38,8 @@ project or retired alias already claims its canonical path.
 from __future__ import annotations
 
 import argparse
+import functools
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -168,11 +170,36 @@ def _sorted_errors(manifest: dict[str, Any], schema: dict[str, Any]) -> list[Any
     list[Any]
         ``jsonschema`` errors sorted by their path parts as strings.
     """
-    Draft202012Validator.check_schema(schema)
+    validator = _checked_validator(json.dumps(schema, sort_keys=True))
     return sorted(
-        Draft202012Validator(schema).iter_errors(manifest),
+        validator.iter_errors(manifest),
         key=lambda error: [str(part) for part in error.absolute_path],
     )
+
+
+@functools.lru_cache(maxsize=8)
+def _checked_validator(schema_text: str) -> Draft202012Validator:
+    """Check one schema once and keep its validator for later documents.
+
+    Parameters
+    ----------
+    schema_text
+        Canonical JSON text of the schema, the cache key.
+
+    Returns
+    -------
+    Draft202012Validator
+        Validator of the checked schema.
+
+    Raises
+    ------
+    jsonschema.exceptions.SchemaError
+        If the schema itself is not a valid Draft 2020-12 schema; a refused
+        schema is not cached.
+    """
+    schema = json.loads(schema_text)
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
 
 
 def _identity_findings(manifest: dict[str, Any]) -> list[str]:
@@ -424,7 +451,7 @@ def _buffer_findings(contracts: dict[str, Any]) -> list[str]:
     findings = []
     depth = fifo["depth_records"]
     if fifo.get("implementation") == "gray_pointer_dual_clock" and (
-        depth < MIN_GRAY_FIFO_DEPTH or depth > MAX_GRAY_FIFO_DEPTH or depth & (depth - 1)
+        depth < MIN_GRAY_FIFO_DEPTH or depth > MAX_GRAY_FIFO_DEPTH or int(depth) & (int(depth) - 1)
     ):
         findings.append("event_fifo: Gray-pointer depth must be a power of two in [2,16384]")
     for profile_name, profile in sorted(contracts["event_profiles"].items()):

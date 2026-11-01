@@ -287,7 +287,8 @@ unless it declares no function.
 The native control-run loader is held to the Python analysis twice. Shared
 corpora under `analysis/rust/tests/data/` record Python's outcomes for
 schema-location mutations of every run variant and the measurement domain,
-bounded JSON documents, and cross-field domain rules with integral floats; the
+bounded JSON documents, cross-field domain rules with integral floats, and
+events blocks with every jitter state, fault pairing and refusal; the
 Python tests rebuild each corpus and require the committed file, and the crate's
 unit tests require the same outcomes. `tests/test_control_run_parity.py` loads
 real RTL captures through both analyses, including refused declarations,

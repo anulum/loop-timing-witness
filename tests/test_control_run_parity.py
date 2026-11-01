@@ -528,3 +528,26 @@ def test_record_layouts_off_the_wire_are_refused_alike(
         outcome["refusal"]
         == "measurement domain event record differs from the 16-byte host wire layout"
     )
+
+
+@pytest.mark.parametrize(("cycles", "warmup"), [(3.0, 0.0), (3.0, 2.0), (3, 1)])
+def test_events_blocks_keep_python_number_types(
+    cycles: float, warmup: float, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Build the events block from integral-float and integer cycle declarations alike.
+
+    Parameters
+    ----------
+    cycles
+        Declared cycle count.
+    warmup
+        Declared warm-up cycles.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    manifest["cycle_count"], manifest["warmup_cycles"] = cycles, warmup
+    outcome = _same(_write(run, manifest), tmp_path)
+    assert outcome["summary"]["block"]["cycle_count"] == cycles - warmup

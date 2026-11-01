@@ -676,7 +676,13 @@ receipts and the declared files, in the declaration's own member order.
 cycle count. Each step refuses with the same text as the Python `load_run` and
 `decode_events`, including the failing schema locations, the cross-field
 findings with Python's number text, and `[Errno <n>] <message>: <path>` for an
-operating-system failure. Report statistics and outputs remain Python-only.
+operating-system failure. `control_events_summary` builds the report's
+`events` block and the per-cycle interval rows, as the Python `events_block`
+does: the fault-schedule agreement, Type-7 interval distributions with Python's
+floating-point operations, deadline, fault-detection and safe-state counts, and
+adjacent-cycle jitter. Counts derived from an integral-float cycle declaration
+stay floats, as in Python. Tracking, energy, receipts and report outputs remain
+Python-only.
 
 Every run-bound JSON document is decoded with three limits that both analyses
 share: arrays and objects nest at most 64 deep, checked before decoding;

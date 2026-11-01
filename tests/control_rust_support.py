@@ -25,7 +25,8 @@ from typing import TYPE_CHECKING, Any
 
 from neural_rust_support import consumer
 
-from loop_timing_witness.event_stream import decode_events
+from loop_timing_witness.analyze_run import events_block
+from loop_timing_witness.event_stream import Event, decode_events
 from loop_timing_witness.run_manifest import load_run
 
 if TYPE_CHECKING:
@@ -69,6 +70,7 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         return {"refusal": _printed(error)}
     decoded: list[list[object]] | None = None
     refusal: str | None = None
+    events: tuple[Event, ...] = ()
     try:
         events = decode_events(
             inputs.files["events"],
@@ -80,6 +82,18 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         refusal = _printed(error)
     else:
         decoded = [[event.name, event.cycle, event.ticks] for event in events]
+    summary: dict[str, Any] | None = None
+    summary_refusal: str | None = None
+    if refusal is not None:
+        summary_refusal = refusal
+    else:
+        try:
+            block, rows = events_block(inputs.manifest, inputs.domain["design_contracts"], events)
+        except ValueError as error:
+            summary_refusal = _printed(error)
+        else:
+            listed = [[row["cycle"], row["interval"], row["ticks"]] for row in rows]
+            summary = {"block": block, "rows": listed}
     return {
         "manifest": inputs.manifest,
         "domain": inputs.domain,
@@ -87,6 +101,8 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         "directory": str(inputs.directory),
         "events": decoded,
         "events_refusal": refusal,
+        "summary": summary,
+        "summary_refusal": summary_refusal,
     }
 
 

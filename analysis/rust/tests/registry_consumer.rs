@@ -25,9 +25,9 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
-    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, decode_control_events,
-    load_control_run, load_control_run_bytes, load_neural_run_with_registry, neural_key,
-    public_command,
+    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, control_events_summary,
+    decode_control_events, load_control_run, load_control_run_bytes, load_neural_run_with_registry,
+    neural_key, public_command,
 };
 
 /// Registry description written by the Python parity helper.
@@ -187,6 +187,13 @@ fn control_run_acquisition() {
                     .map(|event| json!([event.name, event.cycle, event.ticks]))
                     .collect::<Vec<_>>()
             });
+            let summary = control_events_summary(&inputs).map(|(block, rows)| {
+                let rows: Vec<Value> = rows
+                    .iter()
+                    .map(|row| json!([row.cycle, row.interval, row.ticks]))
+                    .collect();
+                json!({ "block": block, "rows": rows })
+            });
             json!({
                 "manifest": inputs.manifest(),
                 "domain": inputs.domain(),
@@ -194,6 +201,8 @@ fn control_run_acquisition() {
                 "directory": inputs.directory(),
                 "events": events.as_ref().ok(),
                 "events_refusal": events.err(),
+                "summary": summary.as_ref().ok(),
+                "summary_refusal": summary.err(),
             })
         }
     };

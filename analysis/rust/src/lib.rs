@@ -12,6 +12,7 @@ mod binding;
 mod capture;
 mod checker_receipt;
 mod clock_completion;
+mod control_analysis;
 /// Public CONTROL and COMPUTE run loading and event decoding.
 pub mod control_api;
 mod control_domain;
@@ -67,7 +68,8 @@ mod strict_json;
 
 /// Executors a consumer registration may bind.
 pub use control_api::{
-    ControlEvent, ControlInputs, decode_control_events, load_control_run, load_control_run_bytes,
+    ControlEvent, ControlInputs, IntervalRow, control_events_summary, decode_control_events,
+    load_control_run, load_control_run_bytes,
 };
 /// Immutable report snapshot returned by the complete source-bound loader.
 pub use public_api::{

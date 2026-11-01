@@ -196,7 +196,7 @@ def _control_faults(
     safe: list[int] = []
     open_injection: int | None = None
     first_missed_deadline: int | None = None
-    for cycle in range(warmup_cycles, cycle_count):
+    for cycle in range(int(warmup_cycles), int(cycle_count)):
         observed = cycles.get(cycle, {})
         injection = observed.get("FAULT_INJECTED")
         if injection is not None:

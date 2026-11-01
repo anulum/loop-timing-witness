@@ -86,7 +86,9 @@ inconsistent sources or failed producer publication.
 `load_control_run(path)` and `load_control_run_bytes(path, root)` validate a
 CONTROL or COMPUTE run and keep its hash-bound input bytes, available through
 `ControlInputs::manifest`, `domain`, `files` and `directory`.
-`decode_control_events(&inputs)` returns the run's `ControlEvent` records.
+`decode_control_events(&inputs)` returns the run's `ControlEvent` records, and
+`control_events_summary(&inputs)` returns the report's `events` block with the
+`IntervalRow` table.
 Every refusal is the text of the Python `load_run` and `decode_events` for the
 same files; the parity tests run both on real RTL captures, malformed
 documents and injected read failures, and shared corpora hold the schema

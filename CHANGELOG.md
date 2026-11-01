@@ -18,6 +18,8 @@ Loop Timing Witness — changelog
   `load_control_run_bytes` and `decode_control_events` validate a CONTROL or COMPUTE
   run, its hash-bound measurement domain and every input, and decode its events,
   refusing with the same texts as the Python `load_run` and `decode_events`.
+  `control_events_summary` builds the report's `events` block and interval rows as
+  the Python analysis does.
 - Complete C controller coverage gate: `make controller-tests` ends with
   `make controller-coverage`, which runs the C API test and the stream and refusal tests
   against GCC-instrumented programs. `tools/c_coverage_gate.py` adds their counts and
@@ -77,7 +79,9 @@ Loop Timing Witness — changelog
 
 - A measurement domain with a Gray-pointer buffer depth written as an integral
   float, and a COMPUTE run whose domain gives COMPUTE a sample rate, raised an
-  internal error; they are now checked and refused like other declarations.
+  internal error; they are now checked and refused like other declarations. A
+  CONTROL run declaring its cycle or warm-up count as an integral float is analysed
+  instead of failing in the deadline pass.
 - Check the checker image executor alike in Python and Rust: the binding must be its
   closed typed form in both (host boundary, image inventory, command, environment,
   deadline and file lists), invalid JSON is refused by name, an unreadable image

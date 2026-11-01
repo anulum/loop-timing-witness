@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .amp_report_completion import attach_amp_completion
 from .event_stream import decode_events
@@ -27,7 +27,69 @@ from .run_manifest import RunInputs, load_run
 from .run_series import energy_per_cycle, tracking_error
 from .tracking_observations import observed_tracking_error
 
+if TYPE_CHECKING:
+    from .event_stream import Event
+
 REPORT_SCHEMA = "loop-timing-witness.analysis-report.v1"
+
+
+def events_block(
+    manifest: dict[str, Any], contracts: dict[str, Any], events: tuple[Event, ...]
+) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
+    """Build the report's ``events`` block from decoded events.
+
+    The captured fault injections must match the declared fault schedule. The
+    block holds the event and cycle counts, the observation span, the interval
+    distributions, the control counts and the adjacent-cycle jitter, each with
+    the shared ``duration_ticks``.
+
+    Parameters
+    ----------
+    manifest
+        Schema-valid run manifest.
+    contracts
+        Valid measurement-domain design contracts.
+    events
+        Decoded events of the run.
+
+    Returns
+    -------
+    tuple[dict[str, Any], list[dict[str, int | str]]]
+        The ``events`` block and the per-cycle interval rows.
+
+    Raises
+    ------
+    ValueError
+        If the fault schedule disagrees with the capture or an event order
+        contradicts the interval and fault rules.
+    """
+    scheduled = sorted(item["cycle"] for item in manifest["fault_schedule"])
+    observed = sorted(event.cycle for event in events if event.name == "FAULT_INJECTED")
+    if scheduled != observed:
+        message = "fault schedule does not match captured FAULT_INJECTED events"
+        raise ValueError(message)
+    profile = contracts["event_profiles"][manifest["profile"]]
+    summary, cycle_rows = analyse_events(
+        events, profile, manifest["cycle_count"], manifest["warmup_cycles"]
+    )
+    duration_ticks = summary["duration_ticks"]
+    summary["jitter_method"] = JITTER_METHOD
+    summary["jitter"] = summarise_jitter(
+        cycle_rows,
+        [
+            str(interval["name"])
+            for interval in profile["intervals"]
+            if interval["name"] != "time_to_safe_state"
+        ],
+        summary["cycle_count"],
+        duration_ticks,
+    )
+    for interval in summary["intervals"].values():
+        interval["duration_ticks"] = duration_ticks
+    if summary["control"] is not None:
+        summary["control"]["sample_count"] = summary["control"]["observed_deadlines"]
+        summary["control"]["duration_ticks"] = duration_ticks
+    return summary, cycle_rows
 
 
 def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
@@ -53,17 +115,7 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
     events = decode_events(
         inputs.files["events"], contracts, manifest["profile"], manifest["cycle_count"]
     )
-    scheduled = sorted(item["cycle"] for item in manifest["fault_schedule"])
-    observed = sorted(event.cycle for event in events if event.name == "FAULT_INJECTED")
-    if scheduled != observed:
-        message = "fault schedule does not match captured FAULT_INJECTED events"
-        raise ValueError(message)
-    summary, cycle_rows = analyse_events(
-        events,
-        contracts["event_profiles"][manifest["profile"]],
-        manifest["cycle_count"],
-        manifest["warmup_cycles"],
-    )
+    summary, cycle_rows = events_block(manifest, contracts, events)
     if manifest.get("tracking_sampling") == "observed":
         tracking = observed_tracking_error(
             inputs.files["tracking"],
@@ -89,22 +141,6 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
         contracts["power_rails"],
     )
     duration_ticks = summary["duration_ticks"]
-    summary["jitter_method"] = JITTER_METHOD
-    summary["jitter"] = summarise_jitter(
-        cycle_rows,
-        [
-            str(interval["name"])
-            for interval in contracts["event_profiles"][manifest["profile"]]["intervals"]
-            if interval["name"] != "time_to_safe_state"
-        ],
-        summary["cycle_count"],
-        duration_ticks,
-    )
-    for interval in summary["intervals"].values():
-        interval["duration_ticks"] = duration_ticks
-    if summary["control"] is not None:
-        summary["control"]["sample_count"] = summary["control"]["observed_deadlines"]
-        summary["control"]["duration_ticks"] = duration_ticks
     tracking["duration_ticks"] = duration_ticks
     energy["duration_ticks"] = duration_ticks
     tracking.setdefault("sample_count", 0)

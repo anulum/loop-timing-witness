@@ -52,6 +52,41 @@ impl Num {
         }
     }
 
+    /// Python `self - other` for a result that cannot be negative.
+    pub(crate) fn sub(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Int(left), Self::Int(right)) => Self::Int(left - right),
+            _ => Self::Float(self.float() - other.float()),
+        }
+    }
+
+    /// Python `max(0, self)`: zero stays the integer `0` unless `self` exceeds it.
+    pub(crate) fn at_least_zero(self) -> Self {
+        if self.compare(Self::Int(0)) == Ordering::Greater {
+            self
+        } else {
+            Self::Int(0)
+        }
+    }
+
+    /// Python truthiness: zero, as integer or float, is false.
+    pub(crate) fn truthy(self) -> bool {
+        !self.same(Self::Int(0))
+    }
+
+    /// Python `numerator / self` as a correctly rounded float.
+    pub(crate) fn divide(self, numerator: u64) -> f64 {
+        numerator as f64 / self.float()
+    }
+
+    /// The JSON value Python writes for this number.
+    pub(crate) fn json(self) -> Value {
+        match self {
+            Self::Int(integer) => Value::from(u64::try_from(integer).expect("64-bit count")),
+            Self::Float(float) => Value::from(float),
+        }
+    }
+
     /// Python `2 ** self` for an exponent of at most 64.
     pub(crate) fn power_of_two(self) -> Self {
         match self {

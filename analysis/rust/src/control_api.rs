@@ -12,8 +12,10 @@
 //! domain and every referenced input, and keeps the verified bytes.
 //! [`decode_control_events`] decodes the run's event records. Each refusal is
 //! the same text the Python `load_run` and `decode_events` give for the same
-//! files.
+//! files. [`control_events_summary`] builds the report's `events` block, as
+//! the Python `events_block` does.
 
+use crate::control_analysis::events_block;
 use crate::control_events::{Names, decode};
 use crate::control_manifest::{ControlRun, load};
 use crate::control_number::Num;
@@ -108,4 +110,52 @@ pub fn decode_control_events(inputs: &ControlInputs) -> Result<Vec<ControlEvent>
             ticks: event.ticks,
         })
         .collect())
+}
+
+/// One same-cycle interval observation of an analysed cycle.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntervalRow {
+    /// Analysed cycle.
+    pub cycle: u32,
+    /// Interval name from the measurement domain.
+    pub interval: String,
+    /// Interval length in clock ticks.
+    pub ticks: u64,
+}
+
+/// Build the report's `events` block and the per-cycle interval rows.
+///
+/// The block holds the analysed event and cycle counts, the observation span,
+/// the Type-7 interval distributions, the deadline and fault counts of a
+/// CONTROL run and the adjacent-cycle jitter, as the Python `events_block`
+/// builds them, including Python's integer or float type of counts derived
+/// from the declared cycles.
+///
+/// # Errors
+///
+/// Returns the Python analysis's refusal text for an event file that does not
+/// decode, a fault schedule that disagrees with the captured injections, or an
+/// event order that contradicts the interval and fault rules.
+pub fn control_events_summary(inputs: &ControlInputs) -> Result<(Value, Vec<IntervalRow>), String> {
+    let contracts = &inputs.domain()["design_contracts"];
+    let manifest = inputs.manifest();
+    let profile = manifest["profile"]
+        .as_str()
+        .expect("schema-checked profile");
+    let events = decode(
+        &inputs.files()["events"],
+        contracts,
+        profile,
+        Num::of(&manifest["cycle_count"]),
+    )?;
+    let (block, rows) = events_block(manifest, contracts, &events)?;
+    let rows = rows
+        .into_iter()
+        .map(|row| IntervalRow {
+            cycle: row.cycle,
+            interval: row.interval,
+            ticks: row.ticks,
+        })
+        .collect();
+    Ok((block, rows))
 }

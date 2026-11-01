@@ -45,6 +45,12 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A run manifest that breaks its schema is refused with its first failing location and
+  an authored sentence, and a run-bound measurement domain with every distinct failing
+  location, instead of the schema validator's wording. `started_utc` is checked by one
+  authored RFC 3339 UTC rule that no longer depends on an optional format checker; a
+  leap second, an impossible date or year 0000 is refused with
+  `started_utc must be an RFC 3339 date-time in UTC`.
 - Every documentation website page shows the copyright, the AGPL-3.0-or-later licence
   of the exact source revision, the commercial licence offer and the contact addresses
   in its footer; the provenance headers of the Markdown sources stay hidden comments.

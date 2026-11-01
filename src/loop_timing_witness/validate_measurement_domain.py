@@ -112,17 +112,67 @@ def schema_findings(manifest: dict[str, Any], schema: dict[str, Any]) -> list[st
     referencing.exceptions.Unresolvable
         If a schema reference cannot be resolved.
     """
-    Draft202012Validator.check_schema(schema)
-    validator = Draft202012Validator(schema)
-    errors = sorted(
-        validator.iter_errors(manifest),
-        key=lambda error: [str(part) for part in error.absolute_path],
-    )
     findings = []
-    for error in errors:
+    for error in _sorted_errors(manifest, schema):
         location = "/".join(str(part) for part in error.absolute_path) or "(root)"
         findings.append(f"schema: {location}: {error.message}")
     return findings
+
+
+def schema_locations(manifest: dict[str, Any], schema: dict[str, Any]) -> list[str]:
+    """Return each document location that breaks the schema, once, in path order.
+
+    Only the locations are reported, never the validator's own message text, so
+    an independent implementation of the same schema reports the same refusal.
+
+    Parameters
+    ----------
+    manifest
+        Decoded manifest object.
+    schema
+        Decoded Draft 2020-12 schema object.
+
+    Returns
+    -------
+    list[str]
+        Slash-joined locations, ``(root)`` for the document itself; empty when
+        the structure is valid.
+
+    Raises
+    ------
+    jsonschema.exceptions.SchemaError
+        If the schema itself is not a valid Draft 2020-12 schema.
+    referencing.exceptions.Unresolvable
+        If a schema reference cannot be resolved.
+    """
+    locations: list[str] = []
+    for error in _sorted_errors(manifest, schema):
+        location = "/".join(str(part) for part in error.absolute_path) or "(root)"
+        if location not in locations:
+            locations.append(location)
+    return locations
+
+
+def _sorted_errors(manifest: dict[str, Any], schema: dict[str, Any]) -> list[Any]:
+    """Return every schema error in a stable document-path order.
+
+    Parameters
+    ----------
+    manifest
+        Decoded manifest object.
+    schema
+        Decoded Draft 2020-12 schema object.
+
+    Returns
+    -------
+    list[Any]
+        ``jsonschema`` errors sorted by their path parts as strings.
+    """
+    Draft202012Validator.check_schema(schema)
+    return sorted(
+        Draft202012Validator(schema).iter_errors(manifest),
+        key=lambda error: [str(part) for part in error.absolute_path],
+    )
 
 
 def _identity_findings(manifest: dict[str, Any]) -> list[str]:

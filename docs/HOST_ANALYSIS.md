@@ -83,10 +83,18 @@ decimal or exponent values that overflow to a nonfinite number. This applies
 inside nested objects and arrays, including worker readiness and receipts.
 Finite numeric values and quoted strings naming those tokens remain valid.
 
-The source loader accepts schema-valid UTC date-time spellings with upper- or
-lowercase `T` and `Z`, or an explicit `+00:00` offset. Nonzero UTC offsets remain
-invalid. Parsing does not rewrite `started_utc`: the original value is retained
-in the loaded manifest and report.
+A run manifest that breaks its schema is refused with the first failing document
+location, for example `run manifest files/events: does not satisfy the run manifest
+schema`. A run-bound measurement domain that breaks its schema is refused with every
+distinct failing location, in document order. Neither refusal repeats the schema
+validator's own wording.
+
+`started_utc` must be one RFC 3339 date-time in UTC: `YYYY-MM-DDTHH:MM:SS`, optional
+fractional seconds of any length, then `Z`, `+00:00` or `-00:00`. `T` and `Z` may be
+lower case. The date and time must name a real instant, so a leap second or
+30 February is refused, as is any other offset; the refusal is
+`started_utc must be an RFC 3339 date-time in UTC`. Parsing does not rewrite
+`started_utc`: the original value is retained in the loaded manifest and report.
 
 The 16-byte event record is little-endian: `event_type` u8, zero reserved byte u8, zero reserved
 word u16, `cycle` u32 and `timebase_ticks` u64. The repository

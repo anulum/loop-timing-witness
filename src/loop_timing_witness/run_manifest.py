@@ -17,15 +17,14 @@ represent a measurement.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from jsonschema import Draft202012Validator, FormatChecker
-
 from .manifest_io import load_json_object, parse_json_object
-from .validate_measurement_domain import schema_findings, semantic_findings
+from .validate_measurement_domain import schema_locations, semantic_findings
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parent / "data"
 DOMAIN_SCHEMA_PATH: Final = REPOSITORY_ROOT / "measurement-domain.schema.json"
@@ -39,6 +38,9 @@ WIRE_FIELDS: Final = (
     ("timebase_ticks", 8, "u64"),
 )
 WIRE_RECORD_BYTES: Final = 16
+UTC_TIMESTAMP: Final = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|[+-]00:00)", re.ASCII
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +88,10 @@ def _load_domain(raw: bytes, source: str) -> dict[str, Any]:
     """
     domain = parse_json_object(raw, source)
     schema = load_json_object(DOMAIN_SCHEMA_PATH)
-    findings = schema_findings(domain, schema)
+    findings = [
+        f"schema: {location}: does not satisfy the measurement-domain schema"
+        for location in schema_locations(domain, schema)
+    ]
     if not findings:
         findings = semantic_findings(domain)
     if findings:
@@ -115,21 +120,40 @@ def _validate_run_schema(manifest: dict[str, Any]) -> None:
     ValueError
         If the run cannot be analysed under this contract.
     """
-    schema = load_json_object(RUN_SCHEMA_PATH)
-    Draft202012Validator.check_schema(schema)
-    errors = sorted(
-        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(manifest),
-        key=lambda error: [str(part) for part in error.absolute_path],
-    )
-    if errors:
-        first = errors[0]
-        location = "/".join(str(part) for part in first.absolute_path) or "(root)"
-        message = f"run manifest {location}: {first.message}"
+    locations = schema_locations(manifest, load_json_object(RUN_SCHEMA_PATH))
+    if locations:
+        message = f"run manifest {locations[0]}: does not satisfy the run manifest schema"
         raise ValueError(message)
-    started = datetime.fromisoformat(manifest["started_utc"].upper())
-    if started.utcoffset() != UTC.utcoffset(started):
-        message = "started_utc must use UTC"
+    if not _utc_timestamp(manifest["started_utc"]):
+        message = "started_utc must be an RFC 3339 date-time in UTC"
         raise ValueError(message)
+
+
+def _utc_timestamp(text: str) -> bool:
+    """Tell whether a text is one RFC 3339 date-time with a zero UTC offset.
+
+    The date and time fields must name a real calendar instant; a leap second
+    is not accepted. Fractional seconds may have any number of digits.
+
+    Parameters
+    ----------
+    text
+        Declared ``started_utc`` value.
+
+    Returns
+    -------
+    bool
+        Whether the text is a valid UTC timestamp.
+    """
+    match = UTC_TIMESTAMP.fullmatch(text)
+    if match is None:
+        return False
+    year, month, day, hour, minute, second = (int(field) for field in match.groups())
+    try:
+        datetime(year, month, day, hour, minute, second, tzinfo=UTC)
+    except ValueError:
+        return False
+    return True
 
 
 def _validate_fault_schedule(manifest: dict[str, Any]) -> None:

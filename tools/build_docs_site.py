@@ -250,6 +250,32 @@ def rewrite_link(target: str, source: Path, documents: set[str]) -> str:
     )
 
 
+def _licence_line(revision: str) -> str:
+    """Return the visible copyright and licence line of every page footer.
+
+    The provenance header of the rendered Markdown sources stays in HTML
+    comments, so this footer line is where a reader sees the licence.
+
+    Parameters
+    ----------
+    revision
+        Actual source commit SHA whose licence text the line links to.
+
+    Returns
+    -------
+    str
+        HTML fragment with the copyright holder, the linked licence, the
+        commercial licence offer and the contact addresses.
+    """
+    return (
+        "© Concepts 1996–2026 and code 2020–2026 Miroslav Šotek. All rights reserved. "
+        f'Licensed under <a href="{REPOSITORY}/blob/{revision}/LICENSE">AGPL-3.0-or-later</a>; '
+        "a commercial licence is available. "
+        '<a href="https://www.anulum.li">www.anulum.li</a> | '
+        '<a href="mailto:protoscience@anulum.li">protoscience@anulum.li</a>'
+    )
+
+
 def write_page(output: Path, relative: Path, title: str, content: str, revision: str) -> None:
     """Write a self-contained page with navigation and source provenance.
 
@@ -296,6 +322,7 @@ def write_page(output: Path, relative: Path, title: str, content: str, revision:
         f"</head><body><header>{brand} {navigation}</header><main>{content}"
         f'<footer>{logos}Source: <a href="{REPOSITORY}/tree/{revision}">{revision[:12]}</a>. '
         "Simulation software and planned hardware instrument; no board qualification is claimed."
+        f"<p>{_licence_line(revision)}</p>"
         "</footer></main></body></html>\n",
         encoding="utf-8",
     )

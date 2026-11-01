@@ -41,6 +41,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Every documentation website page shows the copyright, the AGPL-3.0-or-later licence
+  of the exact source revision, the commercial licence offer and the contact addresses
+  in its footer; the provenance headers of the Markdown sources stay hidden comments.
 - The Rust analysis command runs through `public_command::run`, which also takes a
   consumer's own registry; `Installation::with_embedded_workers` is public and
   checks every worker role and body before writing an owned copy. Operator

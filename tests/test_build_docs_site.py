@@ -15,12 +15,13 @@ import html
 import inspect
 import json
 import pydoc
+import re
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
-from build_docs_site import RepositoryTextDoc, main
+from build_docs_site import REPOSITORY, RepositoryTextDoc, main
 
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness import validate_measurement_domain
@@ -90,6 +91,38 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
         output / "api/python/loop_timing_witness.validate_measurement_domain.html"
     ).read_text()
     assert "src/loop_timing_witness/data/measurement-domain.schema.json" in schema_page
+
+
+def test_every_page_footer_carries_the_licence_and_sources_keep_hidden_headers(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Show the licence in each footer while source provenance headers stay invisible.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive website output directory.
+    capsys
+        Captured build diagnostics.
+    """
+    output = tmp_path / "site"
+    assert main(["--output", str(output)]) == 0, capsys.readouterr().err
+    revision = json.loads((output / "site-provenance.json").read_text())["source_revision"]
+    licence = f'Licensed under <a href="{REPOSITORY}/blob/{revision}/LICENSE">AGPL-3.0-or-later</a>'
+    for name in ("index.html", "docs/HOST_ANALYSIS.html", "api/python/loop_timing_witness.html"):
+        page = (output / name).read_text()
+        footer = page[page.index("<footer>") : page.index("</footer>")]
+        assert licence in footer
+        assert "© Concepts 1996–2026 and code 2020–2026 Miroslav Šotek." in footer
+        assert 'href="mailto:protoscience@anulum.li"' in footer
+    for name in ("index.html", "docs/HOST_ANALYSIS.html", "VALIDATION.html"):
+        page = (output / name).read_text()
+        visible = re.sub(r"<!--.*?-->", "", page, flags=re.DOTALL)
+        for header_line in ("Commercial license available", "ORCID: 0009-0009-3560-0851"):
+            assert header_line in page
+            assert header_line not in visible
+        main_content = visible[visible.index("<main>") + len("<main>") :].lstrip()
+        assert main_content.startswith(("<h1", "<p")), main_content[:80]
 
 
 def test_reference_path_values_preserve_actual_repository_boundaries() -> None:

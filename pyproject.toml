@@ -134,6 +134,7 @@ convention = "numpy"
 known-first-party = [
     "check_analysis_package",
     "audit_workflows",
+    "c_coverage_gate",
     "check_commit_trailers",
     "controller_test_support",
     "check_dependency_licences",

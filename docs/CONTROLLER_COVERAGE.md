@@ -10,10 +10,14 @@ Loop Timing Witness — native controller coverage reproduction
 
 # Native controller coverage
 
+Every line and branch of the C controller kernel and its streaming CLI is required on
+every hosted test run; see [C controller gate](#c-controller-gate).
 [`controller_coverage.json`](../benchmarks/controller_coverage.json) binds source hashes
-to GCC and LLVM coverage reports. Both controller kernels and their streaming CLIs have
-100% executable line and branch coverage in the recorded snapshot. The retained reports
-include the earlier Rust 1.98.1 build; they are historical evidence and do not certify a new
+to the GCC and LLVM reports of an earlier recorded snapshot, with 100% executable line
+and branch coverage of both controller kernels and their streaming CLIs. Its C source
+hashes no longer match the current files, so for C it is historical; the gate is the
+current evidence. Its Rust controller hashes still match. The retained reports include
+the earlier Rust 1.98.1 build; they are historical evidence and do not certify a new
 compiler. These counts exclude benchmark harnesses and SystemVerilog. They establish
 host execution coverage, not board qualification.
 
@@ -42,6 +46,31 @@ required gate. Pull requests retain the test report without publishing it.
 This report describes the configured Python source set. It does not measure C, C++,
 Rust, SystemVerilog or physical hardware. Those surfaces need their separate
 instrumented evidence below.
+
+## C controller gate
+
+`make controller-tests` ends with `make controller-coverage`, and the hosted test shard
+that runs the controller tests runs it at every push. The target:
+
+1. compiles the kernel with `tests/native/controller_api_test.c` using GCC `--coverage
+   -fprofile-abs-path -O0` and runs that test;
+2. runs `tests/test_controller_inputs.py` and `tests/test_controller_parity.py` with
+   `WITNESS_C_COVERAGE_DIRECTORY` set, so the shared fixture builds the CLI with counters in
+   that directory and every real stream, refusal and operating-system boundary case runs
+   against it;
+3. exports each program with `gcov --json-format --branch-probabilities`;
+4. runs [`c_coverage_gate.py`](../tools/c_coverage_gate.py), which adds the counts of all
+   programs line by line and branch by branch. Every executable line and every branch
+   outcome of every `.c` file in `controllers/c` must have run. A new file there fails until
+   it is measured, and a line whose branch structure differs between programs is refused.
+
+The coverage builds omit the undefined-behaviour sanitizer. Its boolean-load check adds a
+branch that only undefined behaviour can take, so complete branch coverage would be
+unreachable with it. The sanitized API test above and the sanitized CLI used by every other
+test keep it. The target's outputs stay in ignored `build/c-controller-coverage`.
+
+The manual procedure below reproduces the recorded snapshot of both languages; the Rust
+controller is not yet gated in CI.
 
 ## Compile instrumented public interfaces
 

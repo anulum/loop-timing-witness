@@ -159,6 +159,29 @@ controller-build:
 controller-tests: controller-build
 	build/controller_api_test
 	cargo test --offline --locked --manifest-path $(CONTROLLER_CRATE)
+	$(MAKE) controller-coverage
+
+# Every line and branch of the C controller and its CLI must run. GCC counters
+# use -O0 without the UB sanitizer: its boolean-load check adds a branch that
+# only undefined behaviour can take. The sanitized builds above keep it.
+CONTROLLER_COVERAGE_DIRECTORY ?= build/c-controller-coverage
+
+.PHONY: controller-coverage
+controller-coverage:
+	rm -rf "$(CONTROLLER_COVERAGE_DIRECTORY)"
+	mkdir -p "$(CONTROLLER_COVERAGE_DIRECTORY)/reports"
+	gcc -std=gnu11 -O0 $(CONTROLLER_WARNINGS) --coverage -fprofile-abs-path -Icontrollers/c \
+		controllers/c/witness_controller.c tests/native/controller_api_test.c \
+		-o "$(CONTROLLER_COVERAGE_DIRECTORY)/controller_api_test"
+	"$(CONTROLLER_COVERAGE_DIRECTORY)/controller_api_test"
+	WITNESS_C_COVERAGE_DIRECTORY="$(abspath $(CONTROLLER_COVERAGE_DIRECTORY))" $(VENV)/pytest \
+		-q -p no:cacheprovider --no-cov tests/test_controller_inputs.py tests/test_controller_parity.py
+	for note in "$(CONTROLLER_COVERAGE_DIRECTORY)"/*.gcno; do \
+		gcov --json-format --stdout --branch-probabilities "$$note" \
+			> "$(CONTROLLER_COVERAGE_DIRECTORY)/reports/$$(basename "$$note" .gcno).json" || exit $$?; \
+	done
+	$(VENV)/python tools/c_coverage_gate.py --sources controllers/c \
+		"$(CONTROLLER_COVERAGE_DIRECTORY)"/reports/*.json
 
 CONTROLLER_BENCHMARK_OUTPUT ?= build/controller_comparison.local.json
 CONTROLLER_BENCHMARK_CPU ?= 0

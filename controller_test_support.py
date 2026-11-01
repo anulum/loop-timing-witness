@@ -10,27 +10,48 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
+C_COVERAGE_DIRECTORY = "WITNESS_C_COVERAGE_DIRECTORY"
+"""Environment variable naming the directory of a GCC line and branch coverage build."""
+
+UNDEFINED_BEHAVIOUR_REFUSAL: tuple[str, ...] = ("-fsanitize=undefined", "-fno-sanitize-recover=all")
+COVERAGE_INSTRUMENTATION: tuple[str, ...] = ("--coverage", "-fprofile-abs-path", "-O0")
+
 
 def build_native_controllers(root: Path, directory: Path) -> tuple[Path, Path]:
     """Compile actual C and Rust public programs with strict C/UB checks.
+
+    When ``WITNESS_C_COVERAGE_DIRECTORY`` names a directory, the C program is
+    built there with GCC line and branch counters at ``-O0`` instead, so the
+    counters of every run collect beside its notes. That build omits the
+    undefined-behaviour sanitizer: its boolean-load check adds a branch that
+    only undefined behaviour can take, so complete branch coverage would be
+    unreachable. Every ordinary build keeps the sanitizer.
 
     Parameters
     ----------
     root
         Witness checkout, also the Rust build-output owner.
     directory
-        Managed C executable directory.
+        Managed C executable directory, unless a coverage directory is named.
 
     Returns
     -------
     tuple of Path
         C and Rust streaming entry points.
     """
+    coverage = os.environ.get(C_COVERAGE_DIRECTORY)
+    if coverage:
+        directory = Path(coverage)
+        directory.mkdir(parents=True, exist_ok=True)
+        checks = COVERAGE_INSTRUMENTATION
+    else:
+        checks = UNDEFINED_BEHAVIOUR_REFUSAL
     binary = directory / "controller_cli"
     subprocess.run(
         [
@@ -44,8 +65,7 @@ def build_native_controllers(root: Path, directory: Path) -> tuple[Path, Path]:
             "-Wshadow",
             "-Wstrict-prototypes",
             "-Wmissing-prototypes",
-            "-fsanitize=undefined",
-            "-fno-sanitize-recover=all",
+            *checks,
             "controllers/c/witness_controller.c",
             "controllers/c/controller_cli.c",
             "-o",

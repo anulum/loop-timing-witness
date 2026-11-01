@@ -322,10 +322,16 @@ rendered API documentation establishes physical instrument qualification.
 
 ## Native controller coverage and regression
 
-[`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md) reproduces GCC line/branch
-and LLVM line/region/function/branch analysis of the kernels and streaming CLIs.
+`make controller-tests`, run in the hosted test shard at every push, ends with
+`make controller-coverage`. It runs the C API test and the real stream and refusal tests
+against GCC-instrumented C programs, and `tools/c_coverage_gate.py` requires every line
+and every branch of every `.c` file in `controllers/c` to have run.
+[`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md) describes that gate and
+reproduces GCC line/branch and LLVM line/region/function/branch analysis of the kernels
+and streaming CLIs.
 [`benchmarks/controller_coverage.json`](benchmarks/controller_coverage.json) retains
-source and raw-report hashes. Coverage is host execution evidence; no numeric RTL
+source and raw-report hashes of that recorded snapshot; its C hashes predate the current
+sources. Coverage is host execution evidence; no numeric RTL
 coverage or physical timing qualification is inferred. The production Rust compiler
 remains 1.99.0; the separate branch analysis pins nightly-2026-08-21.
 

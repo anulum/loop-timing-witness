@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Complete C controller coverage gate: `make controller-tests` ends with
+  `make controller-coverage`, which runs the C API test and the stream and refusal tests
+  against GCC-instrumented programs. `tools/c_coverage_gate.py` adds their counts and
+  requires every line and branch of every `.c` file in `controllers/c` to have run.
 - Repeat campaign manifest and `loop-timing-witness-campaign` command: hash-bound
   ordered repeats with reboot declarations, refusal of mixed configurations, every
   repeat listed with its outcome, latency and jitter pooled from raw samples of

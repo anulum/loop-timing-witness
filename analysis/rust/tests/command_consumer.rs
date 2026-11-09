@@ -19,7 +19,9 @@ use std::process::Command;
 use support::Declaration;
 use witness_analysis::{NeuralRegistry, public_command};
 
-const UNREADABLE: &str = "Cannot read neural manifest as a regular file without symlinks.";
+/// The dispatcher's refusal of a manifest it cannot read, as the Python command prints it.
+const UNREADABLE: &str = "A finite regular strict JSON manifest is required. \
+                          Cannot acquire a finite regular run manifest for analysis.";
 
 /// Run the command against an empty registry; return status, stdout and stderr.
 fn command(arguments: &[OsString]) -> (i32, String, String) {

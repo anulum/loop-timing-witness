@@ -23,10 +23,17 @@
 //! - an unpaired surrogate escape is refused only after the whole document
 //!   decoded, and before the top-level type is checked.
 //!
-//! Any other malformed input is `invalid JSON`.
+//! Any other malformed input is `invalid JSON`. A repeated member name is
+//! compared exactly, unpaired surrogates included, and is named as standard
+//! error prints it, with `\udXXX` for each unpaired surrogate.
+//!
+//! [`decode_dispatch_object`] decodes as Python's `parse_dispatch_json_object`,
+//! which only chooses the analysis: the same nesting bound, with integers kept
+//! as their decimal text and unpaired surrogates kept.
 
 use serde_json::{Map, Number, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use std::fmt::Write as _;
 
 /// Deepest array or object nesting a bounded document may use.
 pub(crate) const MAX_DEPTH: usize = 64;
@@ -42,6 +49,26 @@ pub(crate) fn decode_object(
     raw: &[u8],
     source: &str,
 ) -> Result<(Map<String, Value>, Orders), String> {
+    decode(raw, source, true)
+}
+
+/// Decode one JSON object only to choose its analysis, as Python's
+/// `parse_dispatch_json_object`: integers are their decimal text and an
+/// unpaired surrogate escape is kept.
+pub(crate) fn decode_dispatch_object(
+    raw: &[u8],
+    source: &str,
+) -> Result<Map<String, Value>, String> {
+    decode(raw, source, false).map(|(object, _)| object)
+}
+
+/// Decode one object nested at most [`MAX_DEPTH`] deep; `run_bounds` adds the
+/// 64-bit integer range and the refusal of unpaired surrogates.
+fn decode(
+    raw: &[u8],
+    source: &str,
+    run_bounds: bool,
+) -> Result<(Map<String, Value>, Orders), String> {
     let text = std::str::from_utf8(raw).map_err(|_| format!("{source}: not UTF-8"))?;
     if nesting_depth(text) > MAX_DEPTH {
         return Err(format!("{source}: JSON input exceeds decoder limits"));
@@ -50,6 +77,7 @@ pub(crate) fn decode_object(
         bytes: text.as_bytes(),
         position: 0,
         unpaired: false,
+        run_bounds,
         path: Vec::new(),
         orders: Orders::new(),
     };
@@ -59,7 +87,7 @@ pub(crate) fn decode_object(
             refusal.unwrap_or_else(|| "invalid JSON".to_owned())
         )
     })?;
-    if scanner.unpaired {
+    if run_bounds && scanner.unpaired {
         return Err(format!(
             "{source}: JSON text holds an unpaired surrogate escape"
         ));
@@ -98,11 +126,26 @@ pub(crate) fn nesting_depth(text: &str) -> usize {
 /// A refusal: `None` is invalid JSON, `Some` is an authored refusal text.
 type Refusal = Option<String>;
 
+/// One decoded backslash escape.
+enum Escape {
+    /// A character, a joined surrogate pair included.
+    Character(char),
+    /// A UTF-16 surrogate code unit without its partner.
+    Unpaired(u32),
+}
+
+/// A decoded string: its text, with U+FFFD for each unpaired surrogate, and,
+/// only when it holds one, its printed form with `\udXXX` for each.
+///
+/// The pair identifies the decoded code points exactly.
+type Text = (String, Option<String>);
+
 /// Recursive-descent state over validated UTF-8 bytes.
 struct Scanner<'a> {
     bytes: &'a [u8],
     position: usize,
     unpaired: bool,
+    run_bounds: bool,
     path: Vec<String>,
     orders: Orders,
 }
@@ -142,14 +185,14 @@ impl Scanner<'_> {
     /// Decode one value in the order CPython's scanner tries its alternatives.
     fn value(&mut self) -> Result<Value, Refusal> {
         match self.bytes.get(self.position) {
-            Some(b'"') => self.string().map(Value::String),
+            Some(b'"') => self.string().map(|(text, _)| Value::String(text)),
             Some(b'{') => self.object(),
             Some(b'[') => self.array(),
             _ if self.literal("null") => Ok(Value::Null),
             _ if self.literal("true") => Ok(Value::Bool(true)),
             _ if self.literal("false") => Ok(Value::Bool(false)),
             _ => match self.number()? {
-                Some(number) => Ok(Value::Number(number)),
+                Some(number) => Ok(number),
                 None => {
                     for token in ["NaN", "Infinity", "-Infinity"] {
                         if self.literal(token) {
@@ -166,7 +209,7 @@ impl Scanner<'_> {
     fn object(&mut self) -> Result<Value, Refusal> {
         self.position += 1;
         self.whitespace();
-        let mut members: Vec<(String, Value)> = Vec::new();
+        let mut members: Vec<(Text, Value)> = Vec::new();
         if self.bytes.get(self.position) != Some(&b'}') {
             loop {
                 if self.bytes.get(self.position) != Some(&b'"') {
@@ -178,7 +221,7 @@ impl Scanner<'_> {
                     return Err(None);
                 }
                 self.whitespace();
-                self.path.push(name.clone());
+                self.path.push(name.0.clone());
                 let value = self.value()?;
                 self.path.pop();
                 members.push((name, value));
@@ -193,14 +236,17 @@ impl Scanner<'_> {
             }
         }
         self.position += 1;
-        let order = members.iter().map(|(name, _)| name.clone()).collect();
+        let order = members.iter().map(|((name, _), _)| name.clone()).collect();
         self.orders.insert(self.path.clone(), order);
+        let mut seen = HashSet::new();
         let mut object = Map::new();
         for (name, value) in members {
-            if object.contains_key(&name) {
-                return Err(Some(format!("duplicate JSON key: {name}")));
+            if !seen.insert(name.clone()) {
+                let (text, printed) = name;
+                let shown = printed.unwrap_or(text);
+                return Err(Some(format!("duplicate JSON key: {shown}")));
             }
-            object.insert(name, value);
+            object.insert(name.0, value);
         }
         Ok(Value::Object(object))
     }
@@ -230,9 +276,10 @@ impl Scanner<'_> {
     }
 
     /// Decode a string, joining surrogate pairs and recording an unpaired surrogate.
-    fn string(&mut self) -> Result<String, Refusal> {
+    fn string(&mut self) -> Result<Text, Refusal> {
         self.position += 1;
         let mut text = String::new();
+        let mut printed: Option<String> = None;
         loop {
             let start = self.position;
             while let Some(&byte) = self.bytes.get(self.position) {
@@ -241,19 +288,34 @@ impl Scanner<'_> {
                 }
                 self.position += 1;
             }
-            text.push_str(
-                std::str::from_utf8(&self.bytes[start..self.position])
-                    .ok()
-                    .ok_or(None)?,
-            );
+            let run = std::str::from_utf8(&self.bytes[start..self.position])
+                .ok()
+                .ok_or(None)?;
+            text.push_str(run);
+            if let Some(shown) = printed.as_mut() {
+                shown.push_str(run);
+            }
             match self.bytes.get(self.position) {
                 Some(b'"') => {
                     self.position += 1;
-                    return Ok(text);
+                    return Ok((text, printed));
                 }
                 Some(b'\\') => {
                     self.position += 1;
-                    self.escape(&mut text)?;
+                    match self.escape()? {
+                        Escape::Character(character) => {
+                            text.push(character);
+                            if let Some(shown) = printed.as_mut() {
+                                shown.push(character);
+                            }
+                        }
+                        Escape::Unpaired(unit) => {
+                            self.unpaired = true;
+                            let shown = printed.get_or_insert_with(|| text.clone());
+                            let _ = write!(shown, "\\u{unit:04x}");
+                            text.push(char::REPLACEMENT_CHARACTER);
+                        }
+                    }
                 }
                 _ => return Err(None),
             }
@@ -261,7 +323,7 @@ impl Scanner<'_> {
     }
 
     /// Decode one backslash escape after its backslash.
-    fn escape(&mut self, text: &mut String) -> Result<(), Refusal> {
+    fn escape(&mut self) -> Result<Escape, Refusal> {
         let byte = *self.bytes.get(self.position).ok_or(None)?;
         self.position += 1;
         let simple = match byte {
@@ -282,24 +344,15 @@ impl Scanner<'_> {
                     let low = self.hex()?;
                     if (0xdc00..=0xdfff).contains(&low) {
                         let joined = 0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00);
-                        text.push(char::from_u32(joined).ok_or(None)?);
-                        return Ok(());
+                        return char::from_u32(joined).map(Escape::Character).ok_or(None);
                     }
                     self.position -= 6;
                 }
-                match char::from_u32(unit) {
-                    Some(character) => text.push(character),
-                    None => {
-                        self.unpaired = true;
-                        text.push(char::REPLACEMENT_CHARACTER);
-                    }
-                }
-                return Ok(());
+                return Ok(char::from_u32(unit).map_or(Escape::Unpaired(unit), Escape::Character));
             }
             _ => return Err(None),
         };
-        text.push(simple);
-        Ok(())
+        Ok(Escape::Character(simple))
     }
 
     /// Read exactly four hexadecimal digits.
@@ -317,7 +370,7 @@ impl Scanner<'_> {
     }
 
     /// Match `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]+)?` and decode it with the bounds.
-    fn number(&mut self) -> Result<Option<Number>, Refusal> {
+    fn number(&mut self) -> Result<Option<Value>, Refusal> {
         let start = self.position;
         let mut end = start + usize::from(self.bytes.get(start) == Some(&b'-'));
         match self.bytes.get(end) {
@@ -346,8 +399,11 @@ impl Scanner<'_> {
         if float {
             let value: f64 = token.parse().ok().ok_or(None)?;
             return Number::from_f64(value)
-                .map(Some)
+                .map(|number| Some(Value::Number(number)))
                 .ok_or_else(|| Some(format!("non-finite JSON number: {token}")));
+        }
+        if !self.run_bounds {
+            return Ok(Some(Value::String(token.to_owned())));
         }
         let outside = || Some(format!("integer outside the 64-bit range: {token}"));
         if token.trim_start_matches('-').len() > 20 {
@@ -355,10 +411,10 @@ impl Scanner<'_> {
         }
         let integer: i128 = token.parse().ok().ok_or(None)?;
         if let Ok(signed) = i64::try_from(integer) {
-            Ok(Some(Number::from(signed)))
+            Ok(Some(Value::from(signed)))
         } else {
             u64::try_from(integer)
-                .map(|unsigned| Some(Number::from(unsigned)))
+                .map(|unsigned| Some(Value::from(unsigned)))
                 .map_err(|_| outside())
         }
     }

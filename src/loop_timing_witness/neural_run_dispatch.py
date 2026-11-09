@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from .manifest_io import JsonInputRefusalError, parse_json_object
+from .manifest_io import JsonInputRefusalError, parse_dispatch_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_run_api import NeuralRunError, build_neural_run_report, load_neural_run
 from .neural_run_files import read_run_dispatch_bytes
@@ -51,7 +51,7 @@ def dispatch_analysis(
     """
     try:
         raw = read_run_dispatch_bytes(manifest_path)
-        manifest = parse_json_object(raw, "analysis manifest")
+        manifest = parse_dispatch_json_object(raw, "analysis manifest")
     except (NeuralCaptureRefusalError, JsonInputRefusalError) as exc:
         print(
             f"run analysis: FAIL: A finite regular strict JSON manifest is required. {exc}",

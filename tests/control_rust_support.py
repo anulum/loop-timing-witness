@@ -246,3 +246,99 @@ def canonical(outcome: dict[str, Any]) -> str:
         Comparable text.
     """
     return json.dumps(outcome, sort_keys=True, ensure_ascii=True)
+
+
+def python_command(
+    arguments: Sequence[str], cwd: Path, wrapper: Sequence[str] = ()
+) -> dict[str, Any]:
+    """Run the Python analysis command and return its status and printed text.
+
+    Parameters
+    ----------
+    arguments
+        Command arguments after the program name.
+    cwd
+        Working directory of the command.
+    wrapper
+        Leading argument vector that runs the command under a host condition.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``status``, ``stdout`` and ``stderr``.
+    """
+    tests = Path(__file__).resolve().parent
+    environment = {**os.environ, "PYTHONPATH": str(tests.parent / "src")}
+    result = subprocess.run(
+        [*wrapper, sys.executable, "-m", "loop_timing_witness.analyze_run", *arguments],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=environment,
+        timeout=600,
+        check=False,
+    )
+    return {"status": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+
+
+def rust_command(
+    arguments: Sequence[str],
+    cwd: Path,
+    directory: Path,
+    wrapper: Sequence[str] = (),
+    file_size_limit: int | None = None,
+) -> dict[str, Any]:
+    """Run the native analysis command through the consumer and return its outcome.
+
+    Parameters
+    ----------
+    arguments
+        Command arguments after the program name.
+    cwd
+        Working directory of the command.
+    directory
+        Owned directory for the description and outcome, created when absent.
+    wrapper
+        Leading argument vector that runs the command under a host condition.
+    file_size_limit
+        Largest file, in bytes, the command may write, set by the consumer
+        around the command only, or ``None``; the wrapper must ignore
+        ``SIGXFSZ``.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``status``, ``stdout`` and ``stderr``.
+    """
+    directory.mkdir(exist_ok=True)
+    spec = {
+        "arguments": list(arguments),
+        "outcome": str(directory / "command.json"),
+        "file_size_limit": file_size_limit,
+    }
+    (directory / "command-spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    environment = {**os.environ, "CONTROL_COMMAND_SPEC": str(directory / "command-spec.json")}
+    profiles = os.environ.get("WITNESS_RUST_PROFILE_DIRECTORY")
+    if profiles:
+        environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
+    result = subprocess.run(
+        [
+            *wrapper,
+            str(consumer()),
+            "--exact",
+            "control_command",
+            "--nocapture",
+            "--test-threads=1",
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=environment,
+        timeout=600,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    outcome: dict[str, Any] = json.loads((directory / "command.json").read_bytes())
+    return outcome

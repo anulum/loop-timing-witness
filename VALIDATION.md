@@ -298,7 +298,17 @@ floats compared bit for bit. `tests/test_control_run_parity.py` loads real RTL
 captures through both analyses, including refused declarations, malformed
 documents, files read in declaration order, unreadable files, read errors
 injected by the kernel, damaged series and complete reports, and requires
-identical outcomes.
+identical outcomes. `tests/test_control_command_parity.py` runs the Python and
+the native command on real captures of both profiles and on runs without energy,
+with a gapped sample and with rail energies that need every `.6g` form, and
+requires byte-equal report directories with the same mode and the same printed
+lines. It also requires identical refusals for refused manifests, outputs and
+documents the dispatcher refuses, for output parents resolved through relative,
+absolute, repeated, looping, dangling and unreadable links, for a removed
+working directory, and for publication faults: an unwritable parent, a
+file-size limit, and a failed directory creation and failed renames injected by
+the kernel tracer, with nothing left behind. The shared JSON corpus also holds
+Python's analysis choice for every document.
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.

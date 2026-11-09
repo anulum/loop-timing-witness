@@ -15,6 +15,7 @@ mod clock_completion;
 mod control_analysis;
 /// Public CONTROL and COMPUTE run loading and event decoding.
 pub mod control_api;
+mod control_command;
 mod control_csv;
 mod control_decimal;
 mod control_domain;
@@ -22,8 +23,10 @@ mod control_events;
 mod control_json;
 mod control_manifest;
 mod control_number;
+mod control_outputs;
 mod control_pattern;
 mod control_printable;
+mod control_publication;
 mod control_receipts;
 mod control_report;
 mod control_schema;

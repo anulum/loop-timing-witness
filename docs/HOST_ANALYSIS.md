@@ -586,8 +586,12 @@ The package exports `load_neural_run(path)` and
 `build_neural_run_report(inputs)`. The existing
 `loop-timing-witness-analyze MANIFEST --output-dir NEW_DIR` command dispatches
 versioned neural input before legacy CONTROL/COMPUTE analysis. Dispatch reads
-one strict regular JSON root within 16 MiB; neural carriers additionally have
-the 65,536-byte limit above. Unknown or private neural identities and
+one strict regular JSON root within 16 MiB, nested at most 64 deep (checked
+before decoding, so the choice never depends on the interpreter's recursion
+allowance); integers stay as their text and unpaired surrogate escapes are
+kept, because the chosen analysis applies its own bounds to the same bytes. A
+root with a `schema_id` member is neural. Neural carriers additionally have the
+65,536-byte limit above. Unknown or private neural identities and
 unadmitted source contracts are refused with status 1 and no report output.
 
 Public neural source admission requires an exact consumer-owned registry entry
@@ -694,14 +698,30 @@ and summed with Neumaier's compensation as Python 3.12 and later sum them, and
 the native completion counters and host load receipt are checked against the
 run with Python's equality between integers, floats and booleans. A run that
 binds an AMP capture is refused by the native report until AMP completion is
-implemented natively. CSV, JSON and SVG outputs remain Python-only.
+implemented natively.
+
+The native `loop-timing-witness-analyze-native` command analyses CONTROL and
+COMPUTE runs end to end. It publishes the same report directory as the Python
+command, byte for byte: `report.json` as `json.dumps(..., indent=2,
+sort_keys=True, ensure_ascii=False)` writes it, the interval, jitter,
+adjacent-cycle and per-cycle CSV tables, and the SVG plots of the available
+metrics with Python's `.3f` and `.6g` number text. The output parent is resolved
+as Python's non-strict `Path.resolve`, symbolic links and loops included; an
+existing destination, a dangling link included, and a missing parent are
+refused with Python's texts. Linux `renameat2(RENAME_NOREPLACE)` is first
+exercised in a private probe directory, then every file is staged in a new
+private directory and renamed into place without replacing anything; a failed
+step removes what it staged and is refused with Python's `OSError` text. The
+printed lines and exit statuses equal the Python command's.
 
 Every run-bound JSON document is decoded with three limits that both analyses
 share: arrays and objects nest at most 64 deep, checked before decoding;
 integers fit the signed or unsigned 64-bit range (`integer outside the 64-bit
 range: <token>`); and an unpaired surrogate escape is refused once the whole
 document has decoded (`JSON text holds an unpaired surrogate escape`). When a
-document has several defects, both analyses report the same first one.
+document has several defects, both analyses report the same first one. A
+repeated member name is compared exactly, unpaired surrogates included, and is
+named as standard error prints it, with `\udXXX` for an unpaired surrogate.
 
 ## Native neural analysis API
 
@@ -710,7 +730,9 @@ The [standalone Rust crate](../analysis/rust/README.md) exports
 `write_neural_report`. Its `loop-timing-witness-analyze-native` command accepts
 the same manifest and new output directory as the Python command, and
 `public_command::run` runs that command against a caller's own registry with
-the same statuses and messages as the Python `dispatch_analysis`. Both full
+the same statuses and messages as the Python `dispatch_analysis`, except that a
+neural manifest violating its closed schema is refused by both with status 1
+but can be named by a different text; aligning those texts is open work. Both full
 verifiers bind the complete original acquisition and run fresh fixed source
 checker operations. Neither declaration reader substitutes for full admission.
 

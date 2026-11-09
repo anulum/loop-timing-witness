@@ -24,7 +24,10 @@ import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class JsonInputRefusalError(ValueError):
@@ -263,6 +266,67 @@ def _holds_unpaired_surrogate(value: object) -> bool:
     return False
 
 
+def _decode_bounded(
+    raw: bytes, source: str, parse_int: Callable[[str], object], *, refuse_unpaired: bool
+) -> dict[str, Any]:
+    """Decode a strict JSON object nested at most ``MAX_BOUNDED_DEPTH`` deep.
+
+    Parameters
+    ----------
+    raw
+        Complete bytes already read from one source.
+    source
+        Source label for refusal messages.
+    parse_int
+        Decoder of each integer token.
+    refuse_unpaired
+        Whether a string holding an unpaired surrogate escape is refused once
+        the whole document has decoded.
+
+    Returns
+    -------
+    dict[str, Any]
+        The decoded top-level object.
+
+    Raises
+    ------
+    JsonInputRefusalError
+        If the bytes are not UTF-8, nest too deeply, are not valid JSON, repeat
+        a member name, hold a nonfinite number, an integer ``parse_int``
+        refuses or a refused unpaired surrogate, or the top level is not an
+        object.
+    """
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        message = f"{source}: not UTF-8"
+        raise JsonInputRefusalError(message, source) from exc
+    if nesting_depth(text) > MAX_BOUNDED_DEPTH:
+        message = f"{source}: JSON input exceeds decoder limits"
+        raise JsonInputRefusalError(message, source)
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_finite_json_float,
+            parse_int=parse_int,
+        )
+    except json.JSONDecodeError as exc:
+        message = f"{source}: invalid JSON"
+        raise JsonInputRefusalError(message, source) from exc
+    except JsonInputRefusalError as exc:
+        message = f"{source}: {exc}"
+        raise JsonInputRefusalError(message, source) from exc
+    if refuse_unpaired and _holds_unpaired_surrogate(value):
+        message = f"{source}: JSON text holds an unpaired surrogate escape"
+        raise JsonInputRefusalError(message, source)
+    if not isinstance(value, dict):
+        message = f"{source}: top-level JSON value must be an object"
+        raise JsonInputRefusalError(message, source)
+    return value
+
+
 def parse_bounded_json_object(raw: bytes, source: str) -> dict[str, Any]:
     """Decode a strict JSON object whose limits an independent decoder can share.
 
@@ -291,35 +355,38 @@ def parse_bounded_json_object(raw: bytes, source: str) -> dict[str, Any]:
         a member name, hold a nonfinite number, an out-of-range integer or an
         unpaired surrogate, or the top level is not an object.
     """
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        message = f"{source}: not UTF-8"
-        raise JsonInputRefusalError(message, source) from exc
-    if nesting_depth(text) > MAX_BOUNDED_DEPTH:
-        message = f"{source}: JSON input exceeds decoder limits"
-        raise JsonInputRefusalError(message, source)
-    try:
-        value = json.loads(
-            text,
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite_constant,
-            parse_float=_finite_json_float,
-            parse_int=_bounded_json_int,
-        )
-    except json.JSONDecodeError as exc:
-        message = f"{source}: invalid JSON"
-        raise JsonInputRefusalError(message, source) from exc
-    except JsonInputRefusalError as exc:
-        message = f"{source}: {exc}"
-        raise JsonInputRefusalError(message, source) from exc
-    if _holds_unpaired_surrogate(value):
-        message = f"{source}: JSON text holds an unpaired surrogate escape"
-        raise JsonInputRefusalError(message, source)
-    if not isinstance(value, dict):
-        message = f"{source}: top-level JSON value must be an object"
-        raise JsonInputRefusalError(message, source)
-    return value
+    return _decode_bounded(raw, source, _bounded_json_int, refuse_unpaired=True)
+
+
+def parse_dispatch_json_object(raw: bytes, source: str) -> dict[str, Any]:
+    """Decode a strict JSON object only to choose the analysis that reads it.
+
+    Nesting is bounded as in :func:`parse_bounded_json_object`, before
+    decoding, so the choice never depends on the interpreter's recursion
+    allowance or integer-conversion limit. Integers stay as their decimal
+    text and unpaired surrogate escapes are kept: the chosen analysis applies
+    its own bounds to the same bytes.
+
+    Parameters
+    ----------
+    raw
+        Complete bytes already read from one source.
+    source
+        Source label for refusal messages.
+
+    Returns
+    -------
+    dict[str, Any]
+        The decoded top-level object, with integer tokens as text.
+
+    Raises
+    ------
+    JsonInputRefusalError
+        If the bytes are not UTF-8, nest too deeply, are not valid JSON, repeat
+        a member name or hold a nonfinite number, or the top level is not an
+        object.
+    """
+    return _decode_bounded(raw, source, str, refuse_unpaired=False)
 
 
 def load_json_object(path: Path) -> dict[str, Any]:

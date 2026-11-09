@@ -6,10 +6,13 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Loop Timing Witness — shared bounded JSON corpus of the control-run analysis
 
-"""Keep the bounded-JSON corpus that both analysis implementations must reproduce.
+r"""Keep the bounded-JSON corpus that both analysis implementations must reproduce.
 
 Every case is raw document bytes with either the decoded object or the exact
-refusal of :func:`parse_bounded_json_object`. The cases cover the refusal
+refusal of :func:`parse_bounded_json_object`, and the outcome of
+:func:`parse_dispatch_json_object`: whether the document selects the neural
+analysis, or its refusal. Refusals are kept as standard error prints them,
+with ``\udXXX`` for an unpaired surrogate. The cases cover the refusal
 classes and, where a document has several defects, which one Python reports
 first. The native crate's unit tests read the same committed file.
 """
@@ -25,6 +28,7 @@ from loop_timing_witness.manifest_io import (
     JsonInputRefusalError,
     nesting_depth,
     parse_bounded_json_object,
+    parse_dispatch_json_object,
 )
 
 CORPUS: Final = REPOSITORY_ROOT / "analysis/rust/tests/data/control-json-cases.json"
@@ -99,6 +103,15 @@ def _documents() -> list[bytes]:
         '{"key": "\\ud800", "n": NaN}',
         '{"key": ["\\ud83d\\ude00"]}',
         '{"key": "\\uD83D\\uDE00"}',
+        '{"\\ud800": 1, "\\ud800": 2}',
+        '{"\\ud800": 1, "\\ud801": 2}',
+        '{"\\ud800": 1, "\\\\ud800": 2}',
+        '{"\\ud800": 1, "\\ufffd": 2}',
+        '{"a\\ud800b\\n": 1, "a\\ud800b\\n": 2}',
+        '{"schema_id": 1, "big": 18446744073709551616}',
+        '{"schema_id": "\\ud800"}',
+        '{"n": ' + "9" * 5000 + "}",
+        '{"schema_id": 1, "x": ' + "[" * deep + "]" * deep + "}",
         "[" * deep + "]" * deep,
         '{"a":' * (deep - 1) + "[]" + "}" * (deep - 1),
         "[" * (deep + 1) + "]" * (deep + 1),
@@ -117,6 +130,42 @@ def _documents() -> list[bytes]:
     ]
 
 
+def _printed(error: JsonInputRefusalError) -> str:
+    """Return a refusal as standard error prints it.
+
+    Parameters
+    ----------
+    error
+        Raised refusal.
+
+    Returns
+    -------
+    str
+        Text with unpaired surrogates as backslash escapes.
+    """
+    return str(error).encode("utf-8", "backslashreplace").decode("utf-8")
+
+
+def _dispatch(raw: bytes) -> dict[str, Any]:
+    """Return which analysis one document selects, or its dispatch refusal.
+
+    Parameters
+    ----------
+    raw
+        Document bytes.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``neural`` or ``refusal``.
+    """
+    try:
+        manifest = parse_dispatch_json_object(raw, SOURCE)
+    except JsonInputRefusalError as error:
+        return {"refusal": _printed(error)}
+    return {"neural": "schema_id" in manifest}
+
+
 def _outcome(raw: bytes) -> dict[str, Any]:
     """Return the decoded object or the exact refusal of one document.
 
@@ -128,12 +177,14 @@ def _outcome(raw: bytes) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        ``raw_hex`` with either ``value`` or ``refusal``.
+        ``raw_hex`` and ``dispatch`` with either ``value`` or ``refusal``.
     """
+    case: dict[str, Any] = {"raw_hex": raw.hex(), "dispatch": _dispatch(raw)}
     try:
-        return {"raw_hex": raw.hex(), "value": parse_bounded_json_object(raw, SOURCE)}
+        case["value"] = parse_bounded_json_object(raw, SOURCE)
     except JsonInputRefusalError as error:
-        return {"raw_hex": raw.hex(), "refusal": str(error)}
+        case["refusal"] = _printed(error)
+    return case
 
 
 def corpus() -> dict[str, Any]:
@@ -145,7 +196,7 @@ def corpus() -> dict[str, Any]:
         Source label and cases.
     """
     return {
-        "schema": "loop-timing-witness.control-json-cases.v1",
+        "schema": "loop-timing-witness.control-json-cases.v2",
         "source": SOURCE,
         "cases": [_outcome(raw) for raw in _documents()],
     }
@@ -180,9 +231,22 @@ def test_corpus_covers_every_refusal_class_and_precedence() -> None:
         b'{"key": "\\ud800"} extra': "invalid JSON",
         b'{"key": "\\ud800", "n": NaN}': "non-finite JSON number: NaN",
         b"[" * (MAX_BOUNDED_DEPTH + 1): "JSON input exceeds decoder limits",
+        b'{"\\ud800": 1, "\\ud800": 2}': "duplicate JSON key: \\ud800",
+        b'{"\\ud800": 1, "\\ud801": 2}': "JSON text holds an unpaired surrogate escape",
+        b'{"\\ud800": 1, "\\\\ud800": 2}': "JSON text holds an unpaired surrogate escape",
+        b'{"a\\ud800b\\n": 1, "a\\ud800b\\n": 2}': "duplicate JSON key: a\\ud800b\n",
     }
     for raw, text in expectations.items():
         assert outcomes[raw]["refusal"] == f"{SOURCE}: {text}"
+    dispatch = {
+        b'{"schema_id": 1, "big": 18446744073709551616}': {"neural": True},
+        b'{"schema_id": "\\ud800"}': {"neural": True},
+        b'{"n": ' + b"9" * 5000 + b"}": {"neural": False},
+        b'{"\\ud800": 1, "\\ud800": 2}': {"refusal": f"{SOURCE}: duplicate JSON key: \\ud800"},
+        b"[" * (MAX_BOUNDED_DEPTH + 1): {"refusal": f"{SOURCE}: JSON input exceeds decoder limits"},
+    }
+    for raw, outcome in dispatch.items():
+        assert outcomes[raw]["dispatch"] == outcome
     assert outcomes[b"[" * MAX_BOUNDED_DEPTH + b"]" * MAX_BOUNDED_DEPTH]["refusal"] == (
         f"{SOURCE}: top-level JSON value must be an object"
     )

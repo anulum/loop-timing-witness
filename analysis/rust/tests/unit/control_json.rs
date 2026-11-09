@@ -9,10 +9,10 @@
 //! Hold the decoder to Python's outcome for every document of the shared corpus.
 //!
 //! `tests/test_control_json_corpus.py` builds the corpus from Python's bounded
-//! decoder and requires the committed file to equal it; these tests require
-//! the same decoded objects and refusals here.
+//! and dispatch decoders and requires the committed file to equal it; these
+//! tests require the same decoded objects, analysis choices and refusals here.
 
-use super::{MAX_DEPTH, decode_object, nesting_depth};
+use super::{MAX_DEPTH, decode_dispatch_object, decode_object, nesting_depth};
 use serde_json::Value;
 
 /// The shared corpus of raw documents and Python's outcomes.
@@ -29,11 +29,25 @@ fn bytes(hex: &str) -> Vec<u8> {
 #[test]
 fn every_corpus_document_decodes_or_refuses_as_python() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("corpus");
+    assert_eq!(
+        corpus["schema"],
+        "loop-timing-witness.control-json-cases.v2"
+    );
     let source = corpus["source"].as_str().expect("source");
     let cases = corpus["cases"].as_array().expect("cases");
     assert!(cases.len() > 60);
     for case in cases {
         let raw = bytes(case["raw_hex"].as_str().expect("raw"));
+        let dispatch = match decode_dispatch_object(&raw, source) {
+            Ok(object) => serde_json::json!({"neural": object.contains_key("schema_id")}),
+            Err(refusal) => serde_json::json!({"refusal": refusal}),
+        };
+        assert_eq!(
+            dispatch,
+            case["dispatch"],
+            "{}",
+            String::from_utf8_lossy(&raw)
+        );
         let outcome = decode_object(&raw, source).map(|(object, _)| Value::Object(object));
         match case.get("refusal") {
             Some(refusal) => assert_eq!(

@@ -18,7 +18,13 @@
 //! With `CONTROL_RUN_SPEC` the second test loads one CONTROL or COMPUTE run,
 //! optionally from root bytes the description names, decodes its events and
 //! records the inputs, the events or the refusal for the same comparison.
+//!
+//! With `CONTROL_COMMAND_SPEC` the third test runs the analysis command with
+//! the described arguments, optionally under a file-size limit set in this
+//! process and restored before the outcome is written, and records its status
+//! and printed text.
 
+use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -215,6 +221,53 @@ fn control_run_acquisition() {
             })
         }
     };
+    std::fs::write(
+        spec.outcome,
+        serde_json::to_vec(&rendered).expect("outcome JSON"),
+    )
+    .expect("outcome file");
+}
+
+/// Command description written by the Python control-command parity helper.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CommandSpec {
+    arguments: Vec<String>,
+    outcome: PathBuf,
+    /// Largest file, in bytes, the command may write; the caller ignores `SIGXFSZ`.
+    #[serde(default)]
+    file_size_limit: Option<u64>,
+}
+
+#[test]
+fn control_command() {
+    let Some(path) = std::env::var_os("CONTROL_COMMAND_SPEC") else {
+        return;
+    };
+    let spec: CommandSpec =
+        serde_json::from_slice(&read(&PathBuf::from(path))).expect("closed command description");
+    let arguments: Vec<std::ffi::OsString> = spec.arguments.iter().map(Into::into).collect();
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let limit = getrlimit(Resource::Fsize);
+    if let Some(bytes) = spec.file_size_limit {
+        let lowered = Rlimit {
+            current: Some(bytes),
+            maximum: limit.maximum,
+        };
+        setrlimit(Resource::Fsize, lowered).expect("lower the file-size limit");
+    }
+    let status = public_command::run(
+        &arguments,
+        &NeuralRegistry::reviewed(),
+        &mut stdout,
+        &mut stderr,
+    );
+    setrlimit(Resource::Fsize, limit).expect("restore the file-size limit");
+    let rendered = json!({
+        "status": status,
+        "stdout": String::from_utf8_lossy(&stdout),
+        "stderr": String::from_utf8_lossy(&stderr),
+    });
     std::fs::write(
         spec.outcome,
         serde_json::to_vec(&rendered).expect("outcome JSON"),

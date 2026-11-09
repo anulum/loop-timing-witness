@@ -14,7 +14,8 @@ The `witness-analysis` library and `loop-timing-witness-analyze-native` command
 verify complete simulated neural acquisitions. They implement the same
 `loop-timing-witness.neural-step-run.v1` input and
 `loop-timing-witness.neural-step-analysis-report.v1` output as the Python
-analysis package.
+analysis package. The command also analyses CONTROL and COMPUTE runs, as the
+Python command does, and publishes a byte-equal report directory.
 
 Build and install locally with Rust 1.99.0 or later:
 
@@ -25,7 +26,10 @@ loop-timing-witness-analyze-native run.json --output-dir new-report
 
 The output directory must be new and have an existing parent. Publication is
 atomic and refuses to replace an existing file, directory or symlink.
-A complete passing report returns status 0. An interpreted acquisition with
+A manifest with a `schema_id` member is a neural run; any other is a CONTROL or
+COMPUTE run, which returns status 0 once its report is published and status 1
+with the Python command's diagnostic otherwise. For a neural run,
+a complete passing report returns status 0. An interpreted acquisition with
 failed predicates returns status 2 and retains its complete report. Invalid
 declarations, unadmitted source identities, changed required bytes or failed
 publication return status 1 with an authored diagnostic.

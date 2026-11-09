@@ -24,6 +24,12 @@ Loop Timing Witness — changelog
   limits, native completion counters and the host load receipt, with floats equal to
   the Python report's bit for bit. A run that binds an AMP capture is refused there
   until AMP completion is implemented natively.
+- The native `loop-timing-witness-analyze-native` command analyses CONTROL and COMPUTE
+  runs end to end and publishes the same report directory as the Python command, byte
+  for byte: `report.json`, the interval, jitter, adjacent-cycle and per-cycle CSV
+  tables and the SVG plots. The output parent is resolved as Python's non-strict
+  `Path.resolve`; existing destinations, missing parents and publication faults are
+  refused with Python's texts, and nothing staged is left behind.
 - Complete C controller coverage gate: `make controller-tests` ends with
   `make controller-coverage`, which runs the C API test and the stream and refusal tests
   against GCC-instrumented programs. `tools/c_coverage_gate.py` adds their counts and
@@ -55,6 +61,19 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The analysis command chooses between the neural and the CONTROL/COMPUTE analysis
+  by decoding the manifest nested at most 64 deep, checked before decoding, with
+  integers kept as text and unpaired surrogate escapes kept. A deeper manifest is
+  refused by the dispatcher (`analysis manifest: JSON input exceeds decoder limits`)
+  instead of by the analysis it would have reached, and the choice no longer depends
+  on the interpreter's recursion or integer-conversion limits. Both analyses choose
+  alike.
+- A repeated JSON member name is compared exactly, unpaired surrogates included, and
+  named with `\udXXX` for an unpaired surrogate, as standard error prints it.
+- The native command refuses a manifest it cannot read with the Python dispatcher's
+  text, `A finite regular strict JSON manifest is required. Cannot acquire a finite
+  regular run manifest for analysis.`, and names a published output as Python's
+  `str(Path)` does.
 - Run-bound JSON documents nest at most 64 deep, hold integers within the 64-bit
   ranges and no unpaired surrogate escape; the shared decoding limits keep the
   Python and native refusals identical.

@@ -12,6 +12,8 @@
 //! reviews its own entries can run the same command, with the same arguments,
 //! messages and statuses, against its own registry.
 
+use crate::control_command::{Dispatch, analyze_control, dispatch};
+use crate::control_text::pure_path;
 use crate::public_api::{build_neural_run_report, load_neural_run_with_registry};
 use crate::public_publication::write_neural_report;
 use crate::public_registry::NeuralRegistry;
@@ -90,12 +92,24 @@ fn parse(arguments: &[OsString]) -> Result<Arguments, String> {
     })
 }
 
-/// Analyze and publish the entire admitted report; return whether it passed.
-fn analyze(manifest: &Path, output: &Path, registry: &NeuralRegistry) -> Result<bool, String> {
+/// Analyze and publish the entire admitted report; return whether it passed and
+/// the output path as the success line names it.
+///
+/// A manifest without a `schema_id` member is a CONTROL or COMPUTE run, which
+/// always passes once its report is published, as in the Python command.
+fn analyze(
+    manifest: &Path,
+    output: &Path,
+    registry: &NeuralRegistry,
+) -> Result<(bool, String), String> {
+    if let Dispatch::Control(raw) = dispatch(manifest)? {
+        analyze_control(manifest, output, &raw)?;
+        return Ok((true, pure_path(output)));
+    }
     let inputs = load_neural_run_with_registry(manifest, registry)?;
     let report = build_neural_run_report(&inputs);
     write_neural_report(output, &report)?;
-    Ok(report["verification"]["whole"] == true)
+    Ok((report["verification"]["whole"] == true, pure_path(output)))
 }
 
 /// Run the analysis command and return its status.
@@ -116,9 +130,9 @@ pub fn run(
         }
         Ok(Arguments::Analyze { manifest, output }) => {
             match analyze(&manifest, &output, registry) {
-                Ok(passed) => {
+                Ok((passed, shown)) => {
                     let verdict = if passed { "PASS" } else { "INVALID" };
-                    let _ = writeln!(stdout, "run analysis: {verdict}: {}", output.display());
+                    let _ = writeln!(stdout, "run analysis: {verdict}: {shown}");
                     if passed { 0 } else { 2 }
                 }
                 Err(reason) => {

@@ -26,8 +26,8 @@ use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
     ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, control_events_summary,
-    decode_control_events, load_control_run, load_control_run_bytes, load_neural_run_with_registry,
-    neural_key, public_command,
+    control_run_report, decode_control_events, load_control_run, load_control_run_bytes,
+    load_neural_run_with_registry, neural_key, public_command,
 };
 
 /// Registry description written by the Python parity helper.
@@ -194,6 +194,13 @@ fn control_run_acquisition() {
                     .collect();
                 json!({ "block": block, "rows": rows })
             });
+            let report = control_run_report(&inputs).map(|(report, rows)| {
+                let rows: Vec<Value> = rows
+                    .iter()
+                    .map(|row| json!([row.cycle, row.interval, row.ticks]))
+                    .collect();
+                json!({ "report": report, "rows": rows })
+            });
             json!({
                 "manifest": inputs.manifest(),
                 "domain": inputs.domain(),
@@ -203,6 +210,8 @@ fn control_run_acquisition() {
                 "events_refusal": events.err(),
                 "summary": summary.as_ref().ok(),
                 "summary_refusal": summary.err(),
+                "report": report.as_ref().ok(),
+                "report_refusal": report.err(),
             })
         }
     };

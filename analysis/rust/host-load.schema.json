@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Completed bounded Linux host load receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "loop-timing-witness.host-load.v1"
+    },
+    "profile": {
+      "enum": [
+        "idle",
+        "cpu",
+        "memory",
+        "network",
+        "storage"
+      ]
+    },
+    "requested_cpu": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "working_set_bytes": {
+      "type": "integer",
+      "minimum": 4096,
+      "maximum": 16777216
+    },
+    "worker_pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "native_pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "python_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "checksum": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "native_returncode": {
+      "type": "integer",
+      "minimum": -255,
+      "maximum": 255
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scheduler": {
+          "const": 0
+        },
+        "priority": {
+          "const": 0
+        },
+        "affinity_cpus": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "nice": {
+          "type": "integer",
+          "minimum": -20,
+          "maximum": 19
+        }
+      },
+      "required": [
+        "scheduler",
+        "priority",
+        "affinity_cpus",
+        "nice"
+      ]
+    },
+    "counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chunks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "arithmetic_operations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "memory_touches": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "datagrams": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_sent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_received": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_written": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_read": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fsyncs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "idle_waits": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "chunks",
+        "arithmetic_operations",
+        "memory_touches",
+        "datagrams",
+        "bytes_sent",
+        "bytes_received",
+        "bytes_written",
+        "bytes_read",
+        "fsyncs",
+        "idle_waits"
+      ]
+    },
+    "network_scope": {
+      "enum": [
+        null,
+        "loopback_udp"
+      ]
+    },
+    "storage_scope": {
+      "enum": [
+        null,
+        "owned_file_fsync"
+      ]
+    },
+    "started_ns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "finished_ns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "native_started_ns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "native_finished_ns": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "schema",
+    "profile",
+    "requested_cpu",
+    "working_set_bytes",
+    "worker_pid",
+    "native_pid",
+    "python_version",
+    "checksum",
+    "native_returncode",
+    "policy",
+    "counters",
+    "network_scope",
+    "storage_scope",
+    "started_ns",
+    "finished_ns",
+    "native_started_ns",
+    "native_finished_ns"
+  ]
+}

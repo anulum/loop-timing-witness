@@ -15,6 +15,8 @@ mod clock_completion;
 mod control_analysis;
 /// Public CONTROL and COMPUTE run loading and event decoding.
 pub mod control_api;
+mod control_csv;
+mod control_decimal;
 mod control_domain;
 mod control_events;
 mod control_json;
@@ -22,7 +24,10 @@ mod control_manifest;
 mod control_number;
 mod control_pattern;
 mod control_printable;
+mod control_receipts;
+mod control_report;
 mod control_schema;
+mod control_series;
 mod control_text;
 /// Whole original file reference and finite complete-byte acquisition.
 pub mod files;
@@ -68,8 +73,8 @@ mod strict_json;
 
 /// Executors a consumer registration may bind.
 pub use control_api::{
-    ControlEvent, ControlInputs, IntervalRow, control_events_summary, decode_control_events,
-    load_control_run, load_control_run_bytes,
+    ControlEvent, ControlInputs, IntervalRow, control_events_summary, control_run_report,
+    decode_control_events, load_control_run, load_control_run_bytes,
 };
 /// Immutable report snapshot returned by the complete source-bound loader.
 pub use public_api::{

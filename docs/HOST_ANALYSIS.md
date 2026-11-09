@@ -110,8 +110,13 @@ observation per analysed control cycle. `reference` and `output` have the unit n
 `plant.tracking_unit`. The optional power CSV has the exact header
 `timebase_ticks,rail,voltage_v,current_a,energy_j`; energy is a cumulative joule counter, and all
 four rails from the measurement-domain contract must occur at each fabric tick. Voltage, current
-and energy are finite and nonnegative. The run manifest may declare either auxiliary file as
-`null` for an incomplete simulation run. A CONTROL board run requires both files. A COMPUTE
+and energy are finite and nonnegative. Every series value is written in one plain form: ASCII,
+an optional sign, digits with an optional decimal point and an optional exponent, with at most 28
+significant digits and a magnitude of zero or from 10^-99 up to 10^100. Cycle and tick counts are
+ASCII decimal integers below 2**64. Within these bounds every sum, product and quotient in the
+default 28-digit decimal context is exact or correctly rounded, and every result converts to a
+finite float. The run manifest may declare either auxiliary file as `null` for an incomplete
+simulation run. A CONTROL board run requires both files. A COMPUTE
 board run requires power and declares tracking as `null`. Missing data remains
 `unavailable` in the report; it is never substituted.
 
@@ -681,8 +686,15 @@ operating-system failure. `control_events_summary` builds the report's
 does: the fault-schedule agreement, Type-7 interval distributions with Python's
 floating-point operations, deadline, fault-detection and safe-state counts, and
 adjacent-cycle jitter. Counts derived from an integral-float cycle declaration
-stay floats, as in Python. Tracking, energy, receipts and report outputs remain
-Python-only.
+stay floats, as in Python. `control_run_report` builds the complete report as
+the Python `build_report` does: the CSV series are read with CPython's `csv`
+reader rules and errors, decimal values are kept exact and each result is
+rounded half to even at 28 digits, floats are converted with correct rounding
+and summed with Neumaier's compensation as Python 3.12 and later sum them, and
+the native completion counters and host load receipt are checked against the
+run with Python's equality between integers, floats and booleans. A run that
+binds an AMP capture is refused by the native report until AMP completion is
+implemented natively. CSV, JSON and SVG outputs remain Python-only.
 
 Every run-bound JSON document is decoded with three limits that both analyses
 share: arrays and objects nest at most 64 deep, checked before decoding;

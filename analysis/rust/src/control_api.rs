@@ -13,12 +13,14 @@
 //! [`decode_control_events`] decodes the run's event records. Each refusal is
 //! the same text the Python `load_run` and `decode_events` give for the same
 //! files. [`control_events_summary`] builds the report's `events` block, as
-//! the Python `events_block` does.
+//! the Python `events_block` does, and [`control_run_report`] the complete
+//! report, as the Python `build_report` does.
 
 use crate::control_analysis::events_block;
 use crate::control_events::{Names, decode};
 use crate::control_manifest::{ControlRun, load};
 use crate::control_number::Num;
+use crate::control_report::build_report;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -158,4 +160,29 @@ pub fn control_events_summary(inputs: &ControlInputs) -> Result<(Value, Vec<Inte
         })
         .collect();
     Ok((block, rows))
+}
+
+/// Build the complete per-run report and its interval rows.
+///
+/// The report holds the events block, the tracking and energy series with
+/// validity and its reasons, the input digests, the stated limits, and the
+/// native completion counters and host load receipt when the run binds them,
+/// as the Python `build_report` builds it; floats are bit-equal.
+///
+/// # Errors
+///
+/// Returns the Python analysis's refusal text for events, series or receipts
+/// that contradict the run. A run that binds an AMP capture is refused: the
+/// native analysis does not yet implement AMP completion.
+pub fn control_run_report(inputs: &ControlInputs) -> Result<(Value, Vec<IntervalRow>), String> {
+    let (report, rows) = build_report(inputs.manifest(), inputs.domain(), inputs.files())?;
+    let rows = rows
+        .into_iter()
+        .map(|row| IntervalRow {
+            cycle: row.cycle,
+            interval: row.interval,
+            ticks: row.ticks,
+        })
+        .collect();
+    Ok((report, rows))
 }

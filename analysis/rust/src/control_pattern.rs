@@ -10,13 +10,18 @@
 //!
 //! The supported syntax is the subset the run and measurement-domain schemas use:
 //! the anchors `^` and `$`, literal characters, bracketed classes of single
-//! characters and ranges, the class `\S`, groups and the quantifiers `*`, `+`, `?`,
+//! characters and ranges, the classes `\S` and `\d`, the escaped `\.`, groups and
+//! the quantifiers `*`, `+`, `?`,
 //! `{n}` and `{m,n}`. Any other construct is refused when the pattern is compiled,
 //! so a schema change cannot be matched with different semantics silently.
 //!
 //! Python semantics that differ from many other engines are kept: a match may
 //! start anywhere unless anchored, `$` also matches before one final newline, and
-//! `\S` excludes exactly the characters for which Python's `str.isspace` is true.
+//! `\S` excludes exactly the characters for which Python's `str.isspace` is true,
+//! and `\d` matches every character for which `str.isdecimal` is true, not only
+//! the ASCII digits.
+
+use crate::control_text::python_decimal;
 
 /// One element of a compiled pattern.
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +34,8 @@ enum Atom {
     Class(Vec<(char, char)>),
     /// One character that Python does not treat as whitespace.
     NotSpace,
+    /// One character that Python treats as a decimal digit.
+    Digit,
     /// A parenthesised sequence.
     Group(Vec<Piece>),
 }
@@ -108,6 +115,14 @@ fn sequence(characters: &[char], position: &mut usize, text: &str) -> Result<Vec
                 Some('S') => {
                     *position += 1;
                     Atom::NotSpace
+                }
+                Some('d') => {
+                    *position += 1;
+                    Atom::Digit
+                }
+                Some('.') => {
+                    *position += 1;
+                    Atom::Class(vec![('.', '.')])
                 }
                 _ => return Err(unsupported(text)),
             },
@@ -261,6 +276,12 @@ fn once(
             characters
                 .get(position)
                 .is_some_and(|&character| !python_space(character))
+                && rest(position + 1)
+        }
+        Atom::Digit => {
+            characters
+                .get(position)
+                .is_some_and(|&character| python_decimal(character))
                 && rest(position + 1)
         }
         Atom::Group(inner) => matches(inner, characters, position, rest),

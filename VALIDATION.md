@@ -287,13 +287,18 @@ unless it declares no function.
 The native control-run loader is held to the Python analysis twice. Shared
 corpora under `analysis/rust/tests/data/` record Python's outcomes for
 schema-location mutations of every run variant and the measurement domain,
-bounded JSON documents, cross-field domain rules with integral floats, and
-events blocks with every jitter state, fault pairing and refusal; the
-Python tests rebuild each corpus and require the committed file, and the crate's
-unit tests require the same outcomes. `tests/test_control_run_parity.py` loads
-real RTL captures through both analyses, including refused declarations,
-malformed documents, files read in declaration order, unreadable files and read
-errors injected by the kernel, and requires identical outcomes.
+bounded JSON documents, cross-field domain rules with integral floats,
+events blocks with every jitter state, fault pairing and refusal, CSV texts
+with CPython's reader errors, series values, counts and exact decimal
+operations with half-even ties, tracking, observed tracking and energy series
+with every refusal, and schema-location mutations of native-run metadata and
+host load receipts; the Python tests rebuild each corpus and require the
+committed file, and the crate's unit tests require the same outcomes, with
+floats compared bit for bit. `tests/test_control_run_parity.py` loads real RTL
+captures through both analyses, including refused declarations, malformed
+documents, files read in declaration order, unreadable files, read errors
+injected by the kernel, damaged series and complete reports, and requires
+identical outcomes.
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.

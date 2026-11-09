@@ -233,7 +233,7 @@ fn control(
 }
 
 /// Python `int(number)` of a schema-checked non-negative count.
-fn whole(number: Num) -> u128 {
+pub(crate) fn whole(number: Num) -> u128 {
     match number {
         Num::Int(integer) => integer,
         Num::Float(float) => float as u128,
@@ -379,6 +379,23 @@ pub(crate) fn events_block(
         "jitter": jitter(&rows, &periodic, analysed_cycles, duration),
     });
     Ok((block, rows))
+}
+
+/// The control counts of every cycle, warm-up included, as Python's
+/// `analyse_events(events, CONTROL profile, cycle_count, 0)` gives them for the
+/// native completion check.
+pub(crate) fn full_control(
+    events: &[Event],
+    contracts: &Value,
+    cycle_count: Num,
+) -> Result<Value, String> {
+    let grouped = cycles(events, &Names::of(contracts));
+    intervals(
+        &grouped,
+        &contracts["event_profiles"]["CONTROL"],
+        Num::Int(0),
+    )?;
+    Ok(control(&grouped, Num::Int(0), cycle_count)?.0)
 }
 
 #[cfg(test)]

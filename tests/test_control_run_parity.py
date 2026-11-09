@@ -16,6 +16,7 @@ including operating-system failures and faults injected by the kernel.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -26,7 +27,15 @@ from typing import Any
 
 import pytest
 from control_rust_support import canonical, python_outcome, python_outcome_under, rust_outcome
+from test_control_receipt_schema_corpus import HOST_LOAD, NATIVE
 from test_run_manifest import _change_manifest
+from test_run_series import _bad_power, _bad_tracking
+
+from conftest import REPOSITORY_ROOT
+from loop_timing_witness.event_stream import decode_events
+from loop_timing_witness.manifest_io import load_json_object
+from loop_timing_witness.run_analysis import analyse_events
+from loop_timing_witness.run_manifest import load_run
 
 MakeRtlRun = Callable[..., tuple[Path, dict[str, Any]]]
 VARIANTS = [
@@ -47,6 +56,29 @@ VARIANTS = [
     "escape_symlink",
     "missing_source",
     "board_without_evidence",
+]
+CODES = load_json_object(REPOSITORY_ROOT / "measurement-domain.json")["design_contracts"][
+    "event_codes"
+]
+SERIES_VARIANTS = [
+    "tracking_utf8",
+    "tracking_header",
+    "tracking_empty",
+    "tracking_ragged",
+    "tracking_csv_quote",
+    "tracking_cycle_text",
+    "tracking_cycle_duplicate",
+    "tracking_cycle_outside",
+    "tracking_cycle_missing",
+    "tracking_decimal",
+    "tracking_infinite",
+    "power_unknown_rail",
+    "power_duplicate_rail",
+    "power_negative",
+    "power_incomplete",
+    "power_single_sample",
+    "power_regression",
+    "power_uncovered",
 ]
 
 
@@ -551,3 +583,314 @@ def test_events_blocks_keep_python_number_types(
     manifest["cycle_count"], manifest["warmup_cycles"] = cycles, warmup
     outcome = _same(_write(run, manifest), tmp_path)
     assert outcome["summary"]["block"]["cycle_count"] == cycles - warmup
+
+
+@pytest.mark.parametrize("variant", SERIES_VARIANTS)
+def test_series_refusals_are_identical(
+    variant: str, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Refuse each damaged tracking or power series with the same text.
+
+    Parameters
+    ----------
+    variant
+        Named damage from the series command tests.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    name = "tracking" if variant.startswith("tracking") else "power"
+    content = (run / f"{name}.csv").read_bytes()
+    damage = _bad_tracking if name == "tracking" else _bad_power
+    _bind(run, manifest, name, damage(variant, content))
+    outcome = _same(_write(run, manifest), tmp_path)
+    assert outcome["report"] is None
+    assert outcome["report_refusal"]
+
+
+@pytest.mark.parametrize(
+    "change", ["complete", "observed", "no tracking", "no power", "range", "header quote"]
+)
+def test_reports_are_identical(change: str, make_rtl_run: MakeRtlRun, tmp_path: Path) -> None:
+    """Build the same complete report, or refuse alike, for real captures.
+
+    Parameters
+    ----------
+    change
+        Complete run, observed tracking, an absent series, an out-of-range
+        value or a damaged header.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    tracking = (run / "tracking.csv").read_bytes()
+    if change == "observed":
+        manifest["tracking_sampling"] = "observed"
+    elif change in {"no tracking", "no power"}:
+        manifest["files"]["tracking" if change == "no tracking" else "power"] = None
+    elif change == "range":
+        _bind(run, manifest, "tracking", tracking.replace(b"\n0,", b"\n0,1e100", 1))
+    elif change == "header quote":
+        _bind(run, manifest, "tracking", b'"' + tracking)
+    outcome = _same(_write(run, manifest), tmp_path)
+    assert (outcome["report"] is None) is (change in {"range", "header quote"})
+
+
+def _receipt(run: Path, manifest: dict[str, Any], key: str, document: dict[str, Any]) -> None:
+    """Write one receipt beside the run and bind it in the declaration.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    manifest
+        Declaration changed in place.
+    key
+        ``native_metadata`` or ``host_load``.
+    document
+        Receipt content.
+    """
+    content = json.dumps(document).encode()
+    (run / f"{key}.json").write_bytes(content)
+    manifest[key] = {"path": f"{key}.json", "sha256": hashlib.sha256(content).hexdigest()}
+
+
+def _bind_receipts(
+    run: Path, manifest: dict[str, Any], overflow: int, profile: str, exit_status: int | None = None
+) -> None:
+    """Bind native metadata and a host load receipt that agree with the capture.
+
+    The completion counters are those of the Python analysis of the same
+    captured events, so a correct native analysis accepts them.
+
+    Parameters
+    ----------
+    run
+        Real Icarus CONTROL capture.
+    manifest
+        Its declaration, changed in place.
+    overflow
+        Declared and reported FIFO overflow count.
+    profile
+        Host load profile of the receipt; the declared load case stays ``idle``.
+    exit_status
+        Native exit status in the host load receipt, or ``None`` for the one the
+        overflow implies.
+    """
+    manifest["controller"] = {"name": "pid", "coefficients": dict(NATIVE["coefficients"])}
+    manifest["instrument"]["fifo_overflow_count"] = overflow
+    inputs = load_run(_write(run, manifest))
+    contracts = inputs.domain["design_contracts"]
+    events = decode_events(inputs.files["events"], contracts, "CONTROL", manifest["cycle_count"])
+    try:
+        full, _ = analyse_events(
+            events, contracts["event_profiles"]["CONTROL"], manifest["cycle_count"], 0
+        )
+    except ValueError:
+        full = {"control": {"deadline_misses": 0, "safe_state_events": 0}}
+    fault = manifest["fault_schedule"][0]
+    native = copy.deepcopy(NATIVE)
+    native.update(
+        cycles=manifest["cycle_count"],
+        period_ticks=manifest["sample_period_ticks"],
+        fault={
+            "kind": fault["kind"],
+            "cycle": fault["cycle"],
+            "duration_periods": fault["delay_periods"],
+        },
+        result={
+            "records": len(events),
+            "overflow": overflow,
+            "misses": full["control"]["deadline_misses"],
+            "samples": sum(event.name == "SAMPLE_READ" for event in events),
+            "safe": bool(full["control"]["safe_state_events"]),
+        },
+    )
+    native["artifacts"]["events"] = {
+        "sha256": manifest["files"]["events"]["sha256"],
+        "bytes": len(inputs.files["events"]),
+    }
+    native["artifacts"]["configuration"]["sha256"] = manifest["source"]["files"][0]["sha256"]
+    _receipt(run, manifest, "native_metadata", native)
+    host = copy.deepcopy(HOST_LOAD)
+    host.update(
+        profile=profile,
+        native_pid=2,
+        started_ns=1,
+        native_started_ns=2,
+        native_finished_ns=3,
+        finished_ns=4,
+        native_returncode=int(bool(overflow)) if exit_status is None else exit_status,
+    )
+    host["counters"]["idle_waits"] = 1 if profile == "idle" else 0
+    host["counters"]["arithmetic_operations"] = 4096 if profile == "cpu" else 0
+    _receipt(run, manifest, "host_load", host)
+
+
+@pytest.mark.parametrize(
+    "change", ["receipts", "warm-up", "overflow", "load profile", "exit status", "warm-up order"]
+)
+def test_reports_with_receipts_are_identical(
+    change: str, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Attach agreeing native metadata and a host load receipt alike.
+
+    Parameters
+    ----------
+    change
+        Agreeing receipts; a warm-up cycle, which checks the counters against
+        the whole capture; a declared FIFO overflow; or a host load profile
+        that contradicts the declared load case.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    if change in {"warm-up", "warm-up order"}:
+        manifest["warmup_cycles"] = 1
+        manifest["files"]["power"] = None
+    if change == "warm-up order":
+        _edit_events(run, manifest, _swap_first_ready_and_read)
+    _bind_receipts(
+        run,
+        manifest,
+        1 if change == "overflow" else 0,
+        "cpu" if change == "load profile" else "idle",
+        1 if change == "exit status" else None,
+    )
+    outcome = _same(_write(run, manifest), tmp_path)
+    if change in {"load profile", "exit status"}:
+        assert outcome["report_refusal"] == (
+            "host load profile or native exit status contradicts the capture"
+        )
+    elif change == "warm-up order":
+        assert outcome["report_refusal"] == "cycle 0: scheduling_latency ends before it starts"
+    else:
+        report = outcome["report"]["report"]
+        assert set(report) >= {"native_completion", "host_load"}
+
+
+def _edit_events(
+    run: Path, manifest: dict[str, Any], edit: Callable[[list[bytearray]], list[bytearray]]
+) -> None:
+    """Change the captured event records and bind the result.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    manifest
+        Declaration changed in place.
+    edit
+        Change of the list of 16-byte records.
+    """
+    content = (run / "events.bin").read_bytes()
+    records = [bytearray(content[offset : offset + 16]) for offset in range(0, len(content), 16)]
+    _bind(run, manifest, "events", b"".join(edit(records)))
+
+
+def _cycle(record: bytearray) -> int:
+    """Return a record's cycle.
+
+    Parameters
+    ----------
+    record
+        16-byte event record.
+
+    Returns
+    -------
+    int
+        Cycle number.
+    """
+    return int.from_bytes(record[4:8], "little")
+
+
+def _swap_first_ready_and_read(records: list[bytearray]) -> list[bytearray]:
+    """Swap the event codes of cycle 0's ready and read records, keeping time order.
+
+    Parameters
+    ----------
+    records
+        Captured records.
+
+    Returns
+    -------
+    list[bytearray]
+        Records whose cycle-0 sample read precedes its sample-ready event.
+    """
+    ready, read = CODES["SAMPLE_READY"], CODES["SAMPLE_READ"]
+    for record in records:
+        if _cycle(record) == 0 and record[0] in {ready, read}:
+            record[0] = read if record[0] == ready else ready
+    return records
+
+
+@pytest.mark.parametrize("change", ["missing deadline", "partial observed"])
+def test_invalid_reports_are_identical(
+    change: str, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Report a missing cycle anchor or partial observed tracking alike.
+
+    Parameters
+    ----------
+    change
+        A removed deadline record, or a removed sample read with its tracking row.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    if change == "missing deadline":
+        _edit_events(
+            run,
+            manifest,
+            lambda records: [
+                record
+                for record in records
+                if not (record[0] == CODES["DEADLINE"] and _cycle(record) == 1)
+            ],
+        )
+    else:
+        manifest["tracking_sampling"] = "observed"
+        _edit_events(
+            run,
+            manifest,
+            lambda records: [
+                record
+                for record in records
+                if not (record[0] == CODES["SAMPLE_READ"] and _cycle(record) == 1)
+            ],
+        )
+        rows = (run / "tracking.csv").read_text(encoding="utf-8").splitlines()
+        kept = [row for row in rows if not row.startswith("1,")]
+        _bind(run, manifest, "tracking", ("\n".join(kept) + "\n").encode())
+    report = _same(_write(run, manifest), tmp_path)["report"]["report"]
+    assert report["valid"] is False
+    assert report["invalid_reasons"]
+
+
+def test_runs_with_an_amp_capture_are_refused_by_the_native_report(
+    make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """The native report refuses an AMP capture until AMP completion is native.
+
+    Parameters
+    ----------
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    manifest.update(placement="bare_metal_amp", tracking_sampling="observed")
+    manifest["files"]["power"] = None
+    manifest["amp_capture"] = manifest["files"]["events"].copy()
+    rust = rust_outcome(_write(run, manifest), tmp_path)
+    assert rust["events_refusal"] is None
+    assert rust["report_refusal"] == "AMP capture completion is not analysed by the native analysis"

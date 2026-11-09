@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import csv
 import io
-from decimal import Decimal, DecimalException
-from math import isfinite, sqrt
+from decimal import Decimal
+from math import sqrt
 from typing import TYPE_CHECKING, Any
+
+from .run_series import count, measurement
 
 if TYPE_CHECKING:
     from .event_stream import Event
@@ -35,30 +37,29 @@ def _observations(content: bytes, cycle_count: int) -> dict[int, Decimal]:
     dict of int to Decimal
         Signed reference-minus-output errors by observed cycle.
     """
-    reader = csv.DictReader(io.StringIO(content.decode("utf-8"), newline=""), strict=True)
-    if reader.fieldnames != ["cycle", "reference", "output"]:
-        message = "observed tracking CSV header must be cycle,reference,output"
-        raise ValueError(message)
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        message = "observed tracking file is not UTF-8"
+        raise ValueError(message) from exc
+    reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
     result: dict[int, Decimal] = {}
     try:
+        if reader.fieldnames != ["cycle", "reference", "output"]:
+            message = "observed tracking CSV header must be cycle,reference,output"
+            raise ValueError(message)
         for row in reader:
             if None in row or any(value is None or value == "" for value in row.values()):
                 message = "observed tracking contains an incomplete row"
                 raise ValueError(message)
-            raw_cycle = row["cycle"]
-            if not raw_cycle.isascii() or not raw_cycle.isdecimal():
-                message = "observed tracking cycle must be a nonnegative decimal integer"
-                raise ValueError(message)
-            cycle = int(raw_cycle)
+            cycle = count(row["cycle"], "observed tracking cycle")
             if cycle >= cycle_count or cycle in result:
                 message = "observed tracking cycle is duplicated or outside the run"
                 raise ValueError(message)
-            reference, output = Decimal(row["reference"]), Decimal(row["output"])
-            if not reference.is_finite() or not output.is_finite():
-                message = "observed tracking values must be finite"
-                raise ValueError(message)
+            reference = measurement(row["reference"], "observed tracking reference")
+            output = measurement(row["output"], "observed tracking output")
             result[cycle] = reference - output
-    except (csv.Error, DecimalException) as exc:
+    except csv.Error as exc:
         message = f"invalid observed tracking CSV: {exc}"
         raise ValueError(message) from exc
     return result
@@ -98,7 +99,7 @@ def observed_tracking_error(
     if set(observations) != captured:
         message = "observed tracking cycles do not match captured SAMPLE_READ events"
         raise ValueError(message)
-    needed = set(range(warmup_cycles, cycle_count))
+    needed = set(range(int(warmup_cycles), int(cycle_count)))
     selected = sorted(needed & observations.keys())
     missing = sorted(needed - observations.keys())
     result: dict[str, Any] = {
@@ -114,15 +115,8 @@ def observed_tracking_error(
         result.update(status="unavailable", reason="no observed post-warmup samples")
         return result
     errors = [observations[cycle] for cycle in selected]
-    try:
-        mean_square = sum((error * error for error in errors), Decimal(0)) / len(errors)
-        rms = sqrt(float(mean_square))
-        peak = float(max(abs(error) for error in errors))
-    except (DecimalException, OverflowError) as exc:
-        message = "observed tracking metrics exceed the numeric range"
-        raise ValueError(message) from exc
-    if not isfinite(rms) or not isfinite(peak):
-        message = "observed tracking metrics exceed the numeric range"
-        raise ValueError(message)
-    result.update(rms=rms, peak_absolute=peak)
+    mean_square = sum((error * error for error in errors), Decimal(0)) / len(errors)
+    result.update(
+        rms=sqrt(float(mean_square)), peak_absolute=float(max(abs(error) for error in errors))
+    )
     return result

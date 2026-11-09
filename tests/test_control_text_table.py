@@ -18,14 +18,23 @@ from __future__ import annotations
 import re
 import sys
 import unicodedata
+from typing import TYPE_CHECKING
 
 from conftest import REPOSITORY_ROOT
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 TABLE = REPOSITORY_ROOT / "analysis/rust/src/control_printable.rs"
 
 
-def _python_ranges() -> list[tuple[int, int]]:
-    """Return the inclusive ranges of code points this interpreter does not print.
+def _python_ranges(test: Callable[[str], bool]) -> list[tuple[int, int]]:
+    """Return the inclusive ranges of code points for which a test is true.
+
+    Parameters
+    ----------
+    test
+        Character predicate of this interpreter.
 
     Returns
     -------
@@ -35,7 +44,7 @@ def _python_ranges() -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     start = None
     for code in range(sys.maxunicode + 2):
-        hidden = code <= sys.maxunicode and not chr(code).isprintable()
+        hidden = code <= sys.maxunicode and test(chr(code))
         if hidden and start is None:
             start = code
         elif not hidden and start is not None:
@@ -50,8 +59,14 @@ def test_native_table_equals_the_interpreter() -> None:
     version = re.search(r"with Unicode ([0-9.]+);", source)
     assert version is not None
     assert version.group(1) == unicodedata.unidata_version
-    native = [
-        (int(low, 16), int(high, 16))
-        for low, high in re.findall(r"\(0x([0-9a-f]+), 0x([0-9a-f]+)\)", source)
-    ]
-    assert native == _python_ranges()
+    for name, test in (
+        ("NON_PRINTABLE", lambda character: not character.isprintable()),
+        ("DECIMAL", str.isdecimal),
+    ):
+        table = re.search(rf"const {name}: &\[\(u32, u32\)\] = &\[(.*?)\];", source, re.DOTALL)
+        assert table is not None, name
+        native = [
+            (int(low, 16), int(high, 16))
+            for low, high in re.findall(r"\(0x([0-9a-f]+), 0x([0-9a-f]+)\)", table.group(1))
+        ]
+        assert native == _python_ranges(test), name

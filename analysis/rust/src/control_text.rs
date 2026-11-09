@@ -14,7 +14,7 @@
 //! that are not UTF-8 appear as surrogate escapes, as Python's file-system
 //! decoding gives them.
 
-use crate::control_printable::NON_PRINTABLE;
+use crate::control_printable::{DECIMAL, NON_PRINTABLE};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
@@ -26,8 +26,18 @@ enum Unit {
 
 /// Tell whether CPython's `str.isprintable` is true for one character.
 pub(crate) fn printable(character: char) -> bool {
+    !within(NON_PRINTABLE, character)
+}
+
+/// Tell whether CPython's `str.isdecimal` is true for one character.
+pub(crate) fn python_decimal(character: char) -> bool {
+    within(DECIMAL, character)
+}
+
+/// Tell whether a character lies in one of sorted, disjoint inclusive ranges.
+fn within(ranges: &[(u32, u32)], character: char) -> bool {
     let code = u32::from(character);
-    NON_PRINTABLE
+    ranges
         .binary_search_by(|&(low, high)| {
             if high < code {
                 std::cmp::Ordering::Less
@@ -37,7 +47,7 @@ pub(crate) fn printable(character: char) -> bool {
                 std::cmp::Ordering::Equal
             }
         })
-        .is_err()
+        .is_ok()
 }
 
 /// Decode bytes as UTF-8, keeping each invalid byte as Python's surrogate escape does.
@@ -99,6 +109,11 @@ fn repr(units: &[Unit]) -> String {
     }
     text.push(quote);
     text
+}
+
+/// CPython's `repr` of a string, as an f-string's `!r` writes it.
+pub(crate) fn python_repr(text: &str) -> String {
+    repr(&text.chars().map(Unit::Character).collect::<Vec<_>>())
 }
 
 /// Python's printed form of a path: invalid bytes appear as `\udcXX`, as stderr shows them.

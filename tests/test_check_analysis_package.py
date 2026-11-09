@@ -40,6 +40,8 @@ _COPIED = (
     "neural-step-run.schema.json",
     "run-manifest.schema.json",
     "measurement-domain.schema.json",
+    "native-run.schema.json",
+    "host-load.schema.json",
     "tests/data/neural-selected-original.run.json",
 )
 
@@ -65,6 +67,8 @@ def analysis_package(tmp_path: Path) -> Path:
         "neural-step-run.schema.json",
         "run-manifest.schema.json",
         "measurement-domain.schema.json",
+        "native-run.schema.json",
+        "host-load.schema.json",
         "tests/data/neural-selected-original.run.json",
     )
     for name in owners:

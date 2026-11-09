@@ -19,7 +19,11 @@ Loop Timing Witness — changelog
   run, its hash-bound measurement domain and every input, and decode its events,
   refusing with the same texts as the Python `load_run` and `decode_events`.
   `control_events_summary` builds the report's `events` block and interval rows as
-  the Python analysis does.
+  the Python analysis does. `control_run_report` builds the complete per-run report:
+  tracking error, observed tracking, energy per cycle, validity, input digests, stated
+  limits, native completion counters and the host load receipt, with floats equal to
+  the Python report's bit for bit. A run that binds an AMP capture is refused there
+  until AMP completion is implemented natively.
 - Complete C controller coverage gate: `make controller-tests` ends with
   `make controller-coverage`, which runs the C API test and the stream and refusal tests
   against GCC-instrumented programs. `tools/c_coverage_gate.py` adds their counts and
@@ -60,6 +64,18 @@ Loop Timing Witness — changelog
   authored RFC 3339 UTC rule that no longer depends on an optional format checker; a
   leap second, an impossible date or year 0000 is refused with
   `started_utc must be an RFC 3339 date-time in UTC`.
+- Tracking and power series values have one plain form: ASCII, an optional sign,
+  digits with an optional decimal point and an optional exponent, at most 28
+  significant digits, and zero or a magnitude from 10^-99 up to 10^100. Whitespace,
+  digit separators, non-ASCII digits and values outside that range are refused
+  (`… is not a decimal`, `… is outside the supported decimal range`), so every result
+  stays exact or correctly rounded and finite. Cycle and tick counts must be below
+  2**64. Observed tracking uses the same rules with the prefix `observed tracking`.
+- Native metadata and host load receipts are read with the bounded run JSON rules, and
+  a receipt that breaks its schema is refused with its first failing location
+  (`native metadata <location>: does not satisfy the native run schema`,
+  `host load receipt <location>: does not satisfy the host load schema`) instead of the
+  schema validator's wording.
 - Every documentation website page shows the copyright, the AGPL-3.0-or-later licence
   of the exact source revision, the commercial licence offer and the contact addresses
   in its footer; the provenance headers of the Markdown sources stay hidden comments.
@@ -82,6 +98,10 @@ Loop Timing Witness — changelog
   internal error; they are now checked and refused like other declarations. A
   CONTROL run declaring its cycle or warm-up count as an integral float is analysed
   instead of failing in the deadline pass.
+- A tracking or power series whose CSV header has a quoting error, an undecodable
+  observed tracking file, a series value with an extreme exponent, and a CONTROL run
+  with an integral-float cycle count and a tracking series raised an internal error;
+  each is now refused or analysed like other inputs.
 - Check the checker image executor alike in Python and Rust: the binding must be its
   closed typed form in both (host boundary, image inventory, command, environment,
   deadline and file lists), invalid JSON is refused by name, an unreadable image

@@ -185,7 +185,7 @@ def apply(document: dict[str, Any], path: list[str | int], change: dict[str, Any
     return mutated
 
 
-def _cases(
+def cases_of(
     base: str, document: dict[str, Any], schema: dict[str, Any], depth: int
 ) -> list[dict[str, Any]]:
     """Change the nodes of one document and record Python's failing locations.
@@ -241,7 +241,7 @@ def corpus() -> dict[str, Any]:
     run_cases = [
         case
         for name, document in variants.items()
-        for case in _cases(f"run {name}", document, run_schema, 99 if name == "control" else 1)
+        for case in cases_of(f"run {name}", document, run_schema, 99 if name == "control" else 1)
     ]
     return {
         "schema": "loop-timing-witness.control-schema-locations.v4",
@@ -250,7 +250,7 @@ def corpus() -> dict[str, Any]:
             "domain": domain,
         },
         "run": run_cases,
-        "domain": _cases("domain", domain, domain_schema, 99),
+        "domain": cases_of("domain", domain, domain_schema, 99),
     }
 
 

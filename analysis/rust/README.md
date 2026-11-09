@@ -88,11 +88,18 @@ CONTROL or COMPUTE run and keep its hash-bound input bytes, available through
 `ControlInputs::manifest`, `domain`, `files` and `directory`.
 `decode_control_events(&inputs)` returns the run's `ControlEvent` records, and
 `control_events_summary(&inputs)` returns the report's `events` block with the
-`IntervalRow` table.
+`IntervalRow` table, and `control_run_report(&inputs)` the complete report with
+the same rows: tracking error, observed tracking, energy per cycle, validity,
+input digests, stated limits and any bound native completion and host load
+receipts. Its floats equal the Python report's bit for bit. A run that binds an
+AMP capture is refused until AMP completion is implemented natively.
 Every refusal is the text of the Python `load_run` and `decode_events` for the
-same files; the parity tests run both on real RTL captures, malformed
+same files, and every report refusal the text of the Python `build_report`;
+the parity tests run both on real RTL captures, damaged series, malformed
 documents and injected read failures, and shared corpora hold the schema
-locations, JSON decoding and measurement-domain rules to Python's outcomes.
+locations, JSON decoding, measurement-domain rules, CSV reading, decimal values
+and arithmetic, series metrics and receipt schema locations to Python's
+outcomes.
 
 ## Selected installation
 

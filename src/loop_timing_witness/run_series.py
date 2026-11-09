@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from collections import defaultdict
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from itertools import pairwise
 from math import sqrt
 from typing import TYPE_CHECKING, Any, cast
@@ -24,6 +25,13 @@ if TYPE_CHECKING:
 TRACKING_COLUMNS = ("cycle", "reference", "output")
 POWER_COLUMNS = ("timebase_ticks", "rail", "voltage_v", "current_a", "energy_j")
 MINIMUM_POWER_SAMPLES = 2
+MEASUREMENT_DIGITS = 28
+MEASUREMENT_EXPONENT = 99
+_MEASUREMENT = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+_NON_FINITE = re.compile(r"[+-]?(?:inf(?:inity)?|s?nan[0-9]*)", re.IGNORECASE | re.ASCII)
+_EXPONENT_DIGITS = 6
+_COUNT_LIMIT = 2**64
+_COUNT_DIGITS = len(str(_COUNT_LIMIT))
 
 
 def _rows(content: bytes, columns: tuple[str, ...]) -> list[dict[str, str]]:
@@ -52,10 +60,11 @@ def _rows(content: bytes, columns: tuple[str, ...]) -> list[dict[str, str]]:
         message = "series file is not UTF-8"
         raise ValueError(message) from exc
     reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
-    if tuple(reader.fieldnames or ()) != columns:
-        message = f"CSV header must be {','.join(columns)}"
-        raise ValueError(message)
     try:
+        header = tuple(reader.fieldnames or ())
+        if header != columns:
+            message = f"CSV header must be {','.join(columns)}"
+            raise ValueError(message)
         rows = list(reader)
     except csv.Error as exc:
         message = f"invalid CSV: {exc}"
@@ -68,8 +77,8 @@ def _rows(content: bytes, columns: tuple[str, ...]) -> list[dict[str, str]]:
     return cast("list[dict[str, str]]", rows)
 
 
-def _integer(value: str, field: str) -> int:
-    """Parse one canonical nonnegative decimal integer.
+def count(value: str, field: str) -> int:
+    """Parse one canonical nonnegative decimal integer below 2**64.
 
     Parameters
     ----------
@@ -86,16 +95,27 @@ def _integer(value: str, field: str) -> int:
     Raises
     ------
     ValueError
-        If the value is not a nonnegative base-10 integer.
+        If the value is not a nonnegative base-10 integer below 2**64.
     """
     if not value.isascii() or not value.isdecimal():
         message = f"{field} must be a nonnegative decimal integer"
         raise ValueError(message)
-    return int(value)
+    digits = value.lstrip("0")
+    if len(digits) > _COUNT_DIGITS or int(digits or "0") >= _COUNT_LIMIT:
+        message = f"{field} must be below 2**64"
+        raise ValueError(message)
+    return int(digits or "0")
 
 
-def _decimal(value: str, field: str) -> Decimal:
-    """Parse one finite decimal measurement.
+def measurement(value: str, field: str) -> Decimal:
+    """Parse one finite decimal measurement within the supported range.
+
+    The value is ASCII: an optional sign, digits with an optional decimal
+    point, and an optional exponent. It has at most 28 significant digits,
+    not counting leading or trailing zeros, and is zero or has a magnitude
+    from 10**-99 up to, but not including, 10**100. Every sum, product and
+    quotient of such values is then exact or correctly rounded in the
+    default 28-digit decimal context and converts to a finite float.
 
     Parameters
     ----------
@@ -112,17 +132,31 @@ def _decimal(value: str, field: str) -> Decimal:
     Raises
     ------
     ValueError
-        If the value is not a finite decimal.
+        If the value is not a finite decimal in the supported range.
     """
-    try:
-        result = Decimal(value)
-    except InvalidOperation as exc:
-        message = f"{field} is not a decimal"
-        raise ValueError(message) from exc
-    if not result.is_finite():
+    if _NON_FINITE.fullmatch(value):
         message = f"{field} must be finite"
         raise ValueError(message)
-    return result
+    if not _MEASUREMENT.fullmatch(value):
+        message = f"{field} is not a decimal"
+        raise ValueError(message)
+    mantissa, _, exponent = value.lower().partition("e")
+    negative = mantissa.startswith("-")
+    whole, _, fraction = mantissa.lstrip("+-").partition(".")
+    whole = whole.lstrip("0")
+    digits = (whole + fraction).lstrip("0").rstrip("0")
+    if not digits:
+        return Decimal("-0" if negative else "0")
+    power = exponent.lstrip("+-").lstrip("0")
+    if len(power) > _EXPONENT_DIGITS:
+        message = f"{field} is outside the supported decimal range"
+        raise ValueError(message)
+    shift = -int(power or "0") if exponent.startswith("-") else int(power or "0")
+    leading = len(whole) - 1 if whole else len(fraction.lstrip("0")) - len(fraction) - 1
+    if len(digits) > MEASUREMENT_DIGITS or abs(shift + leading) > MEASUREMENT_EXPONENT:
+        message = f"{field} is outside the supported decimal range"
+        raise ValueError(message)
+    return Decimal(value)
 
 
 def tracking_error(
@@ -155,14 +189,14 @@ def tracking_error(
         return {"status": "unavailable", "reason": "tracking file not supplied", "unit": unit}
     observations: dict[int, Decimal] = {}
     for row in _rows(content, TRACKING_COLUMNS):
-        cycle = _integer(row["cycle"], "cycle")
+        cycle = count(row["cycle"], "cycle")
         if cycle >= cycle_count or cycle in observations:
             message = f"tracking cycle {cycle} is duplicated or outside the run"
             raise ValueError(message)
-        reference = _decimal(row["reference"], "reference")
-        output = _decimal(row["output"], "output")
+        reference = measurement(row["reference"], "reference")
+        output = measurement(row["output"], "output")
         observations[cycle] = reference - output
-    needed = set(range(warmup_cycles, cycle_count))
+    needed = set(range(int(warmup_cycles), int(cycle_count)))
     if not needed.issubset(observations):
         message = "tracking file lacks an analysed cycle"
         raise ValueError(message)
@@ -199,13 +233,13 @@ def _power_samples(content: bytes, rails: list[str]) -> dict[int, dict[str, Deci
     """
     samples: dict[int, dict[str, Decimal]] = defaultdict(dict)
     for row in _rows(content, POWER_COLUMNS):
-        ticks = _integer(row["timebase_ticks"], "timebase_ticks")
+        ticks = count(row["timebase_ticks"], "timebase_ticks")
         rail = row["rail"]
         if rail not in rails or rail in samples[ticks]:
             message = f"power rail {rail!r} is unknown or duplicated at tick {ticks}"
             raise ValueError(message)
         for field in ("voltage_v", "current_a", "energy_j"):
-            value = _decimal(row[field], field)
+            value = measurement(row[field], field)
             if value < 0:
                 message = f"{field} cannot be negative"
                 raise ValueError(message)

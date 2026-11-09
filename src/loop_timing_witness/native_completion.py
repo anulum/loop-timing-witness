@@ -13,10 +13,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from jsonschema import Draft202012Validator
-
-from .manifest_io import load_json_object, parse_json_object
+from .manifest_io import load_json_object, parse_bounded_json_object
 from .run_analysis import analyse_events
+from .validate_measurement_domain import schema_locations
 
 if TYPE_CHECKING:
     from .event_stream import Event
@@ -51,11 +50,10 @@ def completion_statistics(
     ValueError
         If the native receipt contradicts its run or complete captured events.
     """
-    native = parse_json_object(content, "native metadata")
-    validator = Draft202012Validator(load_json_object(ROOT / "native-run.schema.json"))
-    errors = list(validator.iter_errors(native))
-    if errors:
-        message = f"native metadata invalid: {errors[0].message}"
+    native = parse_bounded_json_object(content, "native metadata")
+    locations = schema_locations(native, load_json_object(ROOT / "native-run.schema.json"))
+    if locations:
+        message = f"native metadata {locations[0]}: does not satisfy the native run schema"
         raise ValueError(message)
     fault = native["fault"]
     schedule = (

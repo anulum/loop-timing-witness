@@ -10,7 +10,7 @@
 //!
 //! The Python analysis validates with `jsonschema` and reports only failing
 //! locations, never the validator's wording. This interpreter implements the
-//! keywords the run and measurement-domain schemas use, with the same
+//! keywords the run, measurement-domain, native-run and host-load schemas use, with the same
 //! applicability and equality rules, and reports the same locations: each
 //! distinct location once, sorted by its path parts as strings. A keyword
 //! outside the supported set is refused when the schema is loaded.
@@ -63,6 +63,7 @@ const ASSERTIONS: &[&str] = &[
     "minimum",
     "maximum",
     "minItems",
+    "maxItems",
     "uniqueItems",
     "required",
     "minProperties",
@@ -295,6 +296,9 @@ impl Schema {
             "minItems" => instance
                 .as_array()
                 .is_none_or(|items| !below(items.len(), value)),
+            "maxItems" => instance
+                .as_array()
+                .is_none_or(|items| !above(items.len(), value)),
             "minProperties" => instance
                 .as_object()
                 .is_none_or(|object| !below(object.len(), value)),
@@ -334,6 +338,11 @@ impl Schema {
 /// Tell whether a count is below an integer bound.
 fn below(count: usize, bound: &Value) -> bool {
     compare(Numeric::Integer(count as i128), numeric(bound)) == Ordering::Less
+}
+
+/// Tell whether a count is above an integer bound.
+fn above(count: usize, bound: &Value) -> bool {
+    compare(Numeric::Integer(count as i128), numeric(bound)) == Ordering::Greater
 }
 
 /// The array of a list keyword; audited as an array at load time.

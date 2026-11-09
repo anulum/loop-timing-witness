@@ -13,9 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from jsonschema import Draft202012Validator
-
-from .manifest_io import load_json_object, parse_json_object
+from .manifest_io import load_json_object, parse_bounded_json_object
+from .validate_measurement_domain import schema_locations
 
 if TYPE_CHECKING:
     from .run_manifest import RunInputs
@@ -42,11 +41,10 @@ def validate_host_load(content: bytes) -> dict[str, Any]:
     ValueError
         If schema, scheduling, resource scope, counters or time brackets disagree.
     """
-    receipt = parse_json_object(content, "host load receipt")
-    validator = Draft202012Validator(load_json_object(ROOT / "host-load.schema.json"))
-    errors = list(validator.iter_errors(receipt))
-    if errors:
-        message = f"host load receipt invalid: {errors[0].message}"
+    receipt = parse_bounded_json_object(content, "host load receipt")
+    locations = schema_locations(receipt, load_json_object(ROOT / "host-load.schema.json"))
+    if locations:
+        message = f"host load receipt {locations[0]}: does not satisfy the host load schema"
         raise ValueError(message)
     profile = receipt["profile"]
     size = receipt["working_set_bytes"]
@@ -101,7 +99,7 @@ def attach_host_load(inputs: RunInputs, report: dict[str, Any]) -> None:
     if "host_load" not in inputs.files:
         return
     receipt = validate_host_load(inputs.files["host_load"])
-    native = parse_json_object(inputs.files["native_metadata"], "native metadata")
+    native = parse_bounded_json_object(inputs.files["native_metadata"], "native metadata")
     if inputs.manifest["load_case"] != receipt["profile"] or receipt["native_returncode"] != int(
         bool(native["result"]["overflow"])
     ):

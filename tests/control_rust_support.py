@@ -9,8 +9,9 @@
 """Load one CONTROL or COMPUTE run through the Python and the native analysis.
 
 Both outcomes have one shape: the loaded manifest, domain, input digests,
-resolved directory and decoded events, or the refusal text. A refusal is
-compared as the command prints it, with unpaired surrogates escaped.
+resolved directory, decoded events, events block and complete report, or the
+refusal text. A refusal is compared as the command prints it, with unpaired
+surrogates escaped.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_rust_support import consumer
 
-from loop_timing_witness.analyze_run import events_block
+from loop_timing_witness.analyze_run import build_report, events_block
 from loop_timing_witness.event_stream import Event, decode_events
 from loop_timing_witness.run_manifest import load_run
 
@@ -94,6 +95,15 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         else:
             listed = [[row["cycle"], row["interval"], row["ticks"]] for row in rows]
             summary = {"block": block, "rows": listed}
+    report: dict[str, Any] | None = None
+    report_refusal: str | None = None
+    try:
+        built, report_rows = build_report(inputs)
+    except ValueError as error:
+        report_refusal = _printed(error)
+    else:
+        rows_listed = [[row["cycle"], row["interval"], row["ticks"]] for row in report_rows]
+        report = {"report": built, "rows": rows_listed}
     return {
         "manifest": inputs.manifest,
         "domain": inputs.domain,
@@ -103,6 +113,8 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         "events_refusal": refusal,
         "summary": summary,
         "summary_refusal": summary_refusal,
+        "report": report,
+        "report_refusal": report_refusal,
     }
 
 

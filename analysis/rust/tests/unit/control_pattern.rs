@@ -938,7 +938,7 @@ fn syntax_outside_the_subset_is_refused() {
         "[\\d]",
         "[z-a]",
         "[a-\\d]",
-        "\\d",
+        "\\w",
         "(a",
         "a)",
         "^*",
@@ -987,5 +987,21 @@ fn an_empty_group_iteration_ends_the_repetition() {
     let pattern = Pattern::compile("^(a?)*$").expect("supported pattern");
     for (text, expected) in [("aa", true), ("", true), ("b", false), ("aab", false)] {
         assert_eq!(pattern.search(text), expected, "{text:?}");
+    }
+}
+
+#[test]
+fn digits_and_escaped_dots_follow_python() {
+    let version = Pattern::compile(r"^\d+\.\d+\.\d+$").expect("version pattern");
+    for (text, expected) in [
+        ("1.2.3", true),
+        ("10.20.30\n", true),
+        ("\u{661}.\u{6f2}.\u{966}", true),
+        ("1.2", false),
+        ("1x2.3", false),
+        ("\u{b2}.1.1", false),
+        ("1.2.3 ", false),
+    ] {
+        assert_eq!(version.search(text), expected, "{text:?}");
     }
 }

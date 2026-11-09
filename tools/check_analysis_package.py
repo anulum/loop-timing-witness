@@ -43,6 +43,8 @@ PACKAGE_COPIES: Final = {
     f"{PACKAGE_ROOT}/neural-step-run.schema.json": "neural-step-run.schema.json",
     f"{PACKAGE_ROOT}/run-manifest.schema.json": "run-manifest.schema.json",
     f"{PACKAGE_ROOT}/measurement-domain.schema.json": "measurement-domain.schema.json",
+    f"{PACKAGE_ROOT}/native-run.schema.json": "native-run.schema.json",
+    f"{PACKAGE_ROOT}/host-load.schema.json": "host-load.schema.json",
     f"{PACKAGE_ROOT}/tests/data/{RUN_FIXTURE}": f"tests/data/{RUN_FIXTURE}",
 }
 LICENCE_SCHEMA: Final = "loop-timing-witness.analysis-dependency-licences.v1"

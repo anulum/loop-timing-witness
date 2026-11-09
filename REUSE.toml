@@ -29,6 +29,8 @@ path = [
     "analysis/rust/LICENSE",
     "analysis/rust/dependency-licences.json",
     "analysis/rust/neural-step-run.schema.json",
+    "analysis/rust/measurement-domain.schema.json",
+    "analysis/rust/run-manifest.schema.json",
     "analysis/rust/public-data/*.json",
     "analysis/rust/tests/data/*.json",
     "measurement-domain.json",

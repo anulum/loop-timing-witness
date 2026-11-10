@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING
 
 import pytest
@@ -18,11 +19,13 @@ from neural_acquisition_support import (
     NeuralAcquisition,
     build_neural_acquisition,
     calibrated_host_installation,
+    checker_runs,
     edit_json,
     make_writable,
 )
 from neural_rust_support import assert_command_in_both, assert_report_in_both
 
+from loop_timing_witness.neural_checker_trace import _OPEN
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import (
     NeuralRunError,
@@ -155,6 +158,29 @@ def host_installation(tmp_path_factory: pytest.TempPathFactory) -> NeuralChecker
         Running interpreter, actual tracer and every observed runtime file.
     """
     return calibrated_host_installation(tmp_path_factory.mktemp("calibration"))
+
+
+def test_every_successful_open_of_a_real_checker_run_is_read(tmp_path: Path) -> None:
+    """Accept every successful open record a real traced checker run writes.
+
+    A record shape that the reader's grammar does not accept would leave its
+    file out of a calibrated runtime binding. This holds the grammar to the
+    actual tracer output of the running host.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory for the real checker runs.
+    """
+    _, _, runs = checker_runs(tmp_path)
+    success = re.compile(r"openat2?\(.*\)\s+=\s+\d+")
+    unread = [
+        line
+        for _, trace in runs
+        for line in trace.decode("utf-8").split("\n")
+        if success.search(line) and _OPEN.fullmatch(line) is None
+    ]
+    assert unread == []
 
 
 def test_host_installation_passes_under_the_traced_isolated_worker(

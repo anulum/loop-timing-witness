@@ -887,6 +887,37 @@ def _host(root: Path, runtime: tuple[Path, ...]) -> NeuralCheckerInstallation:
     )
 
 
+def checker_runs(root: Path) -> tuple[NeuralCheckerInstallation, Path, list[tuple[Path, bytes]]]:
+    """Run the real traced checker for both operations on a minimal host installation.
+
+    Parameters
+    ----------
+    root
+        Empty owned directory for the runs.
+
+    Returns
+    -------
+    tuple[NeuralCheckerInstallation, Path, list[tuple[Path, bytes]]]
+        The minimal installation, the frozen source closure, and each run's
+        working directory with its complete trace.
+    """
+    sources = _sources()
+    closure = root / "closure"
+    for name in (ENTRY, REFERENCE, "stimuli.txt"):
+        (closure / name).parent.mkdir(parents=True, exist_ok=True)
+        (closure / name).write_bytes(sources[name])
+    minimal = _host(root, ())
+    runs = []
+    for operation in ("generate", "check"):
+        directory = root / operation
+        directory.mkdir()
+        (directory / "results_verilog.txt").write_bytes(simulation_file("observed-projection.txt"))
+        invocation = invoke_source_checker(minimal, closure / ENTRY, operation, directory)
+        assert invocation.returncode == 0, invocation.stderr
+        runs.append((directory, invocation.trace))
+    return minimal, closure, runs
+
+
 def calibrated_host_installation(root: Path) -> NeuralCheckerInstallation:
     """Select every host file the real traced checker opens, as a consumer review would.
 
@@ -900,20 +931,10 @@ def calibrated_host_installation(root: Path) -> NeuralCheckerInstallation:
     NeuralCheckerInstallation
         Host installation whose inventory covers the observed runtime closure.
     """
-    sources = _sources()
-    closure = root / "closure"
-    for name in (ENTRY, REFERENCE, "stimuli.txt"):
-        (closure / name).parent.mkdir(parents=True, exist_ok=True)
-        (closure / name).write_bytes(sources[name])
-    minimal = _host(root, ())
+    minimal, closure, runs = checker_runs(root)
     known = {item.path for item in (*minimal.files, *minimal.worker_files())}
     opened: set[Path] = set()
-    for operation in ("generate", "check"):
-        directory = root / operation
-        directory.mkdir()
-        (directory / "results_verilog.txt").write_bytes(simulation_file("observed-projection.txt"))
-        invocation = invoke_source_checker(minimal, closure / ENTRY, operation, directory)
-        assert invocation.returncode == 0, invocation.stderr
+    for directory, trace in runs:
         data = {
             directory / name
             for name in (
@@ -923,7 +944,7 @@ def calibrated_host_installation(root: Path) -> NeuralCheckerInstallation:
                 "checker-observation.json",
             )
         }
-        opened |= checker_opened_files(invocation.trace, directory) - data
+        opened |= checker_opened_files(trace, directory) - data
     runtime = sorted(opened - known - {path.resolve() for path in closure.rglob("*")})
     return _host(root, tuple(runtime))
 

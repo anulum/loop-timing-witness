@@ -214,8 +214,14 @@ def _other_floor(path: Path, document: dict[str, Any]) -> None:
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        (_missing_notes, "repeat campaign (root): 'operator_notes' is a required property"),
-        (_wrong_schema, "repeat campaign schema: 'loop-timing-witness.repeat-campaign.v1' was"),
+        (
+            _missing_notes,
+            "repeat campaign (root): does not satisfy the repeat campaign schema",
+        ),
+        (
+            _wrong_schema,
+            "repeat campaign schema: does not satisfy the repeat campaign schema",
+        ),
         (_reordered, "repeat_index values must run 1, 2, 3, ... in manifest order"),
         (_upward_path, "run manifest path must stay within the campaign directory"),
         (_outside_link, "run manifest is not a regular file inside the campaign: linked.json"),

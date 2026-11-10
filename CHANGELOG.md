@@ -61,6 +61,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A repeat campaign that breaks its schema is refused as `repeat campaign <location>: does not
+  satisfy the repeat campaign schema`, naming the first failing location in path order as a run
+  manifest refusal does. The schema validator's own wording is no longer part of the text.
 - The repeat campaign manifest is decoded with the bounded JSON rules of every run-bound
   document: a campaign nested more than 64 deep, holding an integer outside the 64-bit range
   or an unpaired surrogate escape is refused with the decoder's text before its schema is

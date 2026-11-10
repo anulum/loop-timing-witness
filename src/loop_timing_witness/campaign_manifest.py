@@ -15,10 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from jsonschema import Draft202012Validator
-
 from .manifest_io import load_json_object, parse_bounded_json_object
 from .run_manifest import RunInputs, load_run
+from .validate_measurement_domain import schema_locations
 
 CAMPAIGN_SCHEMA_PATH: Final = (
     Path(__file__).resolve().parent / "data" / ("repeat-campaign.schema.json")
@@ -120,6 +119,10 @@ def run_configuration(inputs: RunInputs) -> dict[str, Any]:
 def _validate_campaign_schema(manifest: dict[str, Any]) -> None:
     """Reject a campaign manifest outside the versioned JSON Schema.
 
+    The refusal names only the first failing location in path order, never
+    the validator's own wording, so an independent implementation of the
+    schema refuses with the same text.
+
     Parameters
     ----------
     manifest
@@ -128,18 +131,12 @@ def _validate_campaign_schema(manifest: dict[str, Any]) -> None:
     Raises
     ------
     ValueError
-        If the first schema error, in path order, is found.
+        If the manifest breaks the schema, or its repeat indexes do not run
+        from one in manifest order.
     """
-    schema = load_json_object(CAMPAIGN_SCHEMA_PATH)
-    Draft202012Validator.check_schema(schema)
-    errors = sorted(
-        Draft202012Validator(schema).iter_errors(manifest),
-        key=lambda error: [str(part) for part in error.absolute_path],
-    )
-    if errors:
-        first = errors[0]
-        location = "/".join(str(part) for part in first.absolute_path) or "(root)"
-        message = f"repeat campaign {location}: {first.message}"
+    locations = schema_locations(manifest, load_json_object(CAMPAIGN_SCHEMA_PATH))
+    if locations:
+        message = f"repeat campaign {locations[0]}: does not satisfy the repeat campaign schema"
         raise ValueError(message)
     indexes = [item["repeat_index"] for item in manifest["repeats"]]
     if indexes != list(range(1, len(indexes) + 1)):

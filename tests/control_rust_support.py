@@ -30,6 +30,12 @@ from loop_timing_witness.analyze_run import build_report, events_block
 from loop_timing_witness.event_stream import Event, decode_events
 from loop_timing_witness.run_manifest import load_run
 
+HANG_GUARD_SECONDS = 600
+"""Policy hang guard for one child analysis: a stuck child fails its test instead of the run.
+
+It is not a performance budget; no run is judged by its speed against it.
+"""
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -168,7 +174,7 @@ def python_outcome_under(
         capture_output=True,
         text=True,
         env=environment,
-        timeout=600,
+        timeout=HANG_GUARD_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -224,7 +230,7 @@ def rust_outcome(
         capture_output=True,
         text=True,
         env=environment,
-        timeout=600,
+        timeout=HANG_GUARD_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -276,7 +282,7 @@ def python_command(
         text=True,
         cwd=cwd,
         env=environment,
-        timeout=600,
+        timeout=HANG_GUARD_SECONDS,
         check=False,
     )
     return {"status": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
@@ -336,7 +342,7 @@ def rust_command(
         text=True,
         cwd=cwd,
         env=environment,
-        timeout=600,
+        timeout=HANG_GUARD_SECONDS,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

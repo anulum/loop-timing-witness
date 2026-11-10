@@ -11,7 +11,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -25,7 +29,7 @@ from neural_acquisition_support import (
 )
 from neural_rust_support import assert_command_in_both, assert_report_in_both
 
-from loop_timing_witness.neural_checker_trace import _OPEN
+from loop_timing_witness.neural_checker_trace import _OPEN, checker_opened_files
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import (
     NeuralRunError,
@@ -36,7 +40,6 @@ from loop_timing_witness.neural_run_dispatch import dispatch_analysis
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from pathlib import Path
 
     from loop_timing_witness.neural_checker_installation import NeuralCheckerInstallation
     from loop_timing_witness.neural_run_policy import NeuralEntry
@@ -181,6 +184,45 @@ def test_every_successful_open_of_a_real_checker_run_is_read(tmp_path: Path) -> 
         if success.search(line) and _OPEN.fullmatch(line) is None
     ]
     assert unread == []
+
+
+def test_a_real_checker_trace_names_the_same_files_in_another_process(tmp_path: Path) -> None:
+    """Read the same opened files from a real checker trace in another process.
+
+    The native consumer reads each trace in its own process. A name that
+    resolves through the reading process's own kernel files would name another
+    file there, and that file would then lie outside the calibrated binding.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory for the real checker runs and their saved traces.
+    """
+    _, _, runs = checker_runs(tmp_path / "runs")
+    code = (
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "from loop_timing_witness.neural_checker_trace import checker_opened_files\n"
+        "trace, directory = Path(sys.argv[1]).read_bytes(), Path(sys.argv[2])\n"
+        "print(json.dumps(sorted(map(str, checker_opened_files(trace, directory)))))\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+    differing = []
+    for index, (directory, trace) in enumerate(runs):
+        saved = tmp_path / f"trace-{index}.txt"
+        saved.write_bytes(trace)
+        child = subprocess.run(
+            [sys.executable, "-c", code, str(saved), str(directory)],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        assert child.returncode == 0, child.stderr
+        here = {str(path) for path in checker_opened_files(trace, directory)}
+        differing += sorted(here.symmetric_difference(json.loads(child.stdout)))
+    assert differing == []
 
 
 def test_host_installation_passes_under_the_traced_isolated_worker(

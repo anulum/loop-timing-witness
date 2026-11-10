@@ -19,6 +19,7 @@ import pytest
 
 from conftest import write_bound_json
 from loop_timing_witness import build_campaign_report, build_report, load_campaign, load_run
+from loop_timing_witness.campaign_outputs import write_campaign_report
 from loop_timing_witness.latency_jitter import jitter_pairs
 from loop_timing_witness.run_analysis import distribution
 
@@ -327,6 +328,36 @@ def test_invalid_and_refused_repeats_stay_visible_without_samples(
         "repeat 5 is refused",
         "3 analysed cycles per repeat; the run plan requires 1000000",
     ]
+
+
+def test_refusal_with_an_unpaired_surrogate_is_reported_escaped(
+    make_repeat_campaign: MakeRepeatCampaign, tmp_path: Path
+) -> None:
+    """Report and publish a refusal that names a member holding an unpaired surrogate.
+
+    The run loader refuses a repeated member name with the name itself, which
+    UTF-8 cannot encode. The report holds the refusal with the surrogate
+    escaped, so the campaign is still published.
+
+    Parameters
+    ----------
+    make_repeat_campaign
+        Campaign of copied real RTL captures.
+    tmp_path
+        Owned report parent.
+    """
+    path, document = make_repeat_campaign(repeats=2)
+    run = path.parent / "repeat-2" / "manifest.json"
+    text = run.read_text(encoding="utf-8")
+    run.write_text(text[:-2] + ', "\\ud800": 1, "\\ud800": 2}\n', encoding="utf-8")
+    document["repeats"][1]["run_manifest"]["sha256"] = hashlib.sha256(run.read_bytes()).hexdigest()
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    report = build_campaign_report(load_campaign(path))
+    assert report["repeats"][1]["status"] == "refused"
+    assert report["repeats"][1]["refusal"] == f"{run.resolve()}: duplicate JSON key: \\ud800"
+    write_campaign_report(tmp_path / "report", report)
+    written = json.loads((tmp_path / "report" / "campaign_report.json").read_bytes())
+    assert written["repeats"] == report["repeats"]
 
 
 def test_missing_reboot_and_repeat_count_are_nonconformities(

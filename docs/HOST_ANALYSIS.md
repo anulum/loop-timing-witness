@@ -367,7 +367,8 @@ tracking sampling, instrument floor and hardware artefact digests and tool versi
 inputs and per-run receipts differ between repeats by design and are not compared.
 
 A run that its own loader or `build_report` refuses stays in the report as a `refused` repeat
-with the refusal text. A run whose report is invalid, for example after an event FIFO overflow,
+with the refusal text. A code point UTF-8 cannot encode, such as an unpaired surrogate in a
+repeated member name or a path byte that is not UTF-8, is written as its backslash escape. A run whose report is invalid, for example after an event FIFO overflow,
 is listed as `invalid` with its reasons. Neither contributes samples.
 
 Pooled statistics use only `valid` repeats:

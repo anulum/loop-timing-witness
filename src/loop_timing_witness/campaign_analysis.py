@@ -26,6 +26,26 @@ SPREAD_STATISTICS: Final = ("median_ticks", "p95_ticks", "p99_ticks", "p999_tick
 _Analysed = tuple[dict[str, Any], list[dict[str, int | str]]]
 
 
+def _printable(refusal: str | None) -> str | None:
+    r"""Return a refusal as the report holds it, as UTF-8 text.
+
+    A refusal can name a path with bytes that are not UTF-8, or a repeated JSON
+    member name holding an unpaired surrogate. Each such code point is written
+    as its backslash escape, as the command prints a refusal.
+
+    Parameters
+    ----------
+    refusal
+        Refusal text, or ``None``.
+
+    Returns
+    -------
+    str | None
+        Text with every unpaired surrogate as ``\udXXX``, or ``None``.
+    """
+    return None if refusal is None else refusal.encode("utf-8", "backslashreplace").decode()
+
+
 def _analyse_repeat(repeat: CampaignRepeat) -> tuple[dict[str, Any], _Analysed | None]:
     """Analyse one repeat with the per-run report and summarise its outcome.
 
@@ -46,7 +66,7 @@ def _analyse_repeat(repeat: CampaignRepeat) -> tuple[dict[str, Any], _Analysed |
         "rebooted_before_run": repeat.rebooted_before_run,
         "run_id": None if repeat.inputs is None else repeat.inputs.manifest["run_id"],
         "status": "refused",
-        "refusal": repeat.refusal,
+        "refusal": _printable(repeat.refusal),
         "invalid_reasons": [],
         "analysed_cycles": None,
         "duration_ticks": None,
@@ -59,7 +79,7 @@ def _analyse_repeat(repeat: CampaignRepeat) -> tuple[dict[str, Any], _Analysed |
     try:
         report, rows = build_report(repeat.inputs)
     except ValueError as error:
-        entry["refusal"] = str(error)
+        entry["refusal"] = _printable(str(error))
         return entry, None
     events = report["events"]
     entry.update(

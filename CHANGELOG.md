@@ -131,6 +131,10 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- A repeat campaign whose refused repeat names a repeated JSON member holding an unpaired
+  surrogate, or a path with bytes that are not UTF-8, failed while its report was written. The
+  report now holds such a refusal with each of those code points as its backslash escape, as
+  the command prints a refusal, and the campaign is published.
 - The native analysis quotes a CSV cell holding a comma, a quote or a line break, and doubles
   its quotes, as Python's CSV writer does. A run identifier ending with the line feed its schema
   pattern admits was written unquoted.

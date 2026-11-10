@@ -124,6 +124,9 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Series values are built from their digits, so a CPython without the C decimal module
+  (built without libmpdec, as the hosted runners' 3.15) reads a value with a long run of
+  leading zeros as the C module does instead of refusing it at the integer-string limit.
 - The checker trace readers of both analyses skip every own kernel file of a process,
   `/proc/self/…`, `/proc/thread-self/…` and `/proc/<number>/…`, as they skipped
   `/proc/self/maps`. CPython 3.15 reads its memory map by number when ctypes loads, and

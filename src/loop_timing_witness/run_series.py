@@ -156,7 +156,10 @@ def measurement(value: str, field: str) -> Decimal:
     if len(digits) > MEASUREMENT_DIGITS or abs(shift + leading) > MEASUREMENT_EXPONENT:
         message = f"{field} is outside the supported decimal range"
         raise ValueError(message)
-    return Decimal(value)
+    # Built from its digits, as Decimal(value) represents it, so that no implementation
+    # of the decimal module converts a long run of leading zeros to an integer.
+    coefficient = tuple(int(digit) for digit in (whole + fraction).lstrip("0"))
+    return Decimal((int(negative), coefficient, shift - len(fraction)))
 
 
 def tracking_error(

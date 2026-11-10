@@ -21,6 +21,9 @@ import csv
 import hashlib
 import io
 import json
+import os
+import subprocess
+import sys
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Final
 
@@ -735,6 +738,38 @@ def test_committed_csv_corpus_equals_python_records() -> None:
 def test_committed_series_corpus_equals_python_series() -> None:
     """The committed series corpus is exactly what Python's series analysis gives."""
     assert SERIES_CORPUS.read_text(encoding="utf-8") == _text(series_corpus())
+
+
+def test_series_corpus_is_the_same_without_the_c_decimal_module() -> None:
+    """The pure-Python decimal module gives the committed corpus as well.
+
+    A CPython built without libmpdec, such as the hosted runners' 3.15, has no
+    C decimal module and imports the pure-Python one, which converts long
+    digit strings to integers and so meets the interpreter's integer-string
+    limit. A child interpreter that cannot import the C module rebuilds the
+    corpus and requires the committed text.
+    """
+    code = (
+        "import sys\n"
+        "sys.modules['_decimal'] = None\n"
+        "import decimal, _pydecimal\n"
+        "assert decimal.Decimal is _pydecimal.Decimal\n"
+        "import test_control_series_corpus as corpus\n"
+        "committed = corpus.SERIES_CORPUS.read_text(encoding='utf-8')\n"
+        "sys.exit(0 if committed == corpus._text(corpus.series_corpus()) else 1)\n"
+    )
+    tests = REPOSITORY_ROOT / "tests"
+    environment = {**os.environ, "PYTHONPATH": f"{REPOSITORY_ROOT / 'src'}{os.pathsep}{tests}"}
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_corpora_cover_every_refusal() -> None:

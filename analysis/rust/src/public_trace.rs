@@ -106,6 +106,16 @@ fn opened_path(base: &str, name: &str, directory: &Path) -> Result<PathBuf, Stri
         .map_err(|_| "Actual checker observed file is unavailable.".to_owned())
 }
 
+/// Tell whether a name is a process's memory map read by its number, as CPython 3.15
+/// reads its own when ctypes loads.
+fn process_map(name: &str) -> bool {
+    name.strip_prefix("/proc/")
+        .and_then(|rest| rest.strip_suffix("/maps"))
+        .is_some_and(|number| {
+            !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+        })
+}
+
 /// Recover every successful regular-file open, preserving directory-descriptor anchoring.
 ///
 /// The grammar is the Python verifier's: lines end only at a line feed, and any
@@ -129,6 +139,7 @@ pub(crate) fn opened(raw: &[u8], directory: &Path) -> Result<BTreeSet<PathBuf>, 
             "/dev/urandom",
         ]
         .contains(&name.as_str())
+            || process_map(&name)
             || flags.contains("O_DIRECTORY")
         {
             continue;

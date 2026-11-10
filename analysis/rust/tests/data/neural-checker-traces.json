@@ -108,6 +108,37 @@
       "opened": []
     },
     {
+      "name": "process memory map read by its number",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc/99999999/maps\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"{root}/absolute.py\", O_RDONLY) = 3"
+      ],
+      "opened": [
+        "absolute.py"
+      ]
+    },
+    {
+      "name": "process map without a number",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc//maps\", O_RDONLY) = 3"
+      ],
+      "refusal": "Actual checker observed file is unavailable."
+    },
+    {
+      "name": "process map with a non-digit number",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc/x9/maps\", O_RDONLY) = 3"
+      ],
+      "refusal": "Actual checker observed file is unavailable."
+    },
+    {
+      "name": "other file of a numbered process",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc/99999999/mapsx\", O_RDONLY) = 3"
+      ],
+      "refusal": "Actual checker observed file is unavailable."
+    },
+    {
       "name": "unfinished record",
       "lines": [
         "1 openat(AT_FDCWD, \"a\", O_RDONLY <unfinished ...>"

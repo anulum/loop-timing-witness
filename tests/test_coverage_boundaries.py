@@ -71,7 +71,9 @@ def test_canonical_and_snapshot_commands_have_distinct_coverage(tmp_path: Path) 
         timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.count("usage: validate_measurement_domain.py") == 2
+    # Python 3.14 and later name a module command by its -m invocation in the usage line.
+    usage = "usage: python -m loop_timing_witness.validate_measurement_domain"
+    assert result.stdout.count(usage) == 2
     subprocess.run(
         [*command, "combine", "--data-file", str(data_file), str(tmp_path)],
         cwd=REPOSITORY_ROOT,

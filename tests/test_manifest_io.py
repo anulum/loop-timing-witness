@@ -95,7 +95,9 @@ def test_real_decoder_limits_have_an_authored_refusal(tmp_path: Path, limit: str
         assert maximum > 0
         content = '{"value":' + "9" * (maximum + 1) + "}"
     else:
-        depth = 10_000
+        # CPython 3.14 and later bound decoding by the actual C stack rather than the
+        # recursion limit; a million levels exceed it on every supported stack size.
+        depth = 1_000_000
         content = '{"value":' + "[" * depth + "0" + "]" * depth + "}"
     path = tmp_path / "limits.json"
     path.write_text(content, encoding="utf-8")

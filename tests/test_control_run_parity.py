@@ -207,6 +207,40 @@ def test_root_bytes_keep_loading_after_the_manifest_file_vanished(
     _same(path, tmp_path / "missing")
 
 
+@pytest.mark.parametrize(
+    "started",
+    [
+        "2026-02-28T23:59:59Z",
+        "2026-02-29T00:00:00Z",
+        "2024-02-29T00:00:00Z",
+        "2000-02-29T12:00:00Z",
+        "2100-02-29T12:00:00Z",
+        "2026-04-30T00:00:00Z",
+        "2026-04-31T00:00:00Z",
+    ],
+)
+def test_start_dates_load_or_refuse_alike(
+    started: str, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Accept or refuse each calendar boundary of the start timestamp alike.
+
+    Parameters
+    ----------
+    started
+        A last day of February in common, leap and century years, or of a
+        30-day month, or the day after it.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    manifest["started_utc"] = started
+    outcome = _same(_write(run, manifest), tmp_path)
+    valid = started[:10] in {"2026-02-28", "2024-02-29", "2000-02-29", "2026-04-30"}
+    assert ("refusal" not in outcome) is valid
+
+
 @pytest.mark.parametrize("variant", VARIANTS)
 def test_declaration_refusals_are_identical(
     variant: str, make_rtl_run: MakeRtlRun, tmp_path: Path

@@ -270,6 +270,7 @@ def _cells(generator: _Values) -> list[str]:
         "1" + "0" * 60 + "e-60",
         "1.5e+0000005",
         "1e1000000",
+        "1e1234567890123456789",
         "1e-0999999",
         "-1E-5",
         "NaN",
@@ -667,6 +668,10 @@ def _energy_cases(generator: _Values) -> list[dict[str, Any]]:
         "incomplete": (_power_text([(0, [0] * rails)]) + f"500,{RAILS[0]},1,1,1\n", 0),
         "warm-up aligned": (_power_text([(110, [0] * rails), (1100, [1] * rails)]), 1),
         "no anchors": (_power_text([(0, [0] * rails), (500, [1] * rails)]), 0),
+        "anchor boundary": (
+            _power_text([(0, [0] * rails), (510, [1] * rails), (1100, [2] * rails)]),
+            0,
+        ),
     }
     cases: list[dict[str, Any]] = []
     for name, (text, warmup) in texts.items():

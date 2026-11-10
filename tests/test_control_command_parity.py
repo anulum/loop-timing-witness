@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 from control_rust_support import python_command, rust_command
-from test_control_run_parity import CODES, _bind, _cycle, _edit_events
+from test_control_run_parity import CODES, _bind, _bind_receipts, _cycle, _edit_events
 
 MakeRtlRun = Callable[..., tuple[Path, dict[str, Any]]]
 DEFAULT_OUTPUTS = ("python-report", "rust-report")
@@ -113,6 +113,8 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
         rows = (run / "tracking.csv").read_text(encoding="utf-8").splitlines()
         kept = [row for row in rows if not row.startswith("1,")]
         _bind(run, manifest, "tracking", ("\n".join(kept) + "\n").encode())
+    elif variant == "receipts":
+        _bind_receipts(run, manifest, 0, "idle")
     elif variant == "extreme ticks":
         manifest["files"]["power"] = None
 
@@ -147,6 +149,7 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
         "energy formats",
         "energy rounding",
         "extreme ticks",
+        "receipts",
     ],
 )
 @pytest.mark.parametrize(
@@ -163,8 +166,9 @@ def test_reports_are_byte_equal(
         Event profile of the capture, or a changed capture: every JSON string
         escape in the plant unit, no energy series, a gapped sample, rail
         energies whose plot labels need each ``.6g`` form or round across a
-        form, or a COMPUTE capture whose counter saturates after cycle 0 so an
-        adjacent-cycle change exceeds the signed 64-bit range.
+        form, a COMPUTE capture whose counter saturates after cycle 0 so an
+        adjacent-cycle change exceeds the signed 64-bit range, or agreeing
+        native metadata and host load receipts, which the report carries.
     outputs
         Output arguments of the Python and native commands.
     make_rtl_run
@@ -226,6 +230,7 @@ def _refused_input(change: str, run: Path, manifest: dict[str, Any]) -> tuple[st
         "symlink manifest": "link.json",
         "directory manifest": ".",
         "fifo manifest": "fifo.json",
+        "fifo parent": "fifo.json/manifest.json",
     }
     outputs = {
         "existing output": ("taken", "taken"),
@@ -243,7 +248,7 @@ def _refused_input(change: str, run: Path, manifest: dict[str, Any]) -> tuple[st
         path.write_text("{", encoding="utf-8")
     elif change == "symlink manifest":
         (run / "link.json").symlink_to(path)
-    elif change == "fifo manifest":
+    elif change in {"fifo manifest", "fifo parent"}:
         os.mkfifo(run / "fifo.json")
     elif change == "oversized manifest":
         path.write_bytes(b"{" + b" " * (16 * 1048576) + b"}")
@@ -275,6 +280,7 @@ EXISTING_OUTPUTS = {"existing output", "dot output", "parent output", "root outp
         "symlink manifest",
         "directory manifest",
         "fifo manifest",
+        "fifo parent",
         "oversized manifest",
         "wide integer",
         "damaged series",
@@ -613,3 +619,29 @@ def test_publication_faults_are_refused_alike(
         assert list(parent.iterdir()) == []
     assert outcomes["python"]["status"] == 1, outcomes["python"]
     assert outcomes["rust"] == outcomes["python"]
+
+
+def test_a_manifest_at_the_dispatch_limit_is_analysed_alike(
+    make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Read a manifest of exactly 16 MiB, the dispatcher's limit, and analyse it alike.
+
+    Parameters
+    ----------
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    text = json.dumps(manifest).encode()
+    (run / "manifest.json").write_bytes(text + b" " * (16 * 1048576 - len(text)))
+    assert (run / "manifest.json").stat().st_size == 16 * 1048576
+    python = python_command(["manifest.json", "--output-dir", "python-report"], run)
+    rust = rust_command(["manifest.json", "--output-dir", "rust-report"], run, tmp_path)
+    assert rust == {
+        "status": python["status"],
+        "stdout": python["stdout"].replace("python-report", "rust-report"),
+        "stderr": python["stderr"].replace("python-report", "rust-report"),
+    }
+    assert "A finite regular strict JSON manifest is required" not in python["stderr"]

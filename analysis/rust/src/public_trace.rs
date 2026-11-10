@@ -106,13 +106,17 @@ fn opened_path(base: &str, name: &str, directory: &Path) -> Result<PathBuf, Stri
         .map_err(|_| "Actual checker observed file is unavailable.".to_owned())
 }
 
-/// Tell whether a name is a process's memory map read by its number, as CPython 3.15
-/// reads its own when ctypes loads.
-fn process_map(name: &str) -> bool {
+/// Tell whether a name is one of a process's own kernel files: the memory map
+/// CPython reads at start-up and by number when ctypes loads, or the status
+/// libffi reads. None of them is a runtime file.
+fn process_file(name: &str) -> bool {
     name.strip_prefix("/proc/")
-        .and_then(|rest| rest.strip_suffix("/maps"))
-        .is_some_and(|number| {
-            !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+        .and_then(|rest| rest.split_once('/'))
+        .is_some_and(|(process, file)| {
+            !file.is_empty()
+                && (process == "self"
+                    || process == "thread-self"
+                    || (!process.is_empty() && process.bytes().all(|byte| byte.is_ascii_digit())))
         })
 }
 
@@ -133,13 +137,8 @@ pub(crate) fn opened(raw: &[u8], directory: &Path) -> Result<BTreeSet<PathBuf>, 
             continue;
         };
         let name = quoted_path(encoded)?;
-        if [
-            "/proc/self/maps",
-            "/sys/devices/system/cpu/possible",
-            "/dev/urandom",
-        ]
-        .contains(&name.as_str())
-            || process_map(&name)
+        if ["/sys/devices/system/cpu/possible", "/dev/urandom"].contains(&name.as_str())
+            || process_file(&name)
             || flags.contains("O_DIRECTORY")
         {
             continue;

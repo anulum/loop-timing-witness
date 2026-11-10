@@ -108,9 +108,13 @@
       "opened": []
     },
     {
-      "name": "process memory map read by its number",
+      "name": "own kernel files of a process, by number, self and thread-self",
       "lines": [
         "1 openat(AT_FDCWD, \"/proc/99999999/maps\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"/proc/self/maps\", O_RDONLY|O_CLOEXEC) = 3",
+        "1 openat(AT_FDCWD, \"/proc/self/status\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"/proc/thread-self/stat\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"/proc/self/\", O_RDONLY) = 3",
         "1 openat(AT_FDCWD, \"{root}/absolute.py\", O_RDONLY) = 3"
       ],
       "opened": [
@@ -132,9 +136,9 @@
       "refusal": "Actual checker observed file is unavailable."
     },
     {
-      "name": "other file of a numbered process",
+      "name": "numbered process without a file",
       "lines": [
-        "1 openat(AT_FDCWD, \"/proc/99999999/mapsx\", O_RDONLY) = 3"
+        "1 openat(AT_FDCWD, \"/proc/99999999\", O_RDONLY) = 3"
       ],
       "refusal": "Actual checker observed file is unavailable."
     },

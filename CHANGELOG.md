@@ -124,6 +124,11 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- The checker trace readers of both analyses skip every own kernel file of a process,
+  `/proc/self/…`, `/proc/thread-self/…` and `/proc/<number>/…`, as they skipped
+  `/proc/self/maps`. CPython 3.15 reads its memory map by number when ctypes loads, and
+  some builds read the process status through libffi; a host checker run on them was
+  refused as unavailable or as differing from its reviewed installation.
 - A measurement domain with a Gray-pointer buffer depth written as an integral
   float, and a COMPUTE run whose domain gives COMPUTE a sample rate, raised an
   internal error; they are now checked and refused like other declarations. A

@@ -26,9 +26,10 @@ _OPEN = re.compile(
 )
 _BASE = re.compile(r"\d+<([^>]+)>", re.ASCII)
 _PIECE = re.compile(r"\\x([0-9a-fA-F]{2})|([^\\])")
-_DYNAMIC_READS = frozenset({"/proc/self/maps", "/sys/devices/system/cpu/possible", "/dev/urandom"})
-# CPython 3.15 also reads its own memory map by process number when ctypes loads.
-_PROCESS_MAP = re.compile(r"/proc/[0-9]+/maps", re.ASCII)
+_DYNAMIC_READS = frozenset({"/sys/devices/system/cpu/possible", "/dev/urandom"})
+# A process's own kernel files, such as the memory map CPython reads at start-up and
+# by number when ctypes loads, or the status libffi reads, are never runtime files.
+_PROCESS_FILE = re.compile(r"/proc/(?:self|thread-self|[0-9]+)/.+", re.ASCII)
 
 
 def _quoted_path(encoded: str) -> str:
@@ -148,7 +149,7 @@ def checker_opened_files(raw: bytes, directory: Path) -> frozenset[Path]:
             continue
         descriptor, encoded, flags, _ = match.groups()
         name = _quoted_path(encoded)
-        if name in _DYNAMIC_READS or _PROCESS_MAP.fullmatch(name) or "O_DIRECTORY" in flags:
+        if name in _DYNAMIC_READS or _PROCESS_FILE.fullmatch(name) or "O_DIRECTORY" in flags:
             continue
         path = _opened_path(descriptor, name, directory)
         if path.is_file():

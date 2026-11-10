@@ -8,7 +8,10 @@
 
 //! Bind real packaged worker bytes without selecting or executing an SC runtime.
 
-use sha2::{Digest, Sha256};
+#[path = "support/digest.rs"]
+mod digest;
+
+use digest::sha256_hex;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,7 +32,7 @@ impl InstalledWorker {
     fn create() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         assert_eq!(WORKER.len(), 4789);
-        assert_eq!(format!("{:x}", Sha256::digest(WORKER)), WORKER_DIGEST);
+        assert_eq!(sha256_hex(WORKER), WORKER_DIGEST);
         let instant = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("current clock")
@@ -109,7 +112,7 @@ fn empty_regular_file_is_verified_and_missing_or_nonregular_files_are_refused() 
     let mut original = InstalledWorker::create();
     std::fs::write(&original.binding.path, []).expect("present zero-byte installed file");
     original.binding.byte_length = 0;
-    original.binding.sha256 = format!("{:x}", Sha256::digest(b""));
+    original.binding.sha256 = sha256_hex(b"");
     assert_eq!(original.binding.verify(), Ok(()));
     std::fs::remove_file(&original.binding.path).expect("remove only the owned empty file");
     assert_eq!(

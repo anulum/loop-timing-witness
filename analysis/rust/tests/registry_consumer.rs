@@ -24,10 +24,13 @@
 //! process and restored before the outcome is written, and records its status
 //! and printed text.
 
+#[path = "support/digest.rs"]
+mod digest;
+
+use digest::sha256_hex;
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
@@ -185,7 +188,7 @@ fn control_run_acquisition() {
             let files: serde_json::Map<String, Value> = inputs
                 .files()
                 .iter()
-                .map(|(name, bytes)| (name.clone(), json!(format!("{:x}", Sha256::digest(bytes)))))
+                .map(|(name, bytes)| (name.clone(), json!(sha256_hex(bytes))))
                 .collect();
             let events = decode_control_events(&inputs).map(|events| {
                 events

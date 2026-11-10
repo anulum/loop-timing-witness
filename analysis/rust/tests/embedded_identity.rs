@@ -16,7 +16,6 @@
 mod support;
 
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,7 +38,7 @@ const UNAVAILABLE: &str = "Selected neural profile installation asset is unavail
 
 /// Return the lowercase SHA-256 of whole bytes.
 fn sha(raw: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(raw))
+    support::digest::sha256_hex(raw)
 }
 
 /// Write a copy of the installed command with one unique byte range replaced.

@@ -35,7 +35,12 @@ pub struct FileRef {
 
 /// Return the actual complete-byte digest without source execution.
 pub(crate) fn digest(raw: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(raw))
+    hex(&Sha256::digest(raw))
+}
+
+/// Write digest bytes as lowercase hexadecimal text.
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Open every canonical within-root component through an owned directory descriptor.

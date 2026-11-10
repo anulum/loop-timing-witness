@@ -349,7 +349,7 @@ fn verify_artifact(directory: &Path, item: &Value) -> Result<(), String> {
         }
         hasher.update(&block[..count]);
     }
-    if format!("{:x}", hasher.finalize()) != text(&item["sha256"]) {
+    if crate::files::hex(&hasher.finalize()) != text(&item["sha256"]) {
         return Err(format!(
             "artefact SHA-256 mismatch: {}",
             text(&item["path"])

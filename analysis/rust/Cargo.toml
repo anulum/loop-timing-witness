@@ -23,10 +23,10 @@ categories = ["science", "command-line-utilities"]
 include = ["src/**", "public-data/**", "checker_worker/**/*.py", "tests/**", "neural-step-run.schema.json", "neural-step-run.schema.json.license", "run-manifest.schema.json", "run-manifest.schema.json.license", "measurement-domain.schema.json", "measurement-domain.schema.json.license", "native-run.schema.json", "native-run.schema.json.license", "host-load.schema.json", "host-load.schema.json.license", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "dependency-licences.json", "dependency-licences.json.license"]
 
 [dependencies]
-rustix = { version = "=1.1.4", default-features = false, features = ["std", "process", "fs"] }
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.151"
-sha2 = "=0.10.9"
+rustix = { version = "=1.1.6", default-features = false, features = ["std", "process", "fs"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+sha2 = "=0.11.1"
 
 [lints.rust]
 unsafe_code = "forbid"

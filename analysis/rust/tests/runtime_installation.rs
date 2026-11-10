@@ -11,9 +11,12 @@
 //! The two actual tools and three packaged worker bodies exercise construction only.
 //! This inventory is not a complete SC execution closure or a trusted source registration.
 
+#[path = "support/digest.rs"]
+mod digest;
+
+use digest::sha256_hex;
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -88,7 +91,7 @@ impl SelectedInstallation {
                 let raw = std::fs::read(path).expect("complete actual installed tool bytes");
                 json!({
                     "path": name,
-                    "sha256": format!("{:x}", Sha256::digest(&raw)),
+                    "sha256": sha256_hex(&raw),
                     "byte_length": raw.len(),
                 })
             })
@@ -101,7 +104,7 @@ impl SelectedInstallation {
                     .expect("unchanged actual packaged worker bytes");
                 json!({
                     "path": relative,
-                    "sha256": format!("{:x}", Sha256::digest(raw)),
+                    "sha256": sha256_hex(raw),
                     "byte_length": raw.len(),
                 })
             })

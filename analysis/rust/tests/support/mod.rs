@@ -8,8 +8,9 @@
 
 //! Own an isolated directory containing only exact recorded or deliberately invalid input bytes.
 
+pub mod digest;
+
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -34,7 +35,7 @@ impl Declaration {
         ));
         std::fs::create_dir(&root).expect("exclusive original declaration allocation");
         assert_eq!(
-            format!("{:x}", Sha256::digest(Self::raw())),
+            digest::sha256_hex(Self::raw()),
             "3a982fb1aa66f64135ce622c68e408c6dcefb78022cc270f2ecc7fd047a3b075"
         );
         Self { root }

@@ -130,6 +130,17 @@
       "opened": []
     },
     {
+      "name": "names that resolve into the reading process's own kernel files",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc/mounts\", O_RDONLY|O_CLOEXEC) = 3",
+        "1 openat(AT_FDCWD, \"/proc/net/dev\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"{root}/absolute.py\", O_RDONLY) = 3"
+      ],
+      "opened": [
+        "absolute.py"
+      ]
+    },
+    {
       "name": "process map without a number",
       "lines": [
         "1 openat(AT_FDCWD, \"/proc//maps\", O_RDONLY) = 3"

@@ -28,8 +28,9 @@ _BASE = re.compile(r"\d+<([^>]+)>", re.ASCII)
 _PIECE = re.compile(r"\\x([0-9a-fA-F]{2})|([^\\])")
 _DYNAMIC_READS = frozenset({"/sys/devices/system/cpu/possible", "/dev/urandom"})
 # A process's own kernel files, such as the memory map CPython reads at start-up and
-# by number when ctypes loads, or the status libffi reads, are never runtime files.
-# The file part may hold any character, a line feed included, as the Rust reader's does.
+# by number when ctypes loads, the status libffi reads, or a file such as /proc/mounts
+# that resolves through /proc/self, are never runtime files. The file part may hold
+# any character, a line feed included, as the Rust reader's does.
 _PROCESS_FILE = re.compile(r"/proc/(?:self|thread-self|[0-9]+)/.+", re.ASCII | re.DOTALL)
 
 
@@ -152,8 +153,10 @@ def checker_opened_files(raw: bytes, directory: Path) -> frozenset[Path]:
         name = _quoted_path(encoded)
         if name in _DYNAMIC_READS or _PROCESS_FILE.fullmatch(name) or "O_DIRECTORY" in flags:
             continue
+        # A name resolves in the reading process, so a link through /proc/self names
+        # the reader's own file and is skipped as the checker's would be.
         path = _opened_path(descriptor, name, directory)
-        if path.is_file():
+        if path.is_file() and not _PROCESS_FILE.fullmatch(str(path)):
             paths.add(path)
     return frozenset(paths)
 

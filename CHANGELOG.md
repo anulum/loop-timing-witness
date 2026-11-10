@@ -133,6 +133,9 @@ Loop Timing Witness — changelog
   some builds read the process status through libffi; a host checker run on them was
   refused as unavailable or as differing from its reviewed installation. A line feed
   in the file part no longer makes the Python reader refuse a name the Rust reader skips.
+  A name such as `/proc/mounts`, which resolves through `/proc/self`, is skipped by its
+  resolved path as well: each reader resolved it to its own process's file, so the
+  native consumer found a file outside the binding that the Python consumer calibrated.
 - A measurement domain with a Gray-pointer buffer depth written as an integral
   float, and a COMPUTE run whose domain gives COMPUTE a sample rate, raised an
   internal error; they are now checked and refused like other declarations. A

@@ -11,6 +11,7 @@
 use crate::public_execution::Invocation;
 use crate::public_runtime::Installation;
 use std::collections::BTreeSet;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 /// ASCII whitespace as the Python verifier's ASCII regular expressions read it.
@@ -106,17 +107,21 @@ fn opened_path(base: &str, name: &str, directory: &Path) -> Result<PathBuf, Stri
         .map_err(|_| "Actual checker observed file is unavailable.".to_owned())
 }
 
-/// Tell whether a name is one of a process's own kernel files: the memory map
-/// CPython reads at start-up and by number when ctypes loads, or the status
-/// libffi reads. None of them is a runtime file.
-fn process_file(name: &str) -> bool {
-    name.strip_prefix("/proc/")
-        .and_then(|rest| rest.split_once('/'))
+/// Tell whether a name or a resolved path is one of a process's own kernel
+/// files: the memory map CPython reads at start-up and by number when ctypes
+/// loads, the status libffi reads, or a file such as `/proc/mounts` that
+/// resolves through `/proc/self`. None of them is a runtime file.
+fn process_file(name: &[u8]) -> bool {
+    name.strip_prefix(b"/proc/")
+        .and_then(|rest| {
+            let slash = rest.iter().position(|&byte| byte == b'/')?;
+            Some((&rest[..slash], &rest[slash + 1..]))
+        })
         .is_some_and(|(process, file)| {
             !file.is_empty()
-                && (process == "self"
-                    || process == "thread-self"
-                    || (!process.is_empty() && process.bytes().all(|byte| byte.is_ascii_digit())))
+                && (process == b"self"
+                    || process == b"thread-self"
+                    || (!process.is_empty() && process.iter().all(u8::is_ascii_digit)))
         })
 }
 
@@ -138,13 +143,15 @@ pub(crate) fn opened(raw: &[u8], directory: &Path) -> Result<BTreeSet<PathBuf>, 
         };
         let name = quoted_path(encoded)?;
         if ["/sys/devices/system/cpu/possible", "/dev/urandom"].contains(&name.as_str())
-            || process_file(&name)
+            || process_file(name.as_bytes())
             || flags.contains("O_DIRECTORY")
         {
             continue;
         }
+        // A name resolves in the reading process, so a link through /proc/self
+        // names the reader's own file and is skipped as the checker's would be.
         let path = opened_path(base, &name, directory)?;
-        if path.is_file() {
+        if path.is_file() && !process_file(path.as_os_str().as_bytes()) {
             paths.insert(path);
         }
     }

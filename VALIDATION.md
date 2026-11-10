@@ -44,7 +44,7 @@ truthfulness of the `architecture_only` state.
 
 - Python 3.13 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
-- Flit Core 4.1.0 is the hash-pinned Python distribution build backend in the same development
+- Flit Core 4.2.0 is the hash-pinned Python distribution build backend in the same development
   lock, with the current complete-chain upload cut-off recorded in both lock headers.
 - Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu noble package `12.0-2build2`, to compile the
   synthesizable capture and buffered witness modules and produce binary event files consumed by
@@ -80,7 +80,7 @@ truthfulness of the `architecture_only` state.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
   preflight runner reads each binary's recorded module version and checksum with
   `go version -m` and refuses any other build.
-- `typos` 1.50.3, installed from the same lock and checked by its reported version.
+- `typos` 1.52.0, installed from the same lock and checked by its reported version.
 
 The lock is regenerated only with the command recorded in its header, followed by a licence review
 of every new or changed package in `development-dependency-licences.json`.

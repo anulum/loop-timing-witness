@@ -166,6 +166,11 @@ Loop Timing Witness — changelog
   21.15.1, both fixed releases of reported vulnerabilities, keeping hashes and upload cut-offs.
 - Refresh the development certificate bundle and virtual environment dependencies
   to their fixed releases while retaining hashes and reproducible upload cut-offs.
+- Move the whole development and runtime Python chain to its newest releases under one
+  upload cut-off (2026-11-10): Ruff 0.17, mypy 2.4.1, pytest 9.2, coverage 7.17, typos
+  1.52, REUSE 6.3, zizmor 1.32, CycloneDX 8, pre-commit 4.7, Flit Core 4.2 and their
+  dependencies, with the hook revisions, the pinned typos version and the licence
+  record moved together.
 - Validate JSON attribution sidecars without changing original JSON bytes;
   reject missing, linked, nonregular or malformed ownership records.
 - Keep complete preflight available on an allocated runner while normal pushes

@@ -22,7 +22,7 @@
     },
     "ast-serialize": {
       "licence": "MIT",
-      "version": "0.11.2"
+      "version": "0.13.1"
     },
     "attrs": {
       "licence": "MIT",
@@ -38,7 +38,7 @@
     },
     "certifi": {
       "licence": "MPL-2.0",
-      "version": "2026.10.19"
+      "version": "2026.10.23"
     },
     "cfgv": {
       "licence": "MIT",
@@ -46,7 +46,7 @@
     },
     "chardet": {
       "licence": "0BSD",
-      "version": "7.6.0"
+      "version": "7.7.0"
     },
     "charset-normalizer": {
       "licence": "MIT",
@@ -54,15 +54,15 @@
     },
     "click": {
       "licence": "BSD-3-Clause",
-      "version": "8.5.0"
+      "version": "8.5.1"
     },
     "coverage": {
       "licence": "Apache-2.0",
-      "version": "7.16.2"
+      "version": "7.17.2"
     },
     "cyclonedx-bom": {
       "licence": "Apache-2.0",
-      "version": "7.5.0"
+      "version": "8.0.1"
     },
     "cyclonedx-python-lib": {
       "licence": "Apache-2.0",
@@ -74,15 +74,15 @@
     },
     "distlib": {
       "licence": "PSF-2.0",
-      "version": "0.4.3"
+      "version": "0.4.4"
     },
     "filelock": {
       "licence": "MIT",
-      "version": "4.2.4"
+      "version": "4.2.10"
     },
     "flit-core": {
       "licence": "BSD-3-Clause",
-      "version": "4.1.0"
+      "version": "4.2.0"
     },
     "fqdn": {
       "licence": "MPL-2.0",
@@ -98,7 +98,7 @@
     },
     "iniconfig": {
       "licence": "MIT",
-      "version": "2.3.0"
+      "version": "2.3.1"
     },
     "isoduration": {
       "licence": "ISC",
@@ -110,7 +110,7 @@
     },
     "jsonpointer": {
       "licence": "BSD-3-Clause",
-      "version": "3.1.1"
+      "version": "3.10"
     },
     "jsonschema": {
       "licence": "MIT",
@@ -142,7 +142,7 @@
     },
     "markupsafe": {
       "licence": "BSD-3-Clause",
-      "version": "3.0.3"
+      "version": "3.0.4"
     },
     "mdurl": {
       "licence": "MIT",
@@ -150,19 +150,19 @@
     },
     "msgpack": {
       "licence": "Apache-2.0",
-      "version": "1.2.3"
+      "version": "1.2.4"
     },
     "mypy": {
       "licence": "MIT AND Apache-2.0 AND PSF-2.0 AND BSD-2-Clause",
-      "version": "2.4.0"
+      "version": "2.4.1"
     },
     "mypy-extensions": {
       "licence": "MIT",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     "nodeenv": {
       "licence": "BSD-3-Clause",
-      "version": "1.11.0"
+      "version": "1.12.0"
     },
     "packageurl-python": {
       "licence": "MIT",
@@ -178,7 +178,7 @@
     },
     "pip": {
       "licence": "MIT",
-      "version": "26.2.1"
+      "version": "26.3"
     },
     "pip-api": {
       "licence": "Apache-2.0",
@@ -194,19 +194,19 @@
     },
     "platformdirs": {
       "licence": "MIT",
-      "version": "4.12.2"
+      "version": "4.14.5"
     },
     "pluggy": {
       "licence": "MIT",
-      "version": "1.6.0"
+      "version": "1.7.0"
     },
     "pre-commit": {
       "licence": "MIT",
-      "version": "4.6.2"
+      "version": "4.7.0"
     },
     "py-serializable": {
       "licence": "Apache-2.0",
-      "version": "2.1.0"
+      "version": "2.2.0"
     },
     "pygments": {
       "licence": "BSD-2-Clause",
@@ -218,7 +218,7 @@
     },
     "pytest": {
       "licence": "MIT",
-      "version": "9.1.1"
+      "version": "9.2.0"
     },
     "pytest-cov": {
       "licence": "MIT",
@@ -226,7 +226,7 @@
     },
     "python-dateutil": {
       "licence": "Apache-2.0 AND BSD-3-Clause",
-      "version": "2.9.0.post0"
+      "version": "4.0.0"
     },
     "python-debian": {
       "licence": "GPL-2.0-or-later",
@@ -234,7 +234,7 @@
     },
     "python-discovery": {
       "licence": "MIT",
-      "version": "1.6.1"
+      "version": "1.9.5"
     },
     "python-magic": {
       "licence": "MIT",
@@ -254,7 +254,7 @@
     },
     "reuse": {
       "licence": "Apache-2.0 AND CC0-1.0 AND CC-BY-SA-4.0 AND GPL-3.0-or-later",
-      "version": "6.2.0"
+      "version": "6.3.0"
     },
     "rfc3339-validator": {
       "licence": "MIT",
@@ -274,11 +274,11 @@
     },
     "rpds-py": {
       "licence": "MIT",
-      "version": "2026.6.3"
+      "version": "2026.9.1"
     },
     "ruff": {
       "licence": "MIT",
-      "version": "0.16.10"
+      "version": "0.17.4"
     },
     "six": {
       "licence": "MIT",
@@ -290,7 +290,7 @@
     },
     "tomli": {
       "licence": "MIT",
-      "version": "2.4.1"
+      "version": "2.5.0"
     },
     "tomli-w": {
       "licence": "MIT",
@@ -298,7 +298,7 @@
     },
     "tomlkit": {
       "licence": "MIT",
-      "version": "0.15.1"
+      "version": "0.15.2"
     },
     "types-defusedxml": {
       "licence": "Apache-2.0",
@@ -306,11 +306,11 @@
     },
     "types-jsonschema": {
       "licence": "Apache-2.0",
-      "version": "4.26.0.20260518"
+      "version": "4.26.0.20261006"
     },
     "types-pyyaml": {
       "licence": "Apache-2.0",
-      "version": "6.0.12.20260906"
+      "version": "6.0.12.20261103"
     },
     "typing-extensions": {
       "licence": "PSF-2.0",
@@ -318,11 +318,11 @@
     },
     "typos": {
       "licence": "Apache-2.0 OR MIT",
-      "version": "1.50.3"
+      "version": "1.52.0"
     },
     "tzdata": {
       "licence": "Apache-2.0",
-      "version": "2026.4"
+      "version": "2026.6"
     },
     "uri-template": {
       "licence": "MIT",
@@ -334,7 +334,7 @@
     },
     "virtualenv": {
       "licence": "MIT",
-      "version": "21.15.1"
+      "version": "21.15.6"
     },
     "webcolors": {
       "licence": "BSD-3-Clause",
@@ -342,7 +342,7 @@
     },
     "zizmor": {
       "licence": "MIT",
-      "version": "1.30.1"
+      "version": "1.32.0"
     }
   },
   "schema": "loop-timing-witness.dependency-licences.v1",

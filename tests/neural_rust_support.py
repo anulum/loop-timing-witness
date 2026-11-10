@@ -255,46 +255,7 @@ def assert_same_outcome(python: dict[str, Any], rust: dict[str, Any]) -> None:
         assert rust == python
         return
     native, original = _observations(rust["report"]), _observations(python["report"])
-    assert native == original, [
-        *_differences(native, original),
-        *_observed_paths(rust["report"], python["report"]),
-    ]
-
-
-def _observed_paths(native: dict[str, Any], original: dict[str, Any]) -> list[str]:
-    """Name the files and modules only one language's checker run observed.
-
-    Each run's temporary root is written ``<root>``, so that files inside it compare.
-
-    Parameters
-    ----------
-    native, original
-        Rust and Python reports.
-
-    Returns
-    -------
-    list[str]
-        ``operation: only in rust|python: path`` lines.
-    """
-    lines = []
-    for operation in ("generate", "check"):
-        sides = []
-        for report in (native, original):
-            invocation = report["source_binding"]["checker_invocations"][operation]
-            observation = invocation.get("worker_observation") or {}
-            sides.append(
-                {
-                    re.sub(r"^.*/neural-checker-[^/]*/", "<root>/", item["path"])
-                    for item in observation.get("files", [])
-                }
-                | {
-                    "module " + re.sub(r"^.*/neural-checker-[^/]*/", "<root>/", item["path"])
-                    for item in observation.get("modules", [])
-                }
-            )
-        lines += [f"{operation}: only in rust: {path}" for path in sorted(sides[0] - sides[1])]
-        lines += [f"{operation}: only in python: {path}" for path in sorted(sides[1] - sides[0])]
-    return lines[:20]
+    assert native == original, _differences(native, original)
 
 
 def _differences(native: object, original: object, path: str = "") -> list[str]:

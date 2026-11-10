@@ -379,6 +379,8 @@ Pooled statistics use only `valid` repeats:
   No pair spans two repeats. Expected pairs sum `analysed_cycles - 1` over the repeats, with the
   same `available`, `partial` and `unavailable` status rule as a single run;
 - deadline observations and misses are summed and the pooled miss rate is their ratio;
+- the pooled duration sums the repeats' durations. A campaign whose valid repeats together
+  span more than the 64-bit tick range is refused;
 - fault detection, time to safe state, tracking error and energy stay in the per-repeat
   entries and the run reports.
 

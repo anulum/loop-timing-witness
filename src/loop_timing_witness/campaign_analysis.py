@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 CAMPAIGN_REPORT_SCHEMA: Final = "loop-timing-witness.repeat-campaign-report.v1"
 SPREAD_STATISTICS: Final = ("median_ticks", "p95_ticks", "p99_ticks", "p999_ticks", "maximum_ticks")
+_MAX_POOLED_TICKS: Final = 2**64 - 1
+"""Longest pooled duration a report holds: the range of one 64-bit tick counter."""
 
 _Analysed = tuple[dict[str, Any], list[dict[str, int | str]]]
 
@@ -111,6 +113,13 @@ def _pooled(valid: list[_Analysed], names: list[str]) -> dict[str, Any]:
     dict[str, Any]
         Type-7 distributions over the concatenated samples, summed duration,
         cycle and pair accounting, and summed deadline counts.
+
+    Raises
+    ------
+    ValueError
+        If the summed duration exceeds the 64-bit tick range. Summed cycle
+        and pair counts cannot: each valid repeat has one anchor event in each
+        of at most 2**32 analysed cycles.
     """
     latencies: dict[str, list[int]] = {name: [] for name in names}
     changes: dict[str, list[int]] = {name: [] for name in names}
@@ -122,6 +131,9 @@ def _pooled(valid: list[_Analysed], names: list[str]) -> dict[str, Any]:
             changes[str(pair["interval"])].append(int(pair["absolute_delta_ticks"]))
         expected_pairs += max(0, report["events"]["cycle_count"] - 1)
     duration = sum(report["events"]["duration_ticks"] for report, _ in valid)
+    if duration > _MAX_POOLED_TICKS:
+        message = "pooled duration exceeds the 64-bit tick range"
+        raise ValueError(message)
     jitter: dict[str, Any] = {}
     for name in names:
         count = len(changes[name])
@@ -268,6 +280,11 @@ def build_campaign_report(inputs: CampaignInputs) -> dict[str, Any]:
         per-statistic spread between valid repeats, run-plan conformance and
         the evidence limits. Invalid and refused repeats stay listed and never
         contribute samples.
+
+    Raises
+    ------
+    ValueError
+        If the valid repeats together span more than the 64-bit tick range.
     """
     entries: list[dict[str, Any]] = []
     valid: list[_Analysed] = []

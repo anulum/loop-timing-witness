@@ -61,6 +61,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A repeat campaign whose valid repeats together span more than the 64-bit tick range is
+  refused (`pooled duration exceeds the 64-bit tick range`). Every integer a report holds
+  then fits 64 bits, as every integer a run-bound document may hold does.
 - A repeat campaign that breaks its schema is refused as `repeat campaign <location>: does not
   satisfy the repeat campaign schema`, naming the first failing location in path order as a run
   manifest refusal does. The schema validator's own wording is no longer part of the text.

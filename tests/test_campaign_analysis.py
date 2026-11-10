@@ -128,6 +128,39 @@ def _without_cycle_one_sample_read(events: bytes) -> bytes:
     )
 
 
+def _last_record_at(ticks: int) -> Callable[[bytes], bytes]:
+    """Return an edit that moves the last witness record to one counter value.
+
+    Parameters
+    ----------
+    ticks
+        New timebase value of the last record, at least its current value.
+
+    Returns
+    -------
+    Callable[[bytes], bytes]
+        Transformation of the complete event file; order is kept.
+    """
+
+    def edit(events: bytes) -> bytes:
+        """Rewrite the counter of the last record.
+
+        Parameters
+        ----------
+        events
+            Complete witness records.
+
+        Returns
+        -------
+        bytes
+            Records with only the last timebase value changed.
+        """
+        last = RECORD.unpack_from(events, len(events) - RECORD.size)
+        return events[: -RECORD.size] + RECORD.pack(*last[:4], ticks)
+
+    return edit
+
+
 def _run_reports(path: Path, document: dict[str, Any], indexes: list[int]) -> list[Any]:
     """Analyse selected repeats directly through the public run interface.
 
@@ -358,6 +391,40 @@ def test_refusal_with_an_unpaired_surrogate_is_reported_escaped(
     write_campaign_report(tmp_path / "report", report)
     written = json.loads((tmp_path / "report" / "campaign_report.json").read_bytes())
     assert written["repeats"] == report["repeats"]
+
+
+@pytest.mark.parametrize("excess", [0, 1])
+def test_pooled_duration_holds_the_64_bit_tick_range(
+    make_repeat_campaign: MakeRepeatCampaign, excess: int
+) -> None:
+    """Pool a duration up to the counter's range and refuse one tick more.
+
+    The first COMPUTE repeat's last record moves so that both repeats together
+    span exactly 2**64 - 1 ticks, or one tick more. Each repeat stays valid:
+    its anchors and power windows are unchanged.
+
+    Parameters
+    ----------
+    make_repeat_campaign
+        Campaign of copied real COMPUTE captures.
+    excess
+        Ticks beyond the 64-bit range.
+    """
+    path, document = make_repeat_campaign(repeats=2, profile="COMPUTE")
+    first, second = _run_reports(path, document, [1, 2])
+    span = 2**64 - 1 - second[0]["events"]["duration_ticks"] + excess
+    events = (path.parent / "repeat-1" / "events.bin").read_bytes()
+    start = RECORD.unpack_from(events, 0)[4]
+    assert first[0]["events"]["duration_ticks"] < span
+    _rewrite_events(path, document, 1, _last_record_at(start + span))
+    campaign = load_campaign(path)
+    if excess:
+        with pytest.raises(ValueError, match=r"^pooled duration exceeds the 64-bit tick range$"):
+            build_campaign_report(campaign)
+        return
+    report = build_campaign_report(campaign)
+    assert [entry["status"] for entry in report["repeats"]] == ["valid", "valid"]
+    assert report["pooled"]["duration_ticks"] == 2**64 - 1
 
 
 def test_missing_reboot_and_repeat_count_are_nonconformities(

@@ -100,8 +100,8 @@ Loop Timing Witness — changelog
   pins, each source reference (its digest, then its path and length), repeated source
   paths, then the root and channel references. A digest that only the schema's line
   anchor admits is refused as `Neural file reference requires an exact lowercase
-  SHA-256.`, and a path holding NUL as in Python. The former native-only texts are
-  gone.
+  SHA-256.`; a path holding NUL, a directory and a descriptor that cannot be inspected
+  or read are refused with Python's texts. The former native-only texts are gone.
 - Native metadata and host load receipts are read with the bounded run JSON rules, and
   a receipt that breaks its schema is refused with its first failing location
   (`native metadata <location>: does not satisfy the native run schema`,

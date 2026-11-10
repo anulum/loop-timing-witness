@@ -16,7 +16,6 @@ use corpus::changed;
 use serde_json::{Value, json};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
 use std::process::Command;
 use support::Declaration;
 use witness_analysis::{load_neural_manifest, load_neural_run};
@@ -102,12 +101,39 @@ fn every_corpus_declaration_has_the_python_outcome() {
 }
 
 #[test]
-fn a_path_holding_nul_is_refused_as_python_refuses_it() {
-    let path = Path::new(OsStr::from_bytes(b"run\0.json"));
-    assert_eq!(
-        load_neural_manifest(path).err().as_deref(),
-        Some("Neural manifest path contains an invalid NUL character.")
-    );
+fn manifest_paths_that_are_not_regular_files_are_refused_as_python_refuses_them() {
+    let corpus: Value = serde_json::from_str(REFUSALS).expect("corpus");
+    let texts = corpus["refusals"].as_array().expect("refusal texts");
+    let fixture = Declaration::recorded();
+    let base = corpus["base_text"].as_str().expect("base text");
+    for pair in corpus["kinds"].as_array().expect("file kinds") {
+        let kind = pair[0].as_str().expect("kind");
+        let root = fixture.root().join(format!("kind-{kind}"));
+        std::fs::create_dir(&root).expect("kind directory");
+        let mut path = root.join("run.json");
+        match kind {
+            "absent" => {}
+            "directory" => std::fs::create_dir(&path).expect("directory"),
+            "symlink" => {
+                std::fs::write(root.join("target.json"), base).expect("symlink target");
+                std::os::unix::fs::symlink(root.join("target.json"), &path).expect("symlink");
+            }
+            "fifo" => assert!(
+                Command::new("mkfifo")
+                    .arg(&path)
+                    .status()
+                    .expect("FIFO")
+                    .success()
+            ),
+            _ => path = root.join(OsStr::from_bytes(b"run\0.json")),
+        }
+        let index = usize::try_from(pair[1].as_u64().expect("refusal index")).expect("index");
+        assert_eq!(
+            load_neural_manifest(&path).err().as_deref(),
+            texts[index].as_str(),
+            "{kind}"
+        );
+    }
 }
 
 #[test]

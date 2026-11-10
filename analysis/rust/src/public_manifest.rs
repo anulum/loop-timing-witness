@@ -34,6 +34,8 @@ const SOURCE_LIMIT: u64 = 1048576;
 const PATH_LIMIT: usize = 4096;
 const LINUX_O_NOFOLLOW: i32 = 0o400000;
 const LINUX_O_NONBLOCK: i32 = 0o4000;
+/// The refusal of a manifest descriptor that cannot be opened, inspected or read.
+const UNREADABLE: &str = "Cannot read neural manifest as a regular file without symlinks.";
 /// The refusal of bytes that are not one bounded strict JSON object.
 const NOT_JSON: &str = "Neural manifest must contain a strict UTF-8 JSON object.";
 /// The refusal of a document outside the closed schema or its exact integers.
@@ -82,6 +84,10 @@ fn reference(reference: &FileRef, limit: u64) -> Result<&str, String> {
 }
 
 /// Read a finite regular Linux manifest descriptor without following the final symlink.
+///
+/// As in Python, a descriptor that cannot be opened, inspected or read, or that
+/// names a directory (which Python's stream refuses), is unreadable; any other
+/// kind that is not a regular file is refused as such.
 fn root_bytes(path: &Path) -> Result<Vec<u8>, String> {
     if path.as_os_str().as_bytes().contains(&0) {
         return Err("Neural manifest path contains an invalid NUL character.".into());
@@ -90,20 +96,21 @@ fn root_bytes(path: &Path) -> Result<Vec<u8>, String> {
         .read(true)
         .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_NONBLOCK)
         .open(path)
-        .map_err(|_| {
-            "Cannot read neural manifest as a regular file without symlinks.".to_owned()
-        })?;
-    if !file
+        .map_err(|_| UNREADABLE.to_owned())?;
+    let kind = file
         .metadata()
-        .map_err(|_| "Cannot inspect neural manifest descriptor.".to_owned())?
-        .is_file()
-    {
+        .map_err(|_| UNREADABLE.to_owned())?
+        .file_type();
+    if kind.is_dir() {
+        return Err(UNREADABLE.into());
+    }
+    if !kind.is_file() {
         return Err("Neural manifest must be a regular file.".into());
     }
     let mut raw = Vec::new();
     file.take(JSON_LIMIT as u64 + 1)
         .read_to_end(&mut raw)
-        .map_err(|_| "Cannot read neural manifest bytes.".to_owned())?;
+        .map_err(|_| UNREADABLE.to_owned())?;
     if raw.len() > JSON_LIMIT {
         return Err("Neural manifest exceeds its byte allocation.".into());
     }

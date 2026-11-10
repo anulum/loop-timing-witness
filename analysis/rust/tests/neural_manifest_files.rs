@@ -7,6 +7,9 @@
 // Loop Timing Witness — public manifest descriptor input contracts
 
 //! Verify actual manifest descriptors, kernel failures and a bounded no-writer FIFO.
+//!
+//! The refusal texts are Python's: a descriptor that cannot be opened,
+//! inspected or read, or that names a directory, is unreadable there.
 
 mod support;
 
@@ -15,8 +18,11 @@ use std::process::Command;
 use support::Declaration;
 use witness_analysis::load_neural_manifest;
 
+/// Python's refusal of a manifest descriptor it cannot open, inspect or read.
+const UNREADABLE: &str = "Cannot read neural manifest as a regular file without symlinks.";
+
 #[test]
-fn manifest_file_identity_distinguishes_missing_symlink_directory_and_read_failure() {
+fn missing_symlinked_directory_and_unreadable_manifests_are_refused() {
     let fixture = Declaration::recorded();
     let path = fixture.write("manifest.json", Declaration::raw());
     assert_eq!(
@@ -24,33 +30,24 @@ fn manifest_file_identity_distinguishes_missing_symlink_directory_and_read_failu
         fixture.value()
     );
     let missing = fixture.root().join("absent.json");
-    assert_eq!(
-        load_neural_manifest(&missing),
-        Err("Cannot read neural manifest as a regular file without symlinks.".into())
-    );
+    assert_eq!(load_neural_manifest(&missing), Err(UNREADABLE.into()));
     let alias = fixture.root().join("alias.json");
     std::os::unix::fs::symlink("manifest.json", &alias).expect("actual manifest symlink");
-    assert_eq!(
-        load_neural_manifest(&alias),
-        Err("Cannot read neural manifest as a regular file without symlinks.".into())
-    );
-    assert_eq!(
-        load_neural_manifest(fixture.root()),
-        Err("Neural manifest must be a regular file.".into())
-    );
+    assert_eq!(load_neural_manifest(&alias), Err(UNREADABLE.into()));
+    assert_eq!(load_neural_manifest(fixture.root()), Err(UNREADABLE.into()));
     assert_eq!(
         load_neural_manifest(Path::new("/proc/self/mem")),
-        Err("Cannot read neural manifest bytes.".into())
+        Err(UNREADABLE.into())
     );
 }
 
 #[test]
-fn manifest_metadata_failure_is_an_authored_descriptor_refusal() {
+fn manifest_metadata_failure_is_refused_as_unreadable() {
     const INPUT_FLAG: &str = "WITNESS_MANIFEST_METADATA_INPUT";
     if let Some(path) = std::env::var_os(INPUT_FLAG) {
         assert_eq!(
             load_neural_manifest(Path::new(&path)),
-            Err("Cannot inspect neural manifest descriptor.".into())
+            Err(UNREADABLE.into())
         );
         return;
     }
@@ -72,7 +69,7 @@ fn manifest_metadata_failure_is_an_authored_descriptor_refusal() {
         .arg(std::env::current_exe().expect("current public manifest test executable"))
         .args([
             "--exact",
-            "manifest_metadata_failure_is_an_authored_descriptor_refusal",
+            "manifest_metadata_failure_is_refused_as_unreadable",
             "--test-threads=1",
         ])
         .env(INPUT_FLAG, &input)

@@ -24,6 +24,7 @@ the same refusal from ``load_neural_manifest``.
 from __future__ import annotations
 
 import json
+import os
 from typing import TYPE_CHECKING, Any, Final
 
 from test_control_schema_corpus import apply
@@ -71,7 +72,11 @@ NOT_EXACT: Final = "Neural run identity and source pins require exact grammar."
 NOT_DIGEST: Final = "Neural file reference requires an exact lowercase SHA-256."
 NOT_PORTABLE: Final = "Neural file reference requires a bounded portable within-run path."
 REPEATED: Final = "Neural source references contain a duplicate path."
+KINDS: Final = ("absent", "directory", "symlink", "fifo", "nul")
 OVERSIZED: Final = "Neural manifest exceeds its byte allocation."
+UNREADABLE: Final = "Cannot read neural manifest as a regular file without symlinks."
+IRREGULAR: Final = "Neural manifest must be a regular file."
+NUL: Final = "Neural manifest path contains an invalid NUL character."
 
 
 def _base() -> dict[str, Any]:
@@ -402,6 +407,43 @@ def _documents(base: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _kind(kind: str, directory: Path, base_text: str) -> str | None:
+    """Return Python's refusal of a manifest path that is not a regular file.
+
+    Parameters
+    ----------
+    kind
+        ``absent``, ``directory``, a ``symlink`` to the admitted base, a
+        ``fifo``, or a path holding ``nul``.
+    directory
+        Directory for the written paths.
+    base_text
+        Compact text of the base.
+
+    Returns
+    -------
+    str | None
+        Refusal text of ``load_neural_manifest``.
+    """
+    root = directory / f"kind-{kind}"
+    root.mkdir()
+    path = root / "run.json"
+    if kind == "directory":
+        path.mkdir()
+    elif kind == "symlink":
+        (root / "target.json").write_text(base_text, encoding="utf-8")
+        path.symlink_to(root / "target.json")
+    elif kind == "fifo":
+        os.mkfifo(path)
+    elif kind == "nul":
+        path = root / "run\x00.json"
+    try:
+        load_neural_manifest(path)
+    except NeuralCaptureRefusalError as refusal:
+        return str(refusal)
+    return None
+
+
 def corpus(directory: Path) -> dict[str, Any]:
     """Build the complete refusal corpus.
 
@@ -413,9 +455,9 @@ def corpus(directory: Path) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        The base and its compact text, the refusal texts, the node groups and
-        the crafted documents; an outcome is an index into the refusal texts,
-        or ``None`` for an admitted declaration.
+        The base and its compact text, the refusal texts, the node groups, the
+        crafted documents and the file kinds; an outcome is an index into the
+        refusal texts, or ``None`` for an admitted declaration.
     """
     base = _base()
     base_text = _text(base)
@@ -427,8 +469,10 @@ def corpus(directory: Path) -> dict[str, Any]:
         refusal, value = _load(_render(base_text, document), directory)
         assert value in (None, base), document["name"]
         document["refusal"] = refusal
+    kinds: list[list[Any]] = [[kind, _kind(kind, directory, base_text)] for kind in KINDS]
     outcomes = {triple[2] for group in groups for triple in group["changes"]}
     outcomes |= {document["refusal"] for document in documents}
+    outcomes |= {refusal for _, refusal in kinds}
     refusals = sorted(outcomes - {None})
     for group in groups:
         for triple in group["changes"]:
@@ -436,6 +480,8 @@ def corpus(directory: Path) -> dict[str, Any]:
     for document in documents:
         refusal = document["refusal"]
         document["refusal"] = None if refusal is None else refusals.index(refusal)
+    for pair in kinds:
+        pair[1] = refusals.index(pair[1])
     return {
         "schema": "loop-timing-witness.neural-manifest-refusals.v1",
         "base": base,
@@ -443,6 +489,7 @@ def corpus(directory: Path) -> dict[str, Any]:
         "refusals": refusals,
         "groups": groups,
         "documents": documents,
+        "kinds": kinds,
     }
 
 
@@ -474,6 +521,13 @@ def test_corpus_reaches_every_declaration_refusal() -> None:
     every = {NOT_JSON, NOT_CLOSED, NOT_EXACT, NOT_DIGEST, NOT_PORTABLE, REPEATED, None}
     assert every - {NOT_JSON} <= set(changed)
     assert every | {OVERSIZED} == set(crafted.values())
+    assert {kind: texts[index + 1] for kind, index in data["kinds"]} == {
+        "absent": UNREADABLE,
+        "directory": UNREADABLE,
+        "symlink": UNREADABLE,
+        "fifo": IRREGULAR,
+        "nul": NUL,
+    }
     assert {
         name: crafted[name]
         for name in (

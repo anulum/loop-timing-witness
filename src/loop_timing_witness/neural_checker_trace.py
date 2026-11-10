@@ -29,7 +29,8 @@ _PIECE = re.compile(r"\\x([0-9a-fA-F]{2})|([^\\])")
 _DYNAMIC_READS = frozenset({"/sys/devices/system/cpu/possible", "/dev/urandom"})
 # A process's own kernel files, such as the memory map CPython reads at start-up and
 # by number when ctypes loads, or the status libffi reads, are never runtime files.
-_PROCESS_FILE = re.compile(r"/proc/(?:self|thread-self|[0-9]+)/.+", re.ASCII)
+# The file part may hold any character, a line feed included, as the Rust reader's does.
+_PROCESS_FILE = re.compile(r"/proc/(?:self|thread-self|[0-9]+)/.+", re.ASCII | re.DOTALL)
 
 
 def _quoted_path(encoded: str) -> str:

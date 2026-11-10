@@ -122,6 +122,14 @@
       ]
     },
     {
+      "name": "process file name holding a line feed",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc/self/\\x0a\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"/proc/1/\\x0astatus\", O_RDONLY) = 3"
+      ],
+      "opened": []
+    },
+    {
       "name": "process map without a number",
       "lines": [
         "1 openat(AT_FDCWD, \"/proc//maps\", O_RDONLY) = 3"

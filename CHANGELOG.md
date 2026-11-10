@@ -131,7 +131,8 @@ Loop Timing Witness — changelog
   `/proc/self/…`, `/proc/thread-self/…` and `/proc/<number>/…`, as they skipped
   `/proc/self/maps`. CPython 3.15 reads its memory map by number when ctypes loads, and
   some builds read the process status through libffi; a host checker run on them was
-  refused as unavailable or as differing from its reviewed installation.
+  refused as unavailable or as differing from its reviewed installation. A line feed
+  in the file part no longer makes the Python reader refuse a name the Rust reader skips.
 - A measurement domain with a Gray-pointer buffer depth written as an integral
   float, and a COMPUTE run whose domain gives COMPUTE a sample rate, raised an
   internal error; they are now checked and refused like other declarations. A

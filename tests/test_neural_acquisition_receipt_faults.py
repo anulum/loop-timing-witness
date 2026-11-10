@@ -14,6 +14,7 @@ dimension; Python and Rust must give the same refusal or the same report.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -1211,3 +1212,37 @@ def test_integer_zero_spellings_are_one_value_in_both(tmp_path: Path) -> None:
     finally:
         make_writable(tmp_path)
     assert python["report"]["verification"]["whole"] is True
+
+
+def test_integer_zero_text_inside_a_string_is_kept_in_both(tmp_path: Path) -> None:
+    """Keep ``-0`` tokens that stand inside a JSON string, alike in both languages.
+
+    The tool receipt's scope text is reported unchanged. A scope ending in
+    ``[-0, -0]`` holds the token between the characters that delimit a JSON
+    integer, so only the string state keeps it from being read as a number.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned acquisition directory.
+    """
+
+    def scope(receipt: dict[str, Any]) -> None:
+        """Append the tokens to the scope text.
+
+        Parameters
+        ----------
+        receipt
+            Decoded tool receipt.
+        """
+        receipt["scope"] += " [-0, -0]"
+
+    change = edit_json("tool-receipt.json", scope)
+    acquisition = build_neural_acquisition(tmp_path / "run", change=change)
+    try:
+        python: dict[str, Any] = python_outcome(acquisition)
+        assert_same_outcome(python, rust_outcome(acquisition, tmp_path / "rust"))
+    finally:
+        make_writable(tmp_path)
+    assert python["report"]["verification"]["whole"] is True
+    assert "[-0, -0]" in json.dumps(python["report"])

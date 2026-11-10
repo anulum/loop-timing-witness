@@ -6,7 +6,7 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Loop Timing Witness — local gate entry points
 
-PYTHON_BOOTSTRAP ?= python3.13
+PYTHON_BOOTSTRAP ?= python3.15
 VENV := .venv/bin
 PREFLIGHT := $(VENV)/python tools/preflight.py
 
@@ -36,7 +36,8 @@ controller-fuzz: controller-fuzz-build
 
 venv:
 	$(PYTHON_BOOTSTRAP) -m venv .venv
-	$(VENV)/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+	$(VENV)/python -m pip install --require-hashes --no-deps -r requirements-build.txt
+	PYYAML_FORCE_LIBYAML=0 $(VENV)/python -m pip install --require-hashes --no-deps --no-build-isolation -r requirements-dev.txt
 	$(VENV)/python -m pip install --no-index --no-build-isolation --no-deps -e .
 
 python-wheelhouse:

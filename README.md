@@ -209,7 +209,7 @@ Its [versioned API reference](https://docs.rs/witness-controller/0.1.0/witness_c
 covers the PID state, coefficient validation and LQR step. Native execution and
 board adapters remain source tools; the AMP kernel is not a registry crate.
 
-From a source checkout with Python 3.13.15:
+From a source checkout with Python 3.15.2:
 
 ```bash
 make venv
@@ -258,7 +258,7 @@ if any maintained language reference is missing.
 ## Validation
 
 Every gate and its exact scope are listed in [`VALIDATION.md`](https://github.com/anulum/loop-timing-witness/blob/main/VALIDATION.md). From a clean
-checkout with Python 3.13:
+checkout with Python 3.15:
 
 ```bash
 make venv        # .venv from the hashed development lock

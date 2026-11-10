@@ -247,7 +247,7 @@ def _brand_asset_finding(root: Path, relative: str) -> str | None:
     try:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         attribution = path.with_name(path.name + ".license").read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return f"{relative}: original image and UTF-8 attribution sidecar are required"
     if digest != BRAND_ASSET_DIGESTS[relative]:
         return f"{relative}: bytes differ from the registered original brand image"
@@ -291,7 +291,7 @@ def _json_attribution_finding(root: Path, relative: str) -> str | None:
         ):
             return f"{relative}: JSON and attribution sidecar must be regular original files"
         lines = path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
+    except OSError, UnicodeError:
         return f"{relative}: attribution sidecar is unavailable as UTF-8 text"
     expected = [
         "SPDX-FileCopyrightText: 1996-2026 Miroslav Šotek <protoscience@anulum.li> (concepts)",

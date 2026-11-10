@@ -151,7 +151,7 @@ def audit(root: Path) -> list[str]:
             if read_package_file(root / copied) != read_package_file(root / owner):
                 findings.append(f"{copied}: bytes differ from the canonical owner {owner}")
         findings.extend(_licence_findings(root / PACKAGE_ROOT))
-    except (OSError, UnicodeError, ValueError, KeyError, TypeError):
+    except OSError, UnicodeError, ValueError, KeyError, TypeError:
         return ["analysis package, source correspondence or licence record is missing or invalid"]
     return findings
 

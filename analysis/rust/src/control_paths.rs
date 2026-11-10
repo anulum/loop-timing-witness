@@ -9,7 +9,7 @@
 //! Split, print and resolve paths as Python's `pathlib` and `posixpath` do.
 //!
 //! A pure path keeps a root of `""`, `"/"` or `"//"` and drops empty and `.`
-//! parts. Resolution follows CPython 3.13's non-strict `os.path.realpath`,
+//! parts. Resolution follows CPython 3.15's non-strict `os.path.realpath`,
 //! which `Path.resolve()` uses.
 
 use crate::control_text::{os_error_without_path, python_display};

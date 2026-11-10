@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         predicate = verify_release(args.assets, args.reconstructed, args.workflow_revision)
         args.predicate.write_text(json.dumps(predicate, indent=2) + "\n", encoding="utf-8")
-    except (ValueError, OSError):
+    except ValueError, OSError:
         print("Source release verification failed; no signature is authorised.", file=sys.stderr)
         return 1
     print("Verified immutable source assets and reconstructed Git archive.")

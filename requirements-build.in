@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — build backend of the source-built development package
+#
+# Input to the hashed lock `requirements-build.txt`. PyYAML publishes no wheel
+# for CPython 3.15, so it is built from its hashed source distribution without
+# build isolation: this backend is installed first, and PYYAML_FORCE_LIBYAML=0
+# disables the optional libyaml extension, so every host builds the same
+# pure-Python package.
+
+setuptools==84.2.1

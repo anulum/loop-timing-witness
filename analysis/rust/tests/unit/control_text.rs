@@ -6,7 +6,7 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — Python text, crate-internal controls
 
-//! Compare string and error text with CPython 3.13 `repr` and `str(OSError)`.
+//! Compare string and error text with CPython 3.15 `repr` and `str(OSError)`.
 
 use super::{os_error, printable, python_display, repr, units};
 use std::ffi::OsStr;
@@ -18,7 +18,7 @@ fn python_repr(text: &str) -> String {
     repr(&units(text.as_bytes()))
 }
 
-/// Strings with their CPython 3.13 `repr`.
+/// Strings with their CPython 3.15 `repr`.
 const PYTHON_REPR: &[(&str, &str)] = &[
     ("plain", "'plain'"),
     ("it's", "\"it's\""),

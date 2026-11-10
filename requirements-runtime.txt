@@ -8,7 +8,7 @@
 #
 # Generated from pyproject.toml; do not edit dependency entries by hand.
 # Regenerate with uv 0.13.7:
-#   uv pip compile pyproject.toml --python-version 3.13 \
+#   uv pip compile pyproject.toml --python-version 3.15 \
 #     --python-platform x86_64-manylinux_2_28 --generate-hashes --no-header \
 #     --exclude-newer 2026-11-10T06:00:00Z
 #

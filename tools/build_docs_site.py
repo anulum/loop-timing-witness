@@ -106,7 +106,7 @@ class RepositoryTextDoc(pydoc.TextDoc):
             return reference
         try:
             signature = inspect.signature(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return reference
         for parameter in signature.parameters.values():
             default: object = parameter.default
@@ -463,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     except DocumentationRefusedError as error:
         print(f"documentation-site: FAIL: {error}", file=sys.stderr)
         return 1
-    except (OSError, ValueError, subprocess.CalledProcessError):
+    except OSError, ValueError, subprocess.CalledProcessError:
         print("documentation-site: FAIL: could not read inputs or create output", file=sys.stderr)
         return 1
     print(f"documentation-site: PASS: {args.output}")

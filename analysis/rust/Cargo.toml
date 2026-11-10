@@ -10,7 +10,7 @@
 name = "witness-analysis"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.99.0"
+rust-version = "1.99.1"
 publish = ["crates-io"]
 license = "AGPL-3.0-or-later"
 description = "Source-bound neural acquisition verification and control-run loading for Loop Timing Witness"

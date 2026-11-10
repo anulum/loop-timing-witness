@@ -12,9 +12,9 @@ import shlex
 import shutil
 import subprocess
 import threading
-from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from amp_build_toolchain import rust_program_query
@@ -22,6 +22,9 @@ from amp_rust_build import prepare_rust_sources
 from amp_rust_toolchain import TARGET, rust_toolchain
 
 from manifest_io import sha256_of_file
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 

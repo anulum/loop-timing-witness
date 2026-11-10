@@ -115,7 +115,7 @@ def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) ->
         timeout=30,
     )
     assert version.returncode == 0, version.stdout + version.stderr
-    assert version.stdout.startswith("rustc 1.99.0 ")
+    assert version.stdout.startswith("rustc 1.99.1 ")
     for relative in ["analysis/rust", "controllers/rust", "runtime/bare_metal/rust_kernel"]:
         result = subprocess.run(
             [

@@ -694,13 +694,13 @@ def validate(
         return [str(exc)], "not_checked"
     try:
         structural = schema_findings(manifest, schema)
-    except (SchemaError, Unresolvable):
+    except SchemaError, Unresolvable:
         return ["input: invalid JSON Schema"], "not_checked"
     if structural:
         return structural, "not_checked"
     try:
         findings = semantic_findings(manifest)
-    except (ArithmeticError, AttributeError, KeyError, TypeError):
+    except ArithmeticError, AttributeError, KeyError, TypeError:
         return ["input: invalid measurement-domain semantic fields"], "not_checked"
     if registry_path is None:
         return findings, "not_checked"

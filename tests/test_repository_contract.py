@@ -253,7 +253,7 @@ def test_workflows_share_one_exact_toolchain_matching_the_local_pins() -> None:
     go_versions = {
         version for text in texts.values() for version in re.findall(r'go-version: "([^"]+)"', text)
     }
-    assert python_versions == {"3.13.15"}
+    assert python_versions == {"3.15.2"}
     assert go_versions == {"1.27.1"}
     installs = {
         install for text in texts.values() for install in re.findall(r"\bgo install (\S+)", text)
@@ -325,10 +325,10 @@ def test_publishable_text_uses_no_self_applied_quality_terms() -> None:
     assert offenders == {}
 
 
-def test_licence_record_lists_the_lock_file_and_json_is_reuse_annotated() -> None:
-    """The licence record points at the lock, and every JSON document is annotated in REUSE.toml."""
+def test_licence_record_lists_the_lock_files_and_json_is_reuse_annotated() -> None:
+    """The licence record names both locks; every JSON document is annotated in REUSE.toml."""
     record = json.loads(publishable_text("development-dependency-licences.json"))
-    assert record["lock_file"] == "requirements-dev.txt"
+    assert record["lock_files"] == ["requirements-build.txt", "requirements-dev.txt"]
     reuse = tomllib.loads(publishable_text("REUSE.toml"))
     patterns = [_reuse_pattern(item) for entry in reuse["annotations"] for item in entry["path"]]
     json_files = [name for name in candidate_files(REPOSITORY_ROOT) if name.endswith(".json")]

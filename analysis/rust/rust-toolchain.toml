@@ -7,6 +7,6 @@
 # Loop Timing Witness — reproducible Rust compiler and static checks
 
 [toolchain]
-channel = "1.99.0"
+channel = "1.99.1"
 profile = "minimal"
 components = ["rustfmt", "clippy"]

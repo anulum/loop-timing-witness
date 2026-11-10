@@ -17,7 +17,7 @@ verify complete simulated neural acquisitions. They implement the same
 analysis package. The command also analyses CONTROL and COMPUTE runs, as the
 Python command does, and publishes a byte-equal report directory.
 
-Build and install locally with Rust 1.99.0 or later:
+Build and install locally with Rust 1.99.1 or later:
 
 ```sh
 cargo install --locked --path analysis/rust

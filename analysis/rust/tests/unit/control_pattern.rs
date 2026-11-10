@@ -8,7 +8,7 @@
 
 //! Compare every schema pattern with the outcomes of Python's `re.search`.
 //!
-//! The expected outcomes were produced by CPython 3.13 `re.search` over the
+//! The expected outcomes were produced by CPython 3.15 `re.search` over the
 //! nine patterns of the committed schemas, two extra quantifier patterns and
 //! forty texts holding anchors, final newlines, lengths at the bounds and the
 //! whitespace characters on which Python and Unicode disagree.

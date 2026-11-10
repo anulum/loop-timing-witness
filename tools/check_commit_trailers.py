@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         message = args.message_file.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         print("commit-message: cannot read message file", file=sys.stderr)
         return 1
     findings = message_findings(message)

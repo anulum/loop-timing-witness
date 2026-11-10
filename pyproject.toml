@@ -17,7 +17,7 @@ build-backend = "flit_core.buildapi"
 name = "loop-timing-witness"
 version = "0.1.0"
 description = "Timing, tracking and power analysis for Loop Timing Witness"
-requires-python = ">=3.13"
+requires-python = ">=3.15"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 readme = "README.md"
@@ -26,7 +26,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering",
     "Typing :: Typed",
 ]
@@ -45,9 +45,13 @@ Changelog = "https://github.com/anulum/loop-timing-witness/blob/main/CHANGELOG.m
 Security = "https://github.com/anulum/loop-timing-witness/security/policy"
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py315"
 line-length = 100
 extend-exclude = ["docs/internal"]
+# The checker worker bodies are bound by digest in the reviewed runtime
+# descriptors and run under the checker's own interpreter, so they keep the
+# Python 3.13 syntax they were reviewed with.
+per-file-target-version = {"src/loop_timing_witness/neural_checker_worker.py" = "py313", "src/loop_timing_witness/neural_checker_isolation.py" = "py313", "analysis/rust/checker_worker/**/*.py" = "py313"}
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -154,7 +158,7 @@ docstring-code-format = true
 
 [tool.mypy]
 strict = true
-python_version = "3.13"
+python_version = "3.15"
 warn_unreachable = true
 extra_checks = true
 enable_error_code = [

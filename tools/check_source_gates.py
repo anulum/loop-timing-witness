@@ -89,7 +89,7 @@ LANGUAGE_CHECKS: Final = {
 }
 PYTHON_ROOTS: Final = ("src/loop_timing_witness", "tools", "tests")
 PYTHON_PATHS: Final = ("conftest.py", "controller_test_support.py")
-RUST_CHANNEL: Final = "1.99.0"
+RUST_CHANNEL: Final = "1.99.1"
 RUST_MANIFESTS: Final = (
     "analysis/rust/Cargo.toml",
     "controllers/rust/Cargo.toml",
@@ -319,7 +319,7 @@ def audit(root: Path) -> list[str]:
         files = candidate_files(root)
         findings = _python_findings(root, profiles["python"])
         findings.extend(_rust_findings(root))
-    except (OSError, UnicodeError, ValueError, RuntimeError, KeyError, TypeError):
+    except OSError, UnicodeError, ValueError, RuntimeError, KeyError, TypeError:
         return ["source catalogue, Git listing or language configuration is missing or invalid"]
     for language, profile in profiles.items():
         for relative in profile.paths:

@@ -437,7 +437,7 @@ def main() -> int:
     except ReferenceDerivationRefusedError as error:
         print(f"icicle-derivation: FAIL: {error}", file=sys.stderr)
         return 1
-    except (OSError, ValueError):
+    except OSError, ValueError:
         print("icicle-derivation: FAIL: could not read inputs or create output", file=sys.stderr)
         return 1
     return 0

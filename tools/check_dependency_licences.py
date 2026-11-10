@@ -9,13 +9,15 @@
 """Fail closed when the development lock and its reviewed licence record disagree.
 
 ``development-dependency-licences.json`` records, for every package pinned in
-``requirements-dev.txt``, the exact version and the SPDX licence expression
+the development locks it names (``requirements-build.txt`` and
+``requirements-dev.txt``), the exact version and the SPDX licence expression
 established by reading the package's licence files and index metadata. The
 guard proves that:
 
 - every pinned package has exactly one record and every record has a pin, with
   identical versions, so no dependency enters or changes without a licence
   review;
+- a package pinned in more than one lock has the same version in each;
 - every record holds a well-formed SPDX expression (identifiers joined by
   ``AND``, ``OR`` and ``WITH`` with balanced parentheses);
 - every identifier in every expression is in the reviewed
@@ -36,8 +38,8 @@ from typing import Any, Final
 
 from manifest_io import load_json_object
 
-POLICY_SCHEMA: Final = "loop-timing-witness.dependency-licences.v1"
-POLICY_SCHEMA_VERSION: Final = "1.0.0"
+POLICY_SCHEMA: Final = "loop-timing-witness.dependency-licences.v2"
+POLICY_SCHEMA_VERSION: Final = "2.0.0"
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY: Final = REPOSITORY_ROOT / "development-dependency-licences.json"
 PIN: Final = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\;]+)", re.MULTILINE)
@@ -190,9 +192,13 @@ def _policy_shape(policy: dict[str, Any]) -> list[str]:
         findings.append(f"policy: schema must be {POLICY_SCHEMA!r}")
     if policy.get("schema_version") != POLICY_SCHEMA_VERSION:
         findings.append(f"policy: schema_version must be {POLICY_SCHEMA_VERSION!r}")
-    lock_file = policy.get("lock_file")
-    if not isinstance(lock_file, str) or Path(lock_file).is_absolute():
-        findings.append("policy: lock_file must be a relative path")
+    lock_files = policy.get("lock_files")
+    if not (
+        isinstance(lock_files, list)
+        and lock_files
+        and all(isinstance(item, str) and not Path(item).is_absolute() for item in lock_files)
+    ):
+        findings.append("policy: lock_files must be a non-empty list of relative paths")
     allowed = policy.get("allowed_licences")
     if not (
         isinstance(allowed, list) and allowed and all(isinstance(item, str) for item in allowed)
@@ -210,19 +216,19 @@ def _policy_shape(policy: dict[str, Any]) -> list[str]:
 
 
 def audit(policy_path: Path) -> list[str]:
-    """Compare the licence record with its lock and licence allow-list.
+    """Compare the licence record with its locks and licence allow-list.
 
     Parameters
     ----------
     policy_path
-        Licence record file; ``lock_file`` inside it is resolved relative to
+        Licence record file; each of its ``lock_files`` is resolved relative to
         this file's directory.
 
     Returns
     -------
     list[str]
-        Findings; empty when the lock and record agree and every licence is
-        allowed.
+        Findings; empty when the locks agree with each other and with the
+        record, and every licence is allowed.
     """
     try:
         policy = load_json_object(policy_path)
@@ -231,11 +237,16 @@ def audit(policy_path: Path) -> list[str]:
     findings = _policy_shape(policy)
     if findings:
         return findings
-    lock_path = policy_path.parent / policy["lock_file"]
-    try:
-        pins = locked_pins(lock_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        return [f"lock unreadable: {exc}"]
+    pins: dict[str, str] = {}
+    for lock_file in policy["lock_files"]:
+        try:
+            lock_pins = locked_pins((policy_path.parent / lock_file).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            return [f"lock unreadable: {exc}"]
+        for name, version in sorted(lock_pins.items()):
+            pinned = pins.setdefault(name, version)
+            if pinned != version:
+                findings.append(f"{name}: locks pin both {pinned} and {version}")
     packages: dict[str, dict[str, str]] = policy["packages"]
     findings.extend(
         f"{name}: record name must be written in normalised form {normalise_name(name)!r}"

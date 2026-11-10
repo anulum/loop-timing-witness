@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         generated = canonical_json_bytes(generate_inventory(args.manifest, args.schema))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         print("capability-inventory: FAIL invalid or unreadable manifest or schema")
         return 1
     if args.write:

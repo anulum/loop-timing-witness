@@ -132,12 +132,12 @@ def _rust_consumer(directory: Path, source: Path) -> Path:
         str(source),
     ]
     _run(
-        ["rustfmt", "+1.99.0", "--edition", "2024", "--check", str(source)],
+        ["rustfmt", "+1.99.1", "--edition", "2024", "--check", str(source)],
         directory,
         "rust-client-format",
     )
     _run(
-        ["rustc", "+1.99.0", *rust_arguments, "-o", str(rust_client)],
+        ["rustc", "+1.99.1", *rust_arguments, "-o", str(rust_client)],
         directory,
         "rust-client-build",
         extra_env={"RUSTC_BOOTSTRAP": "1"},
@@ -146,7 +146,7 @@ def _rust_consumer(directory: Path, source: Path) -> Path:
         [
             "rustup",
             "run",
-            "1.99.0",
+            "1.99.1",
             "clippy-driver",
             *rust_arguments,
             "--emit=metadata",
@@ -182,15 +182,15 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     adapter = ROOT / "runtime/bare_metal/rust_kernel/src/lib.rs"
     consumer = ROOT / "tests/native/amp_rust_reset_client.rs"
     source_bytes = {path: path.read_bytes() for path in [core, adapter, consumer]}
-    version = _run(["rustc", "+1.99.0", "-vV"], tmp_path, "rust-version")
-    assert version.stdout.startswith(b"rustc 1.99.0 ")
+    version = _run(["rustc", "+1.99.1", "-vV"], tmp_path, "rust-version")
+    assert version.stdout.startswith(b"rustc 1.99.1 ")
     host = next(
         line.removeprefix("host: ")
         for line in version.stdout.decode().splitlines()
         if line.startswith("host: ")
     )
     sysroot = Path(
-        _run(["rustc", "+1.99.0", "--print", "sysroot"], tmp_path, "sysroot")
+        _run(["rustc", "+1.99.1", "--print", "sysroot"], tmp_path, "sysroot")
         .stdout.decode()
         .strip()
     )
@@ -202,7 +202,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "cargo",
-            "+1.99.0",
+            "+1.99.1",
             "build",
             "--release",
             "--offline",
@@ -242,7 +242,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "rustc",
-            "+1.99.0",
+            "+1.99.1",
             "--crate-type",
             "rlib",
             "--edition",
@@ -313,7 +313,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "cargo",
-            "+1.99.0",
+            "+1.99.1",
             "test",
             "--offline",
             "--locked",

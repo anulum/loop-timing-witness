@@ -237,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     except BenchmarkRefusedError as error:
         print(f"controller benchmark: FAIL: {error}", file=sys.stderr)
         return 1
-    except (ValueError, OSError, subprocess.SubprocessError):
+    except ValueError, OSError, subprocess.SubprocessError:
         print("controller benchmark: FAIL: could not complete measurement", file=sys.stderr)
         return 1
     print(f"controller benchmark: PASS: {args.output}")

@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13.15"
+          python-version: "3.15.2"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.1"
@@ -35,7 +35,8 @@ jobs:
       - name: Install the hashed development lock
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-dev.txt
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-build.txt
+          PYYAML_FORCE_LIBYAML=0 .venv/bin/python -m pip install --require-hashes --no-deps --no-build-isolation -r requirements-dev.txt
           .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
       - name: Build pinned Go scanners (module checksums verified by the Go checksum database)
         run: |
@@ -45,14 +46,15 @@ jobs:
         run: '"$(go env GOPATH)/bin/gitleaks" git --no-banner --redact .'
       - name: Install the pinned Rust toolchain and advisory auditor
         run: |
-          rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
-          rustup default 1.99.0
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.99.1
           cargo install cargo-audit --version 0.22.2 --locked
           test "$(cargo-audit --version)" = "cargo-audit 0.22.2"
       - name: Known vulnerabilities in every dependency lock
         run: |
           cargo audit --file analysis/rust/Cargo.lock
           cargo audit --file controllers/rust/Cargo.lock
+          .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-build.txt
           .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
           .venv/bin/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt
           cargo audit --file runtime/bare_metal/rust_kernel/Cargo.lock

@@ -6,13 +6,13 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — Python numbers, crate-internal controls
 
-//! Compare float text with CPython 3.13 `repr` and arithmetic with Python's rules.
+//! Compare float text with CPython 3.15 `repr` and arithmetic with Python's rules.
 
 use super::{Num, python_float, python_number};
 use serde_json::json;
 use std::cmp::Ordering;
 
-/// Floats with their CPython 3.13 `repr`.
+/// Floats with their CPython 3.15 `repr`.
 const PYTHON_REPR: &[(f64, &str)] = &[
     (1000000000000000.0_f64, "1000000000000000.0"),
     (1e+16_f64, "1e+16"),

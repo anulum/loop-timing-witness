@@ -171,6 +171,13 @@ Loop Timing Witness — changelog
   1.52, REUSE 6.3, zizmor 1.32, CycloneDX 8, pre-commit 4.7, Flit Core 4.2 and their
   dependencies, with the hook revisions, the pinned typos version and the licence
   record moved together.
+- The source package requires Python 3.15 and is developed and tested on CPython 3.15.2,
+  and the native crates build with Rust 1.99.1, also their minimum supported version. The
+  published 0.1.0 release still accepts Python 3.13. The native text table follows CPython
+  3.15's Unicode 17.0.0 for printable and decimal characters. PyYAML publishes no CPython
+  3.15 wheel; it is built from its hashed source distribution with the hash-pinned
+  setuptools of `requirements-build.txt` and without the libyaml extension, and the licence
+  record covers both development locks.
 - Validate JSON attribution sidecars without changing original JSON bytes;
   reject missing, linked, nonregular or malformed ownership records.
 - Keep complete preflight available on an allocated runner while normal pushes

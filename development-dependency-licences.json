@@ -14,7 +14,10 @@
     "MPL-2.0",
     "PSF-2.0"
   ],
-  "lock_file": "requirements-dev.txt",
+  "lock_files": [
+    "requirements-build.txt",
+    "requirements-dev.txt"
+  ],
   "packages": {
     "arrow": {
       "licence": "Apache-2.0",
@@ -280,6 +283,10 @@
       "licence": "MIT",
       "version": "0.17.4"
     },
+    "setuptools": {
+      "licence": "MIT",
+      "version": "84.2.1"
+    },
     "six": {
       "licence": "MIT",
       "version": "1.17.0"
@@ -345,6 +352,6 @@
       "version": "1.32.0"
     }
   },
-  "schema": "loop-timing-witness.dependency-licences.v1",
-  "schema_version": "1.0.0"
+  "schema": "loop-timing-witness.dependency-licences.v2",
+  "schema_version": "2.0.0"
 }

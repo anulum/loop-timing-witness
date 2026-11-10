@@ -419,12 +419,12 @@ def test_vendor_runner_preserves_existing_project(
     shutil.copytree(derived_tree, changed, symlinks=True)
     project = changed / project_name
     project.mkdir()
-    sentinel = project / "keep"
-    sentinel.write_text("unchanged", encoding="utf-8")
+    marker = project / "keep"
+    marker.write_text("unchanged", encoding="utf-8")
     refusal = invoke(str(RUN), str(changed), str(tmp_path / "not-installed-libero"), device)
     assert refusal.returncode == 2
     assert "generated project already exists" in refusal.stderr
-    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert marker.read_text(encoding="utf-8") == "unchanged"
 
 
 def test_public_derivation_refuses_dirty_official_source(
@@ -705,12 +705,12 @@ def test_public_derivation_preserves_existing_output(
     """
     output = tmp_path / "existing-output"
     output.mkdir()
-    sentinel = output / "keep"
-    sentinel.write_text("unchanged", encoding="utf-8")
+    marker = output / "keep"
+    marker.write_text("unchanged", encoding="utf-8")
     refusal = invoke(str(DERIVE), str(official_reference), str(output))
     assert refusal.returncode == 2
     assert "destination parent must exist and destination must be new" in refusal.stderr
-    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert marker.read_text(encoding="utf-8") == "unchanged"
 
 
 def test_public_python_derivation_preserves_existing_output(
@@ -727,12 +727,12 @@ def test_public_python_derivation_preserves_existing_output(
     """
     output = tmp_path / "existing-output"
     output.mkdir()
-    sentinel = output / "keep"
-    sentinel.write_text("unchanged", encoding="utf-8")
+    marker = output / "keep"
+    marker.write_text("unchanged", encoding="utf-8")
     refusal = invoke(str(PYTHON), str(VERIFY), str(official_reference), str(output))
     assert refusal.returncode != 0
     assert refusal.stderr == "icicle-derivation: FAIL: could not read inputs or create output\n"
-    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert marker.read_text(encoding="utf-8") == "unchanged"
 
 
 @pytest.mark.parametrize("command", [DERIVE, VERIFY])

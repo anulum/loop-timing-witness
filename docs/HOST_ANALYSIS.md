@@ -19,7 +19,8 @@ simulation_only` and cannot be cited as a PolarFire SoC result.
 .venv/bin/python tools/analyze_run.py path/to/manifest.json --output-dir path/to/new-report
 ```
 
-The Python distribution is named `loop-timing-witness` and requires Python 3.13 or later.
+The Python distribution is named `loop-timing-witness` and requires Python 3.15 or later; the
+published 0.1.0 release accepts Python 3.13.
 Its installed command runs the same analysis implementation:
 
 ```bash

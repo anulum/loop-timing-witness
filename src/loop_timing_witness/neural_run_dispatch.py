@@ -67,7 +67,7 @@ def dispatch_analysis(
     except NeuralCaptureRefusalError as exc:
         print(f"run analysis: FAIL: {exc}", file=sys.stderr)
         return 1, raw
-    except (NeuralRunError, OSError):
+    except NeuralRunError, OSError:
         print("run analysis: FAIL: Neural analysis or report publication failed.", file=sys.stderr)
         return 1, raw
     passed = report["verification"]["whole"]

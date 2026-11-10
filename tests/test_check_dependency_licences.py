@@ -52,13 +52,13 @@ def policy_document(**overrides: object) -> dict[str, Any]:
     """
     document: dict[str, Any] = {
         "allowed_licences": ["Apache-2.0", "MIT"],
-        "lock_file": "requirements-dev.txt",
+        "lock_files": ["requirements-dev.txt"],
         "packages": {
             "alpha-tool": {"licence": "MIT", "version": "1.0.0"},
             "beta-lib": {"licence": "(MIT OR Apache-2.0)", "version": "2.1"},
         },
-        "schema": "loop-timing-witness.dependency-licences.v1",
-        "schema_version": "1.0.0",
+        "schema": "loop-timing-witness.dependency-licences.v2",
+        "schema_version": "2.0.0",
     }
     document.update(overrides)
     return document
@@ -96,10 +96,13 @@ def test_committed_record_matches_the_committed_lock_in_a_subprocess(run_tool: R
 
 
 def test_committed_record_covers_every_lock_pin() -> None:
-    """The committed record and lock have identical package sets and versions."""
-    record = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))["packages"]
-    pins = locked_pins((REPOSITORY_ROOT / "requirements-dev.txt").read_text(encoding="utf-8"))
-    assert {name: entry["version"] for name, entry in record.items()} == pins
+    """The committed record and both locks have identical package sets and versions."""
+    record = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))
+    pins: dict[str, str] = {}
+    for lock in record["lock_files"]:
+        pins |= locked_pins((REPOSITORY_ROOT / lock).read_text(encoding="utf-8"))
+    assert record["lock_files"] == ["requirements-build.txt", "requirements-dev.txt"]
+    assert {name: entry["version"] for name, entry in record["packages"].items()} == pins
 
 
 def test_absolute_lock_file_is_refused_by_public_cli(tmp_path: Path, run_tool: RunTool) -> None:
@@ -116,12 +119,12 @@ def test_absolute_lock_file_is_refused_by_public_cli(tmp_path: Path, run_tool: R
     lock = tmp_path / "requirements-dev.txt"
     lock.write_bytes(original)
     document = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))
-    document["lock_file"] = str(lock)
+    document["lock_files"] = ["requirements-build.txt", str(lock)]
     policy = tmp_path / "licences.json"
     policy.write_text(json.dumps(document), encoding="utf-8")
     result = run_tool("check_dependency_licences", str(policy))
     assert result.returncode == 1
-    assert "policy: lock_file must be a relative path" in result.stdout
+    assert "policy: lock_files must be a non-empty list of relative paths" in result.stdout
     assert lock.read_bytes() == original
 
 
@@ -134,6 +137,19 @@ def test_pins_are_read_with_normalised_names() -> None:
     """Pins are keyed by the normalised name; continuation and comment lines are ignored."""
     assert locked_pins(LOCK) == {"alpha-tool": "1.0.0", "beta-lib": "2.1"}
     assert normalise_name("Zope.Interface__Extra") == "zope-interface-extra"
+
+
+def test_locks_that_pin_one_package_differently_are_reported(tmp_path: Path) -> None:
+    """A package pinned in two locks must carry the same version in both."""
+    (tmp_path / "requirements-build.txt").write_text("alpha-tool==1.0.1\n", encoding="utf-8")
+    document = policy_document(lock_files=["requirements-build.txt", "requirements-dev.txt"])
+    findings = audit(write_case(tmp_path, document))
+    assert findings == [
+        "alpha-tool: locks pin both 1.0.1 and 1.0.0",
+        "alpha-tool: record version 1.0.0 differs from pin 1.0.1",
+    ]
+    (tmp_path / "requirements-build.txt").write_text("alpha-tool==1.0.0\n", encoding="utf-8")
+    assert audit(tmp_path / "licences.json") == []
 
 
 def test_duplicate_pin_is_refused(tmp_path: Path) -> None:
@@ -186,9 +202,9 @@ def test_disallowed_and_malformed_licences_are_reported(tmp_path: Path) -> None:
         (
             {"schema": "other", "schema_version": "9"},
             [
-                "policy: schema must be 'loop-timing-witness.dependency-licences.v1'",
-                "policy: schema_version must be '1.0.0'",
-                "policy: lock_file must be a relative path",
+                "policy: schema must be 'loop-timing-witness.dependency-licences.v2'",
+                "policy: schema_version must be '2.0.0'",
+                "policy: lock_files must be a non-empty list of relative paths",
                 "policy: allowed_licences must be a non-empty list of identifiers",
                 "policy: packages must map names to {licence, version} strings",
             ],

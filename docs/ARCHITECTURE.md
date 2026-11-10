@@ -279,7 +279,7 @@ evidence.
 
 Schema identifiers are versioned (`loop-timing-witness.measurement-domain.v1`,
 `loop-timing-witness.capability-inventory.v1`, `loop-timing-witness.workflow-inventory.v1`,
-`loop-timing-witness.dependency-licences.v1`); a consumer must reject an identifier it does not
+`loop-timing-witness.dependency-licences.v2`); a consumer must reject an identifier it does not
 know.
 
 ## What would change this architecture

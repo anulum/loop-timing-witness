@@ -66,6 +66,31 @@ fn equality_follows_python() {
     assert!(python_equal(&json!(null), &json!(null)));
     assert!(!python_equal(&json!("1"), &json!(1)));
     assert_eq!(lines(Num::Int(4097)).json(), json!(65));
+}
+
+#[test]
+fn equality_of_signed_numbers_follows_python() {
+    assert!(python_equal(&json!(-2), &json!(-2.0)));
+    assert!(python_equal(&json!(-0.0), &json!(0)));
+    assert!(python_equal(&json!(0.5), &json!(0.5)));
+    assert!(!python_equal(&json!(-1.0), &json!(0)));
+    assert!(!python_equal(&json!(-1), &json!(1)));
+    assert!(!python_equal(&json!(0.5), &json!(-0.5)));
+    assert!(!python_equal(&json!(1), &json!(1.5)));
+    assert!(!python_equal(
+        &json!(9_007_199_254_740_993_i64),
+        &json!(9_007_199_254_740_992.0)
+    ));
+    assert!(!python_equal(
+        &json!(-9_007_199_254_740_993_i64),
+        &json!(-9_007_199_254_740_992.0)
+    ));
+    assert!(!python_equal(
+        &json!(u64::MAX),
+        &json!(18_446_744_073_709_551_615.0)
+    ));
+    assert!(python_equal(&json!(u64::MAX), &json!(u64::MAX)));
+    assert!(python_equal(&json!(false), &json!(0.0)));
     assert_eq!(lines(Num::Float(4097.0)).json(), json!(65.0));
 }
 

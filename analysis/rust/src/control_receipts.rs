@@ -33,12 +33,45 @@ static HOST_LOAD_SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
 /// Largest loopback datagram a network load may declare, in bytes.
 const MAX_DATAGRAM_BYTES: u128 = 60_000;
 
-/// A JSON scalar as a Python number: numbers, and booleans as 0 or 1.
-fn numeric(value: &Value) -> Option<Num> {
+/// A JSON scalar as Python compares it: an exact integer, or a float.
+#[derive(Clone, Copy)]
+enum Scalar {
+    /// A Python `int`, booleans as 0 or 1.
+    Int(i128),
+    /// A Python `float`.
+    Float(f64),
+}
+
+/// A JSON scalar as a Python number: numbers of either sign, and booleans as 0 or 1.
+fn numeric(value: &Value) -> Option<Scalar> {
     match value {
-        Value::Number(_) => Some(Num::of(value)),
-        Value::Bool(flag) => Some(Num::Int(u128::from(*flag))),
+        Value::Number(number) => Some(
+            number
+                .as_i64()
+                .map(i128::from)
+                .or_else(|| number.as_u64().map(i128::from))
+                .map_or_else(
+                    || Scalar::Float(number.as_f64().expect("finite decoded number")),
+                    Scalar::Int,
+                ),
+        ),
+        Value::Bool(flag) => Some(Scalar::Int(i128::from(*flag))),
         _ => None,
+    }
+}
+
+/// Python's `==` between two numbers: exact across `int` and `float`.
+///
+/// An integer equals a float only when the float holds exactly its value: the
+/// integer converts to that float and the float converts back to the integer.
+fn same_number(left: Scalar, right: Scalar) -> bool {
+    match (left, right) {
+        (Scalar::Int(left), Scalar::Int(right)) => left == right,
+        (Scalar::Float(left), Scalar::Float(right)) => left == right,
+        (Scalar::Int(integer), Scalar::Float(float))
+        | (Scalar::Float(float), Scalar::Int(integer)) => {
+            integer as f64 == float && float as i128 == integer
+        }
     }
 }
 
@@ -61,7 +94,7 @@ pub(crate) fn python_equal(left: &Value, right: &Value) -> bool {
                 })
         }
         _ => match (numeric(left), numeric(right)) {
-            (Some(left), Some(right)) => left.same(right),
+            (Some(left), Some(right)) => same_number(left, right),
             _ => left == right,
         },
     }

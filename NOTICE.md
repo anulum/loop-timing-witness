@@ -39,7 +39,7 @@ protoscience@anulum.li. Licensing metadata follows REUSE 3.x; see [`REUSE.toml`]
 - **Development tools:** the Python packages in `requirements-dev.txt` are installed from the
   package index, not distributed here; their licences are recorded in
   `development-dependency-licences.json`.
-- **Native dependency inventory:** `cargo-cyclonedx` 0.5.9 is an Apache-2.0 build tool
+- **Native dependency inventory:** `cargo-cyclonedx` 0.5.10 is an Apache-2.0 build tool
   installed from its locked registry package; its source is not distributed here.
 - **Workflow actions and hook repositories:** referenced by commit and not distributed here.
 - **Cited publications:** referenced by citation and DOI only; no copy is distributed.

@@ -136,7 +136,7 @@ NATIVE_SBOM_DIRECTORY ?= build/native-analysis-sbom
 .PHONY: native-sbom
 
 native-sbom:
-	test "$$(cargo cyclonedx --version)" = "cargo-cyclonedx-cyclonedx 0.5.9"
+	test "$$(cargo cyclonedx --version)" = "cargo-cyclonedx-cyclonedx 0.5.10"
 	$(VENV)/python tools/check_analysis_package.py
 	$(VENV)/python -c 'from pathlib import Path; import sys; Path(sys.argv[1]).mkdir(parents=True)' "$(NATIVE_SBOM_DIRECTORY)"
 	$(VENV)/python -c 'import shutil, sys; shutil.copytree(sys.argv[1], sys.argv[2], ignore=shutil.ignore_patterns("target", "__pycache__"))' analysis/rust "$(NATIVE_SBOM_DIRECTORY)/crate"

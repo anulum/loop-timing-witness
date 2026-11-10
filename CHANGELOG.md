@@ -181,6 +181,7 @@ Loop Timing Witness — changelog
 - Move the analysis crate to its newest dependencies, rustix 1.1.6, serde 1.0.229,
   serde_json 1.0.154 and sha2 0.11.1, with the lock, the reviewed licence record and the
   third-party notices moved together.
+- Hosted workflows use Go 1.27.3, the CodeQL action 4.39.3 and cargo-cyclonedx 0.5.10.
 - Validate JSON attribution sidecars without changing original JSON bytes;
   reject missing, linked, nonregular or malformed ownership records.
 - Keep complete preflight available on an allocated runner while normal pushes

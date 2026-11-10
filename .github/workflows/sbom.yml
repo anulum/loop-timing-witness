@@ -47,7 +47,7 @@ jobs:
         run: |
           rustup toolchain install 1.99.1 --profile minimal
           rustup default 1.99.1
-          cargo install cargo-cyclonedx --version 0.5.9 --locked
+          cargo install cargo-cyclonedx --version 0.5.10 --locked
       - name: Fetch exact native analysis dependencies
         run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
       - name: Generate and verify the complete native dependency inventory

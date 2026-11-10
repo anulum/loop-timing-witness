@@ -303,7 +303,7 @@ numerical, completion and clock verdicts. This interface verifies simulated
 acquisitions; it does not establish physical device qualification.
 
 `make native-sbom` produces and verifies the complete locked native analysis
-dependency inventory with `cargo-cyclonedx` 0.5.9. See
+dependency inventory with `cargo-cyclonedx` 0.5.10. See
 [native inventory validation](VALIDATION.md#native-dependency-inventory) for tool
 installation, exclusive output directories and the source-package scope.
 

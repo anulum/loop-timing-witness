@@ -500,7 +500,7 @@ isolation. See [the crate](analysis/rust/README.md#verification-fixtures).
 
 ### Native dependency inventory
 
-Install the pinned generator with `cargo install cargo-cyclonedx --version 0.5.9 --locked`,
+Install the pinned generator with `cargo install cargo-cyclonedx --version 0.5.10 --locked`,
 fetch the analysis lock with `cargo fetch --locked --manifest-path analysis/rust/Cargo.toml`,
 then run `make native-sbom`. The target stages the complete crate in a new
 `build/native-analysis-sbom` directory and generates CycloneDX 1.5 JSON offline for

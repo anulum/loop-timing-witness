@@ -202,11 +202,10 @@ pub(crate) fn acquire(path: &Path) -> Result<(Vec<u8>, Value, PublicManifest), S
     if !SCHEMA.locations(&document).is_empty() || has_decimal(&document) {
         return Err(NOT_CLOSED.into());
     }
-    // Every schema-valid integer-only document fits the typed carrier: each
-    // member's type and range is closed by the schema, so this refusal is a
-    // guard against a schema edit, never a second wording, and no input reaches it.
-    let typed = serde_json::from_value::<PublicManifest>(document.clone());
-    let manifest = typed.map_err(|_| NOT_CLOSED.to_owned())?;
+    // The compiled-in closed schema fixes the type and range of every member, so
+    // a schema-valid document with integer encodings only always fits the typed view.
+    let manifest: PublicManifest = serde_json::from_value(document.clone())
+        .expect("the closed schema admits only the typed carrier");
     exact_identity(&manifest)?;
     declarations(&manifest)?;
     Ok((raw, document, manifest))

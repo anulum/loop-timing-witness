@@ -70,6 +70,7 @@ def analysis_package(tmp_path: Path) -> Path:
         "native-run.schema.json",
         "host-load.schema.json",
         "tests/data/neural-selected-original.run.json",
+        "measurement-domain.json",
     )
     for name in owners:
         path = tmp_path / name

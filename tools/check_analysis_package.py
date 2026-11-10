@@ -46,6 +46,7 @@ PACKAGE_COPIES: Final = {
     f"{PACKAGE_ROOT}/native-run.schema.json": "native-run.schema.json",
     f"{PACKAGE_ROOT}/host-load.schema.json": "host-load.schema.json",
     f"{PACKAGE_ROOT}/tests/data/{RUN_FIXTURE}": f"tests/data/{RUN_FIXTURE}",
+    f"{PACKAGE_ROOT}/tests/data/measurement-domain.json": "measurement-domain.json",
 }
 LICENCE_SCHEMA: Final = "loop-timing-witness.analysis-dependency-licences.v1"
 SELECTED_LICENCES: Final = frozenset({"MIT", "MIT AND Unicode-3.0"})

@@ -18,8 +18,8 @@ use serde_json::{Map, Value};
 
 /// The shared corpus of decimal cases and series.
 const CORPUS: &str = include_str!("../data/control-series-cases.json");
-/// The packaged measurement domain, for event codes.
-const DOMAIN: &str = include_str!("../../../../measurement-domain.json");
+/// The repository's measurement domain, through its checked crate copy, for event codes.
+const DOMAIN: &str = include_str!("../data/measurement-domain.json");
 
 /// Series bytes of a case: UTF-8 text, or `{"hex": …}` for bytes that are not UTF-8.
 fn content(case: &Value) -> Option<Vec<u8>> {

@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 pub const USAGE: &str = "usage: loop-timing-witness-analyze-native MANIFEST --output-dir NEW_DIR";
 
 /// Distinct usage and execution requests keep their command status meanings.
-enum Arguments {
+pub(crate) enum Arguments {
     Help,
     Analyze { manifest: PathBuf, output: PathBuf },
 }
@@ -51,8 +51,9 @@ fn classify(item: &OsString) -> Item {
     }
 }
 
-/// Parse caller-owned OS arguments into one request.
-fn parse(arguments: &[OsString]) -> Result<Arguments, String> {
+/// Parse caller-owned OS arguments into one request: one manifest and a new
+/// output directory, as both analysis commands take them.
+pub(crate) fn parse(arguments: &[OsString]) -> Result<Arguments, String> {
     let mut items = arguments.iter();
     let mut manifest = None;
     let mut output = None;

@@ -22,7 +22,8 @@
 //! With `CONTROL_COMMAND_SPEC` the third test runs the analysis command with
 //! the described arguments, optionally under a file-size limit set in this
 //! process and restored before the outcome is written, and records its status
-//! and printed text.
+//! and printed text. With `CAMPAIGN_COMMAND_SPEC` the fourth test runs the
+//! repeat campaign command in the same way.
 
 #[path = "support/digest.rs"]
 mod digest;
@@ -34,9 +35,9 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
-    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, control_events_summary,
-    control_run_report, decode_control_events, load_control_run, load_control_run_bytes,
-    load_neural_run_with_registry, neural_key, public_command,
+    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, campaign_command,
+    control_events_summary, control_run_report, decode_control_events, load_control_run,
+    load_control_run_bytes, load_neural_run_with_registry, neural_key, public_command,
 };
 
 /// Registry description written by the Python parity helper.
@@ -242,9 +243,26 @@ struct CommandSpec {
     file_size_limit: Option<u64>,
 }
 
+/// A command entry point: arguments, standard output and standard error to status.
+type Command = fn(&[std::ffi::OsString], &mut Vec<u8>, &mut Vec<u8>) -> i32;
+
 #[test]
 fn control_command() {
-    let Some(path) = std::env::var_os("CONTROL_COMMAND_SPEC") else {
+    described_command("CONTROL_COMMAND_SPEC", |arguments, stdout, stderr| {
+        public_command::run(arguments, &NeuralRegistry::reviewed(), stdout, stderr)
+    });
+}
+
+#[test]
+fn campaign_command() {
+    described_command("CAMPAIGN_COMMAND_SPEC", |arguments, stdout, stderr| {
+        campaign_command::run(arguments, stdout, stderr)
+    });
+}
+
+/// Run one command as the description in the named variable asks and record its outcome.
+fn described_command(variable: &str, command: Command) {
+    let Some(path) = std::env::var_os(variable) else {
         return;
     };
     let spec: CommandSpec =
@@ -259,12 +277,7 @@ fn control_command() {
         };
         setrlimit(Resource::Fsize, lowered).expect("lower the file-size limit");
     }
-    let status = public_command::run(
-        &arguments,
-        &NeuralRegistry::reviewed(),
-        &mut stdout,
-        &mut stderr,
-    );
+    let status = command(&arguments, &mut stdout, &mut stderr);
     setrlimit(Resource::Fsize, limit).expect("restore the file-size limit");
     let rendered = json!({
         "status": status,

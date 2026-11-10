@@ -24,6 +24,20 @@ cargo install --locked --path analysis/rust
 loop-timing-witness-analyze-native run.json --output-dir new-report
 ```
 
+The `loop-timing-witness-campaign-native` command analyses a repeat campaign
+as the Python `loop-timing-witness-campaign` command does, and publishes a
+byte-equal campaign report directory:
+
+```sh
+loop-timing-witness-campaign-native campaign.json --output-dir new-report
+```
+
+It returns status 0 for a published complete campaign, 2 for a published
+incomplete campaign after printing each nonconformity, and 1 with the Python
+command's diagnostic when the campaign is refused or its report cannot be
+written. A campaign whose repeat binds an AMP capture is refused, because the
+native analysis does not complete AMP captures.
+
 The output directory must be new and have an existing parent. Publication is
 atomic and refuses to replace an existing file, directory or symlink.
 A manifest with a `schema_id` member is a neural run; any other is a CONTROL or

@@ -9,12 +9,17 @@
 //! Verify complete source-bound simulated neural acquisitions through an independent native API.
 
 mod binding;
+/// The repeat campaign command, as Python's `analyze_campaign` runs it.
+pub mod campaign_command;
 mod capture;
 mod checker_receipt;
 mod clock_completion;
 mod control_analysis;
 /// Public CONTROL and COMPUTE run loading and event decoding.
 pub mod control_api;
+mod control_campaign;
+mod control_campaign_outputs;
+mod control_campaign_report;
 mod control_command;
 mod control_csv;
 mod control_decimal;

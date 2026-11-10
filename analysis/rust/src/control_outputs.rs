@@ -184,7 +184,7 @@ fn jitter_pairs(rows: &[Row]) -> Vec<Map<String, Value>> {
 /// Python's `str` of one CSV cell value, quoted as the excel dialect quotes it;
 /// `None` and a missing column are empty cells. Every listed column holds text,
 /// a number or `None`.
-fn cell(value: Option<&Value>) -> String {
+pub(crate) fn cell(value: Option<&Value>) -> String {
     match value.unwrap_or(&Value::Null) {
         Value::Null => String::new(),
         Value::String(string) if string.contains([',', '"', '\r', '\n']) => {
@@ -196,7 +196,7 @@ fn cell(value: Option<&Value>) -> String {
 }
 
 /// A CSV table with a header and one CRLF-terminated row per mapping.
-fn csv_table(columns: &[&str], rows: &[Map<String, Value>]) -> Vec<u8> {
+pub(crate) fn csv_table(columns: &[&str], rows: &[Map<String, Value>]) -> Vec<u8> {
     let mut text = String::new();
     let line = |fields: Vec<String>, text: &mut String| {
         text.push_str(&fields.join(","));

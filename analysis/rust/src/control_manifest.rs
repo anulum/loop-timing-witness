@@ -51,6 +51,34 @@ const HARDWARE: [&str; 4] = ["bitstream", "firmware", "linux_image", "controller
 /// Optional receipts, read before the declared files.
 const RECEIPTS: [&str; 3] = ["native_metadata", "host_load", "amp_capture"];
 
+/// Why a run cannot be loaded, as Python's `load_run` raises it.
+///
+/// A repeat campaign keeps a run its contract refuses as a refused repeat, but
+/// refuses the whole campaign when a bound file cannot be opened or read.
+#[derive(Debug)]
+pub(crate) enum Failure {
+    /// Python's `OSError`: a manifest or bound file cannot be opened or read.
+    Os(String),
+    /// Python's `ValueError`: the run's contract refuses it.
+    Refused(String),
+}
+
+impl From<String> for Failure {
+    /// A refusal of the run's contract.
+    fn from(text: String) -> Self {
+        Self::Refused(text)
+    }
+}
+
+impl Failure {
+    /// The text Python's exception carries.
+    pub(crate) fn text(self) -> String {
+        match self {
+            Self::Os(text) | Self::Refused(text) => text,
+        }
+    }
+}
+
 /// A validated run with its hash-bound input bytes.
 #[derive(Debug)]
 pub(crate) struct ControlRun {
@@ -66,6 +94,11 @@ pub(crate) struct ControlRun {
 
 /// Load a run from its manifest path, or from root bytes already read for it.
 pub(crate) fn load(path: &Path, root: Option<&[u8]>) -> Result<ControlRun, String> {
+    load_classified(path, root).map_err(Failure::text)
+}
+
+/// Load a run as [`load`] does, telling an unreadable file from a refused run.
+pub(crate) fn load_classified(path: &Path, root: Option<&[u8]>) -> Result<ControlRun, Failure> {
     let raw = match root {
         Some(bytes) => bytes.to_vec(),
         None => read_file(path)?,
@@ -73,12 +106,14 @@ pub(crate) fn load(path: &Path, root: Option<&[u8]>) -> Result<ControlRun, Strin
     let (manifest, orders) = decode_object(&raw, &python_display(path))?;
     let document = Value::Object(manifest.clone());
     if let Some(location) = RUN_SCHEMA.locations(&document).first() {
-        return Err(format!(
-            "run manifest {location}: does not satisfy the run manifest schema"
-        ));
+        return Err(
+            format!("run manifest {location}: does not satisfy the run manifest schema").into(),
+        );
     }
     if !utc_timestamp(text(&document["started_utc"])) {
-        return Err("started_utc must be an RFC 3339 date-time in UTC".to_owned());
+        return Err("started_utc must be an RFC 3339 date-time in UTC"
+            .to_owned()
+            .into());
     }
     let directory = resolve(path)
         .parent()
@@ -125,7 +160,7 @@ fn declared_files(orders: &Orders) -> Vec<String> {
 ///
 /// An existing file resolves completely; a missing file keeps its name under
 /// its resolved directory, as when root bytes were read before it vanished.
-fn resolve(path: &Path) -> PathBuf {
+pub(crate) fn resolve(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| {
         let absolute = std::path::absolute(path).unwrap_or_default();
         let parent = absolute.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -320,49 +355,48 @@ fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
 /// Read a whole file as Python's `Path.read_bytes` reports failures: an
 /// opening error names the path, a reading error does not. Python's `open`
 /// refuses a directory once it is open, naming the path, as here.
-fn read_file(path: &Path) -> Result<Vec<u8>, String> {
-    let mut stream = std::fs::File::open(path).map_err(|error| os_error(&error, path))?;
+pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, Failure> {
+    let mut stream =
+        std::fs::File::open(path).map_err(|error| Failure::Os(os_error(&error, path)))?;
     if stream.metadata().is_ok_and(|status| status.is_dir()) {
         let error = std::io::Error::from_raw_os_error(rustix::io::Errno::ISDIR.raw_os_error());
-        return Err(os_error(&error, path));
+        return Err(Failure::Os(os_error(&error, path)));
     }
     let mut content = Vec::new();
     stream
         .read_to_end(&mut content)
-        .map_err(|error| os_error_without_path(&error))?;
+        .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
     Ok(content)
 }
 
 /// Read one bound file completely and verify its digest.
-fn read_bound(directory: &Path, item: &Value) -> Result<Vec<u8>, String> {
+fn read_bound(directory: &Path, item: &Value) -> Result<Vec<u8>, Failure> {
     let path = bound_path(directory, item)?;
     let content = read_file(&path)?;
     if digest(&content) != text(&item["sha256"]) {
-        return Err(format!("input SHA-256 mismatch: {}", text(&item["path"])));
+        return Err(format!("input SHA-256 mismatch: {}", text(&item["path"])).into());
     }
     Ok(content)
 }
 
 /// Stream-check one source or hardware artefact in 1 MiB blocks.
-fn verify_artifact(directory: &Path, item: &Value) -> Result<(), String> {
+fn verify_artifact(directory: &Path, item: &Value) -> Result<(), Failure> {
     let path = bound_path(directory, item)?;
-    let mut stream = std::fs::File::open(&path).map_err(|error| os_error(&error, &path))?;
+    let mut stream =
+        std::fs::File::open(&path).map_err(|error| Failure::Os(os_error(&error, &path)))?;
     let mut hasher = Sha256::new();
     let mut block = vec![0; 1 << 20];
     loop {
         let count = stream
             .read(&mut block)
-            .map_err(|error| os_error_without_path(&error))?;
+            .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
         if count == 0 {
             break;
         }
         hasher.update(&block[..count]);
     }
     if crate::files::hex(&hasher.finalize()) != text(&item["sha256"]) {
-        return Err(format!(
-            "artefact SHA-256 mismatch: {}",
-            text(&item["path"])
-        ));
+        return Err(format!("artefact SHA-256 mismatch: {}", text(&item["path"])).into());
     }
     Ok(())
 }

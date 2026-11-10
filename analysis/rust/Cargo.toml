@@ -13,14 +13,14 @@ edition = "2024"
 rust-version = "1.99.1"
 publish = ["crates-io"]
 license = "AGPL-3.0-or-later"
-description = "Source-bound neural acquisition verification and control-run loading for Loop Timing Witness"
+description = "Source-bound neural acquisition verification and CONTROL, COMPUTE and repeat campaign analysis for Loop Timing Witness"
 authors = ["Miroslav Šotek <protoscience@anulum.li>"]
 repository = "https://github.com/anulum/loop-timing-witness"
 homepage = "https://www.anulum.li"
 readme = "README.md"
 keywords = ["neuromorphic", "verification", "simulation", "timing"]
 categories = ["science", "command-line-utilities"]
-include = ["src/**", "public-data/**", "checker_worker/**/*.py", "tests/**", "neural-step-run.schema.json", "neural-step-run.schema.json.license", "run-manifest.schema.json", "run-manifest.schema.json.license", "measurement-domain.schema.json", "measurement-domain.schema.json.license", "native-run.schema.json", "native-run.schema.json.license", "host-load.schema.json", "host-load.schema.json.license", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "dependency-licences.json", "dependency-licences.json.license"]
+include = ["src/**", "public-data/**", "checker_worker/**/*.py", "tests/**", "neural-step-run.schema.json", "neural-step-run.schema.json.license", "run-manifest.schema.json", "run-manifest.schema.json.license", "repeat-campaign.schema.json", "repeat-campaign.schema.json.license", "measurement-domain.schema.json", "measurement-domain.schema.json.license", "native-run.schema.json", "native-run.schema.json.license", "host-load.schema.json", "host-load.schema.json.license", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "dependency-licences.json", "dependency-licences.json.license"]
 
 [dependencies]
 rustix = { version = "=1.1.6", default-features = false, features = ["std", "process", "fs"] }

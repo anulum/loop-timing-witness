@@ -24,6 +24,9 @@ use std::collections::BTreeMap;
 
 /// Report schema identifier.
 const REPORT_SCHEMA: &str = "loop-timing-witness.analysis-report.v1";
+/// The refusal of a run that binds an AMP capture, which the native analysis does not complete.
+pub(crate) const AMP_UNSUPPORTED: &str =
+    "AMP capture completion is not analysed by the native analysis";
 /// Hardware artefacts whose digests a board report lists.
 const HARDWARE: [&str; 4] = ["bitstream", "firmware", "linux_image", "controller_binary"];
 /// The limit stated when the event FIFO overflowed.
@@ -43,7 +46,7 @@ pub(crate) fn build_report(
     files: &BTreeMap<String, Vec<u8>>,
 ) -> Result<(Value, Vec<Row>), String> {
     if files.contains_key("amp_capture") {
-        return Err("AMP capture completion is not analysed by the native analysis".to_owned());
+        return Err(AMP_UNSUPPORTED.to_owned());
     }
     let contracts = &domain["design_contracts"];
     let names = Names::of(contracts);

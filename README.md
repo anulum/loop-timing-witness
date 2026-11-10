@@ -300,7 +300,9 @@ The source-bound neural verifier is available through the Python API and
 `loop-timing-witness-analyze-native`. The [neural analysis contract](docs/HOST_ANALYSIS.md#source-bound-neural-analysis)
 defines exact source/runtime admission and independent source, capture,
 numerical, completion and clock verdicts. This interface verifies simulated
-acquisitions; it does not establish physical device qualification.
+acquisitions; it does not establish physical device qualification. The crate's
+`loop-timing-witness-campaign-native` command analyses repeat campaigns as
+`loop-timing-witness-campaign` does.
 
 `make native-sbom` produces and verifies the complete locked native analysis
 dependency inventory with `cargo-cyclonedx` 0.5.10. See

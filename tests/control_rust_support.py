@@ -255,9 +255,14 @@ def canonical(outcome: dict[str, Any]) -> str:
 
 
 def python_command(
-    arguments: Sequence[str], cwd: Path, wrapper: Sequence[str] = (), *, measured: bool = True
+    arguments: Sequence[str],
+    cwd: Path,
+    wrapper: Sequence[str] = (),
+    *,
+    measured: bool = True,
+    campaign: bool = False,
 ) -> dict[str, Any]:
-    """Run the Python analysis command and return its status and printed text.
+    """Run the Python analysis or campaign command and return its status and printed text.
 
     Parameters
     ----------
@@ -272,6 +277,8 @@ def python_command(
         inside the command with directories and files of its own, so a command
         whose own system calls are counted for fault injection, or whose file
         size is limited, runs unmeasured.
+    campaign
+        Whether to run the repeat campaign command instead of the run analysis.
 
     Returns
     -------
@@ -286,7 +293,15 @@ def python_command(
     }
     environment["PYTHONPATH"] = str(tests.parent / "src")
     result = subprocess.run(
-        [*wrapper, sys.executable, "-m", "loop_timing_witness.analyze_run", *arguments],
+        [
+            *wrapper,
+            sys.executable,
+            "-m",
+            "loop_timing_witness.analyze_campaign"
+            if campaign
+            else "loop_timing_witness.analyze_run",
+            *arguments,
+        ],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
@@ -327,26 +342,64 @@ def rust_command(
     dict[str, Any]
         ``status``, ``stdout`` and ``stderr``.
     """
+    spec = {"arguments": list(arguments), "file_size_limit": file_size_limit}
+    return _consumer_command("control_command", spec, cwd, directory, wrapper)
+
+
+def rust_campaign_command(arguments: Sequence[str], cwd: Path, directory: Path) -> dict[str, Any]:
+    """Run the native repeat campaign command through the consumer and return its outcome.
+
+    Parameters
+    ----------
+    arguments
+        Command arguments after the program name.
+    cwd
+        Working directory of the command.
+    directory
+        Owned directory for the description and outcome, created when absent.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``status``, ``stdout`` and ``stderr``.
+    """
+    spec = {"arguments": list(arguments), "file_size_limit": None}
+    return _consumer_command("campaign_command", spec, cwd, directory, ())
+
+
+def _consumer_command(
+    test: str, spec: dict[str, Any], cwd: Path, directory: Path, wrapper: Sequence[str]
+) -> dict[str, Any]:
+    """Run one command test of the consumer with its description and return the outcome.
+
+    Parameters
+    ----------
+    test
+        ``control_command`` or ``campaign_command``; the description is passed in
+        the upper-case variable of that name with ``_SPEC`` appended.
+    spec
+        Arguments and file-size limit of the command.
+    cwd
+        Working directory of the command.
+    directory
+        Owned directory for the description and outcome, created when absent.
+    wrapper
+        Leading argument vector that runs the command under a host condition.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``status``, ``stdout`` and ``stderr``.
+    """
     directory.mkdir(exist_ok=True)
-    spec = {
-        "arguments": list(arguments),
-        "outcome": str(directory / "command.json"),
-        "file_size_limit": file_size_limit,
-    }
-    (directory / "command-spec.json").write_text(json.dumps(spec), encoding="utf-8")
-    environment = {**os.environ, "CONTROL_COMMAND_SPEC": str(directory / "command-spec.json")}
+    described = {**spec, "outcome": str(directory / "command.json")}
+    (directory / "command-spec.json").write_text(json.dumps(described), encoding="utf-8")
+    environment = {**os.environ, f"{test.upper()}_SPEC": str(directory / "command-spec.json")}
     profiles = os.environ.get("WITNESS_RUST_PROFILE_DIRECTORY")
     if profiles:
         environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
     result = subprocess.run(
-        [
-            *wrapper,
-            str(consumer()),
-            "--exact",
-            "control_command",
-            "--nocapture",
-            "--test-threads=1",
-        ],
+        [*wrapper, str(consumer()), "--exact", test, "--nocapture", "--test-threads=1"],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,

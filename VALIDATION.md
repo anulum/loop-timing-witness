@@ -312,7 +312,14 @@ absolute, repeated, looping, dangling and unreadable links, for a removed
 working directory, and for publication faults: an unwritable parent, a
 file-size limit, and a failed directory creation and failed renames injected by
 the kernel tracer, with nothing left behind. The shared JSON corpus also holds
-Python's analysis choice for every document.
+Python's analysis choice for every document. `tests/test_campaign_parity.py`
+runs the Python and the native repeat campaign command on campaigns of real
+captures: complete and incomplete plans, COMPUTE and board repeats, invalid and
+refused repeats, gapped cycles, integral floats, a refusal naming an unpaired
+surrogate and a pooled duration at the 64-bit tick range. It requires the same
+status and lines and byte-equal report directories, and the same refusal for
+every schema, order, path, digest, identity, configuration, JSON bound,
+unreadable file, pooled-range and publication defect.
 
 Ownership of every job and the omitted categories are declared in
 `.github/workflow-inventory.json` and enforced by the `workflows` gate.

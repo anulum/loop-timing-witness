@@ -722,6 +722,18 @@ private directory and renamed into place without replacing anything; a failed
 step removes what it staged and is refused with Python's `OSError` text. The
 printed lines and exit statuses equal the Python command's.
 
+The native `loop-timing-witness-campaign-native` command analyses a repeat
+campaign end to end, as the Python `loop-timing-witness-campaign` command does,
+and publishes the same report directory byte for byte: `campaign_report.json`
+and the per-repeat, pooled and spread CSV tables. It loads the campaign in
+Python's order and refuses it with Python's texts; a run its loader refuses
+stays a refused repeat, while a bound file that cannot be read refuses the
+whole campaign, as Python's `OSError` does. The configuration every loaded
+repeat must share is compared with Python's equality, exact between integers
+and floats of either sign. Counts, minima, maxima and the fewest analysed
+cycles keep Python's integer or float type. A campaign whose repeat binds an
+AMP capture is refused by the native command until AMP completion is native.
+
 Every run-bound JSON document is decoded with three limits that both analyses
 share: arrays and objects nest at most 64 deep, checked before decoding;
 integers fit the signed or unsigned 64-bit range (`integer outside the 64-bit

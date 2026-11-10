@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- The native `loop-timing-witness-campaign-native` command analyses a repeat campaign as the
+  Python campaign command does: the same statuses and printed lines, the same refusal texts,
+  and a byte-equal report directory. A campaign binding an AMP capture is refused by the
+  native command.
 - Native control-run loading in the Rust analysis crate: `load_control_run`,
   `load_control_run_bytes` and `decode_control_events` validate a CONTROL or COMPUTE
   run, its hash-bound measurement domain and every input, and decode its events,

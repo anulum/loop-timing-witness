@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -44,6 +44,23 @@ _COPIED = (
     "host-load.schema.json",
     "tests/data/neural-selected-original.run.json",
 )
+
+
+def reviewed_serde(policy: dict[str, Any]) -> str:
+    """Return the reviewed serde entry of a licence record, whichever version the lock holds.
+
+    Parameters
+    ----------
+    policy
+        Decoded analysis licence record.
+
+    Returns
+    -------
+    str
+        The ``name@version`` key of the serde archive.
+    """
+    names: list[str] = list(policy["packages"])
+    return next(name for name in names if name.startswith("serde@"))
 
 
 @pytest.fixture
@@ -157,7 +174,8 @@ def test_original_cargo_licence_and_complete_notices_drift_refuses(
     crate = analysis_package / "analysis/rust"
     path = crate / "dependency-licences.json"
     policy = json.loads(path.read_bytes())
-    entry = policy["packages"]["serde@1.0.228"]
+    serde = reviewed_serde(policy)
+    entry = policy["packages"][serde]
     if damage == "unknown-fields":
         policy["extra"] = 1
     elif damage == "schema":
@@ -165,7 +183,7 @@ def test_original_cargo_licence_and_complete_notices_drift_refuses(
     elif damage == "packages-type":
         policy["packages"] = []
     elif damage == "missing-package":
-        del policy["packages"]["serde@1.0.228"]
+        del policy["packages"][serde]
     elif damage == "extra-package":
         policy["packages"]["unknown@1.0.0"] = dict(entry)
     elif damage == "checksum":
@@ -230,7 +248,7 @@ def test_unreadable_or_malformed_actual_package_metadata_is_authored(
         path.unlink()
     else:
         policy = json.loads(path.read_bytes())
-        policy["packages"]["serde@1.0.228"] = []
+        policy["packages"][reviewed_serde(policy)] = []
         path.write_text(json.dumps(policy), encoding="utf-8")
     result = run_tool("check_analysis_package", "--root", str(analysis_package))
     assert result.returncode == 1
@@ -286,10 +304,11 @@ def test_repeated_original_cargo_archive_identity_refuses(
     """
     crate = analysis_package / "analysis/rust"
     policy = json.loads((crate / "dependency-licences.json").read_bytes())
-    checksum = policy["packages"]["serde@1.0.228"]["checksum"]
+    serde = reviewed_serde(policy)
+    checksum = policy["packages"][serde]["checksum"]
     with (crate / "Cargo.lock").open("a", encoding="utf-8") as stream:
         stream.write(
-            '\n[[package]]\nname = "serde"\nversion = "1.0.228"\n'
+            f'\n[[package]]\nname = "serde"\nversion = "{serde.split("@")[1]}"\n'
             'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
             f'checksum = "{checksum}"\n'
         )

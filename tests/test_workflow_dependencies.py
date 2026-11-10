@@ -156,6 +156,7 @@ def test_missing_lock_surface_is_refused(tree: Path) -> None:
         "analysis/rust/Cargo.lock",
         "controllers/rust/Cargo.lock",
         "runtime/bare_metal/rust_kernel/Cargo.lock",
+        "requirements-build.txt",
         "requirements-dev.txt",
         "requirements-runtime.txt",
     ):

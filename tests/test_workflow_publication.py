@@ -51,6 +51,7 @@ def publication_tree(tmp_path: Path) -> Path:
         "analysis/rust/Cargo.lock",
         "controllers/rust/Cargo.lock",
         "runtime/bare_metal/rust_kernel/Cargo.lock",
+        "requirements-build.txt",
         "requirements-dev.txt",
         "requirements-runtime.txt",
     ):

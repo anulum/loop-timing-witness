@@ -28,6 +28,23 @@ fn value(triple: &Value) -> Decimal {
     )
 }
 
+/// A corpus cell: text, or a long run of one character written as
+/// `{prefix, repeat, count, suffix}`.
+fn cell_text(cell: &Value) -> String {
+    match cell {
+        Value::String(text) => text.clone(),
+        packed => format!(
+            "{}{}{}",
+            packed["prefix"].as_str().expect("prefix"),
+            packed["repeat"]
+                .as_str()
+                .expect("repeat")
+                .repeat(usize::try_from(packed["count"].as_u64().expect("count")).expect("count")),
+            packed["suffix"].as_str().expect("suffix")
+        ),
+    }
+}
+
 /// The decimal section of the corpus.
 fn decimal() -> Value {
     let (corpus, _) = decode_object(CORPUS.as_bytes(), "corpus").expect("corpus");
@@ -40,8 +57,8 @@ fn every_measurement_cell_has_the_python_value_or_refusal() {
     let cases = decimal["measurements"].as_array().expect("measurements");
     assert!(cases.len() > 80);
     for case in cases {
-        let cell = case["cell"].as_str().expect("cell");
-        match measurement(cell, "value") {
+        let cell = cell_text(&case["cell"]);
+        match measurement(&cell, "value") {
             Ok(parsed) => assert!(parsed == value(&case["value"]), "{cell}"),
             Err(refusal) => assert_eq!(refusal, case["refusal"], "{cell}"),
         }

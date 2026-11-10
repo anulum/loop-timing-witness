@@ -270,7 +270,8 @@ def _cells(generator: _Values) -> list[str]:
         "1" + "0" * 60 + "e-60",
         "1.5e+0000005",
         "1e1000000",
-        "1e1234567890123456789",
+        "1e12345678901234567890",
+        "0." + "0" * 99999 + "1e100000",
         "1e-0999999",
         "-1E-5",
         "NaN",
@@ -319,9 +320,9 @@ def _decimal_cases(generator: _Values) -> dict[str, Any]:
         try:
             value = measurement(cell, "value")
         except ValueError as error:
-            measurements.append({"cell": cell, "refusal": str(error)})
+            measurements.append({"cell": _packed(cell), "refusal": str(error)})
         else:
-            measurements.append({"cell": cell, "value": _canonical(value)})
+            measurements.append({"cell": _packed(cell), "value": _canonical(value)})
             values.append(value)
     counts: list[dict[str, Any]] = []
     for cell in ["0", "007", "18446744073709551615", "18446744073709551616", "1" * 21, "-1", ""]:

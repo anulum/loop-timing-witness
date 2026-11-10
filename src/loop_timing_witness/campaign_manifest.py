@@ -17,7 +17,7 @@ from typing import Any, Final
 
 from jsonschema import Draft202012Validator
 
-from .manifest_io import load_json_object, parse_json_object
+from .manifest_io import load_json_object, parse_bounded_json_object
 from .run_manifest import RunInputs, load_run
 
 CAMPAIGN_SCHEMA_PATH: Final = (
@@ -259,7 +259,9 @@ def load_campaign(manifest_path: Path) -> CampaignInputs:
 
     A run that its own loader refuses stays in the campaign as a refused
     repeat, so it is reported rather than dropped. Integrity failures of the
-    campaign itself refuse the whole campaign.
+    campaign itself refuse the whole campaign. The manifest is decoded with
+    the bounded rules of every run-bound document, so an independent decoder
+    refuses the same documents.
 
     Parameters
     ----------
@@ -276,11 +278,12 @@ def load_campaign(manifest_path: Path) -> CampaignInputs:
     OSError
         If the campaign or a run manifest cannot be read.
     ValueError
-        If JSON, schema, index order, path containment, digest, run identity
-        or configuration agreement fails.
+        If JSON, its nesting, integer or surrogate bounds, schema, index
+        order, path containment, digest, run identity or configuration
+        agreement fails.
     """
     raw = manifest_path.read_bytes()
-    manifest = parse_json_object(raw, str(manifest_path))
+    manifest = parse_bounded_json_object(raw, str(manifest_path))
     _validate_campaign_schema(manifest)
     directory = manifest_path.resolve().parent
     paths = [

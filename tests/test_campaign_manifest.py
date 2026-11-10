@@ -252,6 +252,50 @@ def test_unsound_campaigns_are_refused(
         load_campaign(path)
 
 
+@pytest.mark.parametrize(
+    ("change", "refusal"),
+    [
+        (
+            lambda text: text.replace('"repeat_index": 1', '"repeat_index": 18446744073709551616'),
+            "integer outside the 64-bit range: 18446744073709551616",
+        ),
+        (
+            lambda text: text.replace('"operator_notes": "', '"operator_notes": "\\ud800'),
+            "JSON text holds an unpaired surrogate escape",
+        ),
+        (
+            lambda text: text[:-2] + ', "deep": ' + "[" * 64 + "]" * 64 + "}\n",
+            "JSON input exceeds decoder limits",
+        ),
+    ],
+    ids=["wide integer", "unpaired surrogate", "nesting 65"],
+)
+def test_campaign_json_outside_the_bounded_rules_is_refused(
+    make_repeat_campaign: MakeRepeatCampaign, change: Callable[[str], str], refusal: str
+) -> None:
+    """Refuse what the bounded run JSON rules refuse, before the schema.
+
+    The campaign manifest is decoded as every run-bound document is: nested at
+    most 64 deep, integers within 64 bits and no unpaired surrogate escape.
+
+    Parameters
+    ----------
+    make_repeat_campaign
+        Campaign of copied real RTL captures.
+    change
+        Edit of the campaign manifest text.
+    refusal
+        Decoder refusal after the manifest path.
+    """
+    path, _ = make_repeat_campaign(repeats=1)
+    text = path.read_text(encoding="utf-8")
+    changed = change(text)
+    assert changed != text
+    path.write_text(changed, encoding="utf-8")
+    with pytest.raises(ValueError, match=f"^{re.escape(f'{path}: {refusal}')}$"):
+        load_campaign(path)
+
+
 def test_malformed_campaign_json_is_refused(make_repeat_campaign: MakeRepeatCampaign) -> None:
     """Refuse repeated JSON member names before schema validation.
 

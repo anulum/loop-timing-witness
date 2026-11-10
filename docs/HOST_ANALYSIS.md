@@ -356,8 +356,10 @@ report = build_campaign_report(load_campaign(Path("path/to/campaign.json")))
 ```
 
 `load_campaign` verifies each run manifest digest and passes those exact bytes to `load_run`,
-which validates the run as usual. The whole campaign is refused for a schema error, an index
-out of order, a path outside the campaign directory, a run manifest bound twice, a digest
+which validates the run as usual. The campaign manifest is decoded with the same bounded JSON
+rules as a run manifest. The whole campaign is refused for a document nested more than 64 deep,
+an integer outside 64 bits or an unpaired surrogate escape, a schema error, an index out of
+order, a path outside the campaign directory, a run manifest bound twice, a digest
 mismatch or a reused `run_id`. It is also refused when loaded repeats differ in any field that
 must agree before pooling: measurement-domain digest, source kind, tool and version, profile,
 placement, sample period, cycle and warm-up counts, load case, controller, plant, fault schedule,

@@ -61,6 +61,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The repeat campaign manifest is decoded with the bounded JSON rules of every run-bound
+  document: a campaign nested more than 64 deep, holding an integer outside the 64-bit range
+  or an unpaired surrogate escape is refused with the decoder's text before its schema is
+  checked.
 - The analysis command chooses between the neural and the CONTROL/COMPUTE analysis
   by decoding the manifest nested at most 64 deep, checked before decoding, with
   integers kept as text and unpaired surrogate escapes kept. A deeper manifest is

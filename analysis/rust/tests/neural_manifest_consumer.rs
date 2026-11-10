@@ -8,12 +8,107 @@
 
 //! Exercise closed declarations without manufacturing source-policy admission.
 
+#[path = "support/corpus.rs"]
+mod corpus;
 mod support;
 
+use corpus::changed;
 use serde_json::{Value, json};
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 use std::process::Command;
 use support::Declaration;
 use witness_analysis::{load_neural_manifest, load_neural_run};
+
+/// The shared corpus of neural declarations and Python's outcomes.
+const REFUSALS: &str = include_str!("data/neural-manifest-refusals.json");
+
+/// Render one crafted corpus document as the Python corpus test renders it.
+fn rendered(base_text: &str, document: &Value) -> Vec<u8> {
+    let mut text = document["text"].as_str().unwrap_or(base_text).to_owned();
+    for edit in document["edits"].as_array().expect("edits") {
+        let (old, new) = (
+            edit[0].as_str().expect("old text"),
+            edit[1].as_str().expect("new text"),
+        );
+        assert_eq!(text.matches(old).count(), 1, "{old}");
+        text = text.replacen(old, new, 1);
+    }
+    let text = format!(
+        "{}{text}{}",
+        document["before"].as_str().expect("before"),
+        document["after"].as_str().expect("after")
+    );
+    let mut raw: Vec<u8> = if document["encoding"] == "latin-1" {
+        text.chars()
+            .map(|character| u8::try_from(u32::from(character)).expect("latin-1"))
+            .collect()
+    } else {
+        text.into_bytes()
+    };
+    let pad = usize::try_from(document["pad"].as_u64().expect("pad")).expect("pad");
+    raw.resize(raw.len() + pad, b' ');
+    raw
+}
+
+#[test]
+fn every_corpus_declaration_has_the_python_outcome() {
+    let corpus: Value = serde_json::from_str(REFUSALS).expect("corpus");
+    let texts = corpus["refusals"].as_array().expect("refusal texts");
+    let refusal = |outcome: &Value| {
+        outcome.as_u64().map(|index| {
+            texts[usize::try_from(index).expect("index")]
+                .as_str()
+                .expect("refusal text")
+        })
+    };
+    let fixture = Declaration::recorded();
+    let base = &corpus["base"];
+    let mut count = 0;
+    for group in corpus["groups"].as_array().expect("groups") {
+        let path = group["path"].as_array().expect("path");
+        for triple in group["changes"].as_array().expect("changes") {
+            let document = if triple[0].is_null() {
+                base.clone()
+            } else {
+                changed(base, path, &triple[0])
+            };
+            let raw = serde_json::to_vec(&document).expect("compact JSON");
+            let outcome = load_neural_manifest(&fixture.write("change.json", &raw));
+            match refusal(&triple[2]) {
+                Some(text) => assert_eq!(
+                    outcome.err().as_deref(),
+                    Some(text),
+                    "{path:?} {}",
+                    triple[0]
+                ),
+                None => assert_eq!(outcome.ok(), Some(document), "{path:?} {}", triple[0]),
+            }
+            count += 1;
+        }
+    }
+    let base_text = corpus["base_text"].as_str().expect("base text");
+    for document in corpus["documents"].as_array().expect("documents") {
+        let raw = rendered(base_text, document);
+        let outcome = load_neural_manifest(&fixture.write("document.json", &raw));
+        match refusal(&document["refusal"]) {
+            Some(text) => assert_eq!(outcome.err().as_deref(), Some(text), "{}", document["name"]),
+            None => assert_eq!(outcome.ok().as_ref(), Some(base), "{}", document["name"]),
+        }
+        count += 1;
+    }
+    assert!(count > 1900, "{count}");
+}
+
+#[test]
+fn a_path_holding_nul_is_refused_as_python_refuses_it() {
+    let path = Path::new(OsStr::from_bytes(b"run\0.json"));
+    assert_eq!(
+        load_neural_manifest(path).err().as_deref(),
+        Some("Neural manifest path contains an invalid NUL character.")
+    );
+}
 
 #[test]
 fn original_declarations_and_complete_source_population() {

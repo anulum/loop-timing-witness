@@ -90,6 +90,18 @@ Loop Timing Witness — changelog
   (`… is not a decimal`, `… is outside the supported decimal range`), so every result
   stays exact or correctly rounded and finite. Cycle and tick counts must be below
   2**64. Observed tracking uses the same rules with the prefix `observed tracking`.
+- A neural declaration is read with the bounded run JSON rules: nesting at most 64
+  deep, integers within the 64-bit ranges, no repeated member name and no unpaired
+  surrogate escape. A document outside them is refused with `Neural manifest must
+  contain a strict UTF-8 JSON object.` before the schema is checked, and the result
+  no longer depends on the interpreter's recursion or integer-conversion limits.
+- The native neural declaration reader refuses with the Python texts and in the Python
+  order: the closed schema with exact integers, the exact run identifier and source
+  pins, each source reference (its digest, then its path and length), repeated source
+  paths, then the root and channel references. A digest that only the schema's line
+  anchor admits is refused as `Neural file reference requires an exact lowercase
+  SHA-256.`, and a path holding NUL as in Python. The former native-only texts are
+  gone.
 - Native metadata and host load receipts are read with the bounded run JSON rules, and
   a receipt that breaks its schema is refused with its first failing location
   (`native metadata <location>: does not satisfy the native run schema`,

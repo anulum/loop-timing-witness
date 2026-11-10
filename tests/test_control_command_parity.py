@@ -508,6 +508,68 @@ def test_dispatch_refusals_are_identical(name: str, tmp_path: Path) -> None:
     assert not (tmp_path / "report").exists()
 
 
+def _recorded_neural(name: str) -> str:
+    """Return the recorded neural declaration with one defect the neural reader finds.
+
+    Parameters
+    ----------
+    name
+        Defect: a run identifier with a trailing newline, a repeated source,
+        a source digest with a trailing newline, or an absolute trace path.
+
+    Returns
+    -------
+    str
+        Declaration text.
+    """
+    recorded = Path(__file__).parent / "data/neural-selected-original.run.json"
+    document = json.loads(recorded.read_text(encoding="utf-8"))
+    sources = document["source_files"]
+    if name == "run identifier":
+        document["run_id"] += "\n"
+    elif name == "repeated source":
+        sources.append(sources[0])
+    elif name == "source digest":
+        sources[-1] = {**sources[-1], "sha256": sources[-1]["sha256"] + "\n"}
+    else:
+        document["input_trace"] = {**document["input_trace"], "path": "/input.json"}
+    return json.dumps(document)
+
+
+NEURAL_DOCUMENTS = {
+    "schema": '{"schema_id": 1}',
+    "wide integer": '{"schema_id": 1, "x": 18446744073709551616}',
+    "unpaired surrogate": '{"schema_id": "\\ud800"}',
+    "nesting 64": '{"schema_id": 1, "x": ' + "[" * 63 + "]" * 63 + "}",
+    **{name: _recorded_neural(name) for name in ("run identifier", "repeated source")},
+    **{name: _recorded_neural(name) for name in ("source digest", "trace path")},
+}
+
+
+@pytest.mark.parametrize("name", list(NEURAL_DOCUMENTS))
+def test_neural_declaration_refusals_are_identical(name: str, tmp_path: Path) -> None:
+    """Refuse a neural declaration through both commands with the same text.
+
+    Each document passes the dispatcher and reaches the neural declaration
+    reader, which decodes it with the bounded run JSON rules and checks the
+    schema, the exact identity and the references in Python's order. The
+    shared refusal corpus holds the reader itself to Python for every change.
+
+    Parameters
+    ----------
+    name
+        Defect that the reader refuses first.
+    tmp_path
+        Owned run directory.
+    """
+    (tmp_path / "manifest.json").write_text(NEURAL_DOCUMENTS[name], encoding="utf-8")
+    python = python_command(["manifest.json", "--output-dir", "report"], tmp_path)
+    rust = rust_command(["manifest.json", "--output-dir", "report"], tmp_path, tmp_path / "rust")
+    assert python["status"] == 1
+    assert rust == python
+    assert not (tmp_path / "report").exists()
+
+
 def _traced(syscall: str, error: str, when: int, trace: Path) -> list[str]:
     """Return a tracer that fails one invocation of one system call.
 

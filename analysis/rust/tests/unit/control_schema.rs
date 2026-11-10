@@ -23,6 +23,10 @@ const RUN: &str = include_str!("../../run-manifest.schema.json");
 const DOMAIN: &str = include_str!("../../measurement-domain.schema.json");
 /// The shared corpus of mutated documents and Python's locations.
 const CORPUS: &str = include_str!("../data/control-schema-locations.json");
+/// The committed neural carrier schema.
+const NEURAL: &str = include_str!("../../neural-step-run.schema.json");
+/// The shared neural corpus; each change carries Python's locations and refusal.
+const NEURAL_CORPUS: &str = include_str!("../data/neural-manifest-refusals.json");
 
 #[test]
 fn every_corpus_case_reports_the_python_locations() {
@@ -53,6 +57,34 @@ fn every_corpus_case_reports_the_python_locations() {
         }
         assert!(count > 1000, "{kind}");
     }
+}
+
+#[test]
+fn every_neural_change_reports_the_python_locations() {
+    let corpus: Value = serde_json::from_str(NEURAL_CORPUS).expect("corpus");
+    let schema = Schema::load(NEURAL).expect("committed schema");
+    let base = &corpus["base"];
+    let mut count = 0;
+    for group in corpus["groups"].as_array().expect("groups") {
+        let path = group["path"].as_array().expect("path");
+        for triple in group["changes"].as_array().expect("changes") {
+            let document = if triple[0].is_null() {
+                base.clone()
+            } else {
+                changed(base, path, &triple[0])
+            };
+            let expected: Vec<String> =
+                serde_json::from_value(triple[1].clone()).expect("locations");
+            assert_eq!(
+                schema.locations(&document),
+                expected,
+                "{path:?} {}",
+                triple[0]
+            );
+            count += 1;
+        }
+    }
+    assert!(count > 1000);
 }
 
 #[test]

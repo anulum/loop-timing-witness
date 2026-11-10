@@ -6,16 +6,18 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — public neural carrier declarations
 
-//! Closed typed public carrier fields; integer and boolean encodings remain distinct.
+//! Typed public carrier fields read after the closed schema has admitted the document.
 
 use crate::capture::ChannelDeclaration;
 use crate::files::FileRef;
-use crate::manifest::{Codes, Completion, SourcePins};
+use crate::manifest::{Completion, SourcePins};
 use serde::Deserialize;
 
-/// Closed public carrier declarations without source or runtime admission.
+/// Public carrier declarations without source or runtime admission.
+///
+/// The committed schema closes every member and fixes the constant ones before
+/// this view is decoded, so it holds only the members the analysis reads.
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(super) struct PublicManifest {
     /// Public carrier schema identifier.
     pub schema_id: String,
@@ -31,22 +33,12 @@ pub(super) struct PublicManifest {
     pub epoch: u32,
     /// Full requested input/state population.
     pub step_count: u32,
-    /// Shared capture timebase width.
-    pub counter_bits: u32,
-    /// Embedded encoder timestamp width.
-    pub encoder_timestamp_bits: u32,
-    /// Positive neuron-ID width.
-    pub encoder_id_width: u32,
     /// Original nominal per-channel capacity.
     pub fifo_capacity_records: u32,
     /// Exclusive full capture horizon.
     pub capture_horizon_edges: u64,
-    /// Declared post-input encoder tail.
-    pub encoder_tail_edges: u32,
     /// Complete original source bodies.
     pub source_files: Vec<FileRef>,
-    /// Selected source-owner oracle commit.
-    pub accepted_oracle_commit: String,
     /// Complete selected model/checker/encoder pins.
     pub sc_body_pins: SourcePins,
     /// Actual original tool receipt.
@@ -65,8 +57,6 @@ pub(super) struct PublicManifest {
     pub channels: [ChannelDeclaration; 3],
     /// Root completion claims.
     pub completion: Completion,
-    /// Exact event vocabulary.
-    pub event_codes: Codes,
     /// Original declared simulator clock schedule.
     pub clock_schedule_ref: FileRef,
     /// Source-policy declaration, never a run-selected policy admission.

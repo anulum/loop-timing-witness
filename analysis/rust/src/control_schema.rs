@@ -10,15 +10,17 @@
 //!
 //! The Python analysis validates with `jsonschema` and reports only failing
 //! locations, never the validator's wording. This interpreter implements the
-//! keywords the run, measurement-domain, native-run and host-load schemas use, with the same
-//! applicability and equality rules, and reports the same locations: each
-//! distinct location once, sorted by its path parts as strings. A keyword
-//! outside the supported set is refused when the schema is loaded.
+//! keywords the run, measurement-domain, native-run, host-load and neural
+//! carrier schemas use, with the same applicability and equality rules, and
+//! reports the same locations: each distinct location once, sorted by its path
+//! parts as strings. A keyword outside the supported set is refused when the
+//! schema is loaded.
 //!
 //! Where an error is reported follows `jsonschema`: a failing `anyOf`, `oneOf` or
 //! `not`, an unexpected member and a failing `propertyNames` are reported at the
-//! object or value that holds them; `properties`, `items` and an
-//! `additionalProperties` schema report at the member or item; `if` selects
+//! object or value that holds them; `properties`, `prefixItems`, `items` and an
+//! `additionalProperties` schema report at the member or item, except that
+//! `items: false` reports at the array that holds extra items; `if` selects
 //! `then` or `else` without reporting its own errors.
 
 use crate::control_pattern::Pattern;
@@ -51,7 +53,7 @@ const SINGLE: &[&str] = &[
 ];
 
 /// Keywords whose value is an array of subschemas.
-const LISTS: &[&str] = &["allOf", "anyOf", "oneOf"];
+const LISTS: &[&str] = &["allOf", "anyOf", "oneOf", "prefixItems"];
 
 /// Keywords whose value is checked directly against the instance.
 const ASSERTIONS: &[&str] = &[
@@ -141,7 +143,14 @@ impl Schema {
             match keyword.as_str() {
                 "properties" => self.properties(value, instance, path, errors),
                 "additionalProperties" => self.additional(keywords, value, instance, path, errors),
-                "items" => self.items(value, instance, path, errors),
+                "items" => self.items(keywords, value, instance, path, errors),
+                "prefixItems" => {
+                    if let Value::Array(items) = instance {
+                        for (index, (schema, item)) in list(value).iter().zip(items).enumerate() {
+                            self.descend(schema, item, index.to_string(), path, errors);
+                        }
+                    }
+                }
                 "propertyNames" => {
                     if let Value::Object(object) = instance
                         && object
@@ -238,15 +247,27 @@ impl Schema {
     /// Check every array item against one schema.
     fn items(
         &self,
+        keywords: &Map<String, Value>,
         value: &Value,
         instance: &Value,
         path: &mut Vec<String>,
         errors: &mut Vec<Vec<String>>,
     ) {
-        if let Value::Array(items) = instance {
-            for (index, item) in items.iter().enumerate() {
-                self.descend(value, item, index.to_string(), path, errors);
+        // Items covered by `prefixItems` are checked there; `items` takes the rest.
+        let start = keywords
+            .get("prefixItems")
+            .map_or(0, |prefix| list(prefix).len());
+        let Value::Array(items) = instance else {
+            return;
+        };
+        if value == &Value::Bool(false) {
+            if items.len() > start {
+                errors.push(path.clone());
             }
+            return;
+        }
+        for (index, item) in items.iter().enumerate().skip(start) {
+            self.descend(value, item, index.to_string(), path, errors);
         }
     }
 

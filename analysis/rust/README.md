@@ -32,7 +32,8 @@ with the Python command's diagnostic otherwise. For a neural run,
 a complete passing report returns status 0. An interpreted acquisition with
 failed predicates returns status 2 and retains its complete report. Invalid
 declarations, unadmitted source identities, changed required bytes or failed
-publication return status 1 with an authored diagnostic.
+publication return status 1 with an authored diagnostic. `load_neural_manifest`
+refuses a declaration with the Python reader's text, for the same first defect.
 
 Use the library through its root API:
 

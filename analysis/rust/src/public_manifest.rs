@@ -7,16 +7,25 @@
 // Loop Timing Witness — public neural carrier declaration reader
 
 //! Validate carrier declarations without opening referenced sources or admitting a run.
+//!
+//! The checks and their refusal texts follow Python's `decode_neural_manifest`
+//! in the same order, so a declaration with several defects is refused for the
+//! same first one: the byte allocation, the bounded run JSON decoding, the
+//! closed schema with exact integers, the exact identity grammar, each source
+//! reference, repeated source paths, then the root and channel references.
 
-use crate::capture::Role;
+use crate::control_json::decode_object;
+use crate::control_schema::Schema;
 use crate::files::{FileRef, digest};
 use crate::public_manifest_fields::PublicManifest;
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::io::Read;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
+use std::sync::LazyLock;
 
 /// Exact schema used by the public declaration reader.
 pub const SCHEMA_SHA256: &str = "846d131e51cff0dee88d8c9484e435eb02444e0f0a18b58e9d5f053633164f8f";
@@ -25,6 +34,16 @@ const SOURCE_LIMIT: u64 = 1048576;
 const PATH_LIMIT: usize = 4096;
 const LINUX_O_NOFOLLOW: i32 = 0o400000;
 const LINUX_O_NONBLOCK: i32 = 0o4000;
+/// The refusal of bytes that are not one bounded strict JSON object.
+const NOT_JSON: &str = "Neural manifest must contain a strict UTF-8 JSON object.";
+/// The refusal of a document outside the closed schema or its exact integers.
+const NOT_CLOSED: &str = "Neural manifest violates its closed schema or exact integer contract.";
+
+/// The embedded carrier schema; one copy serves both its digest check and validation.
+static SCHEMA_TEXT: &str = include_str!("../neural-step-run.schema.json");
+/// The committed carrier schema, read as Python's validator reads it.
+static SCHEMA: LazyLock<Schema> =
+    LazyLock::new(|| Schema::load(SCHEMA_TEXT).expect("committed schema"));
 
 /// Return whether the entire lowercase SHA-256 declaration is valid.
 fn valid_digest(value: &str) -> bool {
@@ -34,11 +53,24 @@ fn valid_digest(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-/// Check portable canonical names and role allocations without opening the reference.
-fn reference(reference: &FileRef, limit: u64) -> Result<(), String> {
+/// Tell whether any number of the integer-only carrier has a decimal encoding.
+fn has_decimal(value: &Value) -> bool {
+    match value {
+        Value::Number(number) => number.is_f64(),
+        Value::Array(items) => items.iter().any(has_decimal),
+        Value::Object(members) => members.values().any(has_decimal),
+        _ => false,
+    }
+}
+
+/// Require an exact lowercase digest, then a portable canonical name within the role's allocation.
+fn reference(reference: &FileRef, limit: u64) -> Result<&str, String> {
+    if !valid_digest(&reference.sha256) {
+        return Err("Neural file reference requires an exact lowercase SHA-256.".into());
+    }
+    // An empty name has one empty part; the schema already requires one character.
     let name = &reference.path;
-    if name.is_empty()
-        || name.len() > PATH_LIMIT
+    if name.len() > PATH_LIMIT
         || name.split('/').any(|part| {
             part.is_empty()
                 || part == "."
@@ -48,15 +80,17 @@ fn reference(reference: &FileRef, limit: u64) -> Result<(), String> {
                     .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
         })
         || reference.byte_length > limit
-        || !valid_digest(&reference.sha256)
     {
         return Err("Neural file reference requires a bounded portable within-run path.".into());
     }
-    Ok(())
+    Ok(name)
 }
 
 /// Read a finite regular Linux manifest descriptor without following the final symlink.
 fn root_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    if path.as_os_str().as_bytes().contains(&0) {
+        return Err("Neural manifest path contains an invalid NUL character.".into());
+    }
     let file = OpenOptions::new()
         .read(true)
         .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_NONBLOCK)
@@ -81,46 +115,15 @@ fn root_bytes(path: &Path) -> Result<Vec<u8>, String> {
     Ok(raw)
 }
 
-/// Require the public root identity, complete finite populations and exact event meanings.
-fn identity(m: &PublicManifest) -> Result<(), String> {
-    let name = &m.run_id;
-    let valid_name = !name.is_empty()
-        && name.len() <= 128
-        && name.as_bytes()[0].is_ascii_alphanumeric()
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte));
-    let codes = &m.event_codes;
-    if m.schema_id != "loop-timing-witness.neural-step-run.v1"
-        || m.native_source_cohort != "sc-neurocore-neural-step-1n1b16t.v1"
-        || m.profile != "neural-step-capture"
-        || m.evidence_class != "simulated-timing"
-        || !valid_name
-        || m.epoch > 1
-        || m.step_count != 1000
-        || m.counter_bits != 64
-        || m.encoder_timestamp_bits != 16
-        || m.encoder_id_width != 1
-        || ![8, 1024].contains(&m.fifo_capacity_records)
-        || !(1..=65535).contains(&m.capture_horizon_edges)
-        || m.encoder_tail_edges != 4
-        || m.accepted_oracle_commit != "0593c3df906d9493ac5c1da5c5e528f6078d275e"
-        || (
-            codes.input_step_applied,
-            codes.state_and_raw_spike_observed,
-            codes.encoder_packet_serviced,
-            codes.alignment_marker,
-        ) != (14, 15, 16, 17)
-    {
-        return Err("Neural manifest violates its closed schema or exact integer contract.".into());
-    }
-    Ok(())
-}
-
-/// Validate every source pin, channel role/count and complete file declaration.
-fn declarations(m: &PublicManifest) -> Result<(), String> {
+/// Require the whole run identifier and every source pin, which the schema anchors only by line.
+///
+/// The schema's `^…$` patterns are searched as Python's `re.search` does, so
+/// they also admit the token followed by one final newline; Python's whole-string
+/// grammar refuses exactly those. The schema bytes are pinned by their digest.
+fn exact_identity(m: &PublicManifest) -> Result<(), String> {
     let pins = &m.sc_body_pins;
     if [
+        &m.run_id,
         &pins.lif,
         &pins.testbench,
         &pins.encoder,
@@ -130,19 +133,22 @@ fn declarations(m: &PublicManifest) -> Result<(), String> {
         &pins.checker_tests,
     ]
     .iter()
-    .any(|pin| !valid_digest(pin))
+    .any(|token| token.ends_with('\n'))
     {
-        return Err("Neural source pins require lowercase SHA-256 declarations.".into());
+        return Err("Neural run identity and source pins require exact grammar.".into());
     }
-    if m.source_files.is_empty() {
-        return Err("Neural manifest requires a nonempty source population.".into());
-    }
+    Ok(())
+}
+
+/// Check every source reference, then repeated source paths, then the root and channel references.
+fn declarations(m: &PublicManifest) -> Result<(), String> {
     let mut paths = BTreeSet::new();
+    let mut repeated = false;
     for source in &m.source_files {
-        reference(source, SOURCE_LIMIT)?;
-        if !paths.insert(&source.path) {
-            return Err("Neural source references contain a duplicate path.".into());
-        }
+        repeated |= !paths.insert(reference(source, SOURCE_LIMIT)?);
+    }
+    if repeated {
+        return Err("Neural source references contain a duplicate path.".into());
     }
     for item in [
         &m.tool_receipt,
@@ -156,37 +162,7 @@ fn declarations(m: &PublicManifest) -> Result<(), String> {
     ] {
         reference(item, JSON_LIMIT as u64)?;
     }
-    let completion = &m.completion;
-    if [
-        completion.requested_steps,
-        completion.observed_states,
-        completion.raw_spikes,
-        completion.observed_service_packets,
-    ]
-    .iter()
-    .any(|count| *count > 65535)
-    {
-        return Err("Neural completion count exceeds its carrier allocation.".into());
-    }
-    for (channel, role) in m
-        .channels
-        .iter()
-        .zip([Role::Input, Role::State, Role::Service])
-    {
-        if channel.role != role
-            || channel.marker_records > 2
-            || [
-                channel.attempts,
-                channel.accepted,
-                channel.dropped,
-                channel.drained,
-                channel.payload_records,
-            ]
-            .iter()
-            .any(|count| *count > 65535)
-        {
-            return Err("Neural channel declarations violate their closed carrier.".into());
-        }
+    for channel in &m.channels {
         for item in [&channel.capture, &channel.payload, &channel.markers] {
             reference(item, JSON_LIMIT as u64)?;
         }
@@ -194,51 +170,22 @@ fn declarations(m: &PublicManifest) -> Result<(), String> {
     Ok(())
 }
 
-/// Exclude serde's positional struct encoding where the JSON schema requires objects.
-fn object_containers(document: &Value) -> bool {
-    document.is_object()
-        && [
-            "sc_body_pins",
-            "completion",
-            "event_codes",
-            "tool_receipt",
-            "input_trace",
-            "numerical_trace",
-            "numerical_projection",
-            "reference_projection",
-            "service_trace",
-            "clock_schedule_ref",
-            "source_contract_ref",
-        ]
-        .iter()
-        .all(|name| document[name].is_object())
-        && document["source_files"]
-            .as_array()
-            .is_some_and(|sources| sources.iter().all(Value::is_object))
-        && document["channels"].as_array().is_some_and(|channels| {
-            channels.iter().all(|channel| {
-                channel.is_object()
-                    && ["capture", "payload", "markers"]
-                        .iter()
-                        .all(|name| channel[name].is_object())
-            })
-        })
-}
-
 /// Read the closed public carrier as declarations only, without trusted source admission.
 ///
 /// The final manifest component must be a regular Linux file, at most 65,536 bytes.
-/// All integer and boolean fields are deserialised directly into their distinct types;
-/// unknown and duplicate members are refused by the closed typed decoder. Schema objects
-/// cannot be replaced with positional arrays, including nested file references, channel
-/// declarations, source pins, completion and event meanings. Referenced source, policy,
-/// trace and runtime files are never opened. A successful result is not
-/// a complete bound run, numerical verdict, runtime selection or source-owner adoption.
+/// The bytes are decoded with the bounded run JSON rules: nesting at most 64 deep,
+/// integers within 64 bits, no repeated member name and no unpaired surrogate. The
+/// document must then satisfy the committed closed schema with integer encodings
+/// only, so schema objects cannot be replaced with positional arrays. Referenced
+/// source, policy, trace and runtime files are never opened. A successful result is
+/// not a complete bound run, numerical verdict, runtime selection or source-owner
+/// adoption.
 ///
 /// # Errors
 ///
-/// Returns an authored refusal for malformed bytes, unsupported file kinds, excessive
-/// allocations or declarations contradicting the public schema and portable path laws.
+/// Returns the refusal Python's `load_neural_manifest` gives for the same path and
+/// bytes: malformed bytes, unsupported file kinds, excessive allocations, or
+/// declarations contradicting the public schema and portable path laws.
 pub fn load_neural_manifest(path: &Path) -> Result<Value, String> {
     let (_, document, _) = acquire(path)?;
     Ok(document)
@@ -247,15 +194,20 @@ pub fn load_neural_manifest(path: &Path) -> Result<Value, String> {
 /// Acquire one root snapshot and validate its entire closed typed declaration.
 pub(crate) fn acquire(path: &Path) -> Result<(Vec<u8>, Value, PublicManifest), String> {
     let raw = root_bytes(path)?;
-    if digest(include_bytes!("../neural-step-run.schema.json")) != SCHEMA_SHA256 {
+    if digest(SCHEMA_TEXT.as_bytes()) != SCHEMA_SHA256 {
         return Err("Installed neural manifest schema differs from its admitted body.".into());
     }
-    let document = crate::files::decode(&raw, "public neural manifest")?;
-    if !object_containers(&document) {
-        return Err("Neural manifest requires schema object containers.".into());
+    let (object, _) = decode_object(&raw, "neural manifest").map_err(|_| NOT_JSON.to_owned())?;
+    let document = Value::Object(object);
+    if !SCHEMA.locations(&document).is_empty() || has_decimal(&document) {
+        return Err(NOT_CLOSED.into());
     }
-    let manifest: PublicManifest = crate::files::decode(&raw, "public neural manifest")?;
-    identity(&manifest)?;
+    // Every schema-valid integer-only document fits the typed carrier: each
+    // member's type and range is closed by the schema, so this refusal is a
+    // guard against a schema edit, never a second wording, and no input reaches it.
+    let typed = serde_json::from_value::<PublicManifest>(document.clone());
+    let manifest = typed.map_err(|_| NOT_CLOSED.to_owned())?;
+    exact_identity(&manifest)?;
     declarations(&manifest)?;
     Ok((raw, document, manifest))
 }

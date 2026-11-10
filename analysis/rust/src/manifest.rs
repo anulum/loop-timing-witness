@@ -39,20 +39,6 @@ pub(crate) struct SourcePins {
     pub checker_tests: String,
 }
 
-/// Original declared event meanings, never inferred from filenames.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Codes {
-    /// Input application code.
-    pub input_step_applied: u8,
-    /// Observed state/raw-spike code.
-    pub state_and_raw_spike_observed: u8,
-    /// Actual encoder service code.
-    pub encoder_packet_serviced: u8,
-    /// Dedicated marker code.
-    pub alignment_marker: u8,
-}
-
 /// Root status assertions later reconciled against actual source data.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

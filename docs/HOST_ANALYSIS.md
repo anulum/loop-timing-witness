@@ -566,7 +566,9 @@ access or scale arithmetic; that physical-object boundary remains unexercised wi
 `loop_timing_witness.neural_run_manifest.load_neural_manifest(path)` reads the
 closed `loop-timing-witness.neural-step-run.v1` carrier using the bundled schema.
 It requires a regular manifest file of at most 65,536 bytes, rejects a final
-symlink or FIFO, duplicate JSON members, decimal counts, nonportable reference
+symlink or FIFO, and decodes the bytes with the bounded run JSON rules (nesting
+at most 64 deep, integers within the 64-bit ranges, no duplicate members and no
+unpaired surrogate escape). It then rejects decimal counts, nonportable reference
 paths, malformed run IDs and SHA-256 strings, and repeated source paths. The
 complete source list must fit the manifest byte allocation, with at most 1 MiB
 per source; trace and receipt references are limited to 65,536 bytes. The full
@@ -730,11 +732,14 @@ The [standalone Rust crate](../analysis/rust/README.md) exports
 `write_neural_report`. Its `loop-timing-witness-analyze-native` command accepts
 the same manifest and new output directory as the Python command, and
 `public_command::run` runs that command against a caller's own registry with
-the same statuses and messages as the Python `dispatch_analysis`, except that a
-neural manifest violating its closed schema is refused by both with status 1
-but can be named by a different text; aligning those texts is open work. Both full
-verifiers bind the complete original acquisition and run fresh fixed source
-checker operations. Neither declaration reader substitutes for full admission.
+the same statuses and messages as the Python `dispatch_analysis`. Both
+declaration readers refuse a neural manifest with the same text, for the same
+first defect: they decode it with the bounded run JSON rules, then check the
+closed schema with exact integers, the exact run identifier and source pins,
+each source reference (its digest, then its path and length), repeated source
+paths, and then the root and channel references. Both full verifiers bind the
+complete original acquisition and run fresh fixed source checker operations.
+Neither declaration reader substitutes for full admission.
 
 Both file APIs can bind a consumer-owned complete body as well as its file
 reference: Python `read_neural_run_file` accepts `expected_bytes` and a

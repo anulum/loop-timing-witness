@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from jsonschema import Draft202012Validator
 
-from .manifest_io import JsonInputRefusalError, parse_json_object
+from .manifest_io import JsonInputRefusalError, parse_bounded_json_object, parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 
 if TYPE_CHECKING:
@@ -202,14 +202,17 @@ def decode_neural_manifest(raw: bytes) -> dict[str, Any]:
     Raises
     ------
     NeuralCaptureRefusalError
-        If bytes, schema, exact integer encodings or reference laws fail.
+        If bytes, schema, exact integer encodings or reference laws fail. The
+        bytes are decoded with the bounded run JSON rules (nesting at most 64,
+        64-bit integers, no unpaired surrogate), so the refusal never depends on
+        the interpreter's recursion or integer-conversion limits.
     """
     if len(raw) > NEURAL_MANIFEST_LIMIT:
         message = "Neural manifest exceeds its byte allocation."
         raise NeuralCaptureRefusalError(message)
     schema_raw = _installed_schema_bytes()
     try:
-        manifest = parse_json_object(raw, "neural manifest")
+        manifest = parse_bounded_json_object(raw, "neural manifest")
         schema = parse_json_object(schema_raw, "installed neural schema")
     except JsonInputRefusalError as exc:
         message = "Neural manifest must contain a strict UTF-8 JSON object."

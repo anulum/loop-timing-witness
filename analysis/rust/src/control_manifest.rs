@@ -295,6 +295,9 @@ fn agree(manifest: &Value, domain: &Value) -> Result<(), String> {
 }
 
 /// Resolve one declared path without leaving the run directory.
+///
+/// The path names what Python's `Path` makes of it: repeated separators, `.`
+/// parts and a final separator are dropped before it is resolved.
 fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
     let declared = text(&item["path"]);
     let relative = Path::new(declared);
@@ -307,7 +310,8 @@ fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
             "input path must stay within the run directory: {declared}"
         ));
     }
-    std::fs::canonicalize(directory.join(relative))
+    let parts: PathBuf = relative.components().collect();
+    std::fs::canonicalize(directory.join(parts))
         .ok()
         .filter(|path| path.starts_with(directory) && path.is_file())
         .ok_or_else(|| format!("input is not a regular file inside the run directory: {declared}"))

@@ -166,6 +166,39 @@ def test_valid_runs_load_to_the_same_inputs_and_events(
     _same(path, tmp_path / "root", path.read_bytes())
 
 
+@pytest.mark.parametrize(
+    "spelling", ["final separator", "repeated separator", "dot part", "domain final separator"]
+)
+def test_input_paths_name_what_python_paths_name(
+    spelling: str, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Load inputs whose declared paths Python's ``Path`` normalises, alike.
+
+    Parameters
+    ----------
+    spelling
+        A final separator after a file, a repeated separator or a ``.`` part in a
+        source path, or a final separator after the measurement domain.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    source = manifest["source"]["files"][0]
+    if spelling == "final separator":
+        manifest["files"]["events"]["path"] += "/"
+    elif spelling == "repeated separator":
+        source["path"] = source["path"].replace("/", "//", 1)
+    elif spelling == "dot part":
+        source["path"] = source["path"].replace("/", "/./", 1)
+    else:
+        manifest["measurement_domain"]["path"] += "/"
+    outcome = _same(_write(run, manifest), tmp_path)
+    assert "refusal" not in outcome
+    assert outcome["events_refusal"] is None
+
+
 def test_receipts_are_read_before_the_declared_files(
     make_rtl_run: MakeRtlRun, tmp_path: Path
 ) -> None:

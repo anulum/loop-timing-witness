@@ -13,7 +13,7 @@
 //! messages and statuses, against its own registry.
 
 use crate::control_command::{Dispatch, analyze_control, dispatch};
-use crate::control_text::pure_path;
+use crate::control_paths::pure_path;
 use crate::public_api::{build_neural_run_report, load_neural_run_with_registry};
 use crate::public_publication::write_neural_report;
 use crate::public_registry::NeuralRegistry;

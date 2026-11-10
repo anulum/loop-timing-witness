@@ -15,7 +15,6 @@
 //! decoding gives them.
 
 use crate::control_printable::{DECIMAL, NON_PRINTABLE};
-use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
@@ -126,35 +125,6 @@ pub(crate) fn python_display(path: &Path) -> String {
             Unit::Escaped(byte) => format!("\\udc{byte:02x}"),
         })
         .collect()
-}
-
-/// Python's parts of a pure POSIX path: the root, `""`, `"/"` or `"//"` (two
-/// leading separators are kept, three or more are one), and the names
-/// without empty and `.` parts.
-pub(crate) fn pure_parts(path: &Path) -> (&'static [u8], Vec<&[u8]>) {
-    let bytes = path.as_os_str().as_bytes();
-    let root: &'static [u8] = if bytes.starts_with(b"//") && !bytes.starts_with(b"///") {
-        b"//"
-    } else if bytes.starts_with(b"/") {
-        b"/"
-    } else {
-        b""
-    };
-    let parts = bytes
-        .split(|&byte| byte == b'/')
-        .filter(|part| !part.is_empty() && *part != b".")
-        .collect();
-    (root, parts)
-}
-
-/// Python's `str(Path(text))` of a published output, as standard output prints it.
-///
-/// A published output always ends in a name, so the text is never empty.
-pub(crate) fn pure_path(path: &Path) -> String {
-    let (root, parts) = pure_parts(path);
-    python_display(Path::new(OsStr::from_bytes(
-        &[root, &parts.join(&b'/')].concat(),
-    )))
 }
 
 /// The error number and the C library's message for it.

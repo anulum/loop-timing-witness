@@ -14,6 +14,7 @@ dimension; Python and Rust must give the same refusal or the same report.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -38,6 +39,8 @@ _INVENTORY = _CHECK + "source-inventory.json"
 _NATIVE = "native-runtime.json"
 _ZERO = "0" * 64
 _COUNTS = "capture-counts.json"
+# An integer zero member value in the canonical receipt text.
+_ZEROS = re.compile(rb'(": ?)0([,\n }])')
 
 
 def _set(target: str, *path: object, value: object) -> Change:
@@ -157,6 +160,59 @@ def _duplicate_source_path(name: str, raw: bytes) -> bytes:
     start = raw.index(marker) + len(marker)
     end = raw.index(b"\n", start) + 1
     return raw[:start] + raw[start:end] + raw[start:]
+
+
+def _native_text(rewrite: Callable[[bytes], bytes]) -> Change:
+    """Return a change of the native runtime receipt's raw text.
+
+    Parameters
+    ----------
+    rewrite
+        Rewrites the whole receipt text.
+
+    Returns
+    -------
+    Change
+        Rewrite that leaves every other file unchanged.
+    """
+    return lambda name, raw: rewrite(raw) if name == _NATIVE else raw
+
+
+def _zeros(spelling: bytes, count: int = 0) -> Callable[[bytes], bytes]:
+    """Return a rewrite that spells integer zero members another way.
+
+    Parameters
+    ----------
+    spelling
+        Replacement token.
+    count
+        Number of members to respell, the first ones; 0 respells every one.
+
+    Returns
+    -------
+    Callable[[bytes], bytes]
+        Text rewrite.
+    """
+    return lambda raw: _ZEROS.sub(rb"\g<1>" + spelling + rb"\2", raw, count=count)
+
+
+def _escaped_zeros(raw: bytes) -> bytes:
+    """Spell every integer zero as ``-0`` and one string letter as a Unicode escape.
+
+    Parameters
+    ----------
+    raw
+        Native runtime receipt text.
+
+    Returns
+    -------
+    bytes
+        Text with the same decoded value.
+    """
+    letter = re.search(rb'"backend": "([a-z])', raw)
+    assert letter is not None
+    escape = b"\\u%04x" % letter.group(1)[0]
+    return _zeros(b"-0")(raw[: letter.start(1)] + escape + raw[letter.end(1) :])
 
 
 def _repeat_attempts(name: str, raw: bytes) -> bytes:
@@ -671,6 +727,31 @@ _CASES: dict[str, tuple[dict[str, Any], str, str]] = {
         "refusal",
         "Invalid original native runtime.",
     ),
+    "native-negative-zero-document": (
+        {"change": replace_file(_NATIVE, b"-0")},
+        "refusal",
+        "Invalid original native runtime.",
+    ),
+    "native-negative-zero-digits": (
+        {"change": _native_text(_zeros(b"-01", 1))},
+        "refusal",
+        "Invalid original native runtime.",
+    ),
+    "native-negative-zero-decimal": (
+        {"change": _native_text(_zeros(b"-0.0", 1))},
+        "refusal",
+        "Invalid complete actual receipt: native runtime.",
+    ),
+    "native-negative-integer": (
+        {"change": _native_text(lambda raw: _zeros(b"-1", 1)(_zeros(b"-0", 1)(raw)))},
+        "refusal",
+        "Invalid complete actual receipt: native runtime.",
+    ),
+    "native-negative-exponent": (
+        {"change": _native_text(lambda raw: _zeros(b"-0")(_zeros(b"0e-05", 1)(raw)))},
+        "refusal",
+        "Invalid complete actual receipt: native runtime.",
+    ),
     "native-dialect": (
         {"change": _set(_NATIVE, "dialect", value="other")},
         "refusal",
@@ -1108,3 +1189,25 @@ def test_receipt_fault_has_one_outcome_in_both(tmp_path: Path, fault: str) -> No
         findings = python["report"][kind]["findings"]
         assert any(message in finding for finding in findings), findings
         assert python["report"]["verification"]["whole"] is False
+
+
+def test_integer_zero_spellings_are_one_value_in_both(tmp_path: Path) -> None:
+    """Admit integer zeros spelled ``-0`` beside a string escape, alike in both languages.
+
+    JSON allows a minus before an integer zero, and Python reads it as 0. Every
+    integer zero member of the native runtime receipt is spelled ``-0`` and one
+    letter of a string as a Unicode escape, so the decoded receipt is unchanged
+    and the whole run is still verified.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned acquisition directory.
+    """
+    acquisition = build_neural_acquisition(tmp_path / "run", change=_native_text(_escaped_zeros))
+    try:
+        python: dict[str, Any] = python_outcome(acquisition)
+        assert_same_outcome(python, rust_outcome(acquisition, tmp_path / "rust"))
+    finally:
+        make_writable(tmp_path)
+    assert python["report"]["verification"]["whole"] is True

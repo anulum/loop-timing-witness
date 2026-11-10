@@ -42,8 +42,9 @@ fn closes(tail: &str) -> bool {
     else {
         return false;
     };
+    // A rest that starts with `<` and ends with `>` holds both, as Python's `<.*>` requires.
     let rest = rest.trim_end_matches(space);
-    rest.is_empty() || (rest.starts_with('<') && rest.ends_with('>') && rest.len() > 1)
+    rest.is_empty() || (rest.starts_with('<') && rest.ends_with('>'))
 }
 
 /// Match one successful open record: `[PID ]openat[2](BASE, "NAME", FLAGS) = FD[<...>]`.

@@ -220,6 +220,22 @@ def test_receipts_are_read_before_the_declared_files(
     _same(_write(run, manifest), tmp_path / "absent")
 
 
+def test_a_directory_manifest_is_refused_alike(tmp_path: Path) -> None:
+    """Refuse a directory named as the manifest with Python's ``open`` error.
+
+    Python's ``open`` refuses a directory once it is open and names the path;
+    a read of the directory would not.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory named as the manifest, and the native outcome.
+    """
+    (tmp_path / "run").mkdir()
+    outcome = _same(tmp_path / "run", tmp_path / "rust")
+    assert outcome == {"refusal": f"[Errno 21] Is a directory: '{tmp_path / 'run'}'"}
+
+
 def test_root_bytes_keep_loading_after_the_manifest_file_vanished(
     make_rtl_run: MakeRtlRun, tmp_path: Path
 ) -> None:

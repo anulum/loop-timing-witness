@@ -318,9 +318,14 @@ fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
 }
 
 /// Read a whole file as Python's `Path.read_bytes` reports failures: an
-/// opening error names the path, a reading error does not.
+/// opening error names the path, a reading error does not. Python's `open`
+/// refuses a directory once it is open, naming the path, as here.
 fn read_file(path: &Path) -> Result<Vec<u8>, String> {
     let mut stream = std::fs::File::open(path).map_err(|error| os_error(&error, path))?;
+    if stream.metadata().is_ok_and(|status| status.is_dir()) {
+        let error = std::io::Error::from_raw_os_error(rustix::io::Errno::ISDIR.raw_os_error());
+        return Err(os_error(&error, path));
+    }
     let mut content = Vec::new();
     stream
         .read_to_end(&mut content)

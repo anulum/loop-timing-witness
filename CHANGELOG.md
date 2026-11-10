@@ -138,6 +138,8 @@ Loop Timing Witness — changelog
   surrogate, or a path with bytes that are not UTF-8, failed while its report was written. The
   report now holds such a refusal with each of those code points as its backslash escape, as
   the command prints a refusal, and the campaign is published.
+- The native `load_control_run` refuses a directory named as the manifest with Python's
+  text, `[Errno 21] Is a directory: '<path>'`; it named no path.
 - The native analysis resolves a declared input path as Python's `Path` names it: a final
   separator, a repeated separator and a `.` part are dropped. A file declared with a final
   separator, such as `events.bin/`, was refused as not a regular file.

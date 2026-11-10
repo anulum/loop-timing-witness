@@ -670,7 +670,8 @@ def test_publication_faults_are_refused_alike(
             parent.chmod(0o500)
         try:
             if side == "python":
-                outcome = python_command(arguments, run, wrapper)
+                unmeasured = injected is not None or fault == "file size"
+                outcome = python_command(arguments, run, wrapper, measured=not unmeasured)
             else:
                 outcome = rust_command(arguments, run, tmp_path / "rust", wrapper, limit)
         finally:

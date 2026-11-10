@@ -255,7 +255,7 @@ def canonical(outcome: dict[str, Any]) -> str:
 
 
 def python_command(
-    arguments: Sequence[str], cwd: Path, wrapper: Sequence[str] = ()
+    arguments: Sequence[str], cwd: Path, wrapper: Sequence[str] = (), *, measured: bool = True
 ) -> dict[str, Any]:
     """Run the Python analysis command and return its status and printed text.
 
@@ -267,6 +267,11 @@ def python_command(
         Working directory of the command.
     wrapper
         Leading argument vector that runs the command under a host condition.
+    measured
+        Whether a coverage run measures the command. Coverage starts and stops
+        inside the command with directories and files of its own, so a command
+        whose own system calls are counted for fault injection, or whose file
+        size is limited, runs unmeasured.
 
     Returns
     -------
@@ -274,7 +279,12 @@ def python_command(
         ``status``, ``stdout`` and ``stderr``.
     """
     tests = Path(__file__).resolve().parent
-    environment = {**os.environ, "PYTHONPATH": str(tests.parent / "src")}
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if measured or not key.startswith(("COVERAGE_", "COV_CORE"))
+    }
+    environment["PYTHONPATH"] = str(tests.parent / "src")
     result = subprocess.run(
         [*wrapper, sys.executable, "-m", "loop_timing_witness.analyze_run", *arguments],
         stdin=subprocess.DEVNULL,

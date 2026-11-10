@@ -79,25 +79,51 @@ def _files(directory: Path) -> dict[str, bytes]:
     return {path.name: path.read_bytes() for path in sorted(directory.iterdir())}
 
 
+def _declared_variant(variant: str, manifest: dict[str, Any]) -> bool:
+    """Change only the declaration of a real capture into a report variant.
+
+    Parameters
+    ----------
+    variant
+        ``line-feed run id`` for a run identifier ending with the line feed its
+        schema pattern admits, or ``escaped unit`` for a plant unit that needs
+        every JSON string escape.
+    manifest
+        Declaration changed in place.
+
+    Returns
+    -------
+    bool
+        Whether the variant is one of these declaration changes.
+    """
+    if variant == "line-feed run id":
+        manifest["run_id"] += "\n"
+    elif variant == "escaped unit":
+        manifest["plant"]["tracking_unit"] = 'q"b\\s\nn\rr\tt\bb\ff' + chr(1) + chr(0x7F) + "é"
+    else:
+        return False
+    return True
+
+
 def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
     """Change one real CONTROL capture into a report variant.
 
     Parameters
     ----------
     variant
-        ``escaped unit`` for a plant unit that needs every JSON string escape,
-        ``no power`` for a run without an energy series, ``gapped samples``
-        for a cycle without its sample read and tracking row, or ``energy
-        formats`` for rail energies whose plot labels need every ``.6g`` form.
+        A declaration change (:func:`_declared_variant`), ``no power`` for a
+        run without an energy series, ``gapped samples`` for a cycle without
+        its sample read and tracking row, or ``energy formats`` for rail
+        energies whose plot labels need every ``.6g`` form.
     run
         Run directory.
     manifest
         Declaration changed in place.
     """
     energies = ENERGY_VARIANTS.get(variant)
-    if variant == "escaped unit":
-        manifest["plant"]["tracking_unit"] = 'q"b\\s\nn\rr\tt\bb\ff' + chr(1) + chr(0x7F) + "é"
-    elif variant == "no power":
+    if _declared_variant(variant, manifest):
+        return
+    if variant == "no power":
         manifest["files"]["power"] = None
     elif variant == "gapped samples":
         manifest["tracking_sampling"] = "observed"
@@ -143,6 +169,7 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
     [
         "CONTROL",
         "COMPUTE",
+        "line-feed run id",
         "escaped unit",
         "no power",
         "gapped samples",
@@ -163,7 +190,8 @@ def test_reports_are_byte_equal(
     Parameters
     ----------
     variant
-        Event profile of the capture, or a changed capture: every JSON string
+        Event profile of the capture, or a changed capture: a run identifier
+        ending with a line feed, which the CSV tables quote, every JSON string
         escape in the plant unit, no energy series, a gapped sample, rail
         energies whose plot labels need each ``.6g`` form or round across a
         form, a COMPUTE capture whose counter saturates after cycle 0 so an
@@ -198,6 +226,9 @@ def test_reports_are_byte_equal(
     if variant in PLOT_LABELS:
         plot = python_files["energy_per_cycle.svg"].decode()
         assert all(f">{label}<" in plot for label in PLOT_LABELS[variant]), plot
+    if variant == "line-feed run id":
+        cells = python_files["cycle_intervals.csv"].decode()
+        assert '\r\n"rtl-capture-test\n",simulation_only,' in cells, cells
     if variant == "extreme ticks":
         changes = python_files["cycle_jitter.csv"].decode()
         assert ",-18446744073709551" in changes, changes

@@ -10,11 +10,11 @@
 //! `report_outputs.write_report` builds them, in its writing order.
 //!
 //! `report.json` is written by [`canonical_json`]. The CSV tables follow
-//! `csv.DictWriter` in the excel dialect: CRLF rows, `str` of each value and
-//! an empty cell for `None`. Their cells are identifiers, fixed words and
-//! numbers, which the schemas keep free of commas, quotes and line breaks, so
-//! the dialect's minimal quoting never applies. The plots come from
-//! [`plots`].
+//! `csv.DictWriter` in the excel dialect: CRLF rows, `str` of each value, an
+//! empty cell for `None`, and the dialect's minimal quoting: a cell holding a
+//! comma, a quote or a line break is quoted, with its quotes doubled. An
+//! identifier can end with a line feed, which its schema pattern admits. The
+//! plots come from [`plots`].
 
 use crate::control_analysis::Row;
 use crate::control_json_text::{canonical_json, number_text};
@@ -181,11 +181,15 @@ fn jitter_pairs(rows: &[Row]) -> Vec<Map<String, Value>> {
     pairs
 }
 
-/// Python's `str` of one CSV cell value; `None` and a missing column are empty
-/// cells. Every listed column holds text, a number or `None`.
+/// Python's `str` of one CSV cell value, quoted as the excel dialect quotes it;
+/// `None` and a missing column are empty cells. Every listed column holds text,
+/// a number or `None`.
 fn cell(value: Option<&Value>) -> String {
     match value.unwrap_or(&Value::Null) {
         Value::Null => String::new(),
+        Value::String(string) if string.contains([',', '"', '\r', '\n']) => {
+            format!("\"{}\"", string.replace('"', "\"\""))
+        }
         Value::String(string) => string.clone(),
         number => number_text(number, number.is_f64()),
     }

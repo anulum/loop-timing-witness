@@ -124,6 +124,9 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- The native analysis quotes a CSV cell holding a comma, a quote or a line break, and doubles
+  its quotes, as Python's CSV writer does. A run identifier ending with the line feed its schema
+  pattern admits was written unquoted.
 - Series values are built from their digits, so a CPython without the C decimal module
   (built without libmpdec, as the hosted runners' 3.15) reads a value with a long run of
   leading zeros as the C module does instead of refusing it at the integer-string limit.

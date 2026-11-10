@@ -430,7 +430,3 @@ fn plots(report: &Value) -> Vec<(String, Vec<u8>)> {
     }
     files
 }
-
-#[cfg(test)]
-#[path = "../tests/unit/control_outputs.rs"]
-mod tests;

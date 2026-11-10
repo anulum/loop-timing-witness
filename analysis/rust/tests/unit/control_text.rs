@@ -8,7 +8,7 @@
 
 //! Compare string and error text with CPython 3.13 `repr` and `str(OSError)`.
 
-use super::{os_error, printable, pure_path, python_display, repr, units};
+use super::{os_error, printable, python_display, repr, units};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -73,28 +73,4 @@ fn paths_print_as_python_with_surrogate_escapes() {
     let path = Path::new(OsStr::from_bytes(b"/tmp/a\xffb"));
     assert_eq!(python_display(path), "/tmp/a\\udcffb");
     assert_eq!(python_display(Path::new("/tmp/plain")), "/tmp/plain");
-}
-
-/// Paths with CPython 3.13 `str(Path(text))`.
-const PURE: &[(&str, &str)] = &[
-    ("//a/b", "//a/b"),
-    ("///a/b", "/a/b"),
-    ("/a//./b/", "/a/b"),
-    ("a/./b//", "a/b"),
-    ("./a", "a"),
-    ("../a/..", "../a/.."),
-    ("//", "//"),
-    ("/", "/"),
-    ("a/b/.", "a/b"),
-    ("", "."),
-    ("./", "."),
-];
-
-#[test]
-fn pure_paths_are_python_text() {
-    for &(text, expected) in PURE {
-        assert_eq!(pure_path(Path::new(text)), expected, "{text}");
-    }
-    let invalid = Path::new(OsStr::from_bytes(b"a/\xff//b"));
-    assert_eq!(pure_path(invalid), "a/\\udcff/b");
 }

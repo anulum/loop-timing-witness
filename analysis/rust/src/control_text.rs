@@ -147,14 +147,14 @@ pub(crate) fn pure_parts(path: &Path) -> (&'static [u8], Vec<&[u8]>) {
     (root, parts)
 }
 
-/// Python's `str(Path(text))` as standard output prints it.
+/// Python's `str(Path(text))` of a published output, as standard output prints it.
+///
+/// A published output always ends in a name, so the text is never empty.
 pub(crate) fn pure_path(path: &Path) -> String {
     let (root, parts) = pure_parts(path);
-    let joined = [root, &parts.join(&b'/')].concat();
-    if joined.is_empty() {
-        return ".".to_owned();
-    }
-    python_display(Path::new(OsStr::from_bytes(&joined)))
+    python_display(Path::new(OsStr::from_bytes(
+        &[root, &parts.join(&b'/')].concat(),
+    )))
 }
 
 /// The error number and the C library's message for it.

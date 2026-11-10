@@ -31,6 +31,16 @@ from test_control_run_parity import CODES, _bind, _cycle, _edit_events
 MakeRtlRun = Callable[..., tuple[Path, dict[str, Any]]]
 DEFAULT_OUTPUTS = ("python-report", "rust-report")
 IGNORE_XFSZ = ["sh", "-c", "trap '' XFSZ; exec \"$@\"", "sh"]
+# Final cumulative energies of three rails over the capture's three cycles, and the
+# per-cycle plot labels Python prints for them with ``.6g``.
+ENERGY_VARIANTS = {
+    "energy formats": {"VDD": "370368", "VDD25": "4.5e7", "VDDA25": "7.5e-7"},
+    "energy rounding": {"VDD": "2999998.5", "VDD25": "299998.5", "VDDA25": "0.000370370367"},
+}
+PLOT_LABELS = {
+    "energy formats": ("123456", "1.5e+07", "2.5e-07", "0.4"),
+    "energy rounding": ("1e+06", "99999.5", "0.000123457", "0.4"),
+}
 
 
 def _write(run: Path, manifest: dict[str, Any]) -> Path:
@@ -84,6 +94,7 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
     manifest
         Declaration changed in place.
     """
+    energies = ENERGY_VARIANTS.get(variant)
     if variant == "escaped unit":
         manifest["plant"]["tracking_unit"] = 'q"b\\s\nn\rr\tt\bb\ff' + chr(1) + chr(0x7F) + "é"
     elif variant == "no power":
@@ -102,9 +113,20 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
         rows = (run / "tracking.csv").read_text(encoding="utf-8").splitlines()
         kept = [row for row in rows if not row.startswith("1,")]
         _bind(run, manifest, "tracking", ("\n".join(kept) + "\n").encode())
-    elif variant == "energy formats":
+    elif variant == "extreme ticks":
+        manifest["files"]["power"] = None
+
+        def saturate(records: list[bytearray]) -> list[bytearray]:
+            """Hold every record from cycle 0's last onwards at the top of the 64-bit counter."""
+            last = max(index for index, record in enumerate(records) if _cycle(record) == 0)
+            for record in records[last:]:
+                record[8:16] = (2**64 - 1).to_bytes(8, "little")
+            return records
+
+        _edit_events(run, manifest, saturate)
+    elif energies is not None:
         power = (run / "power.csv").read_text(encoding="utf-8")
-        for rail, energy in (("VDD", "370368"), ("VDD25", "4.5e7"), ("VDDA25", "7.5e-7")):
+        for rail, energy in energies.items():
             power = re.sub(
                 rf"^15021,{rail},(.*),[^,]*$",
                 rf"15021,{rail},\g<1>,{energy}",
@@ -116,7 +138,16 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
 
 @pytest.mark.parametrize(
     "variant",
-    ["CONTROL", "COMPUTE", "escaped unit", "no power", "gapped samples", "energy formats"],
+    [
+        "CONTROL",
+        "COMPUTE",
+        "escaped unit",
+        "no power",
+        "gapped samples",
+        "energy formats",
+        "energy rounding",
+        "extreme ticks",
+    ],
 )
 @pytest.mark.parametrize(
     "outputs", [("report-python", "report-rust"), ("./py//report/", "./rs//report/")]
@@ -129,7 +160,11 @@ def test_reports_are_byte_equal(
     Parameters
     ----------
     variant
-        Event profile of the capture, or a changed CONTROL capture.
+        Event profile of the capture, or a changed capture: every JSON string
+        escape in the plant unit, no energy series, a gapped sample, rail
+        energies whose plot labels need each ``.6g`` form or round across a
+        form, or a COMPUTE capture whose counter saturates after cycle 0 so an
+        adjacent-cycle change exceeds the signed 64-bit range.
     outputs
         Output arguments of the Python and native commands.
     make_rtl_run
@@ -137,7 +172,9 @@ def test_reports_are_byte_equal(
     tmp_path
         Owned outcome directory.
     """
-    run, manifest = make_rtl_run("COMPUTE" if variant == "COMPUTE" else "CONTROL")
+    run, manifest = make_rtl_run(
+        "COMPUTE" if variant in {"COMPUTE", "extreme ticks"} else "CONTROL"
+    )
     _variant(variant, run, manifest)
     _write(run, manifest)
     for output in outputs:
@@ -151,10 +188,15 @@ def test_reports_are_byte_equal(
         "stderr": "",
     }
     python_files = _files(run / outputs[0])
-    assert ("energy_per_cycle.svg" in python_files) is (variant != "no power")
-    if variant == "energy formats":
+    assert ("energy_per_cycle.svg" in python_files) is (
+        variant not in {"no power", "extreme ticks"}
+    )
+    if variant in PLOT_LABELS:
         plot = python_files["energy_per_cycle.svg"].decode()
-        assert all(label in plot for label in (">123456<", ">1.5e+07<", ">2.5e-07<", ">0.4<"))
+        assert all(f">{label}<" in plot for label in PLOT_LABELS[variant]), plot
+    if variant == "extreme ticks":
+        changes = python_files["cycle_jitter.csv"].decode()
+        assert ",-18446744073709551" in changes, changes
     assert len(python_files) >= 7
     assert _files(run / outputs[1]) == python_files
     mode = (run / outputs[0]).stat().st_mode & 0o777
@@ -287,6 +329,7 @@ def _paths(run: Path) -> None:
     [
         "{run}/absolute-output/{side}",
         "/{run}/absolute-output/{side}",
+        "//{run}/absolute-output/{side}",
         "sub/../{side}",
         "relative-link/{side}",
         "absolute-link/{side}",

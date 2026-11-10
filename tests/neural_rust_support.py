@@ -262,7 +262,9 @@ def assert_same_outcome(python: dict[str, Any], rust: dict[str, Any]) -> None:
 
 
 def _observed_paths(native: dict[str, Any], original: dict[str, Any]) -> list[str]:
-    """Name the files only one language's checker run observed, outside its temporary root.
+    """Name the files and modules only one language's checker run observed.
+
+    Each run's temporary root is written ``<root>``, so that files inside it compare.
 
     Parameters
     ----------
@@ -282,9 +284,12 @@ def _observed_paths(native: dict[str, Any], original: dict[str, Any]) -> list[st
             observation = invocation.get("worker_observation") or {}
             sides.append(
                 {
-                    item["path"]
+                    re.sub(r"^.*/neural-checker-[^/]*/", "<root>/", item["path"])
                     for item in observation.get("files", [])
-                    if "neural-checker-" not in item["path"]
+                }
+                | {
+                    "module " + re.sub(r"^.*/neural-checker-[^/]*/", "<root>/", item["path"])
+                    for item in observation.get("modules", [])
                 }
             )
         lines += [f"{operation}: only in rust: {path}" for path in sorted(sides[0] - sides[1])]

@@ -254,7 +254,38 @@ def assert_same_outcome(python: dict[str, Any], rust: dict[str, Any]) -> None:
     if "refusal" in python or "refusal" in rust:
         assert rust == python
         return
-    assert _observations(rust["report"]) == _observations(python["report"])
+    native, original = _observations(rust["report"]), _observations(python["report"])
+    assert native == original, _differences(native, original)
+
+
+def _differences(native: object, original: object, path: str = "") -> list[str]:
+    """Name the first places where the two reports differ, for the failure message.
+
+    Parameters
+    ----------
+    native, original
+        Rust and Python values at one place of the reports.
+    path
+        Location of that place.
+
+    Returns
+    -------
+    list[str]
+        At most ten ``location: Rust value != Python value`` lines.
+    """
+    if isinstance(native, dict) and isinstance(original, dict):
+        found = []
+        for key in sorted(native.keys() | original.keys()):
+            if native.get(key) != original.get(key):
+                found += _differences(native.get(key), original.get(key), f"{path}/{key}")
+        return found[:10]
+    if isinstance(native, list) and isinstance(original, list) and len(native) == len(original):
+        found = []
+        for index, (left, right) in enumerate(zip(native, original, strict=True)):
+            if left != right:
+                found += _differences(left, right, f"{path}/{index}")
+        return found[:10]
+    return [f"{path or '/'}: {native!r:.300} != {original!r:.300}"]
 
 
 def assert_refusal_in_both(acquisition: NeuralAcquisition, directory: Path, pattern: str) -> None:

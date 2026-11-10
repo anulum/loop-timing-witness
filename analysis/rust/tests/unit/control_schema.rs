@@ -148,6 +148,38 @@ fn boolean_schemas_and_selected_branches_report_where_they_apply() {
 }
 
 #[test]
+fn prefix_items_and_closed_tails_follow_jsonschema() {
+    // The locations Python's `schema_locations` reports for these documents.
+    // A closed tail reports at the array even where no item count bound applies.
+    let schema = Schema::load(
+        r#"{"properties": {
+            "closed": {"prefixItems": [{"type": "integer"}, {"const": "b"}], "items": false},
+            "open": {"prefixItems": [{"type": "integer"}], "items": {"type": "string"}},
+            "tail": {"items": false}}}"#,
+    )
+    .expect("subset schema");
+    for (document, expected) in [
+        (
+            json!({"closed": [1, "b", 3], "open": [1, "x", 2], "tail": [1]}),
+            vec!["closed", "open/2", "tail"],
+        ),
+        (json!({"closed": [1], "open": [], "tail": []}), vec![]),
+        (
+            json!({"closed": ["a"], "open": ["a", "x"]}),
+            vec!["closed/0", "open/0"],
+        ),
+        (
+            json!({"closed": [1, "c"], "open": [1, "x", "y"]}),
+            vec!["closed/1"],
+        ),
+        (json!({"closed": [], "open": [1.5]}), vec!["open/0"]),
+        (json!({"closed": {"0": 1}, "tail": "x"}), vec![]),
+    ] {
+        assert_eq!(schema.locations(&document), expected, "{document}");
+    }
+}
+
+#[test]
 fn types_and_exact_comparisons_follow_python() {
     assert!(!has_type(&json!(1), "unknown"));
     assert!(!has_type(&json!(true), "integer"));

@@ -35,6 +35,10 @@ mod control_report;
 mod control_schema;
 mod control_series;
 mod control_text;
+/// Corpus changes shared by the crate tests.
+#[cfg(test)]
+#[path = "../tests/support/corpus.rs"]
+mod corpus;
 /// Whole original file reference and finite complete-byte acquisition.
 pub mod files;
 mod json_integer;

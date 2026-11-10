@@ -13,6 +13,7 @@
 //! the same file here, so both languages report identical refusals.
 
 use super::{Numeric, Schema, compare, float_against, has_type};
+use crate::corpus::changed;
 use serde_json::{Value, json};
 use std::cmp::Ordering;
 
@@ -22,40 +23,6 @@ const RUN: &str = include_str!("../../run-manifest.schema.json");
 const DOMAIN: &str = include_str!("../../measurement-domain.schema.json");
 /// The shared corpus of mutated documents and Python's locations.
 const CORPUS: &str = include_str!("../data/control-schema-locations.json");
-
-/// Apply one corpus change at a path: replace the node, remove a member or add one with value 1.
-fn changed(base: &Value, path: &[Value], change: &Value) -> Value {
-    if let Some(value) = change.get("set").filter(|_| path.is_empty()) {
-        return value.clone();
-    }
-    let mut document = base.clone();
-    let parents = if change.get("set").is_some() {
-        &path[..path.len() - 1]
-    } else {
-        path
-    };
-    let mut node = &mut document;
-    for part in parents {
-        node = match part {
-            Value::String(name) => &mut node[name.as_str()],
-            index => &mut node[usize::try_from(index.as_u64().expect("index")).expect("index")],
-        };
-    }
-    if let Some(value) = change.get("set") {
-        match &path[path.len() - 1] {
-            Value::String(name) => node[name.as_str()] = value.clone(),
-            index => {
-                node[usize::try_from(index.as_u64().expect("index")).expect("index")] =
-                    value.clone()
-            }
-        }
-    } else if let Some(name) = change.get("remove").and_then(Value::as_str) {
-        node.as_object_mut().expect("object").remove(name);
-    } else {
-        node[change["add"].as_str().expect("member")] = Value::from(1);
-    }
-    document
-}
 
 #[test]
 fn every_corpus_case_reports_the_python_locations() {

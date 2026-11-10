@@ -13,46 +13,11 @@ use super::{
     HOST_LOAD_SCHEMA, NATIVE_SCHEMA, completion_statistics, host_load, lines, python_equal,
 };
 use crate::control_number::Num;
+use crate::corpus::changed;
 use serde_json::{Map, Value, json};
 
 /// The shared corpus of receipt schema locations.
 const CORPUS: &str = include_str!("../data/control-receipt-schema-locations.json");
-
-/// Apply one corpus change at a path of a base document.
-fn changed(base: &Value, path: &[Value], change: &Value) -> Value {
-    if let Some(value) = change.get("set").filter(|_| path.is_empty()) {
-        return value.clone();
-    }
-    let mut document = base.clone();
-    let keep = if change.get("set").is_some() {
-        path.len() - 1
-    } else {
-        path.len()
-    };
-    let mut node = &mut document;
-    for part in &path[..keep] {
-        node = match part {
-            Value::String(name) => &mut node[name.as_str()],
-            index => &mut node[usize::try_from(index.as_u64().expect("index")).expect("index")],
-        };
-    }
-    if let Some(value) = change.get("set") {
-        match &path[keep] {
-            Value::String(name) => node[name.as_str()] = value.clone(),
-            index => {
-                node[usize::try_from(index.as_u64().expect("index")).expect("index")] =
-                    value.clone();
-            }
-        }
-    } else if let Some(name) = change.get("remove") {
-        node.as_object_mut()
-            .expect("object")
-            .remove(name.as_str().expect("member"));
-    } else {
-        node[change["add"].as_str().expect("member")] = json!(1);
-    }
-    document
-}
 
 #[test]
 fn every_receipt_change_reports_the_python_locations() {

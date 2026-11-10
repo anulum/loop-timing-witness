@@ -45,14 +45,6 @@ static SCHEMA_TEXT: &str = include_str!("../neural-step-run.schema.json");
 static SCHEMA: LazyLock<Schema> =
     LazyLock::new(|| Schema::load(SCHEMA_TEXT).expect("committed schema"));
 
-/// Return whether the entire lowercase SHA-256 declaration is valid.
-fn valid_digest(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
 /// Tell whether any number of the integer-only carrier has a decimal encoding.
 fn has_decimal(value: &Value) -> bool {
     match value {
@@ -64,8 +56,11 @@ fn has_decimal(value: &Value) -> bool {
 }
 
 /// Require an exact lowercase digest, then a portable canonical name within the role's allocation.
+///
+/// The schema's line-anchored digest pattern also admits a digest followed by
+/// one final newline, which Python's whole-string grammar refuses.
 fn reference(reference: &FileRef, limit: u64) -> Result<&str, String> {
-    if !valid_digest(&reference.sha256) {
+    if reference.sha256.ends_with('\n') {
         return Err("Neural file reference requires an exact lowercase SHA-256.".into());
     }
     // An empty name has one empty part; the schema already requires one character.

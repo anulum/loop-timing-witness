@@ -103,6 +103,8 @@
         "1 openat(AT_FDCWD,\"{root}/absent.py\", O_RDONLY) = 3",
         "1 openat(AT_FDCWD, \"{root}/absent.py\", O_RDONLY) =3",
         "1 openat(AT_FDCWD, \"{root}/absent.py\", O_RDONLY) = 3<x",
+        " openat(AT_FDCWD, \"{root}/absent.py\", O_RDONLY) = 3",
+        "1 openat(AT_FDCWD, \"{root}/absent.py\", O_RDONLY) = ",
         ""
       ],
       "opened": []
@@ -162,6 +164,13 @@
       "refusal": "Actual checker observed file is unavailable."
     },
     {
+      "name": "numbered process directory",
+      "lines": [
+        "1 openat(AT_FDCWD, \"/proc/99999999/\", O_RDONLY) = 3"
+      ],
+      "refusal": "Actual checker observed file is unavailable."
+    },
+    {
       "name": "unfinished record",
       "lines": [
         "1 openat(AT_FDCWD, \"a\", O_RDONLY <unfinished ...>"
@@ -195,6 +204,13 @@
         "1 openat(5<>, \"inner.py\", O_RDONLY) = 3"
       ],
       "refusal": "Checker file trace has an unbound relative descriptor."
+    },
+    {
+      "name": "escaped quote",
+      "lines": [
+        "1 openat(AT_FDCWD, \"{root}/a\\\"b\", O_RDONLY) = 3"
+      ],
+      "refusal": "Checker file trace has an invalid quoted path."
     },
     {
       "name": "other escape",

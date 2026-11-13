@@ -97,6 +97,8 @@ def rust_dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[s
     -------
     dict of str to str
         Image-relative source paths and current original byte hashes, independent of output kind.
+        Each record's sources are checked and read in sorted order, so the first refusal does not
+        depend on string hash seeding.
 
     Raises
     ------
@@ -118,7 +120,7 @@ def rust_dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[s
             message = "Rust dependency record is not UTF-8"
             raise ValueError(message) from error
         sources = _record_sources(text)
-        for name in sources:
+        for name in sorted(sources):
             path = directory / name
             if Path(name).is_absolute() or not path.resolve().is_relative_to(root / "source"):
                 message = "Rust dependency source paths escape the original source snapshot"

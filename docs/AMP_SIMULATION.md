@@ -252,6 +252,8 @@ A compiler or Rust dependency record that leaves a quotation or an escape unbala
 with the reader's own text.
 A dependency record or raw native tracking that is not UTF-8 is refused with an authored
 `… is not UTF-8` text.
+The sources of a Rust dependency record are checked and read in sorted order, so the first
+source that fails is the same on every run.
 
 ## Analysis and limits
 

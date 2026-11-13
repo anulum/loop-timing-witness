@@ -170,6 +170,25 @@ def test_no_rust_dependency_record_refused(tmp_path: Path) -> None:
         rust_dependency_hashes((), tmp_path)
 
 
+def test_first_failing_rust_source_is_sorted_first(tmp_path: Path) -> None:
+    """Refuse the escaping source that sorts first, ahead of sixteen missing ones listed before it.
+
+    Iterating the source set in hash order would read a missing source first for most seeds.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive image root without the named sources.
+    """
+    (tmp_path / "source").mkdir()
+    missing = " ".join(f"source/m{index:02}.rs" for index in range(16))
+    record = tmp_path / "order.d"
+    record.write_text(f"out.rmeta: {missing} source/../outside.rs\n", encoding="utf-8")
+    refusal = r"^Rust dependency source paths escape the original source snapshot$"
+    with pytest.raises(ValueError, match=refusal):
+        rust_dependency_hashes((record,), tmp_path)
+
+
 @pytest.mark.parametrize("fault", ["file-symlink", "broken-symlink", "directory-symlink"])
 def test_original_rust_source_symlink_escape_refused(tmp_path: Path, fault: str) -> None:
     """Refuse an outside or absent original source before any Rust build receipt exists.

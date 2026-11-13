@@ -74,6 +74,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The sources of a Rust dependency record are checked and read in sorted order. When several
+  sources fail, the refusal or read error reported is the first in that order; it no longer
+  depends on the interpreter's string hash seed.
 - A compiler or Rust dependency record, or raw native tracking, that is not UTF-8 is refused
   with an authored text (`AMP original compiler dependency record is not UTF-8`, `Rust
   dependency record is not UTF-8`, `native tracking is not UTF-8`) instead of the codec's

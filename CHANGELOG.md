@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native device-tree reading in the Rust analysis crate: the public `device_tree` module
+  decodes an original blob and reads register regions translated to root addresses, scalar,
+  string-list and phandle properties, and the dedicated PLIC binding, with the Python
+  readers' values and refusal texts for the same first defect. A corpus that the Python tests
+  build from real `dtc` output holds both implementations to the same outcomes.
 - The native `loop-timing-witness-campaign-native` command analyses a repeat campaign as the
   Python campaign command does: the same statuses and printed lines, the same refusal texts,
   and a byte-equal report directory. A campaign binding an AMP capture is refused by the

@@ -44,6 +44,13 @@ mod control_text;
 #[cfg(test)]
 #[path = "../tests/support/corpus.rs"]
 mod corpus;
+/// Original device-tree decoding and the resource readers an AMP image binds.
+pub mod device_tree;
+mod device_tree_blob;
+mod device_tree_interrupts;
+mod device_tree_properties;
+mod device_tree_resources;
+mod device_tree_structure;
 /// Whole original file reference and finite complete-byte acquisition.
 pub mod files;
 mod json_integer;

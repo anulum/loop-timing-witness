@@ -120,6 +120,28 @@ locations, JSON decoding, measurement-domain rules, CSV reading, decimal values
 and arithmetic, series metrics and receipt schema locations to Python's
 outcomes.
 
+## Device-tree reading
+
+The `device_tree` module decodes an original device-tree blob and reads the
+resources an AMP image binds, as the Python `device_tree_*` modules do.
+`decode_device_tree(&bytes)` validates the header, block extents, memory
+reservations and structure tokens, and returns a `DeviceTree` with its nodes
+in document order, its reservations and its boot CPU.
+`register_regions(&tree, path)` translates a node's `reg` extents through every
+ancestor `ranges` mapping to root physical addresses. `single_cell`,
+`string_list` and `phandle_nodes` read scalar, string-list and phandle
+properties. `bind_plic(&tree, &selection)` binds one dedicated U54 hart and
+device source to its PLIC machine context and returns the context's register
+addresses. Every refusal is the Python reader's text for the same first
+defect. Addresses are 128-bit, because a translated zero-size extent may start
+exactly at the end of the RV64 address space, as it may in Python.
+
+A shared corpus holds both implementations to the same outcomes. The Python
+tests build it from real `dtc` 1.7.0 output: the repository's Spike platform,
+changed sources that reach each reader rule and bound, byte changes of every
+header word, structure token and string byte of a small tree, hand-built
+structure blocks, and blobs at the depth, node, path and size limits.
+
 ## Selected installation
 
 The compiled registry admits source contract

@@ -108,6 +108,7 @@ def _corrupted_record(data: str, fault: str, root: Path) -> str:
         "quote-target": data.replace(target, '"' + target),
         "quote": data.replace(source, '"' + source),
         "escape": data.rstrip("\n") + " \\",
+        "not-utf8": data,
     }
     return corruptions[fault]
 
@@ -126,6 +127,7 @@ def _corrupted_record(data: str, fault: str, root: Path) -> str:
         "quote-target",
         "quote",
         "escape",
+        "not-utf8",
     ],
 )
 def test_rust_dependency_corruption_refused(
@@ -146,10 +148,12 @@ def test_rust_dependency_corruption_refused(
         (compiled_sources / "rust_metadata/core.d").read_text(), fault, compiled_sources
     )
     path = tmp_path / "corrupt.d"
-    path.write_text(data)
+    path.write_bytes(data.encode() + (b"\xff" if fault == "not-utf8" else b""))
     finding = "Rust dependency"
     if fault in ("quote-target", "quote", "escape"):
         finding = "^Rust dependency rule is malformed or uses ambient environment$"
+    elif fault == "not-utf8":
+        finding = "^Rust dependency record is not UTF-8$"
     with pytest.raises(ValueError, match=finding):
         rust_dependency_hashes((path,), compiled_sources)
 

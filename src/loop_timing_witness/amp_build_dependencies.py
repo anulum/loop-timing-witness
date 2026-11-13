@@ -36,15 +36,19 @@ def dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[str, s
     OSError
         If an original record or dependency is unavailable.
     ValueError
-        If a record lacks its target or complete nonempty dependency list, or leaves a
-        quotation or an escape unbalanced.
+        If a record is not UTF-8, lacks its target or complete nonempty dependency list,
+        or leaves a quotation or an escape unbalanced.
     """
     if not records:
         message = "AMP build requires actual compiler dependency records"
         raise ValueError(message)
     result: dict[str, str] = {}
     for record in records:
-        text = record.read_text(encoding="utf-8").replace("\\\n", "")
+        try:
+            text = record.read_text(encoding="utf-8").replace("\\\n", "")
+        except UnicodeDecodeError as error:
+            message = "AMP original compiler dependency record is not UTF-8"
+            raise ValueError(message) from error
         target, separator, words = text.partition(":")
         if not target.strip() or not separator:
             message = "AMP original compiler dependency record is malformed: missing target"

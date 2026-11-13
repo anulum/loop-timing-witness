@@ -250,6 +250,8 @@ each be a canonical decimal within the signed 64-bit range; any other spelling i
 `AMP original image verification arguments disagree`.
 A compiler or Rust dependency record that leaves a quotation or an escape unbalanced is refused
 with the reader's own text.
+A dependency record or raw native tracking that is not UTF-8 is refused with an authored
+`… is not UTF-8` text.
 
 ## Analysis and limits
 

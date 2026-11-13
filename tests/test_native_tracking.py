@@ -82,6 +82,27 @@ def test_raw_abi_refusal(native_capture: Path, field: int, value: str) -> None:
     assert not (native_capture / "tracking.csv").exists()
 
 
+def test_raw_tracking_that_is_not_utf8_is_refused(native_capture: Path) -> None:
+    """Refuse raw tracking bytes that are not UTF-8 with an authored text, never the codec's.
+
+    Parameters
+    ----------
+    native_capture
+        Completed capture from actual native controller and production RTL.
+    """
+    metadata = native_metadata(native_capture)
+    raw = native_capture / "tracking_raw.csv"
+    content = raw.read_bytes() + b"\xff\n"
+    raw.write_bytes(content)
+    metadata["artifacts"]["tracking_raw"] = {
+        "sha256": hashlib.sha256(content).hexdigest(),
+        "bytes": len(content),
+    }
+    with pytest.raises(ValueError, match=r"^native tracking is not UTF-8$"):
+        convert_tracking(native_capture, metadata)
+    assert not (native_capture / "tracking.csv").exists()
+
+
 def test_q24_precision_is_independent(native_capture: Path) -> None:
     """Preserve exact actual Q8.24 values despite restrictive caller decimal precision.
 

@@ -101,7 +101,8 @@ def rust_dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[s
     Raises
     ------
     ValueError
-        If records, rules or sources are empty, malformed, escaped or depend on ambient variables.
+        If records are not UTF-8, or records, rules or sources are empty, malformed,
+        escaped or depend on ambient variables.
     OSError
         If original records or dependency bytes cannot be read.
     """
@@ -111,7 +112,11 @@ def rust_dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[s
     root = directory.resolve()
     result = {}
     for record in records:
-        text = record.read_text(encoding="utf-8").replace("\\\n", " ")
+        try:
+            text = record.read_text(encoding="utf-8").replace("\\\n", " ")
+        except UnicodeDecodeError as error:
+            message = "Rust dependency record is not UTF-8"
+            raise ValueError(message) from error
         sources = _record_sources(text)
         for name in sources:
             path = directory / name

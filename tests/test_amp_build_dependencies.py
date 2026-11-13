@@ -13,6 +13,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Final
 
 import pytest
 from amp_build_dependencies import dependency_hashes
@@ -82,7 +83,20 @@ def test_actual_source_system_closure(compiled_dependencies: tuple[Path, Path]) 
     assert dependency_hashes((record,), directory) == digests
 
 
-@pytest.mark.parametrize("fault", ["absent", "target", "separator", "empty", "quote", "escape"])
+FINDINGS: Final = {
+    "quote": (
+        "^AMP original compiler dependency record is malformed: unbalanced quotation or escape$"
+    ),
+    "escape": (
+        "^AMP original compiler dependency record is malformed: unbalanced quotation or escape$"
+    ),
+    "not-utf8": "^AMP original compiler dependency record is not UTF-8$",
+}
+
+
+@pytest.mark.parametrize(
+    "fault", ["absent", "target", "separator", "empty", "quote", "escape", "not-utf8"]
+)
 def test_broken_original_records_refused(
     compiled_dependencies: tuple[Path, Path], fault: str
 ) -> None:
@@ -94,29 +108,21 @@ def test_broken_original_records_refused(
         Original actual compilation.
     fault
         Missing complete record set, missing target, missing separator, empty source list,
-        unbalanced quotation or a final escape.
+        unbalanced quotation, a final escape or bytes that are not UTF-8.
     """
     directory, record = compiled_dependencies
-    records: tuple[Path, ...]
-    if fault == "absent":
-        records = ()
-    else:
-        records = (record,)
-        if fault == "target":
-            content = ":" + record.read_text().partition(":")[2]
-        elif fault == "separator":
-            content = record.read_text().replace(":", "", 1)
-        elif fault == "quote":
-            content = record.read_text().partition(":")[0] + ': "unterminated.h'
-        elif fault == "escape":
-            content = record.read_text().rstrip("\n") + " \\"
-        else:
-            content = record.read_text().partition(":")[0] + ":"
-        record.write_text(content)
-    finding = "dependency record"
-    if fault in ("quote", "escape"):
-        finding = (
-            "^AMP original compiler dependency record is malformed: unbalanced quotation or escape$"
-        )
-    with pytest.raises(ValueError, match=finding):
+    records: tuple[Path, ...] = () if fault == "absent" else (record,)
+    text = record.read_text()
+    target = text.partition(":")[0]
+    content = {
+        "absent": text,
+        "target": ":" + text.partition(":")[2],
+        "separator": text.replace(":", "", 1),
+        "empty": target + ":",
+        "quote": target + ': "unterminated.h',
+        "escape": text.rstrip("\n") + " \\",
+        "not-utf8": text,
+    }[fault]
+    record.write_bytes(content.encode() + (b"\xff" if fault == "not-utf8" else b""))
+    with pytest.raises(ValueError, match=FINDINGS.get(fault, "dependency record")):
         dependency_hashes(records, directory)

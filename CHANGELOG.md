@@ -74,6 +74,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A compiler or Rust dependency record, or raw native tracking, that is not UTF-8 is refused
+  with an authored text (`AMP original compiler dependency record is not UTF-8`, `Rust
+  dependency record is not UTF-8`, `native tracking is not UTF-8`) instead of the codec's
+  message.
 - A compiler or Rust dependency record that leaves a quotation or an escape unbalanced is
   refused with the reader's own text (`AMP original compiler dependency record is malformed:
   unbalanced quotation or escape`, `Rust dependency rule is malformed or uses ambient

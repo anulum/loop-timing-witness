@@ -93,7 +93,8 @@ def decode_tracking(content: bytes, cycles: int, sample_count: int) -> list[list
     Raises
     ------
     ValueError
-        If header, rows, integers, cycle ordering or completion counts disagree.
+        If the bytes are not UTF-8, or header, rows, integers, cycle ordering or completion
+        counts disagree.
     """
     converted: list[list[int | Decimal]] = []
     previous = -1
@@ -128,6 +129,9 @@ def decode_tracking(content: bytes, cycles: int, sample_count: int) -> list[list
                         Decimal(values["output_raw"]) / (1 << 24),
                     ]
                 )
+    except UnicodeDecodeError as error:
+        message = "native tracking is not UTF-8"
+        raise ValueError(message) from error
     except csv.Error as error:
         message = "native tracking contains malformed CSV"
         raise ValueError(message) from error

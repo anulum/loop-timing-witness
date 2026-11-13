@@ -18,7 +18,7 @@ from jsonschema import Draft202012Validator
 from .amp_runtime_snapshot import validate_runtime_snapshot
 from .amp_rust_dependencies import rust_dependency_hashes
 from .amp_rust_vectors import ADAPTER, CORE, LIBRARY, TARGET, rust_vectors
-from .manifest_io import load_json_object, sha256_of_file
+from .manifest_io import load_bounded_json_object, sha256_of_file
 
 HASHES = {
     "type": "object",
@@ -211,7 +211,7 @@ def validate_rust_image_receipt(
     if preparation["kernel_backend"] != "rust" or image.get("kernel_backend") != "rust":
         message = "Rust original arithmetic backend declarations disagree"
         raise ValueError(message)
-    data = load_json_object(directory / "rust_preparation.json")
+    data = load_bounded_json_object(directory / "rust_preparation.json")
     validate_rust_preparation_snapshot(directory, data)
     records = tuple(directory / "objects/rust" / name for name in ["core.d", "adapter.d"])
     if rust_dependency_hashes(records, directory) != data["dependencies"]:

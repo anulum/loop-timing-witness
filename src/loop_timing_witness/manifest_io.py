@@ -412,6 +412,33 @@ def load_json_object(path: Path) -> dict[str, Any]:
     return parse_json_object(path.read_bytes(), str(path))
 
 
+def load_bounded_json_object(path: Path) -> dict[str, Any]:
+    """Read a strict JSON object from a filesystem path under the bounded rules.
+
+    The bytes are decoded by :func:`parse_bounded_json_object`, labelled with
+    the path as given, so an independent decoder refuses the same documents
+    with the same text.
+
+    Parameters
+    ----------
+    path
+        File to read.
+
+    Returns
+    -------
+    dict[str, Any]
+        Decoded top-level object.
+
+    Raises
+    ------
+    OSError
+        If the file cannot be read.
+    ValueError
+        If the bytes violate the bounded strict JSON contract.
+    """
+    return parse_bounded_json_object(path.read_bytes(), str(path))
+
+
 def canonical_json_bytes(value: dict[str, Any]) -> bytes:
     """Serialise one object deterministically for drift-checked artefacts.
 

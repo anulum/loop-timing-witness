@@ -16,7 +16,7 @@ from typing import Any, cast
 from jsonschema import Draft202012Validator
 
 from .amp_build_dependencies import dependency_hashes
-from .manifest_io import canonical_json_bytes, load_json_object, sha256_of_file
+from .manifest_io import canonical_json_bytes, load_bounded_json_object, sha256_of_file
 
 RECORD_COUNT = 5
 HASH_SCHEMA = {
@@ -130,7 +130,7 @@ def validate_image_dependency_snapshot(directory: Path, identities: object) -> N
     ValueError
         If index, captured paths or original byte identities disagree.
     """
-    index = load_json_object(directory / "compiler_source_index.json")
+    index = load_bounded_json_object(directory / "compiler_source_index.json")
     if index != dependency_index(identities):
         message = "AMP original firmware dependency snapshot index disagrees"
         raise ValueError(message)

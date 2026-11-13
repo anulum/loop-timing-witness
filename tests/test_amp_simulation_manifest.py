@@ -11,9 +11,11 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from amp_simulation_manifest import admitted_capture, write_amp_manifest
@@ -21,7 +23,7 @@ from capture_amp_simulation import main as capture_main
 from run_manifest import load_run
 from test_capture_amp_simulation import ROOT, capture_arguments
 
-from manifest_io import sha256_of_file
+from manifest_io import canonical_json_bytes, sha256_of_file
 
 __all__ = ["capture_arguments"]
 
@@ -107,6 +109,87 @@ def test_original_capture_refusal(actual_capture: Path, fault: str) -> None:
         finding = "actual logger"
     with pytest.raises(ValueError, match=finding):
         admitted_capture(actual_capture, json.dumps(data).encode("ascii"))
+
+
+def _rebind_image_input(actual_capture: Path, data: dict[str, Any], name: str) -> None:
+    """Bind a changed image preparation input through the whole preparation chain.
+
+    The preparation and the image metadata both record the input's digest, and
+    the capture records the digests of all three files.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    data
+        Decoded capture receipt, updated in place.
+    name
+        Image-relative input name, such as ``build_commands.json``.
+    """
+    image = actual_capture / "image"
+    digest = sha256_of_file(image / name)
+    preparation = json.loads((image / "preparation.json").read_bytes())
+    preparation["inputs"][name] = digest
+    (image / "preparation.json").write_bytes(canonical_json_bytes(preparation))
+    metadata = json.loads((image / "image.json").read_bytes())
+    metadata["inputs"][name] = digest
+    metadata["preparation_sha256"] = sha256_of_file(image / "preparation.json")
+    (image / "image.json").write_bytes(canonical_json_bytes(metadata))
+    for changed in (name, "preparation.json", "image.json"):
+        data["files"]["image/" + changed] = sha256_of_file(image / changed)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "capture.json",
+        "image/preparation.json",
+        "command.json",
+        "image/image.json",
+        "runtime_source_index.json",
+        "image/runtime_source_index.json",
+        "image/compiler_source_index.json",
+        "image/build_commands.json",
+        "plugin_build.json",
+        "plugin_source_index.json",
+    ],
+)
+def test_captured_json_outside_the_bounded_rules_is_refused(
+    actual_capture: Path, target: str
+) -> None:
+    """Decode the capture receipt and every captured JSON file with the bounded rules.
+
+    Each file is replaced by an object holding an integer outside the 64-bit
+    range and bound again by its new digest, through the image preparation
+    chain where the file is a preparation input, so the bounded decoder is
+    the first check that can refuse it.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    target
+        The receipt, or the captured JSON file to replace.
+    """
+    data = json.loads((actual_capture / "capture.json").read_bytes())
+    wide = b'{"wide": 18446744073709551616}'
+    if target == "capture.json":
+        content = json.dumps(data).encode("ascii")[:-1] + b', "wide": 18446744073709551616}'
+        source = "AMP capture"
+    else:
+        path = actual_capture / target
+        path.write_bytes(wide)
+        name = target.removeprefix("image/")
+        preparation = json.loads((actual_capture / "image/preparation.json").read_bytes())
+        if target.startswith("image/") and name in preparation.get("inputs", {}):
+            _rebind_image_input(actual_capture, data, name)
+        else:
+            data["files"][target] = sha256_of_file(path)
+        content = json.dumps(data).encode("ascii")
+        source = "AMP plugin build" if target == "plugin_build.json" else str(path)
+    refusal = f"{source}: integer outside the 64-bit range: 18446744073709551616"
+    with pytest.raises(ValueError, match=f"^{re.escape(refusal)}$"):
+        admitted_capture(actual_capture, content)
 
 
 def corrupt_actual_capture_source(actual_capture: Path, fault: str) -> Path:

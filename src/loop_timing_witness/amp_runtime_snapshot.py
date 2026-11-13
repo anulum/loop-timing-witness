@@ -15,7 +15,7 @@ from typing import cast
 
 from jsonschema import Draft202012Validator
 
-from .manifest_io import canonical_json_bytes, load_json_object, sha256_of_file
+from .manifest_io import canonical_json_bytes, load_bounded_json_object, sha256_of_file
 
 HASH_SCHEMA = {
     "type": "object",
@@ -101,7 +101,7 @@ def validate_runtime_snapshot(output: Path, identities: object) -> None:
     ValueError
         If the captured index, original hash binding or contained file paths disagree.
     """
-    index = load_json_object(output / "runtime_source_index.json")
+    index = load_bounded_json_object(output / "runtime_source_index.json")
     if index != runtime_index(identities):
         message = "AMP runtime library snapshot index disagrees with original identities"
         raise ValueError(message)

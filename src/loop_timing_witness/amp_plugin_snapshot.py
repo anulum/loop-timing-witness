@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .amp_plugin_receipt import decode_plugin_receipt
-from .manifest_io import canonical_json_bytes, load_json_object, sha256_of_file
+from .manifest_io import canonical_json_bytes, load_bounded_json_object, sha256_of_file
 
 
 def source_index(data: dict[str, Any]) -> dict[str, dict[str, str]]:
@@ -90,7 +90,7 @@ def validate_plugin_snapshot(output: Path, plugin_digest: str, *, thermal: bool)
         If source closure, library or actual plant parameter contradicts captured identities.
     """
     data = decode_plugin_receipt((output / "plugin_build.json").read_bytes())
-    index = load_json_object(output / "plugin_source_index.json")
+    index = load_bounded_json_object(output / "plugin_source_index.json")
     if (
         data["plugin_sha256"] != plugin_digest
         or bool(data["thermal"]) != thermal

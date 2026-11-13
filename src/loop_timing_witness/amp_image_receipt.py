@@ -23,7 +23,7 @@ from .amp_run_input import read_amp_run
 from .amp_rust_receipt import validate_rust_image_receipt
 from .device_tree_blob import decode_device_tree
 from .device_tree_interrupts import PlicSelection
-from .manifest_io import load_json_object
+from .manifest_io import load_bounded_json_object
 
 OPTIONS = (
     "--dtb",
@@ -60,7 +60,7 @@ def recorded_request(directory: Path) -> ImageRequest:
     ValueError
         If the recorded vector has missing, duplicated or noncanonical resource arguments.
     """
-    vector = load_json_object(directory / "build_commands.json").get("verify")
+    vector = load_bounded_json_object(directory / "build_commands.json").get("verify")
     if (
         not isinstance(vector, list)
         or len(vector) != PREFIX_SIZE + 2 * len(OPTIONS)

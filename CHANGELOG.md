@@ -74,6 +74,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Every AMP input is decoded with the bounded JSON rules of run-bound documents: the capture,
+  completion and plugin build receipts, the retained measurement domain, and the captured
+  preparation, command, image, build-command and source-index files. A document nested more
+  than 64 deep, holding an integer outside the 64-bit range or an unpaired surrogate escape is
+  refused with the decoder's text.
 - A repeat campaign whose valid repeats together span more than the 64-bit tick range is
   refused (`pooled duration exceeds the 64-bit tick range`). Every integer a report holds
   then fits 64 bits, as every integer a run-bound document may hold does.

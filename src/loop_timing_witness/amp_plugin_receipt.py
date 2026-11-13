@@ -17,7 +17,12 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from .amp_build_dependencies import dependency_hashes
-from .manifest_io import canonical_json_bytes, load_json_object, parse_json_object, sha256_of_file
+from .manifest_io import (
+    canonical_json_bytes,
+    load_json_object,
+    parse_bounded_json_object,
+    sha256_of_file,
+)
 
 ROOT = Path(__file__).resolve().parent / "data"
 
@@ -40,7 +45,7 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
     ValueError
         If JSON, schema identifier, types, bounds or required build identity fields are invalid.
     """
-    data = parse_json_object(content, "AMP plugin build")
+    data = parse_bounded_json_object(content, "AMP plugin build")
     schema = load_json_object(ROOT / "amp-plugin-build.schema.json")
     errors = list(Draft202012Validator(schema).iter_errors(data))
     if errors:

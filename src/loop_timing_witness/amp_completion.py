@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .event_stream import decode_events
-from .manifest_io import parse_json_object
+from .manifest_io import parse_bounded_json_object
 from .native_tracking import decode_tracking
 
 PREFIX = b"WITNESS_AMP_COMPLETION "
@@ -91,7 +91,7 @@ def decode_completion(content: bytes) -> AmpCompletion:
     ValueError
         If the complete object violates the native scalar and field contract.
     """
-    data = parse_json_object(content, "AMP completion")
+    data = parse_bounded_json_object(content, "AMP completion")
     if set(data) != FIELDS or any(type(data[name]) is not bool for name in ("safe", "thermal")):
         message = "AMP completion fields or safe-state type are invalid"
         raise ValueError(message)
@@ -133,7 +133,7 @@ def validate_capture(
     ValueError
         If a stream is malformed, its observations disagree, or the FIFO overflowed.
     """
-    contracts = parse_json_object(domain, "AMP measurement domain")["design_contracts"]
+    contracts = parse_bounded_json_object(domain, "AMP measurement domain")["design_contracts"]
     decoded = decode_events(events, contracts, "CONTROL", cycles)
     observations = decode_tracking(tracking, cycles, completion.samples)
     observed_cycles = [row[0] for row in observations]

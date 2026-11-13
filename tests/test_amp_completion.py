@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -93,6 +94,42 @@ def test_malformed_native_counter(field: str, value: object) -> None:
     original[field] = value
     with pytest.raises(ValueError, match=r"invalid|outside"):
         completion_receipt(PREFIX + json.dumps(original).encode("ascii"))
+
+
+@pytest.mark.parametrize(
+    ("receipt", "refusal"),
+    [
+        (
+            b'{"samples":18446744073709551616}',
+            "integer outside the 64-bit range: 18446744073709551616",
+        ),
+        (b'{"samples":"\\ud800"}', "JSON text holds an unpaired surrogate escape"),
+        (b'{"samples":' + b"[" * 64 + b"]" * 64 + b"}", "JSON input exceeds decoder limits"),
+    ],
+    ids=["wide integer", "unpaired surrogate", "nesting 65"],
+)
+def test_completion_outside_the_bounded_json_rules_is_refused(receipt: bytes, refusal: str) -> None:
+    """Decode the logger receipt with the bounded rules of every run-bound document.
+
+    Parameters
+    ----------
+    receipt
+        Receipt JSON after the completion prefix.
+    refusal
+        Decoder refusal after the receipt label.
+    """
+    with pytest.raises(ValueError, match=f"^{re.escape(f'AMP completion: {refusal}')}$"):
+        completion_receipt(PREFIX + receipt + b"\n")
+
+
+def test_capture_domain_outside_the_bounded_json_rules_is_refused() -> None:
+    """Decode the retained measurement domain with the bounded rules."""
+    domain = (ROOT / "measurement-domain.json").read_bytes().rstrip()
+    deep = domain[:-1] + b', "deep": ' + b"[" * 64 + b"]" * 64 + b"}"
+    with pytest.raises(
+        ValueError, match=r"^AMP measurement domain: JSON input exceeds decoder limits$"
+    ):
+        validate_capture(completion_receipt(LOG), EVENTS, TRACKING, deep, 10)
 
 
 @pytest.mark.parametrize("fault", ["overflow", "events", "samples", "cycle", "reserved", "missing"])

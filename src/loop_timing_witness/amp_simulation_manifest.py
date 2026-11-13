@@ -25,7 +25,13 @@ from .amp_image_receipt import validate_image_receipt
 from .amp_plugin_snapshot import validate_plugin_snapshot
 from .amp_run_input import read_amp_run
 from .amp_runtime_snapshot import validate_runtime_snapshot
-from .manifest_io import canonical_json_bytes, load_json_object, parse_json_object, sha256_of_file
+from .manifest_io import (
+    canonical_json_bytes,
+    load_bounded_json_object,
+    load_json_object,
+    parse_bounded_json_object,
+    sha256_of_file,
+)
 from .run_manifest import load_run
 
 ROOT = Path(__file__).resolve().parent / "data"
@@ -96,13 +102,13 @@ def admitted_capture(output: Path, content: bytes) -> dict[str, Any]:
     ValueError
         If original receipt shape, paths, byte hashes or actual logger counters disagree.
     """
-    capture = parse_json_object(content, "AMP capture")
+    capture = parse_bounded_json_object(content, "AMP capture")
     schema = load_json_object(ROOT / "amp-capture.schema.json")
     errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(capture))
     if errors:
         message = f"AMP capture receipt invalid: {errors[0].message}"
         raise ValueError(message)
-    preparation = load_json_object(output / "image/preparation.json")
+    preparation = load_bounded_json_object(output / "image/preparation.json")
     record_count = image_dependency_record_count(preparation)
     required = {
         "image/firmware.elf",
@@ -137,8 +143,8 @@ def admitted_capture(output: Path, content: bytes) -> dict[str, Any]:
         ):
             message = "AMP capture artifact bytes or paths changed"
             raise ValueError(message)
-    command = load_json_object(output / "command.json")
-    image = load_json_object(output / "image/image.json")
+    command = load_bounded_json_object(output / "command.json")
+    image = load_bounded_json_object(output / "image/image.json")
     libraries = compiler_libraries(preparation.get("toolchain"))
     records = {
         f"precompile/input_{index}.d": sha256_of_file(

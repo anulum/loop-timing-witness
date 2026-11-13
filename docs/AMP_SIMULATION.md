@@ -234,6 +234,11 @@ writes a capture receipt, the normal public run manifest and the normal analysis
 | `manifest.json` | [Public run schema](../run-manifest.schema.json), placement `bare_metal_amp` |
 | `reports/` | Standard report JSON, interval CSVs and plot |
 
+Reanalysis decodes `capture.json`, the logger completion receipt, `plugin_build.json`, the
+retained measurement domain and every captured JSON file with the bounded JSON rules of
+run-bound documents: nesting at most 64 deep, integers within 64 bits and no unpaired
+surrogate escape.
+
 ## Analysis and limits
 
 The same telemetry ABI 2 startup is used by the [Linux collector](AMP_LINUX.md). Firmware

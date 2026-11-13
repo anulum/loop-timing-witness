@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from loop_timing_witness.manifest_io import load_bounded_json_object
 from manifest_io import (
     JsonInputRefusalError,
     canonical_json_bytes,
@@ -111,6 +112,49 @@ def test_load_of_a_missing_file_raises_oserror(tmp_path: Path) -> None:
     """A missing file is an OSError, never an empty object."""
     with pytest.raises(FileNotFoundError):
         load_json_object(tmp_path / "absent.json")
+
+
+def test_bounded_load_decodes_an_object(tmp_path: Path) -> None:
+    """A file within the bounded rules decodes to its object."""
+    path = tmp_path / "receipt.json"
+    path.write_text('{"alpha": [1, {"beta": "ε"}]}', encoding="utf-8")
+    assert load_bounded_json_object(path) == {"alpha": [1, {"beta": "ε"}]}
+
+
+@pytest.mark.parametrize(
+    ("text", "refusal"),
+    [
+        ('{"a": 18446744073709551616}', "integer outside the 64-bit range: 18446744073709551616"),
+        ('{"a": "\\ud800"}', "JSON text holds an unpaired surrogate escape"),
+        ('{"a": ' + "[" * 64 + "]" * 64 + "}", "JSON input exceeds decoder limits"),
+    ],
+    ids=["wide integer", "unpaired surrogate", "nesting 65"],
+)
+def test_bounded_load_refuses_with_the_path_as_given(
+    tmp_path: Path, text: str, refusal: str
+) -> None:
+    """A file outside the bounded rules is refused with its path as the label.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory for the file.
+    text
+        File content.
+    refusal
+        Decoder refusal after the path.
+    """
+    path = tmp_path / "receipt.json"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(JsonInputRefusalError) as refused:
+        load_bounded_json_object(path)
+    assert str(refused.value) == f"{path}: {refusal}"
+
+
+def test_bounded_load_of_a_missing_file_raises_oserror(tmp_path: Path) -> None:
+    """A missing file is an OSError, never an empty object."""
+    with pytest.raises(FileNotFoundError):
+        load_bounded_json_object(tmp_path / "absent.json")
 
 
 @pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"])

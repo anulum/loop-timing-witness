@@ -114,7 +114,7 @@ fn schemas_outside_the_subset_are_refused() {
             "Unsupported schema keyword $ref.",
         ),
         (r#"{"pattern": 1}"#, "Unsupported schema keyword pattern."),
-        (r#"{"pattern": "a|b"}"#, "Unsupported schema pattern a|b."),
+        (r#"{"pattern": "\\w"}"#, r"Unsupported schema pattern \w."),
     ] {
         assert_eq!(Schema::load(text).err().as_deref(), Some(refusal), "{text}");
     }

@@ -13,6 +13,8 @@
 //! forty texts holding anchors, final newlines, lengths at the bounds and the
 //! whitespace characters on which Python and Unicode disagree, then anchored
 //! `\S` and a one-character range, which mutation runs showed were missing.
+//! The cases after them, from CPython 3.15.2, hold the AMP hash schemas' name
+//! patterns and alternation: top level, in groups, empty, repeated and nested.
 
 use super::Pattern;
 
@@ -903,6 +905,49 @@ const PYTHON_CASES: &[(&str, &str, bool)] = &[
     ("[a-a]", "a", true),
     ("[a-a]", "b", false),
     ("[a-a]", "", false),
+    ("^(/|source/|contract\\.c$)", "", false),
+    ("^(/|source/|contract\\.c$)", "/", true),
+    ("^(/|source/|contract\\.c$)", "/usr/include/stdint.h", true),
+    ("^(/|source/|contract\\.c$)", "source/", true),
+    ("^(/|source/|contract\\.c$)", "source/a.c", true),
+    ("^(/|source/|contract\\.c$)", "sourcex", false),
+    ("^(/|source/|contract\\.c$)", "src/a.c", false),
+    ("^(/|source/|contract\\.c$)", "contract.c", true),
+    ("^(/|source/|contract\\.c$)", "contract.c\n", true),
+    ("^(/|source/|contract\\.c$)", "contract.c.orig", false),
+    ("^(/|source/|contract\\.c$)", "xcontract.c", false),
+    ("^(/|source/|contract\\.c$)", "lib/x.h", false),
+    ("^/", "", false),
+    ("^/", "/", true),
+    ("^/", "/a", true),
+    ("^/", "a/", false),
+    ("a|b", "", false),
+    ("a|b", "a", true),
+    ("a|b", "b", true),
+    ("a|b", "c", false),
+    ("a|b", "xb", true),
+    ("^(a|)b$", "ab", true),
+    ("^(a|)b$", "b", true),
+    ("^(a|)b$", "aab", false),
+    ("^(a|)b$", "a", false),
+    ("^(ab|a)c$", "abc", true),
+    ("^(ab|a)c$", "ac", true),
+    ("^(ab|a)c$", "abac", false),
+    ("^(ab|a)c$", "bc", false),
+    ("^(a|b)+$", "abba", true),
+    ("^(a|b)+$", "", false),
+    ("^(a|b)+$", "abc", false),
+    ("^(a|b)+$", "b", true),
+    ("^(|a)$", "", true),
+    ("^(|a)$", "a", true),
+    ("^(|a)$", "aa", false),
+    ("|", "", true),
+    ("|", "x", true),
+    ("^(a|b(c|d))e$", "ae", true),
+    ("^(a|b(c|d))e$", "bce", true),
+    ("^(a|b(c|d))e$", "bde", true),
+    ("^(a|b(c|d))e$", "be", false),
+    ("^(a|b(c|d))e$", "bcde", false),
 ];
 
 #[test]
@@ -916,7 +961,8 @@ fn every_schema_pattern_matches_as_python_searches() {
 #[test]
 fn syntax_outside_the_subset_is_refused() {
     for pattern in [
-        "a|b",
+        "(a|b",
+        "a|b)",
         ".",
         "*a",
         "a{",

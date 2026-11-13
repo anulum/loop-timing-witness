@@ -8,12 +8,11 @@
 
 //! Match the regular expressions of the committed schemas as Python's `re.search` does.
 //!
-//! The supported syntax is the subset the run and measurement-domain schemas use:
-//! the anchors `^` and `$`, literal characters, bracketed classes of single
-//! characters and ranges, the classes `\S` and `\d`, the escaped `\.`, groups and
-//! the quantifiers `*`, `+`, `?`,
-//! `{n}` and `{m,n}`. Any other construct is refused when the pattern is compiled,
-//! so a schema change cannot be matched with different semantics silently.
+//! The supported syntax is the subset the committed schemas use: the anchors `^` and `$`,
+//! literal characters, bracketed classes of single characters and ranges, the classes `\S` and
+//! `\d`, the escaped `\.`, groups, alternatives (`|`) and the quantifiers `*`, `+`, `?`, `{n}`
+//! and `{m,n}`. Any other construct is refused when the pattern is compiled, so a schema change
+//! cannot be matched with different semantics silently.
 //!
 //! Python semantics that differ from many other engines are kept: a match may
 //! start anywhere unless anchored, `$` also matches before one final newline, and
@@ -36,8 +35,8 @@ enum Atom {
     NotSpace,
     /// One character that Python treats as a decimal digit.
     Digit,
-    /// A parenthesised sequence.
-    Group(Vec<Piece>),
+    /// A parenthesised group of alternative sequences.
+    Group(Vec<Vec<Piece>>),
 }
 
 /// An atom with its repetition bounds.
@@ -48,26 +47,26 @@ struct Piece {
     maximum: Option<usize>,
 }
 
-/// A compiled schema pattern.
+/// A compiled schema pattern: its alternative sequences.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Pattern(Vec<Piece>);
+pub(crate) struct Pattern(Vec<Vec<Piece>>);
 
 impl Pattern {
     /// Compile one pattern of the supported subset.
     pub(crate) fn compile(text: &str) -> Result<Self, String> {
         let characters: Vec<char> = text.chars().collect();
         let mut position = 0;
-        let pieces = sequence(&characters, &mut position, text)?;
+        let found = alternatives(&characters, &mut position, text)?;
         if position != characters.len() {
             return Err(unsupported(text));
         }
-        Ok(Self(pieces))
+        Ok(Self(found))
     }
 
     /// Tell whether the pattern matches anywhere in the text, as `re.search` does.
     pub(crate) fn search(&self, text: &str) -> bool {
         let characters: Vec<char> = text.chars().collect();
-        (0..=characters.len()).any(|start| matches(&self.0, &characters, start, &mut |_| true))
+        (0..=characters.len()).any(|start| any_of(&self.0, &characters, start, &mut |_| true))
     }
 }
 
@@ -76,18 +75,32 @@ fn unsupported(text: &str) -> String {
     format!("Unsupported schema pattern {text}.")
 }
 
-/// Parse pieces until the end of the text or a closing parenthesis.
+/// Parse `|`-separated sequences until the end of the text or a `)`.
+fn alternatives(
+    characters: &[char],
+    position: &mut usize,
+    text: &str,
+) -> Result<Vec<Vec<Piece>>, String> {
+    let mut found = vec![sequence(characters, position, text)?];
+    while characters.get(*position) == Some(&'|') {
+        *position += 1;
+        found.push(sequence(characters, position, text)?);
+    }
+    Ok(found)
+}
+
+/// Parse pieces until the end of the text, a `|` or a closing parenthesis.
 fn sequence(characters: &[char], position: &mut usize, text: &str) -> Result<Vec<Piece>, String> {
     let mut pieces = Vec::new();
     while let Some(&character) = characters.get(*position) {
         let atom = match character {
-            ')' => break,
+            ')' | '|' => break,
             '^' => Atom::Start,
             '$' => Atom::End,
             '[' => class(characters, position, text)?,
             '(' => {
                 *position += 1;
-                let inner = sequence(characters, position, text)?;
+                let inner = alternatives(characters, position, text)?;
                 if characters.get(*position) != Some(&')') {
                     return Err(unsupported(text));
                 }
@@ -108,7 +121,7 @@ fn sequence(characters: &[char], position: &mut usize, text: &str) -> Result<Vec
                 }
                 _ => return Err(unsupported(text)),
             },
-            '*' | '+' | '?' | '{' | '|' | '.' | ']' | '}' => return Err(unsupported(text)),
+            '*' | '+' | '?' | '{' | '.' | ']' | '}' => return Err(unsupported(text)),
             literal => Atom::Class(vec![(literal, literal)]),
         };
         *position += 1;
@@ -196,6 +209,18 @@ fn number(text: &str, pattern: &str) -> Result<usize, String> {
     text.parse().map_err(|_| unsupported(pattern))
 }
 
+/// Match any alternative, as Python's backtracking tries each, and continue.
+fn any_of(
+    found: &[Vec<Piece>],
+    characters: &[char],
+    position: usize,
+    rest: &mut dyn FnMut(usize) -> bool,
+) -> bool {
+    found
+        .iter()
+        .any(|pieces| matches(pieces, characters, position, &mut *rest))
+}
+
 /// Match pieces from one position and pass the end position to the continuation.
 fn matches(
     pieces: &[Piece],
@@ -266,7 +291,7 @@ fn once(
                 .is_some_and(|&character| python_decimal(character))
                 && rest(position + 1)
         }
-        Atom::Group(inner) => matches(inner, characters, position, rest),
+        Atom::Group(inner) => any_of(inner, characters, position, rest),
     }
 }
 

@@ -83,7 +83,7 @@ def test_original_capture_refusal(actual_capture: Path, fault: str) -> None:
     data = json.loads((actual_capture / "capture.json").read_bytes())
     if fault == "schema":
         data["simulation_only"] = False
-        finding = "receipt invalid"
+        finding = "^AMP capture receipt simulation_only: does not satisfy the AMP capture schema$"
     elif fault == "missing-input":
         del data["files"]["events.bin"]
         finding = "required original"
@@ -109,6 +109,29 @@ def test_original_capture_refusal(actual_capture: Path, fault: str) -> None:
         finding = "actual logger"
     with pytest.raises(ValueError, match=finding):
         admitted_capture(actual_capture, json.dumps(data).encode("ascii"))
+
+
+def test_capture_schema_refusal_names_the_first_location_in_path_order(
+    actual_capture: Path,
+) -> None:
+    """Name only the first broken location, in path order, never the validator's own words.
+
+    The document itself (``(root)``) comes before any member, and a nested
+    member is named by its whole path.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    """
+    original = json.loads((actual_capture / "capture.json").read_bytes())
+    nested = {**original["completion"], "misses": "none"}
+    broken = {**original, "simulation_only": False, "physical_verified": True, "completion": nested}
+    without = {key: value for key, value in broken.items() if key != "schema"}
+    for data, location in ((broken, "completion/misses"), (without, "(root)")):
+        finding = f"AMP capture receipt {location}: does not satisfy the AMP capture schema"
+        with pytest.raises(ValueError, match=f"^{re.escape(finding)}$"):
+            admitted_capture(actual_capture, json.dumps(data).encode("ascii"))
 
 
 def test_capture_timestamps_outside_the_utc_rule_are_refused(actual_capture: Path) -> None:

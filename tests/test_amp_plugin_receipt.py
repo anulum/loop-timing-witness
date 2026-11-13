@@ -63,7 +63,18 @@ def test_original_real_plugin_admission(admitted_build: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "fault", ["schema", "library", "source", "tool", "conflict", "omitted", "roles", "missing"]
+    "fault",
+    [
+        "schema",
+        "schema-order",
+        "library",
+        "source",
+        "tool",
+        "conflict",
+        "omitted",
+        "roles",
+        "missing",
+    ],
 )
 def test_actual_build_drift_refused(admitted_build: Path, fault: str) -> None:
     """Refuse schema or dependency/library/tool corruption without editing shared original inputs.
@@ -79,7 +90,14 @@ def test_actual_build_drift_refused(admitted_build: Path, fault: str) -> None:
     data = json.loads(path.read_bytes())
     if fault == "schema":
         data["thermal"] = 2
-        finding = "receipt invalid"
+        finding = "^AMP plugin build receipt thermal: does not satisfy the AMP plugin build schema$"
+    elif fault == "schema-order":
+        data["thermal"] = 2
+        data["simulation_only"] = False
+        finding = (
+            "^AMP plugin build receipt simulation_only: "
+            "does not satisfy the AMP plugin build schema$"
+        )
     elif fault == "library":
         with admitted_build.open("ab") as stream:
             stream.write(b"changed original")

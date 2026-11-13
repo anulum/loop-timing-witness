@@ -74,6 +74,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- An AMP capture or plugin build receipt that breaks its schema is refused with the first
+  broken location in path order and an authored text (`AMP capture receipt <location>: does
+  not satisfy the AMP capture schema`, `AMP plugin build receipt <location>: does not satisfy
+  the AMP plugin build schema`) instead of the schema validator's first, unsorted message.
 - An AMP capture's `started_utc` and `completed_utc` must each be one RFC 3339 date-time in
   UTC, the rule of the run manifest's `started_utc`: another offset, an impossible date or a
   leap second is refused (`AMP capture receipt <field> must be an RFC 3339 date-time in UTC`).

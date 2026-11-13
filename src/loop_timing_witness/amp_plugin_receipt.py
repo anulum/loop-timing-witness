@@ -14,8 +14,6 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
-
 from .amp_build_dependencies import dependency_hashes
 from .manifest_io import (
     canonical_json_bytes,
@@ -23,6 +21,7 @@ from .manifest_io import (
     parse_bounded_json_object,
     sha256_of_file,
 )
+from .validate_measurement_domain import schema_locations
 
 ROOT = Path(__file__).resolve().parent / "data"
 
@@ -46,10 +45,11 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
         If JSON, schema identifier, types, bounds or required build identity fields are invalid.
     """
     data = parse_bounded_json_object(content, "AMP plugin build")
-    schema = load_json_object(ROOT / "amp-plugin-build.schema.json")
-    errors = list(Draft202012Validator(schema).iter_errors(data))
-    if errors:
-        message = "AMP plugin build receipt invalid: " + errors[0].message
+    locations = schema_locations(data, load_json_object(ROOT / "amp-plugin-build.schema.json"))
+    if locations:
+        message = (
+            f"AMP plugin build receipt {locations[0]}: does not satisfy the AMP plugin build schema"
+        )
         raise ValueError(message)
     preparation = data["preparation"]
     identity = preparation["identity"]

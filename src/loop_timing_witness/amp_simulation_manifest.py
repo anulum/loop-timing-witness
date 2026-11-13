@@ -33,6 +33,7 @@ from .manifest_io import (
     sha256_of_file,
 )
 from .run_manifest import load_run, utc_timestamp
+from .validate_measurement_domain import schema_locations
 
 ROOT = Path(__file__).resolve().parent / "data"
 COEFFICIENT_NAMES = (
@@ -100,10 +101,9 @@ def _capture_receipt(content: bytes) -> dict[str, Any]:
         timestamp is not one RFC 3339 date-time in UTC.
     """
     capture = parse_bounded_json_object(content, "AMP capture")
-    schema = load_json_object(ROOT / "amp-capture.schema.json")
-    errors = list(Draft202012Validator(schema).iter_errors(capture))
-    if errors:
-        message = f"AMP capture receipt invalid: {errors[0].message}"
+    locations = schema_locations(capture, load_json_object(ROOT / "amp-capture.schema.json"))
+    if locations:
+        message = f"AMP capture receipt {locations[0]}: does not satisfy the AMP capture schema"
         raise ValueError(message)
     for field in ("started_utc", "completed_utc"):
         if not utc_timestamp(capture[field]):

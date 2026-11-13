@@ -240,6 +240,11 @@ run-bound documents: nesting at most 64 deep, integers within 64 bits and no unp
 surrogate escape. The capture's `started_utc` and `completed_utc` must each be one RFC 3339
 date-time in UTC, the rule the run manifest's `started_utc` follows; no optional date-time
 validator is consulted.
+A capture or plugin build receipt that breaks its schema is refused with the first broken
+location in path order and an authored text, never the validator's own words:
+`AMP capture receipt <location>: does not satisfy the AMP capture schema` and
+`AMP plugin build receipt <location>: does not satisfy the AMP plugin build schema`, where
+`(root)` names the document itself.
 
 ## Analysis and limits
 

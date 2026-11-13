@@ -11,7 +11,8 @@
 //! The expected outcomes were produced by CPython 3.15 `re.search` over the
 //! nine patterns of the committed schemas, two extra quantifier patterns and
 //! forty texts holding anchors, final newlines, lengths at the bounds and the
-//! whitespace characters on which Python and Unicode disagree.
+//! whitespace characters on which Python and Unicode disagree, then anchored
+//! `\S` and a one-character range, which mutation runs showed were missing.
 
 use super::Pattern;
 
@@ -892,6 +893,16 @@ const PYTHON_CASES: &[(&str, &str, bool)] = &[
     ("x{3}", "xx", false),
     ("x{3}", "xxx", true),
     ("x{3}", "xxxx", true),
+    ("^\\S$", "a", true),
+    ("^\\S$", "ab", false),
+    ("^\\S$", " ", false),
+    ("^\\S$", "", false),
+    ("^\\S\\S$", "ab", true),
+    ("^\\S\\S$", "a", false),
+    ("^\\S\\S$", "a b", false),
+    ("[a-a]", "a", true),
+    ("[a-a]", "b", false),
+    ("[a-a]", "", false),
 ];
 
 #[test]
@@ -912,6 +923,7 @@ fn syntax_outside_the_subset_is_refused() {
         "a{x}",
         "a{3,2}",
         "a{,2}",
+        "a{+1}",
         "[a",
         "[]",
         "[^a]",

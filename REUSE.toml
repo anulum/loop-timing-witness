@@ -33,6 +33,7 @@ path = [
     "analysis/rust/run-manifest.schema.json",
     "analysis/rust/native-run.schema.json",
     "analysis/rust/host-load.schema.json",
+    "analysis/rust/repeat-campaign.schema.json",
     "analysis/rust/public-data/*.json",
     "analysis/rust/tests/data/*.json",
     "measurement-domain.json",

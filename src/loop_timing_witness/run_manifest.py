@@ -124,21 +124,23 @@ def _validate_run_schema(manifest: dict[str, Any]) -> None:
     if locations:
         message = f"run manifest {locations[0]}: does not satisfy the run manifest schema"
         raise ValueError(message)
-    if not _utc_timestamp(manifest["started_utc"]):
+    if not utc_timestamp(manifest["started_utc"]):
         message = "started_utc must be an RFC 3339 date-time in UTC"
         raise ValueError(message)
 
 
-def _utc_timestamp(text: str) -> bool:
+def utc_timestamp(text: str) -> bool:
     """Tell whether a text is one RFC 3339 date-time with a zero UTC offset.
 
     The date and time fields must name a real calendar instant; a leap second
-    is not accepted. Fractional seconds may have any number of digits.
+    is not accepted. Fractional seconds may have any number of digits. The run
+    manifest's ``started_utc`` and an AMP capture's ``started_utc`` and
+    ``completed_utc`` follow this rule.
 
     Parameters
     ----------
     text
-        Declared ``started_utc`` value.
+        Declared timestamp text.
 
     Returns
     -------

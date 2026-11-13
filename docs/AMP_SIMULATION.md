@@ -237,7 +237,9 @@ writes a capture receipt, the normal public run manifest and the normal analysis
 Reanalysis decodes `capture.json`, the logger completion receipt, `plugin_build.json`, the
 retained measurement domain and every captured JSON file with the bounded JSON rules of
 run-bound documents: nesting at most 64 deep, integers within 64 bits and no unpaired
-surrogate escape.
+surrogate escape. The capture's `started_utc` and `completed_utc` must each be one RFC 3339
+date-time in UTC, the rule the run manifest's `started_utc` follows; no optional date-time
+validator is consulted.
 
 ## Analysis and limits
 

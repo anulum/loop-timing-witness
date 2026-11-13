@@ -111,6 +111,55 @@ def test_original_capture_refusal(actual_capture: Path, fault: str) -> None:
         admitted_capture(actual_capture, json.dumps(data).encode("ascii"))
 
 
+def test_capture_timestamps_outside_the_utc_rule_are_refused(actual_capture: Path) -> None:
+    """Refuse each capture timestamp that is not one real RFC 3339 instant in UTC.
+
+    The rule is the run manifest's and does not depend on an optional
+    date-time validator being installed: another offset, an impossible date,
+    a leap second, a missing ``T`` or offset and free text are each refused
+    with the same authored text.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    """
+    original = json.loads((actual_capture / "capture.json").read_bytes())
+    texts = (
+        "2026-11-13T10:00:00+01:00",
+        "2026-02-30T10:00:00Z",
+        "2026-11-13T23:59:60Z",
+        "2026-11-13 10:00:00Z",
+        "2026-11-13T10:00:00",
+        "not a timestamp",
+    )
+    for field in ("started_utc", "completed_utc"):
+        for text in texts:
+            data = {**original, field: text}
+            finding = f"AMP capture receipt {field} must be an RFC 3339 date-time in UTC"
+            with pytest.raises(ValueError, match=f"^{re.escape(finding)}$"):
+                admitted_capture(actual_capture, json.dumps(data).encode("ascii"))
+
+
+def test_capture_timestamps_in_every_utc_form_are_admitted(actual_capture: Path) -> None:
+    """Admit lowercase separators, a zero numeric offset and long fractions of a second.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    """
+    original = json.loads((actual_capture / "capture.json").read_bytes())
+    for text in (
+        "2026-11-13t10:00:00z",
+        "2026-11-13T10:00:00.123456789+00:00",
+        "2026-11-13T10:00:00-00:00",
+    ):
+        data = {**original, "started_utc": text, "completed_utc": text}
+        admitted = admitted_capture(actual_capture, json.dumps(data).encode("ascii"))
+        assert (admitted["started_utc"], admitted["completed_utc"]) == (text, text)
+
+
 def _rebind_image_input(actual_capture: Path, data: dict[str, Any], name: str) -> None:
     """Bind a changed image preparation input through the whole preparation chain.
 

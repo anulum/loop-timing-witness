@@ -74,6 +74,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- An AMP capture's `started_utc` and `completed_utc` must each be one RFC 3339 date-time in
+  UTC, the rule of the run manifest's `started_utc`: another offset, an impossible date or a
+  leap second is refused (`AMP capture receipt <field> must be an RFC 3339 date-time in UTC`).
+  The check no longer depends on whether an optional date-time validator is installed, which
+  the runtime lock does not provide.
 - Every AMP input is decoded with the bounded JSON rules of run-bound documents: the capture,
   completion and plugin build receipts, the retained measurement domain, and the captured
   preparation, command, image, build-command and source-index files. A document nested more

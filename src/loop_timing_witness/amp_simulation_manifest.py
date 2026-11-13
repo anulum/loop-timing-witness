@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator
 
 from .amp_capture_observations import fault_schedule, tracking_csv
 from .amp_completion import completion_receipt, decode_completion, validate_capture
@@ -32,7 +32,7 @@ from .manifest_io import (
     parse_bounded_json_object,
     sha256_of_file,
 )
-from .run_manifest import load_run
+from .run_manifest import load_run, utc_timestamp
 
 ROOT = Path(__file__).resolve().parent / "data"
 COEFFICIENT_NAMES = (
@@ -80,6 +80,38 @@ def compiler_libraries(identity: object) -> dict[str, str]:
     return cast("dict[str, str]", data["runtime_libraries"])
 
 
+def _capture_receipt(content: bytes) -> dict[str, Any]:
+    """Decode a capture receipt and check its schema and its two UTC timestamps.
+
+    Parameters
+    ----------
+    content
+        Original capture bytes.
+
+    Returns
+    -------
+    dict of str to Any
+        Receipt whose shape and timestamps are valid; its artifacts are not checked yet.
+
+    Raises
+    ------
+    ValueError
+        If the bytes break the bounded JSON rules, the receipt breaks its schema, or a
+        timestamp is not one RFC 3339 date-time in UTC.
+    """
+    capture = parse_bounded_json_object(content, "AMP capture")
+    schema = load_json_object(ROOT / "amp-capture.schema.json")
+    errors = list(Draft202012Validator(schema).iter_errors(capture))
+    if errors:
+        message = f"AMP capture receipt invalid: {errors[0].message}"
+        raise ValueError(message)
+    for field in ("started_utc", "completed_utc"):
+        if not utc_timestamp(capture[field]):
+            message = f"AMP capture receipt {field} must be an RFC 3339 date-time in UTC"
+            raise ValueError(message)
+    return capture
+
+
 def admitted_capture(output: Path, content: bytes) -> dict[str, Any]:
     """Validate the original logger receipt schema and every captured artifact identity.
 
@@ -100,14 +132,10 @@ def admitted_capture(output: Path, content: bytes) -> dict[str, Any]:
     OSError
         If a captured original artifact is unavailable.
     ValueError
-        If original receipt shape, paths, byte hashes or actual logger counters disagree.
+        If original receipt shape, UTC timestamps, paths, byte hashes or actual logger
+        counters disagree.
     """
-    capture = parse_bounded_json_object(content, "AMP capture")
-    schema = load_json_object(ROOT / "amp-capture.schema.json")
-    errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(capture))
-    if errors:
-        message = f"AMP capture receipt invalid: {errors[0].message}"
-        raise ValueError(message)
+    capture = _capture_receipt(content)
     preparation = load_bounded_json_object(output / "image/preparation.json")
     record_count = image_dependency_record_count(preparation)
     required = {

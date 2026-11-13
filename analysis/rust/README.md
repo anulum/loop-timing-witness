@@ -142,6 +142,24 @@ changed sources that reach each reader rule and bound, byte changes of every
 header word, structure token and string byte of a small tree, hand-built
 structure blocks, and blobs at the depth, node, path and size limits.
 
+## Firmware ELF reading
+
+The `amp_elf` module reads an AMP firmware image as the Python `amp_elf` and
+`amp_elf_symbols` modules do. `admit_elf(&bytes, reservation)` admits the load
+segments of a static little-endian soft-float RV64 executable inside the
+firmware reservation, with its entry backed by executable file bytes.
+`read_symbols(&bytes)` returns the defined global and weak symbols of the one
+symbol table, in table order. Every refusal is the Python reader's text for
+the same first defect.
+
+A shared corpus holds both implementations to the same outcomes on two real
+images it carries: the small image the load tests link from one assembly
+file, and a whole firmware compiled from the repository's startup, controller,
+exit and contract sources. The corpus records how each was built.
+It covers cut, padded and changed images, other reservations, and one-field
+changes of the ELF header and of every program header, section header and
+global symbol.
+
 ## Selected installation
 
 The compiled registry admits source contract

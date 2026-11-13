@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native firmware ELF reading in the Rust analysis crate: the public `amp_elf` module admits
+  the load segments of an AMP firmware image inside its reservation and reads its global
+  symbols, with the Python readers' values and refusal texts. Two committed real images and a
+  corpus of their changes hold both implementations to the same outcomes.
 - Native device-tree reading in the Rust analysis crate: the public `device_tree` module
   decodes an original blob and reads register regions translated to root addresses, scalar,
   string-list and phandle properties, and the dedicated PLIC binding, with the Python

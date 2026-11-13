@@ -8,6 +8,9 @@
 
 //! Verify complete source-bound simulated neural acquisitions through an independent native API.
 
+/// Firmware ELF admission and global symbol reading of AMP images.
+pub mod amp_elf;
+mod amp_elf_symbols;
 mod binding;
 /// The repeat campaign command, as Python's `analyze_campaign` runs it.
 pub mod campaign_command;

@@ -10,8 +10,8 @@
 //!
 //! The Python analysis validates with `jsonschema` and reports only failing
 //! locations, never the validator's wording. This interpreter implements the
-//! keywords the run, measurement-domain, native-run, host-load and neural
-//! carrier schemas use, with the same applicability and equality rules, and
+//! keywords the run, measurement-domain, native-run, host-load, neural carrier
+//! and AMP plugin build schemas use, with the same applicability and equality rules, and
 //! reports the same locations: each distinct location once, sorted by its path
 //! parts as strings. A keyword outside the supported set is refused when the
 //! schema is loaded.
@@ -69,6 +69,7 @@ const ASSERTIONS: &[&str] = &[
     "uniqueItems",
     "required",
     "minProperties",
+    "maxProperties",
     "dependentRequired",
     "properties",
     "$ref",
@@ -323,6 +324,9 @@ impl Schema {
             "minProperties" => instance
                 .as_object()
                 .is_none_or(|object| !below(object.len(), value)),
+            "maxProperties" => instance
+                .as_object()
+                .is_none_or(|object| !above(object.len(), value)),
             "minimum" => number(instance)
                 .is_none_or(|actual| compare(actual, numeric(value)) != Ordering::Less),
             "maximum" => number(instance)

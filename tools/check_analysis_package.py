@@ -46,6 +46,7 @@ PACKAGE_COPIES: Final = {
     f"{PACKAGE_ROOT}/measurement-domain.schema.json": "measurement-domain.schema.json",
     f"{PACKAGE_ROOT}/native-run.schema.json": "native-run.schema.json",
     f"{PACKAGE_ROOT}/host-load.schema.json": "host-load.schema.json",
+    f"{PACKAGE_ROOT}/amp-plugin-build.schema.json": "amp-plugin-build.schema.json",
     f"{PACKAGE_ROOT}/tests/data/{RUN_FIXTURE}": f"tests/data/{RUN_FIXTURE}",
     f"{PACKAGE_ROOT}/tests/data/measurement-domain.json": "measurement-domain.json",
 }

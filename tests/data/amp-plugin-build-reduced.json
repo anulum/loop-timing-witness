@@ -1,0 +1,270 @@
+{
+  "build_tools": {
+    "ar": {
+      "path": "/usr/bin/x86_64-linux-gnu-ar",
+      "sha256": "6452af2eea333b8c65e1adb92964fc8f97863ab003fa13f9d12bff5345cd7dbe",
+      "version": "GNU ar (GNU Binutils for Ubuntu) 2.42\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) any later version.\nThis program has absolutely no warranty.\n"
+    },
+    "make": {
+      "path": "/usr/bin/make",
+      "sha256": "d78b8f1d099fbcfb6f2f49ab87223b9b68fb3956642f92d6ec6de812e8afa965",
+      "version": "GNU Make 4.3\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n"
+    },
+    "perl": {
+      "path": "/usr/bin/perl",
+      "sha256": "3c035de4fbf090969421d4d5d5ec06ad939e342e79351e4f817906ff7e7e8dc8",
+      "version": "\nThis is perl 5, version 38, subversion 2 (v5.38.2) built for x86_64-linux-gnu-thread-multi\n(with 68 registered patches, see perl -V for more detail)\n\nCopyright 1987-2023, Larry Wall\n\nPerl may be copied only under the terms of either the Artistic License or the\nGNU General Public License, which may be found in the Perl 5 source kit.\n\nComplete documentation for Perl, including FAQ lists, should be found on\nthis system using \"man perl\" or \"perldoc perl\".  If you have access to the\nInternet, point your browser at https://www.perl.org/, the Perl Home Page.\n\n"
+    },
+    "python3": {
+      "path": "/opt/eda/python/cpython-3.15.2-linux-x86_64-gnu/bin/python3.15",
+      "sha256": "3dc83f9d5dca58d83bab77bef85e70cd77c0072c45ecdb11e4786c12295b7aed",
+      "version": "Python 3.15.2\n"
+    }
+  },
+  "compilers": {
+    "c": {
+      "driver": {
+        "path": "/usr/bin/x86_64-linux-gnu-gcc-13",
+        "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26"
+      },
+      "programs": {
+        "as": {
+          "path": "/usr/bin/x86_64-linux-gnu-as",
+          "sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0"
+        },
+        "cc1": {
+          "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1",
+          "sha256": "5d1679131184e2de4435b426eb264bf13472fe026db8e5c6bc97445814e8e2f4"
+        },
+        "collect2": {
+          "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+          "sha256": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158"
+        },
+        "ld": {
+          "path": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+          "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+        }
+      },
+      "runtime_libraries": {
+        "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+      },
+      "version": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"
+    },
+    "cxx": {
+      "driver": {
+        "path": "/usr/bin/x86_64-linux-gnu-g++-13",
+        "sha256": "1353e9bdd29a7295c7226bf6c63abccce056d8cac31f112e5cdbecc3f28c2769"
+      },
+      "programs": {
+        "as": {
+          "path": "/usr/bin/x86_64-linux-gnu-as",
+          "sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0"
+        },
+        "cc1plus": {
+          "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+          "sha256": "840b332fb62ec6f694ac77d91fe69ef7f80b0d69512ed89374af0ee7a506255d"
+        },
+        "collect2": {
+          "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+          "sha256": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158"
+        },
+        "ld": {
+          "path": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+          "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+        }
+      },
+      "runtime_libraries": {
+        "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+      },
+      "version": "x86_64-linux-gnu-g++-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"
+    }
+  },
+  "dependencies": {
+    "/build/plugin/compilation.json": "8507215a5d22c1cf5c1cf3a62be56646c2985dcfcb006ab9b14c56229b4679c0",
+    "/build/plugin/generation.json": "edb4209532c28954dd9dfeef2cb151e81d7d0fdcb26325e58cbd452940644c26",
+    "/build/plugin/precompile/configuration.d": "c1d19615a781350e7c5bbb2cc4b11af08c74d50754215661580379206aa341a9",
+    "/build/plugin/precompile/controller.d": "25aee2e8e6d8956058f86bd0d25cbed68a11832f510e644587d4a80ec11b986d",
+    "/build/plugin/precompile/model.d": "1579a7d112f2b9d524df5549b43d669db5d560fd7c6dfaeb258e5d4657441b16",
+    "/build/plugin/precompile/plugin.d": "c31595da9f4f2dad1afdfb5ea4286f25a1323cfa2e1e02c167cc45b510ed1c53",
+    "/build/plugin/precompile/verilated.d": "12672fd1633fe0ae0e879027ad1abe7fdd3d76f2b69d2ce9b979802a0e0860a1",
+    "/build/plugin/precompile/verilated_threads.d": "555533e325d81e314022b59e2ae362649fa398598b384dc04591ce96f64d155c",
+    "/build/plugin/rtl/Vaxi_control_witness.cpp": "160b895cdafd95ebfbb5750f3afd968672c6e0435cb15eb7b1a5e8c8d9b56a55",
+    "/build/plugin/rtl/Vaxi_control_witness.h": "a1ee573d8780f0112b93b0d5dd6637a87bfce5816897411daa1f3684d54e0a91",
+    "/build/repo/Makefile": "2488d46d398ccde065e0227b5bf9cfb5ea9889a5ae384666ed0cbcbc3de53900",
+    "/build/repo/amp-plugin-build.schema.json": "08978ebd08dadc502e48b0933b9c0052ace10fb5518db5b5c8ff4ac30d5f1134",
+    "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+  },
+  "dependency_records": {
+    "/build/plugin/configuration.d": "52affc3c570555ef1b697cc90df85e38fa73c01c500608863f0e26c9a10825d6",
+    "/build/plugin/controller.d": "ed06e9ab93c470b6a5cd69e12e473844b4b7883e0bb40a16055cfae4609c64be",
+    "/build/plugin/plugin.d": "0ac4ba5d65badc69ee0bba8fe9d254c303ec1ce9b2aa4ed26cf58477f58ee6f1",
+    "/build/plugin/rtl/Vaxi_control_witness__ALL.d": "ea153c645227a385e3ddc955c940c94329b23147255a7b8c1b87d7a01a981d43",
+    "/build/plugin/verilated.d": "7069b6311b6aa49936201ec27e3fa8dd721d444ec2575eae889d772bc80c527a",
+    "/build/plugin/verilated_threads.d": "3b03127e748498381d2e8b6bfdf2ceef1d8a4a526bc9cead4aca192b043054ac"
+  },
+  "fifo_address_bits": 8,
+  "link_inputs": {
+    "/build/plugin/configuration.o": "3bbd420fba84ebc97d5a0ee72b16255f8216b31271f3313ee46a0338ae1ac8dd",
+    "/build/plugin/controller.o": "3448a175c2facc4881179005e40db83c63e62ef7e96de6178a8555184c12146c",
+    "/build/plugin/plugin.o": "df103fcfda39b74f1f76cfcc35964400903573370ba0e3add254b1987cdca221",
+    "/build/plugin/rtl/Vaxi_control_witness__ALL.a": "0499dac31c1624fa4f5619705068bbb6383e70d7c58ff4855cec321ee3ed0912",
+    "/build/plugin/verilated.o": "7a1aded3ac4688b9e8c72fc4f30b2e7c2ea71778e8f23736be59a91d84d5de1d",
+    "/build/plugin/verilated_threads.o": "3ba676f11c0b476666fbde1bc0397bf95e3dd93278d5562dab4df7b302fba4a6"
+  },
+  "plugin_sha256": "1d8c66b3c80cb2f9abdd0a62dfbdd397c0c5a706ffb07e229c2b8c045b621ef0",
+  "preparation": {
+    "build_files": {
+      "/build/plugin/rtl/Vaxi_control_witness.cpp": "160b895cdafd95ebfbb5750f3afd968672c6e0435cb15eb7b1a5e8c8d9b56a55",
+      "/build/plugin/rtl/Vaxi_control_witness.h": "a1ee573d8780f0112b93b0d5dd6637a87bfce5816897411daa1f3684d54e0a91"
+    },
+    "dependencies": {
+      "/build/plugin/rtl/Vaxi_control_witness.cpp": "160b895cdafd95ebfbb5750f3afd968672c6e0435cb15eb7b1a5e8c8d9b56a55",
+      "/build/plugin/rtl/Vaxi_control_witness.h": "a1ee573d8780f0112b93b0d5dd6637a87bfce5816897411daa1f3684d54e0a91"
+    },
+    "dependency_records": {
+      "/build/plugin/precompile/configuration.d": "c1d19615a781350e7c5bbb2cc4b11af08c74d50754215661580379206aa341a9",
+      "/build/plugin/precompile/controller.d": "25aee2e8e6d8956058f86bd0d25cbed68a11832f510e644587d4a80ec11b986d",
+      "/build/plugin/precompile/model.d": "1579a7d112f2b9d524df5549b43d669db5d560fd7c6dfaeb258e5d4657441b16",
+      "/build/plugin/precompile/plugin.d": "c31595da9f4f2dad1afdfb5ea4286f25a1323cfa2e1e02c167cc45b510ed1c53",
+      "/build/plugin/precompile/verilated.d": "12672fd1633fe0ae0e879027ad1abe7fdd3d76f2b69d2ce9b979802a0e0860a1",
+      "/build/plugin/precompile/verilated_threads.d": "555533e325d81e314022b59e2ae362649fa398598b384dc04591ce96f64d155c"
+    },
+    "generation_sha256": "edb4209532c28954dd9dfeef2cb151e81d7d0fdcb26325e58cbd452940644c26",
+    "identity": {
+      "build_tools": {
+        "ar": {
+          "path": "/usr/bin/x86_64-linux-gnu-ar",
+          "sha256": "6452af2eea333b8c65e1adb92964fc8f97863ab003fa13f9d12bff5345cd7dbe",
+          "version": "GNU ar (GNU Binutils for Ubuntu) 2.42\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) any later version.\nThis program has absolutely no warranty.\n"
+        },
+        "make": {
+          "path": "/usr/bin/make",
+          "sha256": "d78b8f1d099fbcfb6f2f49ab87223b9b68fb3956642f92d6ec6de812e8afa965",
+          "version": "GNU Make 4.3\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n"
+        },
+        "perl": {
+          "path": "/usr/bin/perl",
+          "sha256": "3c035de4fbf090969421d4d5d5ec06ad939e342e79351e4f817906ff7e7e8dc8",
+          "version": "\nThis is perl 5, version 38, subversion 2 (v5.38.2) built for x86_64-linux-gnu-thread-multi\n(with 68 registered patches, see perl -V for more detail)\n\nCopyright 1987-2023, Larry Wall\n\nPerl may be copied only under the terms of either the Artistic License or the\nGNU General Public License, which may be found in the Perl 5 source kit.\n\nComplete documentation for Perl, including FAQ lists, should be found on\nthis system using \"man perl\" or \"perldoc perl\".  If you have access to the\nInternet, point your browser at https://www.perl.org/, the Perl Home Page.\n\n"
+        },
+        "python3": {
+          "path": "/opt/eda/python/cpython-3.15.2-linux-x86_64-gnu/bin/python3.15",
+          "sha256": "3dc83f9d5dca58d83bab77bef85e70cd77c0072c45ecdb11e4786c12295b7aed",
+          "version": "Python 3.15.2\n"
+        }
+      },
+      "compilers": {
+        "c": {
+          "driver": {
+            "path": "/usr/bin/x86_64-linux-gnu-gcc-13",
+            "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26"
+          },
+          "programs": {
+            "as": {
+              "path": "/usr/bin/x86_64-linux-gnu-as",
+              "sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0"
+            },
+            "cc1": {
+              "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1",
+              "sha256": "5d1679131184e2de4435b426eb264bf13472fe026db8e5c6bc97445814e8e2f4"
+            },
+            "collect2": {
+              "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+              "sha256": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158"
+            },
+            "ld": {
+              "path": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+              "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+            }
+          },
+          "runtime_libraries": {
+            "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+          },
+          "version": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"
+        },
+        "cxx": {
+          "driver": {
+            "path": "/usr/bin/x86_64-linux-gnu-g++-13",
+            "sha256": "1353e9bdd29a7295c7226bf6c63abccce056d8cac31f112e5cdbecc3f28c2769"
+          },
+          "programs": {
+            "as": {
+              "path": "/usr/bin/x86_64-linux-gnu-as",
+              "sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0"
+            },
+            "cc1plus": {
+              "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+              "sha256": "840b332fb62ec6f694ac77d91fe69ef7f80b0d69512ed89374af0ee7a506255d"
+            },
+            "collect2": {
+              "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+              "sha256": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158"
+            },
+            "ld": {
+              "path": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+              "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+            }
+          },
+          "runtime_libraries": {
+            "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+          },
+          "version": "x86_64-linux-gnu-g++-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"
+        }
+      },
+      "fifo_address_bits": 8,
+      "runtime_libraries": {
+        "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+      },
+      "sources": {
+        "/build/repo/Makefile": "2488d46d398ccde065e0227b5bf9cfb5ea9889a5ae384666ed0cbcbc3de53900",
+        "/build/repo/amp-plugin-build.schema.json": "08978ebd08dadc502e48b0933b9c0052ace10fb5518db5b5c8ff4ac30d5f1134"
+      },
+      "spike_sdk": {
+        "build": "/build/spike-build",
+        "patch": "diff --git a/riscv/interactive.cc b/riscv/interactive.cc\nindex 6c8c229..cafb4f2 100644\n--- a/riscv/interactive.cc\n+++ b/riscv/interactive.cc\n@@ -3,11 +3,11 @@\n #include \"config.h\"\n #include \"sim.h\"\n #include \"decode.h\"\n+#include \"socketif.h\"\n #include \"decode_macros.h\"\n #include \"disasm.h\"\n #include \"mmu.h\"\n #include \"vector_unit.h\"\n-#include \"socketif.h\"\n #include <sys/mman.h>\n #include <termios.h>\n #include <map>\n",
+        "revision": "7ab2efd6785e847c6d13d810c0b25b7c9c26bd21",
+        "source": "/build/spike-source"
+      },
+      "thermal": 0,
+      "verilator": {
+        "backend": {
+          "path": "/usr/bin/verilator_bin",
+          "sha256": "25f33046f0055a6982c67cdc55081685a844abb50d044cfda087bd418db9be6c",
+          "version": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)\n"
+        },
+        "path": "/usr/bin/verilator",
+        "root": "/usr/share/verilator",
+        "sha256": "4c6292ab82e57b7f34ab26dbae86ba9c494bacfb088b6ff34be93c553d1301b1",
+        "version": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)\n"
+      },
+      "working_directory": "/build/repo"
+    },
+    "schema": "loop-timing-witness.amp-plugin-preparation.v1",
+    "stage": "compilation"
+  },
+  "preparation_path": "/build/plugin/compilation.json",
+  "runtime_libraries": {
+    "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+  },
+  "schema": "loop-timing-witness.amp-plugin-build.v1",
+  "simulation_only": true,
+  "spike_sdk": {
+    "build": "/build/spike-build",
+    "patch": "diff --git a/riscv/interactive.cc b/riscv/interactive.cc\nindex 6c8c229..cafb4f2 100644\n--- a/riscv/interactive.cc\n+++ b/riscv/interactive.cc\n@@ -3,11 +3,11 @@\n #include \"config.h\"\n #include \"sim.h\"\n #include \"decode.h\"\n+#include \"socketif.h\"\n #include \"decode_macros.h\"\n #include \"disasm.h\"\n #include \"mmu.h\"\n #include \"vector_unit.h\"\n-#include \"socketif.h\"\n #include <sys/mman.h>\n #include <termios.h>\n #include <map>\n",
+    "revision": "7ab2efd6785e847c6d13d810c0b25b7c9c26bd21",
+    "source": "/build/spike-source"
+  },
+  "thermal": 0,
+  "verilator": {
+    "backend": {
+      "path": "/usr/bin/verilator_bin",
+      "sha256": "25f33046f0055a6982c67cdc55081685a844abb50d044cfda087bd418db9be6c",
+      "version": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)\n"
+    },
+    "path": "/usr/bin/verilator",
+    "root": "/usr/share/verilator",
+    "sha256": "4c6292ab82e57b7f34ab26dbae86ba9c494bacfb088b6ff34be93c553d1301b1",
+    "version": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)\n"
+  },
+  "working_directory": "/build/repo"
+}

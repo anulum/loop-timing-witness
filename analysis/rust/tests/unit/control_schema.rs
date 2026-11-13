@@ -8,9 +8,10 @@
 
 //! Hold the interpreter to the locations Python reports for the shared corpus.
 //!
-//! `tests/test_control_schema_corpus.py` builds the corpus from Python's
-//! validator and requires the committed file to equal it; these tests require
-//! the same file here, so both languages report identical refusals.
+//! `tests/test_control_schema_corpus.py` and `tests/test_amp_plugin_schema_corpus.py`
+//! build the corpora from Python's validator and require the committed files to
+//! equal them; these tests require the same files here, so both languages report
+//! identical refusals.
 
 use super::{Numeric, Schema, compare, float_against, has_type};
 use crate::corpus::changed;
@@ -27,12 +28,20 @@ const CORPUS: &str = include_str!("../data/control-schema-locations.json");
 const NEURAL: &str = include_str!("../../neural-step-run.schema.json");
 /// The shared neural corpus; each change carries Python's locations and refusal.
 const NEURAL_CORPUS: &str = include_str!("../data/neural-manifest-refusals.json");
+/// The committed AMP plugin build receipt schema.
+const PLUGIN: &str = include_str!("../../amp-plugin-build.schema.json");
+/// The shared plugin build corpus of `tests/test_amp_plugin_schema_corpus.py`.
+const PLUGIN_CORPUS: &str = include_str!("../data/amp-plugin-schema-locations.json");
 
 #[test]
 fn every_corpus_case_reports_the_python_locations() {
-    let corpus: Value = serde_json::from_str(CORPUS).expect("corpus");
-    let bases = &corpus["bases"];
-    for (kind, text) in [("run", RUN), ("domain", DOMAIN)] {
+    for (corpus, kind, text) in [
+        (CORPUS, "run", RUN),
+        (CORPUS, "domain", DOMAIN),
+        (PLUGIN_CORPUS, "plugin", PLUGIN),
+    ] {
+        let corpus: Value = serde_json::from_str(corpus).expect("corpus");
+        let bases = &corpus["bases"];
         let schema = Schema::load(text).expect("committed schema");
         let mut count = 0;
         for group in corpus[kind].as_array().expect("groups") {

@@ -16,6 +16,7 @@
 
 use super::{AmpFailure, rust_dependency_hashes};
 use crate::amp_shell_words::{NO_CLOSING_QUOTATION, NO_ESCAPED_CHARACTER, split};
+use crate::unit_files::{Scratch, hex_bytes};
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
@@ -76,40 +77,6 @@ fn shell_words_equal_python() {
     }
 }
 
-/// An owned directory under the temporary directory, removed when dropped.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    /// Create a new empty directory and hold its resolved path.
-    fn new() -> Self {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let name = format!(
-            "witness-amp-rust-dependencies-{}-{nanos}",
-            std::process::id()
-        );
-        let path = std::env::temp_dir().join(name);
-        std::fs::create_dir(&path).expect("scratch");
-        Self(std::fs::canonicalize(&path).expect("resolved scratch"))
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).ok();
-    }
-}
-
-/// Decode a hexadecimal byte string of the corpus.
-fn bytes(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&text[index..index + 2], 16).expect("hex"))
-        .collect()
-}
-
 /// Write one case's tree and records under its directory and return the record paths.
 fn materialise(directory: &Path, case: &Value) -> Vec<PathBuf> {
     for (name, content) in case["tree"].as_object().expect("tree") {
@@ -132,7 +99,7 @@ fn materialise(directory: &Path, case: &Value) -> Vec<PathBuf> {
         if let Some(text) = record["text"].as_str() {
             std::fs::write(&path, text).expect("text record");
         } else if let Some(hex) = record["hex"].as_str() {
-            std::fs::write(&path, bytes(hex)).expect("byte record");
+            std::fs::write(&path, hex_bytes(hex)).expect("byte record");
         }
         paths.push(path);
     }
@@ -152,7 +119,7 @@ fn outcome(directory: &Path, records: &[PathBuf]) -> Value {
 #[test]
 fn reader_equals_python() {
     let corpus = corpus();
-    let scratch = Scratch::new();
+    let scratch = Scratch::new("amp-rust-dependencies");
     let cases = corpus["cases"].as_array().expect("cases");
     for (index, case) in cases.iter().enumerate() {
         let directory = scratch.0.join(format!("case-{index}"));

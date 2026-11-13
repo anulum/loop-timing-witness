@@ -15,20 +15,13 @@
 use super::{admit_elf, read_symbols};
 use crate::device_tree_resources::Region;
 use crate::files::digest;
+use crate::unit_files::hex_bytes;
 use serde_json::{Map, Value, json};
 
 /// The shared corpus, holding two real images and Python's outcomes.
 const CORPUS: &str = include_str!("../data/amp-elf-cases.json");
 /// The images in the order the sweep numbers them.
 const IMAGES: [&str; 2] = ["linked", "firmware"];
-
-/// Decode a hexadecimal byte string of the corpus.
-fn bytes(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&text[index..index + 2], 16).expect("hex"))
-        .collect()
-}
 
 /// A corpus integer as a size or offset.
 fn index(value: &Value) -> usize {
@@ -98,7 +91,7 @@ impl Corpus {
         let document: Value = serde_json::from_str(CORPUS).expect("corpus");
         assert_eq!(document["schema"], "loop-timing-witness.amp-elf-cases.v1");
         let images = IMAGES.map(|name| {
-            let image = bytes(document["images"][name]["hex"].as_str().expect("hex"));
+            let image = hex_bytes(document["images"][name]["hex"].as_str().expect("hex"));
             assert_eq!(document["images"][name]["sha256"], digest(&image), "{name}");
             image
         });
@@ -183,7 +176,7 @@ fn every_named_case_admits_and_reads_as_python() {
             .into_iter()
             .flatten()
         {
-            let change = bytes(edit[1].as_str().expect("hex"));
+            let change = hex_bytes(edit[1].as_str().expect("hex"));
             let offset = index(&edit[0]);
             content[offset..offset + change.len()].copy_from_slice(&change);
         }
@@ -214,7 +207,7 @@ fn every_field_change_admits_and_reads_as_python() {
     for row in rows {
         let row = corpus.with_texts(row);
         let which = index(&row[0]);
-        let (offset, change) = (index(&row[1]), bytes(row[2].as_str().expect("hex")));
+        let (offset, change) = (index(&row[1]), hex_bytes(row[2].as_str().expect("hex")));
         let mut content = corpus.images[which].clone();
         content[offset..offset + change.len()].copy_from_slice(&change);
         let found = [admission(&content, ram), symbols(&content, false)];

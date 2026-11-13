@@ -14,6 +14,7 @@
 use super::{energy_per_cycle, observed_tracking_error, python_sum, tracking_error};
 use crate::control_events::{Event, Names};
 use crate::control_json::decode_object;
+use crate::unit_files::hex_bytes;
 use serde_json::{Map, Value};
 
 /// The shared corpus of decimal cases and series.
@@ -25,17 +26,7 @@ const DOMAIN: &str = include_str!("../data/measurement-domain.json");
 fn content(case: &Value) -> Option<Vec<u8>> {
     match &case["content"] {
         Value::String(text) => Some(text.clone().into_bytes()),
-        Value::Object(map) => Some(
-            map["hex"]
-                .as_str()
-                .expect("hex")
-                .as_bytes()
-                .chunks(2)
-                .map(|pair| {
-                    u8::from_str_radix(std::str::from_utf8(pair).expect("hex"), 16).expect("hex")
-                })
-                .collect(),
-        ),
+        Value::Object(map) => Some(hex_bytes(map["hex"].as_str().expect("hex"))),
         _ => None,
     }
 }

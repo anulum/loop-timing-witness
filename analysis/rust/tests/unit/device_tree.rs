@@ -17,6 +17,7 @@ use super::{
     register_regions, single_cell, string_list,
 };
 use crate::files::{digest, hex};
+use crate::unit_files::hex_bytes;
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap};
 
@@ -40,14 +41,6 @@ const ABSENT_PLIC: &str = "/soc/plic@absent";
 const ABSENT_NODE: &str = "/absent";
 /// The one value above 64 bits a reader can return: the end of the RV64 space.
 const ADDRESS_END: u128 = 1 << 64;
-
-/// Decode a hexadecimal byte string of the corpus.
-fn bytes(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&text[index..index + 2], 16).expect("hex"))
-        .collect()
-}
 
 /// A corpus integer as a size or offset.
 fn index(value: &Value) -> usize {
@@ -79,7 +72,7 @@ impl Corpus {
             .as_object()
             .expect("chunks")
             .iter()
-            .map(|(name, text)| (name.clone(), bytes(text.as_str().expect("chunk"))))
+            .map(|(name, text)| (name.clone(), hex_bytes(text.as_str().expect("chunk"))))
             .collect();
         Self {
             document,
@@ -97,7 +90,7 @@ impl Corpus {
                 .iter()
                 .flat_map(|segment| {
                     let part = match &segment[0] {
-                        Value::String(text) => bytes(text),
+                        Value::String(text) => hex_bytes(text),
                         reference => {
                             let chunk = &self.chunks[reference["chunk"].as_str().expect("chunk")];
                             let start = reference.get("start").map_or(0, index);
@@ -353,7 +346,7 @@ fn every_byte_change_of_the_small_tree_decodes_as_python() {
     assert!(rows.len() > 800);
     for row in rows {
         let row = corpus.with_texts(row);
-        let (offset, change) = (index(&row[0]), bytes(row[1].as_str().expect("hex")));
+        let (offset, change) = (index(&row[0]), hex_bytes(row[1].as_str().expect("hex")));
         let mut raw = base.clone();
         raw[offset..offset + change.len()].copy_from_slice(&change);
         let found = match decode_device_tree(&raw) {

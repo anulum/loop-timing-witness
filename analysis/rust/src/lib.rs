@@ -71,6 +71,10 @@ mod receipts;
 mod reset;
 mod rows;
 mod traces;
+/// Corpus bytes and owned folders shared by the crate tests.
+#[cfg(test)]
+#[path = "../tests/support/unit_files.rs"]
+mod unit_files;
 
 /// Closed public neural carrier declarations, separate from complete run verification.
 pub mod public_manifest;

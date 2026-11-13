@@ -13,18 +13,11 @@
 //! tests require the same decoded objects, analysis choices and refusals here.
 
 use super::{MAX_DEPTH, decode_dispatch_object, decode_object, nesting_depth};
+use crate::unit_files::hex_bytes;
 use serde_json::Value;
 
 /// The shared corpus of raw documents and Python's outcomes.
 const CORPUS: &str = include_str!("../data/control-json-cases.json");
-
-/// Decode a hexadecimal byte string of the corpus.
-fn bytes(hex: &str) -> Vec<u8> {
-    (0..hex.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&hex[index..index + 2], 16).expect("hex"))
-        .collect()
-}
 
 #[test]
 fn every_corpus_document_decodes_or_refuses_as_python() {
@@ -37,7 +30,7 @@ fn every_corpus_document_decodes_or_refuses_as_python() {
     let cases = corpus["cases"].as_array().expect("cases");
     assert!(cases.len() > 60);
     for case in cases {
-        let raw = bytes(case["raw_hex"].as_str().expect("raw"));
+        let raw = hex_bytes(case["raw_hex"].as_str().expect("raw"));
         let dispatch = match decode_dispatch_object(&raw, source) {
             Ok(object) => serde_json::json!({"neural": object.contains_key("schema_id")}),
             Err(refusal) => serde_json::json!({"refusal": refusal}),

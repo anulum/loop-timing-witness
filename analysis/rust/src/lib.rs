@@ -13,9 +13,15 @@ pub mod amp_elf;
 mod amp_elf_symbols;
 /// Read errors and refusals of AMP inputs, as Python raises them.
 pub mod amp_failure;
+mod amp_files;
+/// Firmware preprocessing dependency snapshots and record counts of AMP images.
+pub mod amp_image_dependencies;
+/// Runtime library snapshots of AMP images and captures.
+pub mod amp_runtime_snapshot;
 /// Rust dependency record reading of AMP images built with the Rust kernel.
 pub mod amp_rust_dependencies;
 mod amp_shell_words;
+mod amp_snapshot_index;
 mod binding;
 /// The repeat campaign command, as Python's `analyze_campaign` runs it.
 pub mod campaign_command;

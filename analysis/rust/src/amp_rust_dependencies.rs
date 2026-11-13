@@ -23,11 +23,11 @@
 //! [`rust_dependency_hashes`]: crate::amp_rust_dependencies::rust_dependency_hashes
 
 use crate::amp_failure::AmpFailure;
+use crate::amp_files::file_digest;
 use crate::amp_shell_words::split;
 use crate::control_manifest::read_file;
 use crate::control_paths::{pure, realpath};
 use crate::control_text::python_space;
-use crate::files::digest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -59,13 +59,6 @@ fn record_text(path: &Path) -> Result<String, AmpFailure> {
     let text = String::from_utf8(content)
         .map_err(|_| AmpFailure::Refused("Rust dependency record is not UTF-8".into()))?;
     Ok(text.replace("\r\n", "\n").replace('\r', "\n"))
-}
-
-/// Python's `sha256_of_file`: the digest of a whole file, or the `OSError`
-/// text of opening or reading it.
-fn file_digest(path: &Path) -> Result<String, AmpFailure> {
-    let content = read_file(path).map_err(|failure| AmpFailure::Os(failure.text()))?;
-    Ok(digest(&content))
 }
 
 /// The sources one Rust record names, reconciled with its phony rules.

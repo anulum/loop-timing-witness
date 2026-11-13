@@ -178,6 +178,26 @@ whitespace, quote, escape and non-ASCII characters and every text of four
 and five characters over the quote and escape core, and the reader to the
 Python reader's digests, refusals and read errors on named file trees.
 
+## AMP snapshot checks
+
+An AMP image or capture keeps copies of its runtime libraries and of the
+firmware's preprocessing sources, indexed by original name. The
+`amp_runtime_snapshot` and `amp_image_dependencies` modules check them as the
+Python modules of the same names do. `validate_runtime_snapshot(output,
+identities)` and `validate_image_dependency_snapshot(directory, identities)`
+require the index document to equal the index Python assigns to the recorded
+identities, then check every copy, in the document's order, for a path inside
+the folder and the recorded digest. `image_dependency_record_count(receipt)`
+reads how many preprocessing records the preparation's kernel backend has.
+Failures are `AmpFailure` values with Python's texts, met in Python's order.
+The identity schemas are committed beside the crate, and a test holds them
+equal to the Python constants.
+
+A shared corpus holds both implementations to the same outcomes on trees that
+Python's own snapshot writers build: changed, missing, linked and escaping
+copies, disagreeing and malformed indexes, invalid identities, document order
+and every kernel declaration.
+
 ## Selected installation
 
 The compiled registry admits source contract

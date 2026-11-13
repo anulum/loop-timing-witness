@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "minProperties": 1,
+  "propertyNames": {
+    "type": "string",
+    "pattern": "^(/|source/|contract\\.c$)"
+  },
+  "additionalProperties": {
+    "type": "string",
+    "pattern": "^[0-9a-f]{64}$"
+  }
+}

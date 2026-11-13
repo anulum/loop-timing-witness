@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP snapshot checks in the Rust analysis crate: the public `amp_runtime_snapshot` and
+  `amp_image_dependencies` modules check an image's or capture's runtime library and firmware
+  preprocessing source copies against their index and the recorded identities, and read the
+  preprocessing record count of a kernel backend, with Python's refusal texts and read errors.
+  A corpus of trees built by Python's own snapshot writers holds both implementations to the
+  same outcomes.
 - Native Rust dependency record reading in the Rust analysis crate: the public
   `amp_rust_dependencies` module hashes the sources that rustc's dependency records of an AMP
   image name, with the Python reader's digests, refusal texts and read errors;

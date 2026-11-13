@@ -34,6 +34,8 @@ path = [
     "analysis/rust/native-run.schema.json",
     "analysis/rust/host-load.schema.json",
     "analysis/rust/repeat-campaign.schema.json",
+    "analysis/rust/amp-runtime-hashes.schema.json",
+    "analysis/rust/amp-firmware-dependency-hashes.schema.json",
     "analysis/rust/public-data/*.json",
     "analysis/rust/tests/data/*.json",
     "measurement-domain.json",

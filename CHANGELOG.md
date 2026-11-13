@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native Rust dependency record reading in the Rust analysis crate: the public
+  `amp_rust_dependencies` module hashes the sources that rustc's dependency records of an AMP
+  image name, with the Python reader's digests, refusal texts and read errors;
+  `amp_failure::AmpFailure` tells a read error from a refusal. Its port of CPython's POSIX
+  `shlex.split` and the reader are held to a corpus built from Python's own lexer and reader.
 - Native firmware ELF reading in the Rust analysis crate: the public `amp_elf` module admits
   the load segments of an AMP firmware image inside its reservation and reads its global
   symbols, with the Python readers' values and refusal texts. Two committed real images and a

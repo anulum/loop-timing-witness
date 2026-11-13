@@ -160,6 +160,24 @@ It covers cut, padded and changed images, other reservations, and one-field
 changes of the ELF header and of every program header, section header and
 global symbol.
 
+## Rust dependency record reading
+
+The `amp_rust_dependencies` module reads rustc's dependency records of an AMP
+image built with the Rust kernel as the Python `amp_rust_dependencies` module
+does. `rust_dependency_hashes(&records, directory)` hashes every source the
+records name, keyed as the records write them; each source must stay in the
+image's `source` tree, and every phony rule must name a source. A failure is
+`AmpFailure::Refused` with the Python reader's text, or `AmpFailure::Os` with
+the text of Python's `OSError`, for the same first failure; the `amp_failure`
+module holds that type for every AMP reader.
+
+Records are read with Python's universal newlines and line boundaries and
+split into words by a port of CPython's POSIX `shlex.split`. A shared corpus
+holds the port to CPython on every text of up to three characters over word,
+whitespace, quote, escape and non-ASCII characters and every text of four
+and five characters over the quote and escape core, and the reader to the
+Python reader's digests, refusals and read errors on named file trees.
+
 ## Selected installation
 
 The compiled registry admits source contract

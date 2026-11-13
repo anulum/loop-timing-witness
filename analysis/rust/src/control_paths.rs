@@ -37,14 +37,22 @@ fn pure_parts(path: &Path) -> (&'static [u8], Vec<&[u8]>) {
     (root, parts)
 }
 
+/// Python's `Path(text)`: the root, then the names joined by single
+/// separators.
+///
+/// Python writes a path with neither a root nor a name as `.`; here it stays
+/// empty, which [`realpath`] resolves alike, and no caller opens or prints
+/// one.
+pub(crate) fn pure(path: &Path) -> PathBuf {
+    let (root, parts) = pure_parts(path);
+    PathBuf::from(OsString::from_vec([root, &parts.join(&b'/')].concat()))
+}
+
 /// Python's `str(Path(text))` of a published output, as standard output prints it.
 ///
 /// A published output always ends in a name, so the text is never empty.
 pub(crate) fn pure_path(path: &Path) -> String {
-    let (root, parts) = pure_parts(path);
-    python_display(Path::new(OsStr::from_bytes(
-        &[root, &parts.join(&b'/')].concat(),
-    )))
+    python_display(&pure(path))
 }
 
 /// Python's `os.path.realpath(path)` without `strict`, as `Path.resolve()` uses it.

@@ -11,6 +11,11 @@
 /// Firmware ELF admission and global symbol reading of AMP images.
 pub mod amp_elf;
 mod amp_elf_symbols;
+/// Read errors and refusals of AMP inputs, as Python raises them.
+pub mod amp_failure;
+/// Rust dependency record reading of AMP images built with the Rust kernel.
+pub mod amp_rust_dependencies;
+mod amp_shell_words;
 mod binding;
 /// The repeat campaign command, as Python's `analyze_campaign` runs it.
 pub mod campaign_command;

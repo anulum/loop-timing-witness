@@ -34,6 +34,24 @@ pub(crate) fn python_decimal(character: char) -> bool {
     within(DECIMAL, character)
 }
 
+/// Tell whether Python's `str.isspace` is true for one character.
+pub(crate) fn python_space(character: char) -> bool {
+    matches!(
+        character,
+        '\t'..='\r'
+            | '\u{1c}'..='\u{20}'
+            | '\u{85}'
+            | '\u{a0}'
+            | '\u{1680}'
+            | '\u{2000}'..='\u{200a}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202f}'
+            | '\u{205f}'
+            | '\u{3000}'
+    )
+}
+
 /// Tell whether a character lies in one of sorted, disjoint inclusive ranges.
 fn within(ranges: &[(u32, u32)], character: char) -> bool {
     let code = u32::from(character);

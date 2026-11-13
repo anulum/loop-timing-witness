@@ -13,7 +13,7 @@
 //! forty texts holding anchors, final newlines, lengths at the bounds and the
 //! whitespace characters on which Python and Unicode disagree.
 
-use super::{Pattern, python_space};
+use super::Pattern;
 
 const PYTHON_CASES: &[(&str, &str, bool)] = &[
     ("^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$", "", false),
@@ -894,31 +894,11 @@ const PYTHON_CASES: &[(&str, &str, bool)] = &[
     ("x{3}", "xxxx", true),
 ];
 
-/// Code points for which CPython's `str.isspace` is true.
-const PYTHON_SPACES: &[u32] = &[
-    0x9, 0xa, 0xb, 0xc, 0xd, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001,
-    0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f,
-    0x205f, 0x3000,
-];
-
 #[test]
 fn every_schema_pattern_matches_as_python_searches() {
     for &(pattern, text, expected) in PYTHON_CASES {
         let compiled = Pattern::compile(pattern).expect("supported pattern");
         assert_eq!(compiled.search(text), expected, "{pattern} on {text:?}");
-    }
-}
-
-#[test]
-fn python_whitespace_is_exactly_the_str_isspace_set() {
-    for code in 0..=0x10ffff_u32 {
-        if let Some(character) = char::from_u32(code) {
-            assert_eq!(
-                python_space(character),
-                PYTHON_SPACES.contains(&code),
-                "{code:#x}"
-            );
-        }
     }
 }
 

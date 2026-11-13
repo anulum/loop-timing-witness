@@ -21,7 +21,7 @@
 //! and `\d` matches every character for which `str.isdecimal` is true, not only
 //! the ASCII digits.
 
-use crate::control_text::python_decimal;
+use crate::control_text::{python_decimal, python_space};
 
 /// One element of a compiled pattern.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,24 +51,6 @@ struct Piece {
 /// A compiled schema pattern.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Pattern(Vec<Piece>);
-
-/// Tell whether Python's `str.isspace` is true for one character.
-pub(crate) fn python_space(character: char) -> bool {
-    matches!(
-        character,
-        '\t'..='\r'
-            | '\u{1c}'..='\u{20}'
-            | '\u{85}'
-            | '\u{a0}'
-            | '\u{1680}'
-            | '\u{2000}'..='\u{200a}'
-            | '\u{2028}'
-            | '\u{2029}'
-            | '\u{202f}'
-            | '\u{205f}'
-            | '\u{3000}'
-    )
-}
 
 impl Pattern {
     /// Compile one pattern of the supported subset.

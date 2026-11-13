@@ -8,7 +8,7 @@
 
 //! Compare string and error text with CPython 3.15 `repr` and `str(OSError)`.
 
-use super::{os_error, printable, python_display, repr, units};
+use super::{os_error, printable, python_display, python_space, repr, units};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -73,4 +73,24 @@ fn paths_print_as_python_with_surrogate_escapes() {
     let path = Path::new(OsStr::from_bytes(b"/tmp/a\xffb"));
     assert_eq!(python_display(path), "/tmp/a\\udcffb");
     assert_eq!(python_display(Path::new("/tmp/plain")), "/tmp/plain");
+}
+
+/// Code points for which CPython's `str.isspace` is true.
+const PYTHON_SPACES: &[u32] = &[
+    0x9, 0xa, 0xb, 0xc, 0xd, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001,
+    0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f,
+    0x205f, 0x3000,
+];
+
+#[test]
+fn python_whitespace_is_exactly_the_str_isspace_set() {
+    for code in 0..=0x10ffff_u32 {
+        if let Some(character) = char::from_u32(code) {
+            assert_eq!(
+                python_space(character),
+                PYTHON_SPACES.contains(&code),
+                "{code:#x}"
+            );
+        }
+    }
 }

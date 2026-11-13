@@ -26,7 +26,7 @@ use crate::amp_failure::AmpFailure;
 use crate::amp_shell_words::split;
 use crate::control_manifest::read_file;
 use crate::control_paths::{pure, realpath};
-use crate::control_pattern::python_space;
+use crate::control_text::python_space;
 use crate::files::digest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

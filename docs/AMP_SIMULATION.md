@@ -245,6 +245,9 @@ location in path order and an authored text, never the validator's own words:
 `AMP capture receipt <location>: does not satisfy the AMP capture schema` and
 `AMP plugin build receipt <location>: does not satisfy the AMP plugin build schema`, where
 `(root)` names the document itself.
+The recorded verification vector's `--hart`, `--interrupt` and `--stack-bytes` arguments must
+each be a canonical decimal within the signed 64-bit range; any other spelling is refused as
+`AMP original image verification arguments disagree`.
 
 ## Analysis and limits
 

@@ -185,9 +185,29 @@ def test_public_original_image_declarations(
     assert not (tmp_path / "reanalysis").exists()
 
 
+INTEGER_FAULTS = frozenset(
+    {"integer", "plus-sign", "separator", "other-digit", "word", "many-digits", "beyond-64-bit"}
+)
+
+
 @pytest.mark.parametrize(
     "fault",
-    ["missing", "short", "type", "relative-python", "script", "option", "dtb", "integer"],
+    [
+        "missing",
+        "short",
+        "type",
+        "relative-python",
+        "script",
+        "option",
+        "dtb",
+        "integer",
+        "plus-sign",
+        "separator",
+        "other-digit",
+        "word",
+        "many-digits",
+        "beyond-64-bit",
+    ],
 )
 def test_public_original_verification_vector(
     original_capture: Path, tmp_path: Path, fault: str
@@ -219,6 +239,12 @@ def test_public_original_verification_vector(
             "option": (4, "--other"),
             "dtb": (5, "different.dtb"),
             "integer": (23, "02"),
+            "plus-sign": (23, "+2"),
+            "separator": (23, "1_0"),
+            "other-digit": (23, "\u0662"),
+            "word": (23, "two"),
+            "many-digits": (23, "1" + "0" * 5000),
+            "beyond-64-bit": (25, str(1 << 63)),
         }[fault]
         commands["verify"][index] = value
     commands_path.write_text(json.dumps(commands), encoding="ascii")
@@ -235,6 +261,10 @@ def test_public_original_verification_vector(
     result = analyze_copy(directory)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "AMP original image verification" in result.stderr
+    if fault in INTEGER_FAULTS:
+        assert result.stderr.rstrip().endswith(
+            "AMP original image verification arguments disagree"
+        ), result.stderr
     assert "Traceback" not in result.stderr
     assert not (tmp_path / "reanalysis").exists()
 

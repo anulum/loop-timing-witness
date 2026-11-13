@@ -74,6 +74,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A recorded AMP image verification vector whose `--hart`, `--interrupt` or `--stack-bytes`
+  argument is not a canonical decimal (`0` or `-?[1-9][0-9]*`) within the signed 64-bit range
+  is refused as `AMP original image verification arguments disagree`. A plus sign, digit
+  separators or other digits no longer pass through Python's `int`, and its error texts no
+  longer leak.
 - An AMP capture or plugin build receipt that breaks its schema is refused with the first
   broken location in path order and an authored text (`AMP capture receipt <location>: does
   not satisfy the AMP capture schema`, `AMP plugin build receipt <location>: does not satisfy

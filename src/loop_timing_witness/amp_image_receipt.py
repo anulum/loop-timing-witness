@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,39 @@ OPTIONS = (
 )
 PREFIX_SIZE = 4
 MAILBOX_BYTES = 16496
+# One decimal integer in its only spelling: no sign on zero, no plus sign, no leading zeros,
+# no separators and ASCII digits only. A signed 64-bit value has at most 19 digits and a sign.
+CANONICAL_INTEGER = re.compile(r"0|-?[1-9][0-9]*")
+MAX_INTEGER_TEXT = 20
+SIGNED_64_BIT = range(-(1 << 63), 1 << 63)
+
+
+def _recorded_integer(text: str) -> int:
+    """Read one recorded integer argument in its canonical decimal spelling.
+
+    Parameters
+    ----------
+    text
+        Recorded argument.
+
+    Returns
+    -------
+    int
+        The value, within the signed 64-bit range.
+
+    Raises
+    ------
+    ValueError
+        If the text is not a canonical decimal or lies outside the signed 64-bit range.
+    """
+    if (
+        len(text) > MAX_INTEGER_TEXT
+        or CANONICAL_INTEGER.fullmatch(text) is None
+        or int(text) not in SIGNED_64_BIT
+    ):
+        message = "AMP original image verification arguments disagree"
+        raise ValueError(message)
+    return int(text)
 
 
 def recorded_request(directory: Path) -> ImageRequest:
@@ -58,7 +92,8 @@ def recorded_request(directory: Path) -> ImageRequest:
     Raises
     ------
     ValueError
-        If the recorded vector has missing, duplicated or noncanonical resource arguments.
+        If the recorded vector has missing, duplicated or noncanonical resource arguments,
+        including an integer outside its canonical decimal spelling or the signed 64-bit range.
     """
     vector = load_bounded_json_object(directory / "build_commands.json").get("verify")
     if (
@@ -78,12 +113,12 @@ def recorded_request(directory: Path) -> ImageRequest:
             arguments["--firmware-node"],
             arguments["--telemetry-node"],
             MAILBOX_BYTES,
-            int(arguments["--stack-bytes"]),
+            _recorded_integer(arguments["--stack-bytes"]),
         ),
         PlicSelection(
             arguments["--plic-node"],
-            int(arguments["--hart"]),
-            int(arguments["--interrupt"]),
+            _recorded_integer(arguments["--hart"]),
+            _recorded_integer(arguments["--interrupt"]),
             arguments["--plic-layout"],
         ),
         arguments["--device-node"],

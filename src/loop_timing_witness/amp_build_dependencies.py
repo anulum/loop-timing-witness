@@ -36,7 +36,8 @@ def dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[str, s
     OSError
         If an original record or dependency is unavailable.
     ValueError
-        If a record lacks its target or complete nonempty dependency list.
+        If a record lacks its target or complete nonempty dependency list, or leaves a
+        quotation or an escape unbalanced.
     """
     if not records:
         message = "AMP build requires actual compiler dependency records"
@@ -48,7 +49,14 @@ def dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[str, s
         if not target.strip() or not separator:
             message = "AMP original compiler dependency record is malformed: missing target"
             raise ValueError(message)
-        names = shlex.split(words)
+        try:
+            names = shlex.split(words)
+        except ValueError as error:
+            message = (
+                "AMP original compiler dependency record is malformed: "
+                "unbalanced quotation or escape"
+            )
+            raise ValueError(message) from error
         if not names:
             message = "AMP original compiler dependency record is empty"
             raise ValueError(message)

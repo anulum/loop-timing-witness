@@ -74,6 +74,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A compiler or Rust dependency record that leaves a quotation or an escape unbalanced is
+  refused with the reader's own text (`AMP original compiler dependency record is malformed:
+  unbalanced quotation or escape`, `Rust dependency rule is malformed or uses ambient
+  environment`) instead of `shlex`'s message.
 - A recorded AMP image verification vector whose `--hart`, `--interrupt` or `--stack-bytes`
   argument is not a canonical decimal (`0` or `-?[1-9][0-9]*`) within the signed 64-bit range
   is refused as `AMP original image verification arguments disagree`. A plus sign, digit

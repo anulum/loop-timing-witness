@@ -82,7 +82,7 @@ def test_actual_source_system_closure(compiled_dependencies: tuple[Path, Path]) 
     assert dependency_hashes((record,), directory) == digests
 
 
-@pytest.mark.parametrize("fault", ["absent", "target", "separator", "empty"])
+@pytest.mark.parametrize("fault", ["absent", "target", "separator", "empty", "quote", "escape"])
 def test_broken_original_records_refused(
     compiled_dependencies: tuple[Path, Path], fault: str
 ) -> None:
@@ -93,7 +93,8 @@ def test_broken_original_records_refused(
     compiled_dependencies
         Original actual compilation.
     fault
-        Missing complete record set, missing target, missing separator or empty source list.
+        Missing complete record set, missing target, missing separator, empty source list,
+        unbalanced quotation or a final escape.
     """
     directory, record = compiled_dependencies
     records: tuple[Path, ...]
@@ -105,8 +106,17 @@ def test_broken_original_records_refused(
             content = ":" + record.read_text().partition(":")[2]
         elif fault == "separator":
             content = record.read_text().replace(":", "", 1)
+        elif fault == "quote":
+            content = record.read_text().partition(":")[0] + ': "unterminated.h'
+        elif fault == "escape":
+            content = record.read_text().rstrip("\n") + " \\"
         else:
             content = record.read_text().partition(":")[0] + ":"
         record.write_text(content)
-    with pytest.raises(ValueError, match="dependency record"):
+    finding = "dependency record"
+    if fault in ("quote", "escape"):
+        finding = (
+            "^AMP original compiler dependency record is malformed: unbalanced quotation or escape$"
+        )
+    with pytest.raises(ValueError, match=finding):
         dependency_hashes(records, directory)

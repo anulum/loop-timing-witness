@@ -16,6 +16,31 @@ from pathlib import Path
 from .manifest_io import sha256_of_file
 
 
+def _shell_words(text: str) -> list[str]:
+    """Split one side of a dependency rule into words, as POSIX ``shlex`` does.
+
+    Parameters
+    ----------
+    text
+        Target or dependency side of one rule.
+
+    Returns
+    -------
+    list of str
+        Words in order.
+
+    Raises
+    ------
+    ValueError
+        If a quotation or an escape is left unbalanced, with the module's own text.
+    """
+    try:
+        return shlex.split(text)
+    except ValueError as error:
+        message = "Rust dependency rule is malformed or uses ambient environment"
+        raise ValueError(message) from error
+
+
 def _record_sources(text: str) -> set[str]:
     """Parse complete original multi-rule compiler evidence into its source dependency set.
 
@@ -43,11 +68,11 @@ def _record_sources(text: str) -> set[str]:
         if not separator or not target.strip() or line.lstrip().startswith("#"):
             message = "Rust dependency rule is malformed or uses ambient environment"
             raise ValueError(message)
-        targets = shlex.split(target)
+        targets = _shell_words(target)
         if len(targets) != 1:
             message = "Rust dependency rule requires one original output or phony target"
             raise ValueError(message)
-        names = shlex.split(words)
+        names = _shell_words(words)
         if names:
             sources.update(names)
         else:

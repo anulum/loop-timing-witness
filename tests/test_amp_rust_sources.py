@@ -77,6 +77,41 @@ def test_real_rust_source_and_library_custody(compiled_sources: Path) -> None:
     assert {Path(name).suffix for name in record["target_index"]} == {".rlib", ".rmeta"}
 
 
+def _corrupted_record(data: str, fault: str, root: Path) -> str:
+    """Return a real Rust dependency record with one named corruption.
+
+    Parameters
+    ----------
+    data
+        Original record text.
+    fault
+        Corruption name.
+    root
+        Captured image root holding the original sources.
+
+    Returns
+    -------
+    str
+        Corrupted record text.
+    """
+    source = "source/controllers/rust/src/lib.rs"
+    target = "rust_metadata/core.d:"
+    corruptions = {
+        "empty": "",
+        "missing-colon": "malformed original record",
+        "environment": data + "\n# env-dep:UNRECORDED=changed\n",
+        "phony": data + "\nother/source.rs:\n",
+        "escaped": data.replace(source, "../outside.rs"),
+        "absolute": data.replace(source, str((root / source).resolve())),
+        "empty-target": data.replace(target, ":"),
+        "targets": data.replace(target, "first second:"),
+        "quote-target": data.replace(target, '"' + target),
+        "quote": data.replace(source, '"' + source),
+        "escape": data.rstrip("\n") + " \\",
+    }
+    return corruptions[fault]
+
+
 @pytest.mark.parametrize(
     "fault",
     [
@@ -88,6 +123,9 @@ def test_real_rust_source_and_library_custody(compiled_sources: Path) -> None:
         "targets",
         "absolute",
         "empty-target",
+        "quote-target",
+        "quote",
+        "escape",
     ],
 )
 def test_rust_dependency_corruption_refused(
@@ -104,27 +142,15 @@ def test_rust_dependency_corruption_refused(
     fault
         Incomplete or escaping rule shape to substitute in that actual record.
     """
-    data = (compiled_sources / "rust_metadata/core.d").read_text()
-    source = "source/controllers/rust/src/lib.rs"
-    if fault == "empty":
-        data = ""
-    elif fault == "missing-colon":
-        data = "malformed original record"
-    elif fault == "environment":
-        data += "\n# env-dep:UNRECORDED=changed\n"
-    elif fault == "phony":
-        data += "\nother/source.rs:\n"
-    elif fault == "escaped":
-        data = data.replace(source, "../outside.rs")
-    elif fault == "absolute":
-        data = data.replace(source, str((compiled_sources / source).resolve()))
-    elif fault == "empty-target":
-        data = data.replace("rust_metadata/core.d:", ":")
-    else:
-        data = data.replace("rust_metadata/core.d:", "first second:")
+    data = _corrupted_record(
+        (compiled_sources / "rust_metadata/core.d").read_text(), fault, compiled_sources
+    )
     path = tmp_path / "corrupt.d"
     path.write_text(data)
-    with pytest.raises(ValueError, match="Rust dependency"):
+    finding = "Rust dependency"
+    if fault in ("quote-target", "quote", "escape"):
+        finding = "^Rust dependency rule is malformed or uses ambient environment$"
+    with pytest.raises(ValueError, match=finding):
         rust_dependency_hashes((path,), compiled_sources)
 
 

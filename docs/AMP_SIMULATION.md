@@ -248,6 +248,8 @@ location in path order and an authored text, never the validator's own words:
 The recorded verification vector's `--hart`, `--interrupt` and `--stack-bytes` arguments must
 each be a canonical decimal within the signed 64-bit range; any other spelling is refused as
 `AMP original image verification arguments disagree`.
+A compiler or Rust dependency record that leaves a quotation or an escape unbalanced is refused
+with the reader's own text.
 
 ## Analysis and limits
 

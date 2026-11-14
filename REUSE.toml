@@ -37,6 +37,7 @@ path = [
     "analysis/rust/amp-runtime-hashes.schema.json",
     "analysis/rust/amp-firmware-dependency-hashes.schema.json",
     "analysis/rust/amp-plugin-build.schema.json",
+    "analysis/rust/amp-rust-toolchain.schema.json",
     "analysis/rust/public-data/*.json",
     "analysis/rust/tests/data/*.json",
     "measurement-domain.json",

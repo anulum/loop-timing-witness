@@ -212,6 +212,21 @@ and observed plant, its source index against the receipt, and every copy as
 the other snapshot checks do. A shared corpus, built from a reduced real
 receipt, holds both to Python's outcomes.
 
+## AMP Rust kernel images
+
+`amp_rust_receipt::validate_rust_image_receipt(directory, image, preparation)`
+checks an AMP image's Rust kernel as the Python module of the same name does.
+An image whose preparation declares no backend is the C kernel and may carry
+no Rust declaration. For the Rust kernel the captured `rust_preparation.json`
+is held to its toolchain identity (the committed toolchain schema, which a
+test holds equal to Python's), to the literal compiler vectors, the runtime
+library snapshot, the crate sources, the target library snapshot (archives and
+metadata paired by Python 3.15's `stem` and `suffix`) and the metadata
+dependency records; then the compiled records, the static archive and the
+controller library are held to the image's receipt. A corpus laid out as a
+real image built on the review host holds both implementations to the same
+outcomes.
+
 ## Selected installation
 
 The compiled registry admits source contract

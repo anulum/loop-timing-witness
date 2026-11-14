@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP Rust kernel checks in the Rust analysis crate: the public `amp_rust_receipt` module
+  checks an image's captured Rust preparation, snapshots, dependency records and compiled outputs
+  against the image's receipts, with Python's refusal texts and read errors. A corpus laid out as
+  a real Rust kernel image holds both implementations to the same outcomes.
 - Native AMP plugin receipt checks in the Rust analysis crate: the public `amp_plugin_receipt`
   module decodes a plugin build receipt and checks it against its preparation, and
   `amp_plugin_snapshot` checks a capture's plugin receipt and source copies, with Python's

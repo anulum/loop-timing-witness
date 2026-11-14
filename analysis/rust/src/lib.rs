@@ -24,6 +24,9 @@ pub mod amp_plugin_snapshot;
 pub mod amp_runtime_snapshot;
 /// Rust dependency record reading of AMP images built with the Rust kernel.
 pub mod amp_rust_dependencies;
+/// Rust kernel preparation and compiled output checks of AMP images.
+pub mod amp_rust_receipt;
+mod amp_rust_vectors;
 mod amp_shell_words;
 mod amp_snapshot_index;
 mod binding;

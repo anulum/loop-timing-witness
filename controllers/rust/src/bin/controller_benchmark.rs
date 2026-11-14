@@ -15,7 +15,7 @@ const SCALE: i32 = 1 << 24;
 const ITERATIONS: u32 = 1_000_000;
 
 /// Time matching deterministic public-kernel workloads and retain command checksums.
-fn main() -> Result<(), String> {
+fn main() {
     let coefficients = Coefficients {
         kp: 2 * SCALE,
         ki_period: 16777,
@@ -44,7 +44,7 @@ fn main() -> Result<(), String> {
             } else {
                 lqr_step(&coefficients, cycle, SCALE, position, velocity)
             }
-            .map_err(|_| "invalid coefficients")?;
+            .expect("the benchmark's constant coefficients are valid");
             checksum += u64::from(command.command as u32);
         }
         println!(
@@ -52,5 +52,4 @@ fn main() -> Result<(), String> {
             begin.elapsed().as_nanos()
         );
     }
-    Ok(())
 }

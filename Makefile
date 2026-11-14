@@ -167,6 +167,7 @@ controller-tests: controller-build
 	build/controller_api_test
 	cargo test --offline --locked --manifest-path $(CONTROLLER_CRATE)
 	$(MAKE) controller-coverage
+	$(MAKE) controller-rust-coverage
 
 # Every line and branch of the C controller and its CLI must run. GCC counters
 # use -O0 without the UB sanitizer: its boolean-load check adds a branch that
@@ -189,6 +190,39 @@ controller-coverage:
 	done
 	$(VENV)/python tools/c_coverage_gate.py --sources controllers/c \
 		"$(CONTROLLER_COVERAGE_DIRECTORY)"/reports/*.json
+
+# Every line and branch of the Rust controller crate must run too: its own tests, the
+# streaming program under the shared parity and refusal tests, and one benchmark pass, all
+# with the LLVM branch instrumentation of the native analysis gate.
+CONTROLLER_RUST_COVERAGE_DIRECTORY ?= build/rust-controller-coverage
+LLVM_TOOLS = $(shell rustc --print sysroot)/lib/rustlib/$(shell rustc -vV | sed -n 's/^host: //p')/bin
+
+.PHONY: controller-rust-coverage
+controller-rust-coverage:
+	rm -rf "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)"
+	mkdir -p "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/profiles"
+	RUSTC_BOOTSTRAP=1 RUSTFLAGS="-C instrument-coverage -Z coverage-options=branch" \
+		LLVM_PROFILE_FILE="$(abspath $(CONTROLLER_RUST_COVERAGE_DIRECTORY))/profiles/cargo-%p-%m.profraw" \
+		cargo test --offline --locked --manifest-path $(CONTROLLER_CRATE) --message-format=json \
+		--target-dir "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/target" > "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/cargo-test.json"
+	jq -R -r 'fromjson? | select(.reason == "compiler-artifact" and .executable != null) | .executable' \
+		"$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/cargo-test.json" | sort -u > "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/executables.txt"
+	jq -R -r 'fromjson? | select(.reason == "compiler-artifact" and .executable != null and .target.name == "controller_benchmark" and (.profile.test | not)) | .executable' \
+		"$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/cargo-test.json" > "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/benchmark.txt"
+	test "$$(wc -l < "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/benchmark.txt")" = 1
+	LLVM_PROFILE_FILE="$(abspath $(CONTROLLER_RUST_COVERAGE_DIRECTORY))/profiles/benchmark-%p-%m.profraw" \
+		"$$(cat "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/benchmark.txt")" > /dev/null
+	WITNESS_RUST_COVERAGE_DIRECTORY="$(abspath $(CONTROLLER_RUST_COVERAGE_DIRECTORY))" \
+		LLVM_PROFILE_FILE="$(abspath $(CONTROLLER_RUST_COVERAGE_DIRECTORY))/profiles/python-%p-%m.profraw" \
+		$(VENV)/pytest -q -p no:cacheprovider --no-cov tests/test_controller_inputs.py tests/test_controller_parity.py
+	"$(LLVM_TOOLS)/llvm-profdata" merge -sparse "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)"/profiles/*.profraw \
+		-o "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/merged.profdata"
+	executables=$$(sed -e '1!s/^/-object=/' "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/executables.txt"); \
+		"$(LLVM_TOOLS)/llvm-cov" export -summary-only $$executables \
+		-instr-profile="$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/merged.profdata" "$(abspath controllers/rust/src)" \
+		> "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/summary.json"
+	$(VENV)/python tools/rust_coverage_gate.py --crate controllers/rust \
+		--summary "$(CONTROLLER_RUST_COVERAGE_DIRECTORY)/summary.json"
 
 CONTROLLER_BENCHMARK_OUTPUT ?= build/controller_comparison.local.json
 CONTROLLER_BENCHMARK_CPU ?= 0

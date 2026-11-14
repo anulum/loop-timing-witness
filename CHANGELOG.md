@@ -29,6 +29,12 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The Rust controller crate is under the hosted 100 % native coverage gate.
+  `make controller-tests` runs `make controller-rust-coverage`: crate tests, one benchmark pass
+  and the shared stream and refusal tests against an LLVM branch-instrumented build, gated by
+  `tools/rust_coverage_gate.py --crate controllers/rust` (208 lines, 52 branches). The
+  benchmark program's unreachable coefficient error path is now an `expect`, as in the
+  streaming program.
 - Source release signatures cover every registered release. `source-release-signatures.yml` takes
   a required `release` choice; `tools/source_release.py` holds a frozen registry of each release's
   source commit and published asset digests, refuses a tag that names another commit and records

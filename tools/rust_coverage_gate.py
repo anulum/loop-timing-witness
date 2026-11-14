@@ -4,13 +4,15 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — complete native analysis line and branch coverage
+# Loop Timing Witness — complete native crate line and branch coverage
 
-"""Require every line and branch of every native analysis source to be covered.
+"""Require every line and branch of every source of a native Rust crate to be covered.
 
 The summary is ``llvm-cov export -summary-only`` of the profiles merged from
-every instrumented native test and every parity run against the instrumented
-registry consumer. Every Rust file under the crate's ``src`` must appear in it
+every instrumented run of the crate: for the analysis crate, every native test
+and every parity run against the instrumented registry consumer; for the
+controller crate, its tests, one benchmark pass and the streaming program under
+the shared parity and refusal tests. Every Rust file under the crate's ``src`` must appear in it
 with all lines and branches covered. ``llvm-cov`` lists no file without
 executable code, so a source may be absent only when it declares no function;
 any other absent source fails, so a new file cannot pass unmeasured. A measured

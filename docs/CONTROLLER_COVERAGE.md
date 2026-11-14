@@ -10,8 +10,9 @@ Loop Timing Witness — native controller coverage reproduction
 
 # Native controller coverage
 
-Every line and branch of the C controller kernel and its streaming CLI is required on
-every hosted test run; see [C controller gate](#c-controller-gate).
+Every line and branch of the C controller kernel and its streaming CLI, and of every source
+of the Rust controller crate, is required on every hosted test run; see
+[C controller gate](#c-controller-gate) and [Rust controller gate](#rust-controller-gate).
 [`controller_coverage.json`](../benchmarks/controller_coverage.json) binds source hashes
 to the GCC and LLVM reports of an earlier recorded snapshot, with 100% executable line
 and branch coverage of both controller kernels and their streaming CLIs. Its C source
@@ -69,8 +70,30 @@ branch that only undefined behaviour can take, so complete branch coverage would
 unreachable with it. The sanitized API test above and the sanitized CLI used by every other
 test keep it. The target's outputs stay in ignored `build/c-controller-coverage`.
 
-The manual procedure below reproduces the recorded snapshot of both languages; the Rust
-controller is not yet gated in CI.
+## Rust controller gate
+
+`make controller-tests` then runs `make controller-rust-coverage`. It uses the
+instrumentation of the native analysis gate, the production Rust 1.100.0 compiler with
+`RUSTC_BOOTSTRAP=1` and `-C instrument-coverage -Z coverage-options=branch`. The target:
+
+1. runs the crate's own tests (`cargo test`) instrumented in its own target directory and
+   selects every executable from Cargo's JSON messages;
+2. runs the `controller_benchmark` program once;
+3. runs `tests/test_controller_inputs.py` and `tests/test_controller_parity.py` with
+   `WITNESS_RUST_COVERAGE_DIRECTORY` set, so the shared fixture builds the instrumented
+   streaming program in that directory and every stream and refusal case runs against it;
+4. merges every profile with `llvm-profdata` and exports the summary of
+   `controllers/rust/src` with `llvm-cov`;
+5. runs [`rust_coverage_gate.py`](../tools/rust_coverage_gate.py) with `--crate
+   controllers/rust`. Every line and branch of `lib.rs`, `main.rs` and
+   `bin/controller_benchmark.rs` must have run, and an unmeasured new source fails.
+
+The outputs stay in ignored `build/rust-controller-coverage`. Without the streaming-program
+runs the gate fails: `main.rs` has 0 of 84 lines and `lib.rs` 33 of 36 branches. The
+benchmark's step uses `expect` for its constant, valid coefficients, as the streaming program
+does after validation, so no unreachable error path remains in the crate.
+
+The manual procedure below reproduces the recorded snapshot of both languages.
 
 ## Compile instrumented public interfaces
 

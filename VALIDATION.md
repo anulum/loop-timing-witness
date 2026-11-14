@@ -399,7 +399,11 @@ rendered API documentation establishes physical instrument qualification.
 `make controller-tests`, run in the hosted test shard at every push, ends with
 `make controller-coverage`. It runs the C API test and the real stream and refusal tests
 against GCC-instrumented C programs, and `tools/c_coverage_gate.py` requires every line
-and every branch of every `.c` file in `controllers/c` to have run.
+and every branch of every `.c` file in `controllers/c` to have run. It then runs
+`make controller-rust-coverage`: the Rust crate's tests, one benchmark pass and the same
+stream and refusal tests against an LLVM branch-instrumented Rust program, and
+`tools/rust_coverage_gate.py --crate controllers/rust` requires every line and branch of
+every source in `controllers/rust/src`.
 [`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md) describes that gate and
 reproduces GCC line/branch and LLVM line/region/function/branch analysis of the kernels
 and streaming CLIs.

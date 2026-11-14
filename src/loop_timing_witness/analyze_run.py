@@ -24,13 +24,68 @@ from .neural_run_dispatch import dispatch_analysis
 from .report_outputs import write_report
 from .run_analysis import analyse_events
 from .run_manifest import RunInputs, load_run
-from .run_series import energy_per_cycle, tracking_error
-from .tracking_observations import observed_tracking_error
+from .run_report_fields import (
+    REPORT_SCHEMA,
+    anchor_count,
+    energy_block,
+    invalid_reasons,
+    report_identity,
+    report_limits,
+    tracking_block,
+)
 
 if TYPE_CHECKING:
     from .event_stream import Event
 
-REPORT_SCHEMA = "loop-timing-witness.analysis-report.v1"
+
+# REPORT_SCHEMA stays importable from this module, where the report was first defined.
+__all__ = [
+    "REPORT_SCHEMA",
+    "build_report",
+    "check_fault_schedule",
+    "events_block",
+    "main",
+    "share_duration",
+]
+
+
+def check_fault_schedule(manifest: dict[str, Any], events: tuple[Event, ...]) -> None:
+    """Refuse a capture whose injected faults differ from the declared fault schedule.
+
+    Parameters
+    ----------
+    manifest
+        Schema-valid run manifest.
+    events
+        Decoded events of the run.
+
+    Raises
+    ------
+    ValueError
+        If the scheduled and captured ``FAULT_INJECTED`` cycles differ.
+    """
+    scheduled = sorted(item["cycle"] for item in manifest["fault_schedule"])
+    observed = sorted(event.cycle for event in events if event.name == "FAULT_INJECTED")
+    if scheduled != observed:
+        message = "fault schedule does not match captured FAULT_INJECTED events"
+        raise ValueError(message)
+
+
+def share_duration(summary: dict[str, Any]) -> None:
+    """Give every interval distribution and the control counts the block's ``duration_ticks``.
+
+    Parameters
+    ----------
+    summary
+        The ``events`` block, completed in place; the control counts also gain their
+        ``sample_count``, the observed deadlines.
+    """
+    duration_ticks = summary["duration_ticks"]
+    for interval in summary["intervals"].values():
+        interval["duration_ticks"] = duration_ticks
+    if summary["control"] is not None:
+        summary["control"]["sample_count"] = summary["control"]["observed_deadlines"]
+        summary["control"]["duration_ticks"] = duration_ticks
 
 
 def events_block(
@@ -63,11 +118,7 @@ def events_block(
         If the fault schedule disagrees with the capture or an event order
         contradicts the interval and fault rules.
     """
-    scheduled = sorted(item["cycle"] for item in manifest["fault_schedule"])
-    observed = sorted(event.cycle for event in events if event.name == "FAULT_INJECTED")
-    if scheduled != observed:
-        message = "fault schedule does not match captured FAULT_INJECTED events"
-        raise ValueError(message)
+    check_fault_schedule(manifest, events)
     profile = contracts["event_profiles"][manifest["profile"]]
     summary, cycle_rows = analyse_events(
         events, profile, manifest["cycle_count"], manifest["warmup_cycles"]
@@ -84,11 +135,7 @@ def events_block(
         summary["cycle_count"],
         duration_ticks,
     )
-    for interval in summary["intervals"].values():
-        interval["duration_ticks"] = duration_ticks
-    if summary["control"] is not None:
-        summary["control"]["sample_count"] = summary["control"]["observed_deadlines"]
-        summary["control"]["duration_ticks"] = duration_ticks
+    share_duration(summary)
     return summary, cycle_rows
 
 
@@ -116,111 +163,27 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
         inputs.files["events"], contracts, manifest["profile"], manifest["cycle_count"]
     )
     summary, cycle_rows = events_block(manifest, contracts, events)
-    if manifest.get("tracking_sampling") == "observed":
-        tracking = observed_tracking_error(
-            inputs.files["tracking"],
-            events,
-            manifest["cycle_count"],
-            manifest["warmup_cycles"],
-            manifest["plant"]["tracking_unit"],
-        )
-    elif manifest["profile"] == "CONTROL":
-        tracking = tracking_error(
-            inputs.files.get("tracking"),
-            manifest["cycle_count"],
-            manifest["warmup_cycles"],
-            manifest["plant"]["tracking_unit"],
-        )
-    else:
-        tracking = {"status": "not_applicable", "reason": "COMPUTE has no control plant"}
-    energy = energy_per_cycle(
-        inputs.files.get("power"),
-        events,
-        manifest["profile"],
-        manifest["warmup_cycles"],
-        contracts["power_rails"],
-    )
-    duration_ticks = summary["duration_ticks"]
-    tracking["duration_ticks"] = duration_ticks
-    energy["duration_ticks"] = duration_ticks
-    tracking.setdefault("sample_count", 0)
-    if energy["status"] == "unavailable":
-        energy["sample_count"] = 0
-    if manifest["profile"] == "CONTROL":
-        anchor_count = summary["control"]["observed_deadlines"]
-    else:
-        anchor_count = sum(
-            event.name == "INPUT_WRITE" and event.cycle >= manifest["warmup_cycles"]
-            for event in events
-        )
-    complete = anchor_count == summary["cycle_count"]
+    tracking = tracking_block(inputs, events, summary["duration_ticks"])
+    energy = energy_block(inputs, events, summary["duration_ticks"])
+    complete = anchor_count(manifest, summary, events) == summary["cycle_count"]
     overflow = manifest["instrument"]["fifo_overflow_count"]
     missing_tracking = manifest["profile"] == "CONTROL" and tracking["status"] != "available"
     missing_energy = energy["status"] != "available"
-    valid = complete and overflow == 0 and not missing_tracking and not missing_energy
-    input_hashes = {
-        name: item["sha256"] for name, item in manifest["files"].items() if item is not None
-    }
-    input_hashes["measurement_domain"] = manifest["measurement_domain"]["sha256"]
-    input_hashes.update(
-        {f"source:{item['path']}": item["sha256"] for item in manifest["source"]["files"]}
-    )
-    if manifest["hardware_artifacts"] is not None:
-        input_hashes.update(
-            {
-                name: manifest["hardware_artifacts"][name]["sha256"]
-                for name in ("bitstream", "firmware", "linux_image", "controller_binary")
-            }
-        )
     report: dict[str, Any] = {
-        "schema": REPORT_SCHEMA,
-        "run_id": manifest["run_id"],
-        "started_utc": manifest["started_utc"],
-        "source_kind": manifest["source"]["kind"],
-        "evidence_status": "simulation_only"
-        if manifest["source"]["kind"] == "rtl_simulation"
-        else "board_declaration_unverified",
-        "profile": manifest["profile"],
-        "placement": manifest["placement"],
-        "measurement_domain_sha256": manifest["measurement_domain"]["sha256"],
-        "input_sha256": input_hashes,
-        "timebase_resolution_ns": contracts["timebase"]["resolution_ns"],
-        "instrument_floor_ticks": manifest["instrument"]["floor_ticks"],
+        **report_identity(manifest, contracts),
         "fifo_overflow_count": overflow,
-        "valid": valid,
-        "invalid_reasons": [
-            *(["event FIFO overflow"] if overflow else []),
-            *(["missing cycle anchor events"] if not complete else []),
-            *(
-                ["tracking series incomplete"]
-                if tracking["status"] == "partial"
-                else ["tracking series unavailable"]
-                if missing_tracking
-                else []
-            ),
-            *(["power series unavailable"] if missing_energy else []),
-        ],
+        "valid": complete and overflow == 0 and not missing_tracking and not missing_energy,
+        "invalid_reasons": invalid_reasons(
+            overflow,
+            tracking,
+            complete=complete,
+            missing_tracking=missing_tracking,
+            missing_energy=missing_energy,
+        ),
         "events": summary,
         "tracking_error": tracking,
         "energy": energy,
-        "limits": [
-            (
-                f"Timebase ticks resolve {contracts['timebase']['resolution_ns']} ns; "
-                "interconnect offsets require calibration."
-            ),
-            "The plant is emulated; these are not physical-machine control results.",
-            "Power rails share processor and fabric consumption. Energy is a window mean.",
-            *(
-                [
-                    (
-                        "Tracking errors describe observed cycles only; "
-                        "missing samples may bias the metric."
-                    )
-                ]
-                if tracking.get("sampling") == "observed"
-                else []
-            ),
-        ],
+        "limits": report_limits(contracts, tracking),
     }
     attach_completion_statistics(inputs, report, events)
     attach_amp_completion(inputs, report, events)

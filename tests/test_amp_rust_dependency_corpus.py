@@ -79,21 +79,33 @@ def _split(text: str) -> list[str] | int:
         return SHLEX_ERRORS.index(str(error))
 
 
-def _rust_cases() -> dict[str, dict[str, Any]]:
-    """Return named Rust record cases: records and the tree beside them.
+def _case(*records: str | bytes, tree: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return one case: its records (text or bytes) and the tree beside them.
+
+    Parameters
+    ----------
+    records
+        Records in order.
+    tree
+        Files and links by path, the shared Rust tree when omitted.
+
+    Returns
+    -------
+    dict[str, Any]
+        Records and tree.
+    """
+    return {"records": list(records), "tree": RUST_TREE if tree is None else tree}
+
+
+def _line_cases() -> dict[str, dict[str, Any]]:
+    """Return the cases of record reading: records, continuations, line ends and comments.
 
     Returns
     -------
     dict[str, dict[str, Any]]
-        Records (text or hexadecimal bytes) and tree by case name.
+        Records and tree by case name.
     """
-
-    def case(*records: str | bytes, tree: dict[str, Any] | None = None) -> dict[str, Any]:
-        return {"records": list(records), "tree": RUST_TREE if tree is None else tree}
-
-    quoted = "out.rmeta: 'source/b c.rs'\n'source/b c.rs':\n"
-    linked = {**RUST_TREE, "source/l.rs": {"symlink": "a.rs"}, "outside.rs": "x\n"}
-    escaping = {**RUST_TREE, "source/out.rs": {"symlink": "../outside.rs"}, "outside.rs": "x\n"}
+    case = _case
     return {
         "one source": case(RUST_RECORD),
         "two records": case(RUST_RECORD, "lib.rlib: source/a.rs source/b\\ c.rs\n"),
@@ -112,6 +124,22 @@ def _rust_cases() -> dict[str, dict[str, Any]]:
         "unicode blank line": case("out.rmeta: source/a.rs\n\u3000\nsource/a.rs:\n"),
         "comment": case(RUST_RECORD + "# env-dep:HOME=/root\n"),
         "indented comment": case(RUST_RECORD + "\u3000# x: y\n"),
+    }
+
+
+def _rule_cases() -> dict[str, dict[str, Any]]:
+    """Return the cases of rules and sources: targets, quoting, phony rules and paths.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        Records and tree by case name.
+    """
+    case = _case
+    quoted = "out.rmeta: 'source/b c.rs'\n'source/b c.rs':\n"
+    linked = {**RUST_TREE, "source/l.rs": {"symlink": "a.rs"}, "outside.rs": "x\n"}
+    escaping = {**RUST_TREE, "source/out.rs": {"symlink": "../outside.rs"}, "outside.rs": "x\n"}
+    return {
         "missing colon": case("malformed record\n"),
         "empty target": case(": source/a.rs\n"),
         "blank target": case("\u3000: source/a.rs\n"),
@@ -144,6 +172,17 @@ def _rust_cases() -> dict[str, dict[str, Any]]:
         "record not utf-8": case(b"out.rmeta: source/a.rs\xff\n"),
         "byte order mark": case("\ufeffout.rmeta: source/a.rs\n"),
     }
+
+
+def _rust_cases() -> dict[str, dict[str, Any]]:
+    """Return every named Rust record case, in corpus order.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        Records and tree by case name.
+    """
+    return {**_line_cases(), **_rule_cases()}
 
 
 def _materialise(directory: Path, case: dict[str, Any]) -> tuple[Path, ...]:

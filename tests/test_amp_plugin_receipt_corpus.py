@@ -335,6 +335,68 @@ def _edits(template: dict[str, Any], tree: dict[str, Any]) -> dict[str, Any]:
     return {"remove": removed, "write": written}
 
 
+def _decode_entries(directory: Path, base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the decoding cases with their text or patch and outcome.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the case folders.
+    base
+        Base receipt.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases in table order.
+    """
+    cases: list[dict[str, Any]] = []
+    for name, content in _decode_cases().items():
+        path = directory / f"decode-{len(cases)}"
+        path.mkdir()
+        item: dict[str, Any] = {"name": name, "function": "decode"}
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict) and canonical_json_bytes(parsed) == content:
+            item["patch"] = _patch(base, parsed)
+        else:
+            item["text"] = content.decode()
+        cases.append({**item, **_outcome(path, content)})
+    return cases
+
+
+def _snapshot_entries(
+    directory: Path, complete: dict[str, Any], first: int
+) -> list[dict[str, Any]]:
+    """Return the snapshot cases with their edits and outcome.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the case folders.
+    complete
+        Tree of the complete capture.
+    first
+        Number of the first case folder.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases in table order.
+    """
+    cases: list[dict[str, Any]] = []
+    for name, build in _snapshot_cases().items():
+        path = directory / f"snapshot-{first + len(cases)}"
+        path.mkdir()
+        argument = build(path)
+        item = {"name": name, "function": "snapshot", "argument": argument}
+        item["edits"] = _edits(complete, _tree(path))
+        cases.append({**item, **_outcome(path, argument)})
+    return cases
+
+
 def corpus(directory: Path) -> dict[str, Any]:
     """Build every case under an owned directory and return the corpus.
 
@@ -350,31 +412,12 @@ def corpus(directory: Path) -> dict[str, Any]:
     """
     directory = directory.resolve()
     base = _base()
-    cases: list[dict[str, Any]] = []
-    for name, content in _decode_cases().items():
-        path = directory / f"decode-{len(cases)}"
-        path.mkdir()
-        item: dict[str, Any] = {"name": name, "function": "decode"}
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError:
-            parsed = None
-        if isinstance(parsed, dict) and canonical_json_bytes(parsed) == content:
-            item["patch"] = _patch(base, parsed)
-        else:
-            item["text"] = content.decode()
-        cases.append({**item, **_outcome(path, content)})
+    cases = _decode_entries(directory, base)
     template = directory / "template"
     template.mkdir()
     _capture(template)
     complete = _tree(template)
-    for name, build in _snapshot_cases().items():
-        path = directory / f"snapshot-{len(cases)}"
-        path.mkdir()
-        argument = build(path)
-        item = {"name": name, "function": "snapshot", "argument": argument}
-        item["edits"] = _edits(complete, _tree(path))
-        cases.append({**item, **_outcome(path, argument)})
+    cases.extend(_snapshot_entries(directory, complete, len(cases)))
     return {
         "schema": "loop-timing-witness.amp-plugin-receipt-cases.v1",
         "description": (

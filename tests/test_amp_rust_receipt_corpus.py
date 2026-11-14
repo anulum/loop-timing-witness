@@ -167,6 +167,77 @@ def _snapshots(image: Path, targets: tuple[str, ...]) -> dict[str, Any]:
     return {"sources": sources, "targets": target_libraries, "runtime": runtime, "index": index}
 
 
+def _records(core_source: str) -> dict[str, str]:
+    """Return the four dependency records as rustc wrote them on the review host.
+
+    Parameters
+    ----------
+    core_source
+        Source that the controller's metadata record names.
+
+    Returns
+    -------
+    dict[str, str]
+        Record text by name in the image.
+    """
+    return {
+        "rust_metadata/core.d": _record(
+            "rust_metadata", "core.d", "libwitness_controller.rmeta", core_source
+        ),
+        "rust_metadata/adapter.d": _record(
+            "rust_metadata", "adapter.d", "libwitness_amp_rust_kernel.rmeta", ADAPTER_SOURCE
+        ),
+        "objects/rust/core.d": _record(
+            "objects/rust", "core.d", "libwitness_controller.rlib", CORE_SOURCE
+        ),
+        "objects/rust/adapter.d": _record(
+            "objects/rust", "adapter.d", "libwitness_amp_rust_kernel.a", ADAPTER_SOURCE
+        ),
+    }
+
+
+def _preparation(
+    compiler: str, found: dict[str, Any], core_source: str, metadata: dict[str, str]
+) -> dict[str, Any]:
+    """Return the captured Rust preparation bound to the written snapshots and records.
+
+    Parameters
+    ----------
+    compiler
+        Compiler path of the toolchain identity.
+    found
+        Source digests, library identities and target index from ``_snapshots``.
+    core_source
+        Source that the controller's metadata record names.
+    metadata
+        Digests of the two metadata records.
+
+    Returns
+    -------
+    dict[str, Any]
+        Preparation document.
+    """
+    program = {"sha256": _digest(compiler.encode())}
+    return {
+        "schema": "loop-timing-witness.rust-preparation.v1",
+        "toolchain": {
+            "compiler": {"path": compiler, **program, "version": VERSIONS["rustc"]},
+            "cargo": {"path": f"{TOOLS}/bin/cargo", **program, "version": VERSIONS["cargo"]},
+            "verbose_version": VERSIONS["verbose"],
+            "target": TARGET,
+            "target_libraries": found["targets"],
+            "runtime_libraries": found["runtime"],
+        },
+        "sources": found["sources"],
+        "target_index": found["index"],
+        "metadata_commands": rust_vectors(compiler, metadata=True),
+        "compile_commands": rust_vectors(compiler, metadata=False),
+        "dependencies": {core_source: found["sources"][core_source]}
+        | {ADAPTER_SOURCE: found["sources"][ADAPTER_SOURCE]},
+        "dependency_records": metadata,
+    }
+
+
 def _image(
     directory: Path,
     compiler: str = COMPILER,
@@ -193,42 +264,10 @@ def _image(
     """
     image = directory / "image"
     found = _snapshots(image, targets)
-    records = {
-        "rust_metadata/core.d": _record(
-            "rust_metadata", "core.d", "libwitness_controller.rmeta", core_source
-        ),
-        "rust_metadata/adapter.d": _record(
-            "rust_metadata", "adapter.d", "libwitness_amp_rust_kernel.rmeta", ADAPTER_SOURCE
-        ),
-        "objects/rust/core.d": _record(
-            "objects/rust", "core.d", "libwitness_controller.rlib", CORE_SOURCE
-        ),
-        "objects/rust/adapter.d": _record(
-            "objects/rust", "adapter.d", "libwitness_amp_rust_kernel.a", ADAPTER_SOURCE
-        ),
-    }
+    records = _records(core_source)
     record_digests = {name: _write(image / name, text.encode()) for name, text in records.items()}
-    program = {"sha256": _digest(compiler.encode())}
-    data = {
-        "schema": "loop-timing-witness.rust-preparation.v1",
-        "toolchain": {
-            "compiler": {"path": compiler, **program, "version": VERSIONS["rustc"]},
-            "cargo": {"path": f"{TOOLS}/bin/cargo", **program, "version": VERSIONS["cargo"]},
-            "verbose_version": VERSIONS["verbose"],
-            "target": TARGET,
-            "target_libraries": found["targets"],
-            "runtime_libraries": found["runtime"],
-        },
-        "sources": found["sources"],
-        "target_index": found["index"],
-        "metadata_commands": rust_vectors(compiler, metadata=True),
-        "compile_commands": rust_vectors(compiler, metadata=False),
-        "dependencies": {core_source: found["sources"][core_source]}
-        | {ADAPTER_SOURCE: found["sources"][ADAPTER_SOURCE]},
-        "dependency_records": {
-            name: record_digests[name] for name in records if "metadata" in name
-        },
-    }
+    metadata = {name: record_digests[name] for name in records if "metadata" in name}
+    data = _preparation(compiler, found, core_source, metadata)
     _write(image / "rust_preparation.json", canonical_json_bytes(data))
     outputs = {name: record_digests[name] for name in records if name.startswith("objects")}
     outputs[LIBRARY] = _write(image / LIBRARY, b"!<arch>\nwitness kernel\n")
@@ -260,78 +299,150 @@ def _receipts(change: Callable[[dict[str, Any]], object]) -> Callable[[Path, Any
     return edit
 
 
-def _cases() -> dict[str, Any]:
-    """Return the named cases of ``validate_rust_image_receipt``.
+PREPARATION: Final = "image/rust_preparation.json"
+ZERO: Final = "0" * 64
+
+
+def _c_kernel(keep: tuple[str, ...]) -> Callable[[dict[str, Any]], object]:
+    """Return a change that declares the C kernel, keeping the named image members.
+
+    Parameters
+    ----------
+    keep
+        Image members that stay.
+
+    Returns
+    -------
+    Callable[[dict[str, Any]], object]
+        Change of the receipts.
+    """
+
+    def change(receipts: dict[str, Any]) -> None:
+        receipts["preparation"].pop("kernel_backend")
+        for name in ("kernel_backend", "rust_kernel"):
+            if name not in keep:
+                receipts["image"].pop(name)
+
+    return change
+
+
+def _declared(image: object, preparation: object) -> Callable[[dict[str, Any]], object]:
+    """Return a change that sets both backend declarations.
+
+    Parameters
+    ----------
+    image
+        The image's declaration.
+    preparation
+        The preparation's declaration.
+
+    Returns
+    -------
+    Callable[[dict[str, Any]], object]
+        Change of the receipts.
+    """
+
+    def change(receipts: dict[str, Any]) -> None:
+        receipts["image"]["kernel_backend"] = image
+        receipts["preparation"]["kernel_backend"] = preparation
+
+    return change
+
+
+def _prepared(change: Callable[[dict[str, Any]], object]) -> Callable[[Path, Any], object]:
+    """Return an edit that changes the captured Rust preparation document.
+
+    Parameters
+    ----------
+    change
+        Change applied to the decoded document in place.
+
+    Returns
+    -------
+    Callable[[Path, Any], object]
+        Tree edit.
+    """
+
+    def rewrite(data: dict[str, Any]) -> dict[str, Any]:
+        change(data)
+        return data
+
+    return _document(PREPARATION, rewrite)
+
+
+def _built(
+    compiler: str = COMPILER, targets: tuple[str, ...] = TARGETS, core_source: str = CORE_SOURCE
+) -> Callable[[Path], object]:
+    """Return a builder of a consistent image with other inputs.
+
+    Parameters
+    ----------
+    compiler
+        Compiler path.
+    targets
+        Target library names.
+    core_source
+        Source the controller's metadata record names.
+
+    Returns
+    -------
+    Callable[[Path], object]
+        Image builder.
+    """
+    return lambda directory: _image(directory, compiler, targets, core_source)
+
+
+def _receipt_cases() -> dict[str, Any]:
+    """Return the cases of the declarations and the captured preparation.
 
     Returns
     -------
     dict[str, Any]
         Builders by case name; each returns the receipts.
     """
-    preparation = "image/rust_preparation.json"
-    source = f"image/{CORE_SOURCE}"
-    target = "image/rust_target_libraries/0000.rlib"
-    zero = "0" * 64
-
-    def c_kernel(keep: tuple[str, ...]) -> Callable[[dict[str, Any]], object]:
-        def change(receipts: dict[str, Any]) -> None:
-            receipts["preparation"].pop("kernel_backend")
-            for name in ("kernel_backend", "rust_kernel"):
-                if name not in keep:
-                    receipts["image"].pop(name)
-
-        return change
-
-    def declared(image: object, preparation: object) -> Callable[[dict[str, Any]], object]:
-        def change(receipts: dict[str, Any]) -> None:
-            receipts["image"]["kernel_backend"] = image
-            receipts["preparation"]["kernel_backend"] = preparation
-
-        return change
-
-    def prepared(change: Callable[[dict[str, Any]], object]) -> Callable[[Path, Any], object]:
-        def rewrite(data: dict[str, Any]) -> dict[str, Any]:
-            change(data)
-            return data
-
-        return _document(preparation, rewrite)
-
-    def built(
-        compiler: str = COMPILER,
-        targets: tuple[str, ...] = TARGETS,
-        core_source: str = CORE_SOURCE,
-    ) -> Callable[[Path], object]:
-        return lambda directory: _image(directory, compiler, targets, core_source)
-
-    others = (*TARGETS, f"{LIBRARIES}/libstd-0.so")
     return {
         "complete Rust image": _image,
-        "C kernel": _edited(_image, _receipts(c_kernel(()))),
+        "C kernel": _edited(_image, _receipts(_c_kernel(()))),
         "C kernel with a Rust archive receipt": _edited(
-            _image, _receipts(c_kernel(("rust_kernel",)))
+            _image, _receipts(_c_kernel(("rust_kernel",)))
         ),
         "C kernel with a Rust declaration": _edited(
-            _image, _receipts(c_kernel(("kernel_backend",)))
+            _image, _receipts(_c_kernel(("kernel_backend",)))
         ),
-        "preparation declares the C kernel": _edited(_image, _receipts(declared("rust", "c"))),
-        "image declares the C kernel": _edited(_image, _receipts(declared("c", "rust"))),
+        "preparation declares the C kernel": _edited(_image, _receipts(_declared("rust", "c"))),
+        "image declares the C kernel": _edited(_image, _receipts(_declared("c", "rust"))),
         "image declares no kernel": _edited(
             _image, _receipts(lambda r: r["image"].pop("kernel_backend"))
         ),
-        "Rust preparation missing": _edited(_image, _unlink(preparation)),
-        "Rust preparation not JSON": _edited(_image, _text(preparation, "{")),
-        "preparation schema changed": _edited(_image, prepared(lambda d: d.update(schema="x"))),
+        "Rust preparation missing": _edited(_image, _unlink(PREPARATION)),
+        "Rust preparation not JSON": _edited(_image, _text(PREPARATION, "{")),
+        "preparation schema changed": _edited(_image, _prepared(lambda d: d.update(schema="x"))),
         "toolchain target changed": _edited(
-            _image, prepared(lambda d: d["toolchain"].update(target="x"))
+            _image, _prepared(lambda d: d["toolchain"].update(target="x"))
         ),
-        "toolchain missing": _edited(_image, prepared(lambda d: d.pop("toolchain"))),
+        "toolchain missing": _edited(_image, _prepared(lambda d: d.pop("toolchain"))),
         "metadata vectors disagree": _edited(
-            _image, prepared(lambda d: d["metadata_commands"].pop())
+            _image, _prepared(lambda d: d["metadata_commands"].pop())
         ),
         "compile vectors disagree": _edited(
-            _image, prepared(lambda d: d["compile_commands"].pop())
+            _image, _prepared(lambda d: d["compile_commands"].pop())
         ),
-        "compiler at the root folder": built(compiler="/rustc"),
+        "compiler at the root folder": _built(compiler="/rustc"),
+    }
+
+
+def _snapshot_cases() -> dict[str, Any]:
+    """Return the cases of the runtime, source and target library snapshots.
+
+    Returns
+    -------
+    dict[str, Any]
+        Builders by case name; each returns the receipts.
+    """
+    source = f"image/{CORE_SOURCE}"
+    target = "image/rust_target_libraries/0000.rlib"
+    others = (*TARGETS, f"{LIBRARIES}/libstd-0.so")
+    return {
         "runtime library copy changed": _edited(
             _image, _text("image/rust_runtime/runtime_sources/0000/library", "x\n")
         ),
@@ -340,31 +451,43 @@ def _cases() -> dict[str, Any]:
         "source folder linked outside": _edited(
             _image, _link(f"image/source/{CORE}", f"../../../outside/{CORE}", f"outside/{CORE}")
         ),
-        "target libraries without core": built(targets=TARGETS[:4]),
-        "target libraries without builtins": built(targets=(*TARGETS[:2], *TARGETS[4:])),
-        "target archive without metadata": built(targets=TARGETS[1:]),
-        "target library of another kind": built(targets=others),
-        "target names with only leading dots": built(
+        "target libraries without core": _built(targets=TARGETS[:4]),
+        "target libraries without builtins": _built(targets=(*TARGETS[:2], *TARGETS[4:])),
+        "target archive without metadata": _built(targets=TARGETS[1:]),
+        "target library of another kind": _built(targets=others),
+        "target names with only leading dots": _built(
             targets=(*TARGETS, f"{LIBRARIES}/..rlib", f"{LIBRARIES}/..rmeta")
         ),
-        "target name ending in a dot": built(targets=(*TARGETS, f"{LIBRARIES}/libx.")),
-        "target names with dotted stems": built(
+        "target name ending in a dot": _built(targets=(*TARGETS, f"{LIBRARIES}/libx.")),
+        "target names with dotted stems": _built(
             targets=(*TARGETS, f"{LIBRARIES}/libx-1.2.rlib", f"{LIBRARIES}/libx-1.2.rmeta")
         ),
         "target index disagrees": _edited(
-            _image, prepared(lambda d: d["target_index"][TARGETS[0]].update(sha256=zero))
+            _image, _prepared(lambda d: d["target_index"][TARGETS[0]].update(sha256=ZERO))
         ),
         "target library copy changed": _edited(_image, _text(target, "x\n")),
         "target library copy missing": _edited(_image, _unlink(target)),
         "target library folder linked outside": _edited(
             _image, _link("image/rust_target_libraries", "../outside/t", "outside/t")
         ),
+    }
+
+
+def _output_cases() -> dict[str, Any]:
+    """Return the cases of the dependency records and the compiled outputs.
+
+    Returns
+    -------
+    dict[str, Any]
+        Builders by case name; each returns the receipts.
+    """
+    return {
         "metadata record changed": _edited(_image, _text("image/rust_metadata/core.d", "x:\n")),
         "metadata record missing": _edited(_image, _unlink("image/rust_metadata/core.d")),
         "metadata dependencies differ": _edited(
-            _image, prepared(lambda d: d["dependencies"].update({CORE_SOURCE: zero}))
+            _image, _prepared(lambda d: d["dependencies"].update({CORE_SOURCE: ZERO}))
         ),
-        "metadata record names another source": built(core_source=f"source/{CORE}/README.md"),
+        "metadata record names another source": _built(core_source=f"source/{CORE}/README.md"),
         "compiled record names another source": _edited(
             _image,
             _text(
@@ -379,12 +502,23 @@ def _cases() -> dict[str, Any]:
         ),
         "output digest differs": _edited(
             _image,
-            _receipts(lambda r: r["image"]["rust_kernel"]["outputs"].update({LIBRARY: zero})),
+            _receipts(lambda r: r["image"]["rust_kernel"]["outputs"].update({LIBRARY: ZERO})),
         ),
         "receipt preparation differs": _edited(
             _image, _receipts(lambda r: r["image"]["rust_kernel"]["preparation"].update(schema="x"))
         ),
     }
+
+
+def _cases() -> dict[str, Any]:
+    """Return every named case of ``validate_rust_image_receipt``, in corpus order.
+
+    Returns
+    -------
+    dict[str, Any]
+        Builders by case name; each returns the receipts.
+    """
+    return {**_receipt_cases(), **_snapshot_cases(), **_output_cases()}
 
 
 def _outcome(directory: Path, receipts: dict[str, Any]) -> dict[str, Any]:

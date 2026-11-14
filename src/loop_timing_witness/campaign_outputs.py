@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from .campaign_analysis import SPREAD_STATISTICS
+from .campaign_pooling import SPREAD_STATISTICS
 from .manifest_io import canonical_json_bytes
 from .report_outputs import csv_table_bytes
 from .report_publication import publish_report_directory

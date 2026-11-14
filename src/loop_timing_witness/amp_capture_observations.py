@@ -14,7 +14,8 @@ import csv
 import io
 from typing import Any
 
-from .amp_run_input import read_amp_run
+from .amp_contract import UINT32_MAX
+from .amp_run_input import native_integer, native_words, read_amp_run
 from .native_tracking import decode_tracking
 
 
@@ -32,16 +33,18 @@ def fault_schedule(configuration: bytes) -> list[dict[str, Any]]:
         Actual configured fault kind, cycle and delay with no inferred fault.
     """
     read_amp_run(configuration)
-    words = configuration.decode("ascii").split()
+    words = native_words(configuration)
     fault = words[19]
     return (
         []
         if fault == "none"
         else [
             {
-                "cycle": int(words[20]),
+                "cycle": native_integer(words[20], 0, UINT32_MAX),
                 "kind": "overload_request" if fault == "overload" else fault,
-                "delay_periods": int(words[21]) if fault == "delay" else 0,
+                "delay_periods": (
+                    native_integer(words[21], 0, UINT32_MAX) if fault == "delay" else 0
+                ),
             }
         ]
     )

@@ -43,7 +43,10 @@ The same resource arguments are required by preparation, image verification and 
 
 Paths, memory ranges, hart topology and interrupt ownership must agree with the original
 DTB and linked firmware. The native configuration contains all 24 fields, including reference
-and fault settings. A modeled controller latency is refused: the target executes instructions.
+and fault settings. Its fields are separated by the C locale's whitespace (space, tab, newline,
+carriage return, vertical tab and form feed), as the native reader separates them, and a whole
+number may carry any count of leading zeros.
+A modeled controller latency is refused: the target executes instructions.
 Each firmware or telemetry reservation must fit one selected RAM bank without overlapping
 another declared RAM node, including a partial alias.
 The Spike command explicitly allocates every enabled original DTB RAM bank with `-m`.

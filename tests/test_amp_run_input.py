@@ -74,3 +74,53 @@ def test_original_encoding_and_schedule_refusals() -> None:
         read_amp_run(CONFIGURATION.replace(b"none 0 0 0 0", b"drop 10 1 0 0"))
     with pytest.raises(ValueError, match="fault schedule"):
         read_amp_run(CONFIGURATION.replace(b"none 0 0 0 0", b"drop 3 0 0 0"))
+
+
+@pytest.mark.parametrize("separator", [b"\t", b"\n", b"\x0b", b"\x0c", b"\r\n"])
+def test_native_whitespace_separates_fields(separator: bytes) -> None:
+    """Admit the C locale's whitespace between fields, as the native reader does.
+
+    Parameters
+    ----------
+    separator
+        Whitespace the native stream reader skips.
+    """
+    assert read_amp_run(separator.join(CONFIGURATION.split())) == read_amp_run(CONFIGURATION)
+
+
+@pytest.mark.parametrize("separator", [b"\x1c", b"\x1d", b"\x1e", b"\x1f"])
+def test_information_separators_stay_inside_fields(separator: bytes) -> None:
+    """Refuse the ASCII information separators the native reader keeps inside a field.
+
+    Parameters
+    ----------
+    separator
+        ASCII information separator that Python's text splitting would skip.
+    """
+    words = CONFIGURATION.split()
+    joined = b" ".join([words[0] + separator + words[1], *words[2:]])
+    with pytest.raises(ValueError, match="complete original native run configuration"):
+        read_amp_run(joined)
+    with pytest.raises(ValueError, match="integer syntax is invalid"):
+        read_amp_run(CONFIGURATION.rstrip() + separator)
+
+
+def test_native_digits_and_magnitudes() -> None:
+    """Admit leading zeros at any length and refuse magnitudes beyond every bound."""
+    words = CONFIGURATION.decode("ascii").split()
+    padded = list(words)
+    padded[1] = "+" + "0" * 5000 + words[1]
+    padded[15] = "-" + "0" * 5000 + "1"
+    assert read_amp_run(" ".join(padded).encode("ascii")) == read_amp_run(CONFIGURATION)
+    widest = list(words)
+    widest[1] = "4294967295"
+    widest[7] = "-2147483648"
+    run = read_amp_run(" ".join(widest).encode("ascii"))
+    assert (run.cycles, run.coefficients[4]) == (4294967295, -2147483648)
+    for index, token in [(1, "9" * 5000), (1, "10000000000"), (7, "-2147483649")]:
+        refused = list(words)
+        refused[index] = token
+        with pytest.raises(
+            ValueError, match=r"^AMP native configuration integer is outside bounds$"
+        ):
+            read_amp_run(" ".join(refused).encode("ascii"))

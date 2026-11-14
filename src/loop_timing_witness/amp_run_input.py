@@ -20,10 +20,44 @@ COEFFICIENT_END = 14
 FAULT_INDEX = 19
 MAX_REFERENCE_MODE = 2
 MAX_PHASE = 15
+SIGNIFICANT_DIGITS = len(str(max(UINT32_MAX, -INT32_MIN)))
 
 
-def _integer(token: str, minimum: int, maximum: int) -> int:
+def native_words(content: bytes) -> list[str]:
+    """Split original ASCII configuration bytes where the native stream reader does.
+
+    The native reader skips only the C locale's whitespace, the set ``bytes.split``
+    uses; ``str.split`` would also split at the four ASCII information separators.
+
+    Parameters
+    ----------
+    content
+        Complete original native configuration bytes.
+
+    Returns
+    -------
+    list of str
+        Original whitespace-delimited fields in order.
+
+    Raises
+    ------
+    ValueError
+        If the configuration is not ASCII.
+    """
+    try:
+        content.decode("ascii")
+    except UnicodeDecodeError as error:
+        message = "AMP native configuration must be ASCII"
+        raise ValueError(message) from error
+    return [word.decode("ascii") for word in content.split()]
+
+
+def native_integer(token: str, minimum: int, maximum: int) -> int:
     """Require original native whole decimal syntax and explicit field bounds.
+
+    Leading zeros are accepted at any length, as the native reader accepts them; a
+    magnitude with more significant digits than any bound is outside every bound
+    and is refused before conversion.
 
     Parameters
     ----------
@@ -47,11 +81,13 @@ def _integer(token: str, minimum: int, maximum: int) -> int:
     if re.fullmatch(r"[+-]?[0-9]+", token) is None:
         message = "AMP native configuration integer syntax is invalid"
         raise ValueError(message)
-    value = int(token)
-    if not minimum <= value <= maximum:
-        message = "AMP native configuration integer is outside bounds"
-        raise ValueError(message)
-    return value
+    digits = token.lstrip("+-").lstrip("0") or "0"
+    if len(digits) <= SIGNIFICANT_DIGITS:
+        value = -int(digits) if token[0] == "-" else int(digits)
+        if minimum <= value <= maximum:
+            return value
+    message = "AMP native configuration integer is outside bounds"
+    raise ValueError(message)
 
 
 def read_amp_run(content: bytes) -> AmpRun:
@@ -72,29 +108,26 @@ def read_amp_run(content: bytes) -> AmpRun:
     ValueError
         If original encoding, fields, reference/fault schedule or native invariants are invalid.
     """
-    try:
-        tokens = content.decode("ascii").split()
-    except UnicodeDecodeError as error:
-        message = "AMP native configuration must be ASCII"
-        raise ValueError(message) from error
+    tokens = native_words(content)
     if len(tokens) != TOKEN_COUNT or tokens[0] not in ("pid", "lqr"):
         message = "AMP requires the complete original native run configuration"
         raise ValueError(message)
-    cycles = _integer(tokens[1], 0, UINT32_MAX)
-    period = _integer(tokens[2], 0, UINT32_MAX)
+    cycles = native_integer(tokens[1], 0, UINT32_MAX)
+    period = native_integer(tokens[2], 0, UINT32_MAX)
     coefficients = tuple(
-        _integer(word, INT32_MIN, INT32_MAX) for word in tokens[COEFFICIENT_START:COEFFICIENT_END]
+        native_integer(word, INT32_MIN, INT32_MAX)
+        for word in tokens[COEFFICIENT_START:COEFFICIENT_END]
     )
-    _integer(tokens[14], 0, MAX_REFERENCE_MODE)
+    native_integer(tokens[14], 0, MAX_REFERENCE_MODE)
     for word in tokens[15:18]:
-        _integer(word, INT32_MIN, INT32_MAX)
-    _integer(tokens[18], 0, MAX_PHASE)
+        native_integer(word, INT32_MIN, INT32_MAX)
+    native_integer(tokens[18], 0, MAX_PHASE)
     fault = tokens[FAULT_INDEX]
     if fault not in ("none", "drop", "delay", "freeze", "overload"):
         message = "AMP native fault kind is invalid"
         raise ValueError(message)
     fault_cycle, fault_periods, overload, modeled_ns = (
-        _integer(word, 0, UINT32_MAX) for word in tokens[20:24]
+        native_integer(word, 0, UINT32_MAX) for word in tokens[20:24]
     )
     if (
         (fault == "none" and (fault_cycle or fault_periods))

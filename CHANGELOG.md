@@ -99,6 +99,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The AMP run configuration reader separates fields only at the C locale's whitespace, as the
+  native reader does; the ASCII information separators no longer separate fields. Whole numbers
+  with more than 4300 digits (leading zeros included) are read as the native reader reads them,
+  instead of being refused with the interpreter's integer string conversion limit text.
 - An AMP plugin build receipt whose preparation path names no file (the root folder) is refused
   as `AMP plugin receipt omits or contradicts original preparation identities` instead of with
   pathlib's `PosixPath('/') has an empty name`.

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from test_amp_capture_scenarios import arithmetic_compiler, scenario_capture
+from test_amp_image_flow import CONFIGURATION
 from test_amp_simulation_manifest import actual_capture
 from test_capture_amp_simulation import capture_arguments
 
@@ -118,3 +119,12 @@ def test_tracking_contradictions_refused(actual_capture: Path) -> None:
     lines[2] = lines[1]
     with pytest.raises(ValueError, match="unique and increasing"):
         tracking_csv(b"".join(lines), int(words[1]), samples)
+
+
+def test_fault_schedule_reads_native_digits() -> None:
+    """Read fault fields with the native reader's digits, leading zeros included."""
+    assert fault_schedule(CONFIGURATION) == []
+    padded = CONFIGURATION.replace(b"none 0 0 0 0", b"delay +" + b"0" * 5000 + b"3 0002 0 0")
+    assert fault_schedule(padded) == [{"cycle": 3, "kind": "delay", "delay_periods": 2}]
+    dropped = padded.replace(b"delay", b"drop")
+    assert fault_schedule(dropped) == [{"cycle": 3, "kind": "drop", "delay_periods": 0}]

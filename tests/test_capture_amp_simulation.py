@@ -27,7 +27,7 @@ from capture_amp_simulation import capture_amp
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST
 
-from loop_timing_witness.host_profile import scaled, scaled_seconds
+from loop_timing_witness.host_profile import build_jobs, scaled, scaled_seconds
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -307,7 +307,7 @@ def test_parked_image_refused(capture_arguments: list[str]) -> None:
     environment = os.environ.copy()
     environment["PATH"] = str(compiler.parent) + os.pathsep + environment["PATH"]
     build = subprocess.run(
-        ["make", "-C", str(parked), "-j2"],
+        ["make", "-C", str(parked), f"-j{build_jobs()}"],
         env=environment,
         capture_output=True,
         text=True,

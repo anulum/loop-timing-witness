@@ -29,7 +29,7 @@ from test_device_tree_resources import CompileTree, compile_tree
 from verify_amp_image import main as verify_main
 from verify_amp_image import verify_image
 
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import build_jobs, scaled
 
 __all__ = ["compile_tree"]
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +67,7 @@ def prepared_image(compile_tree: CompileTree, tmp_path: Path) -> Path:
     assert prepare_main([*arguments, "--output", str(output), "--compiler", compiler, "--isa"]) == 0
     with (tmp_path / "make.log").open("wb") as log:
         subprocess.run(
-            ["make", "-C", str(output), "-j2"],
+            ["make", "-C", str(output), f"-j{build_jobs()}"],
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
@@ -262,7 +262,7 @@ def test_actual_parked_exit_build(prepared_image: Path) -> None:
     prepare_image(build, output, REQUEST)
     with (prepared_image.parent / "parked-make.log").open("wb") as log:
         subprocess.run(
-            ["make", "-C", str(output), "-j2"],
+            ["make", "-C", str(output), f"-j{build_jobs()}"],
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,

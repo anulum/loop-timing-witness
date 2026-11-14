@@ -131,6 +131,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Build parallelism follows the executing host instead of two jobs: the Makefile's Verilator builds
+  use `VERILATOR_JOBS` (by default `nproc`), the tests build generated image Makefiles with every usable
+  processor, and the hosted workflow builds Spike and the image with `make -j"$(nproc)"`. The
+  Makefile's Yosys proofs' bound and the fuzz target's per-input bound are now the overridable
+  `SAT_TIMEOUT` and `FUZZ_INPUT_TIMEOUT`, which the tests pass scaled for the host.
 - The native crate's integration tests bound their child processes with `timeout(1)` durations
   scaled by the same declaration. A corpus of declarations shared with the Python tests holds both
   readers to the same scale, whole-second rounding and refusal.

@@ -28,7 +28,7 @@ from loop_timing_witness.amp_rust_receipt import (
     validate_rust_image_receipt,
     validate_rust_preparation_snapshot,
 )
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import build_jobs, scaled
 
 
 @pytest.fixture(scope="module")
@@ -81,7 +81,7 @@ def rust_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
     )
     with (tmp_path / "make.log").open("wb") as log:
         subprocess.run(
-            ["make", "-C", str(output), "-j2"],
+            ["make", "-C", str(output), f"-j{build_jobs()}"],
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,

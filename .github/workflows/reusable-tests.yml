@@ -203,7 +203,7 @@ jobs:
           git diff -- riscv/interactive.cc
           cd "$WITNESS_SPIKE_BUILD"
           "$WITNESS_SPIKE_SOURCE/configure" --prefix="$WITNESS_SPIKE_BUILD/install"
-          make -j2 spike
+          make -j"$(nproc)" spike
           "$WITNESS_SPIKE" --help
       - name: Retain the exact Spike build for later runs
         if: matrix.shard == 1 && steps.spike-cache.outputs.cache-hit != 'true'
@@ -224,7 +224,7 @@ jobs:
             --telemetry-node /reserved-memory/telemetry@80080000 --device-node /witness@40000000 \
             --plic-node /soc/plic@c000000 --plic-layout spike --hart 2 --interrupt 2 \
             --stack-bytes 16384 --output "$WITNESS_AMP_IMAGE" --compiler "$WITNESS_RV64_CC" --isa
-          make -C "$WITNESS_AMP_IMAGE" -j2
+          make -C "$WITNESS_AMP_IMAGE" -j"$(nproc)"
           make amp-spike-plugin AMP_SPIKE_SOURCE="$WITNESS_SPIKE_SOURCE" AMP_SPIKE_BUILD="$WITNESS_SPIKE_BUILD" AMP_PLUGIN_DIRECTORY=build/amp-ci/mechanical SIMULATION_THERMAL=0
           make amp-spike-plugin AMP_SPIKE_SOURCE="$WITNESS_SPIKE_SOURCE" AMP_SPIKE_BUILD="$WITNESS_SPIKE_BUILD" AMP_PLUGIN_DIRECTORY=build/amp-ci/thermal SIMULATION_THERMAL=1
       - name: Build pinned Go tools used by the gate-runner tests

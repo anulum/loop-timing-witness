@@ -110,6 +110,14 @@ the same declaration, read by `analysis/rust/tests/support/host_profile.rs`. The
 `loop_timing_witness.host_profile`, holds both readers to the same scales, whole-second rounding and
 refusals.
 
+Build parallelism follows the host as well. The Makefile's Verilator builds use `VERILATOR_JOBS`, by
+default `nproc`; the tests build generated image Makefiles with as many jobs as the test process has
+usable processors (`loop_timing_witness.host_profile.build_jobs`), and the hosted workflow builds
+Spike and the image with `make -j"$(nproc)"`. The bound of the Makefile's Yosys proofs,
+`SAT_TIMEOUT` (30 seconds), and the fuzz target's per-input bound, `FUZZ_INPUT_TIMEOUT` (10
+seconds), are reference-profile values; the tests pass them scaled, and a direct `make` on another
+host can override them.
+
 ## Native lifecycle profiles
 
 The lifecycle and configuration API tests compile the actual production RTL top and

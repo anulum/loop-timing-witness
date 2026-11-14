@@ -21,7 +21,7 @@ from amp_image_options import verification_arguments
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST
 
-from loop_timing_witness.host_profile import scaled, scaled_seconds
+from loop_timing_witness.host_profile import build_jobs, scaled, scaled_seconds
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,7 +77,7 @@ def panic_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
     assert sha256_of_file(image / "source" / ADAPTER) == sha256_of_file(adapter)
     with (directory / "make.log").open("wb") as log:
         subprocess.run(
-            ["make", "-C", str(image), "-j2"],
+            ["make", "-C", str(image), f"-j{build_jobs()}"],
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,

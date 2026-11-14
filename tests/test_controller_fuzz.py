@@ -77,6 +77,7 @@ def campaign(directory: Path, source: Path, seconds: int) -> subprocess.Complete
             f"FUZZ_DIRECTORY={directory}",
             f"FUZZ_SOURCE={source}",
             f"FUZZ_SECONDS={seconds}",
+            f"FUZZ_INPUT_TIMEOUT={scaled_seconds(10)}",
         ],
         cwd=REPOSITORY_ROOT,
         capture_output=True,

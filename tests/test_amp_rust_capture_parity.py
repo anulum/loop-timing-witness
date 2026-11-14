@@ -22,7 +22,7 @@ import pytest
 from amp_image_options import verification_arguments
 from test_amp_spike_command import REQUEST
 
-from loop_timing_witness.host_profile import scaled, scaled_seconds
+from loop_timing_witness.host_profile import build_jobs, scaled, scaled_seconds
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -116,7 +116,7 @@ def parity_assets(tmp_path_factory: pytest.TempPathFactory) -> ParityAssets:
         directory / "rust-prepare.log",
         120,
     )
-    _run(["make", "-C", str(rust_image), "-j2"], directory / "rust-build.log", 180)
+    _run(["make", "-C", str(rust_image), f"-j{build_jobs()}"], directory / "rust-build.log", 180)
     c_preparation = json.loads((c_image / "preparation.json").read_bytes())
     rust_preparation = json.loads((rust_image / "preparation.json").read_bytes())
     assert "kernel_backend" not in c_preparation

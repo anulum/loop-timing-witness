@@ -15,7 +15,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from conftest import REPOSITORY_ROOT
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import scaled, scaled_seconds
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -30,7 +30,12 @@ def test_native_commit_and_state_proofs(tmp_path: Path) -> None:
         Exclusive proof, elaborated-source and counterexample output allocation.
     """
     result = subprocess.run(
-        ["make", "native-runtime-invariants", f"NATIVE_INVARIANT_DIRECTORY={tmp_path}"],
+        [
+            "make",
+            "native-runtime-invariants",
+            f"NATIVE_INVARIANT_DIRECTORY={tmp_path}",
+            f"SAT_TIMEOUT={scaled_seconds(30)}",
+        ],
         cwd=REPOSITORY_ROOT,
         capture_output=True,
         text=True,

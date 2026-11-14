@@ -23,7 +23,7 @@ from device_tree_blob import decode_device_tree
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST, SOURCE
 
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import build_jobs, scaled
 
 ROOT = Path(__file__).resolve().parents[1]
 ARGUMENT = "Witness device arguments must be unsigned decimal integers"
@@ -432,7 +432,7 @@ def test_actual_native_safe_completion(tmp_path: Path, plugin_environment: str) 
         REQUEST,
     )
     build = subprocess.run(
-        ["make", "-C", str(image), "-j2"],
+        ["make", "-C", str(image), f"-j{build_jobs()}"],
         capture_output=True,
         text=True,
         timeout=scaled(60),

@@ -9,12 +9,18 @@
 PYTHON_BOOTSTRAP ?= python3.15
 VENV := .venv/bin
 PREFLIGHT := $(VENV)/python tools/preflight.py
+# Verilator build parallelism follows the executing host: the processors make may run on.
+VERILATOR_JOBS ?= $(shell nproc)
+# Hang guards in seconds on the reference profile; a host that declares a timeout scale passes
+# its scaled values, as the tests do.
+SAT_TIMEOUT ?= 30
 
 FUZZ_DIRECTORY ?= build/fuzz
 FUZZ_CC ?= clang-18
 FUZZ_CXX ?= clang++-18
 FUZZ_GCC_INSTALL ?= /usr/lib/gcc/x86_64-linux-gnu/13
 FUZZ_SECONDS ?= 120
+FUZZ_INPUT_TIMEOUT ?= 10
 FUZZ_SOURCE ?= controllers/c/witness_controller.c
 
 .PHONY: controller-fuzz-build controller-fuzz
@@ -29,7 +35,7 @@ controller-fuzz-build:
 controller-fuzz: controller-fuzz-build
 	mkdir -p "$(FUZZ_DIRECTORY)/corpus" "$(FUZZ_DIRECTORY)/crashes"
 	cp fuzz/corpus/*.bin "$(FUZZ_DIRECTORY)/corpus/"
-	ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 "$(FUZZ_DIRECTORY)/controller_fuzz" -max_total_time=$(FUZZ_SECONDS) -max_len=589 -timeout=10 -rss_limit_mb=512 -artifact_prefix="$(FUZZ_DIRECTORY)/crashes/" "$(FUZZ_DIRECTORY)/corpus" > "$(FUZZ_DIRECTORY)/run.log" 2>&1 || { result=$$?; cat "$(FUZZ_DIRECTORY)/run.log"; exit "$$result"; }
+	ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 "$(FUZZ_DIRECTORY)/controller_fuzz" -max_total_time=$(FUZZ_SECONDS) -max_len=589 -timeout=$(FUZZ_INPUT_TIMEOUT) -rss_limit_mb=512 -artifact_prefix="$(FUZZ_DIRECTORY)/crashes/" "$(FUZZ_DIRECTORY)/corpus" > "$(FUZZ_DIRECTORY)/run.log" 2>&1 || { result=$$?; cat "$(FUZZ_DIRECTORY)/run.log"; exit "$$result"; }
 	cat "$(FUZZ_DIRECTORY)/run.log"
 
 .PHONY: venv hooks lint typecheck test validate docs security preflight inventory python-wheelhouse python-package-tests
@@ -203,7 +209,7 @@ RTL_SOURCES := rtl/event_codes_pkg.sv $(filter-out rtl/event_codes_pkg.sv,$(wild
 .PHONY: axi-simulator
 axi-simulator:
 	mkdir -p "$(SIMULATION_DIRECTORY)"
-	verilator --cc --exe --build --Wall --top-module axi_control_witness -j 2 \
+	verilator --cc --exe --build --Wall --top-module axi_control_witness -j $(VERILATOR_JOBS) \
 		$(AXI_SIMULATOR_VERILATOR_FLAGS) \
 		-GPERIOD_TICKS=32768 -GADDRESS_BITS=8 -GGROUP_ADDRESS_BITS=4 \
 		"-GTHERMAL=1'b$(SIMULATION_THERMAL)" --Mdir $(SIMULATION_DIRECTORY) \
@@ -227,7 +233,7 @@ uio-transport:
 run-simulation:
 	mkdir -p build "$(RUN_SIMULATION_DIRECTORY)"
 	gcc -std=gnu11 -O2 $(CONTROLLER_WARNINGS) -c controllers/c/witness_controller.c -o build/run_controller_kernel.o
-	verilator --cc --exe --build --Wall --top-module axi_control_witness -j 2 \
+	verilator --cc --exe --build --Wall --top-module axi_control_witness -j $(VERILATOR_JOBS) \
 		-GPERIOD_TICKS=32768 -GADDRESS_BITS=$(SIMULATION_FIFO_ADDRESS_BITS) -GGROUP_ADDRESS_BITS=4 \
 		"-GTHERMAL=1'b$(SIMULATION_THERMAL)" --Mdir $(RUN_SIMULATION_DIRECTORY) \
 		-CFLAGS "$(RUN_SIMULATION_CFLAGS)" \
@@ -269,7 +275,7 @@ RTL_SATURATION_STEPS ?= 4294967304
 rtl-counter-saturation:
 	mkdir -p "$(RTL_SATURATION_DIRECTORY)"
 	verilator --cc --exe --build --Wall --assert --coverage-line \
-		--top-module rtl_counter_saturation -GOVERFLOW_COUNTER_BITS=32 -j 2 --Mdir "$(RTL_SATURATION_DIRECTORY)" \
+		--top-module rtl_counter_saturation -GOVERFLOW_COUNTER_BITS=32 -j $(VERILATOR_JOBS) --Mdir "$(RTL_SATURATION_DIRECTORY)" \
 		-CFLAGS "-std=c++17 -O3 -Wall -Wextra -Werror" -MAKEFLAGS "OPT_FAST=-O3" \
 		rtl/control_cycle.sv rtl/deadline_monitor.sv rtl/event_witness.sv \
 		rtl/clock_reset_release.sv rtl/event_record_capture.sv rtl/event_record_fifo.sv \
@@ -292,11 +298,11 @@ native-runtime-invariants:
 	for module in runtime_commit runtime_enabled runtime_finished runtime_safe runtime_release; do \
 		yosys -Q -T -p "read_verilog -formal -sv $(NATIVE_INVARIANT_SOURCES); \
 		prep -top $${module}_proof; write_json $(NATIVE_INVARIANT_DIRECTORY)/$${module}.json; \
-		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -verify -timeout 30 -show-ports" \
+		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 		> "$(NATIVE_INVARIANT_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
 		yosys -Q -T -p "read_verilog -formal -sv $(NATIVE_INVARIANT_SOURCES); \
 		chparam -set NEGATIVE_CONTROL 1 $${module}_proof; prep -top $${module}_proof; \
-		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -timeout 30 -show-ports \
+		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -timeout $(SAT_TIMEOUT) -show-ports \
 		-dump_json $(NATIVE_INVARIANT_DIRECTORY)/$${module}-counterexample.json" \
 		> "$(NATIVE_INVARIANT_DIRECTORY)/$${module}-negative.log" 2>&1 || exit $$?; \
 		grep -Fq 'SAT proof finished - model found: FAIL!' "$(NATIVE_INVARIANT_DIRECTORY)/$${module}-negative.log" || exit 1; \
@@ -308,7 +314,7 @@ rtl-invariants:
 	for module in run_configuration_registers control_io_registers axi_lite_clock_bridge fixed_point_math; do \
 		yosys -Q -T -p "read_verilog -formal -sv $(RTL_INVARIANT_SOURCES) tests/formal/$${module}_proof.sv; \
 		prep -top $${module}_proof; write_json $(RTL_INVARIANT_DIRECTORY)/$${module}.json; \
-		flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout 30 -show-ports" \
+		flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 		> "$(RTL_INVARIANT_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
 	done
 	for period in 64 256 512 16384 32768 100000; do \
@@ -316,7 +322,7 @@ rtl-invariants:
 			yosys -Q -T -p "read_verilog -formal -sv rtl/run_configuration_registers.sv tests/formal/run_configuration_registers_proof.sv; \
 			chparam -set PERIOD_TICKS $$period -set THERMAL $$thermal run_configuration_registers_proof; \
 			prep -top run_configuration_registers_proof; write_json $(RTL_INVARIANT_DIRECTORY)/configuration-$${period}-$${thermal}.json; \
-			flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout 30 -show-ports" \
+			flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 			> "$(RTL_INVARIANT_DIRECTORY)/configuration-$${period}-$${thermal}.log" 2>&1 || exit $$?; \
 		done; \
 	done

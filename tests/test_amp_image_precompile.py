@@ -25,7 +25,7 @@ from test_amp_spike_command import REQUEST
 from verify_amp_image import verify_image
 from verify_amp_preparation import main as preparation_main
 
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import build_jobs, scaled
 from manifest_io import canonical_json_bytes, sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,7 +95,7 @@ def test_actual_original_preprocessing(original_preparation: Path, *, compiled: 
     assert "AMP original preparation: PASS" in cli.stdout
     if compiled:
         result = subprocess.run(
-            ["make", "-C", str(original_preparation), "-j2"],
+            ["make", "-C", str(original_preparation), f"-j{build_jobs()}"],
             capture_output=True,
             text=True,
             check=False,
@@ -174,7 +174,7 @@ def test_public_precompile_refusal(original_preparation: Path, fault: str) -> No
     receipt.write_bytes(canonical_json_bytes(data))
     assert preparation_main(["--directory", str(original_preparation)]) == 1
     result = subprocess.run(
-        ["make", "-C", str(original_preparation), "-j2"],
+        ["make", "-C", str(original_preparation), f"-j{build_jobs()}"],
         capture_output=True,
         text=True,
         check=False,
@@ -229,7 +229,7 @@ def test_actual_late_compiler_dependency_refused(original_preparation: Path) -> 
         Actual prepared firmware compiled by its public Make target.
     """
     result = subprocess.run(
-        ["make", "-C", str(original_preparation), "-j2"],
+        ["make", "-C", str(original_preparation), f"-j{build_jobs()}"],
         capture_output=True,
         text=True,
         check=False,

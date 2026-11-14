@@ -8,6 +8,8 @@
 
 //! Verify complete source-bound simulated neural acquisitions through an independent native API.
 
+mod amp_collisions;
+mod amp_device;
 /// Firmware ELF admission and global symbol reading of AMP images.
 pub mod amp_elf;
 mod amp_elf_symbols;
@@ -16,6 +18,9 @@ pub mod amp_failure;
 mod amp_files;
 /// Firmware preprocessing dependency snapshots and record counts of AMP images.
 pub mod amp_image_dependencies;
+mod amp_memory;
+/// Memory, device and PLIC resource binding of AMP platforms.
+pub mod amp_platform;
 /// Plugin build receipt decoding of AMP captures.
 pub mod amp_plugin_receipt;
 /// Plugin build receipt and source snapshot checks of AMP captures.

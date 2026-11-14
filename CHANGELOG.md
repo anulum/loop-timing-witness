@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP platform binding in the Rust analysis crate: the public `amp_platform` module admits
+  the firmware and telemetry reservations, the Witness device with its PLIC source and aperture,
+  and the PLIC aperture from a decoded device tree, with the Python binding's refusal texts. A
+  corpus compiled by the real `dtc` from the repository's Spike platform holds both
+  implementations to the same outcomes.
 - Native AMP Rust kernel checks in the Rust analysis crate: the public `amp_rust_receipt` module
   checks an image's captured Rust preparation, snapshots, dependency records and compiled outputs
   against the image's receipts, with Python's refusal texts and read errors. A corpus laid out as

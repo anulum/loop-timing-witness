@@ -227,6 +227,20 @@ controller library are held to the image's receipt. A corpus laid out as a
 real image built on the review host holds both implementations to the same
 outcomes.
 
+## AMP platform binding
+
+`amp_platform::bind_platform(&tree, &memory, device_path, &plic)` admits an AMP
+platform's resources from a decoded device tree as the Python modules
+`amp_platform`, `amp_memory`, `amp_device` and `amp_collisions` do: the
+firmware and telemetry reservations (direct, enabled, unmapped, page-aligned,
+each inside one RAM bank, meeting no other reservation, memory node or header
+reservation), the enabled Witness AXI device with its one PLIC source and
+256-byte aperture, no other consumer of that source and no other root-level
+register extent meeting the aperture, and a PLIC aperture that meets no RAM or
+reservation. A shared corpus compiles the repository's Spike platform with the
+real `dtc`, changed per rule, and holds both implementations to the same
+platform or refusal.
+
 ## Selected installation
 
 The compiled registry admits source contract

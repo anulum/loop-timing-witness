@@ -191,7 +191,9 @@ The owned file and worker log remain in `host_load_workspace/`. Resource and nat
 retain their artifacts and remain failures. The standalone
 [`linux_load.py`](../tools/linux_load.py) CLI can wrap an explicitly selected absolute native
 executable with the same profiles, exclusive `--journal` and `--workspace` paths and a
-bounded `--timeout`.
+bounded `--timeout`, by default 120 seconds on the reference profile multiplied by the
+executing host's declared timeout scale; see
+[Host-derived limits](../VALIDATION.md#host-derived-limits).
 
 The launcher owns both control and readiness pipes through
 [`worker_channels`](../tools/linux_load_channels.py). It closes its child-end copies after
@@ -199,12 +201,13 @@ process creation and the control writer when stopping the worker, so EOF does no
 garbage collection. Process groups are stopped and reaped before remaining pipe resources
 are released. An already released descriptor is never closed again after its number is reused.
 
-Readiness must be a complete UTF-8 JSON line within ten seconds and at most 4096 bytes including
-its newline. The reader uses one deadline across all pipe chunks, requires Boolean `true`
-and a positive integer PID, and verifies that PID against the owned worker. Partial lines,
-early EOF, oversized frames, repeated JSON member names and numeric substitutes for these
-fields are refused before native execution. The completed worker receipt uses the same strict
-JSON decoder, including repeated-member refusal inside nested counter objects.
+Readiness must be a complete UTF-8 JSON line within ten seconds on the reference profile,
+scaled for the executing host, and at most 4096 bytes including its newline. The reader uses
+one deadline across all pipe chunks, requires Boolean `true` and a positive integer PID, and
+verifies that PID against the owned worker. Partial lines, early EOF, oversized frames, repeated
+JSON member names and numeric substitutes for these fields are refused before native execution.
+The completed worker receipt uses the same strict JSON decoder, including repeated-member refusal
+inside nested counter objects.
 
 Loaded captures freeze the host load implementation, including the worker, configuration,
 launcher, readiness reader, pipe ownership, process cleanup and shared strict JSON decoder

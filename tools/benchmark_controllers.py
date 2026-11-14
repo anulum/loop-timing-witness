@@ -22,6 +22,7 @@ from typing import Any
 
 from benchmark_batches import ITERATIONS, MIN_REPEATS, benchmark_statistics, decode_batch
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,7 +96,7 @@ def measure_controllers(
         raise BenchmarkRefusedError(message)
     versions = {
         tool: subprocess.run(
-            [tool, "--version"], check=True, capture_output=True, text=True, timeout=10
+            [tool, "--version"], check=True, capture_output=True, text=True, timeout=scaled(10)
         ).stdout.splitlines()[0]
         for tool in ("gcc", "rustc", "cargo", "taskset")
     }
@@ -105,7 +106,9 @@ def measure_controllers(
     for repeat in range(warmup + repeats):
         for backend, binary in BINARIES.items():
             command = ["taskset", "--cpu-list", str(cpu), str(root / binary)]
-            result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                command, check=True, capture_output=True, text=True, timeout=scaled(30)
+            )
             for controller, iterations, elapsed, checksum in decode_batch(result.stdout):
                 if checksums.setdefault(controller, checksum) != checksum:
                     message = "native benchmark checksum parity failed"
@@ -167,7 +170,7 @@ def measure_controllers(
         check=True,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
     ).stdout.strip()
     artifact = {
         "schema": "loop-timing-witness.controller-comparison.v1",

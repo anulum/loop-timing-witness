@@ -131,6 +131,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Tool hang guards follow the executing host as the tests' do: toolchain probes, benchmark and
+  capture commands, the native analysis SBOM check, the load worker's loopback receive and the load
+  launcher's readiness wait, cleanup waits and default `--timeout` are multiplied by the declared
+  timeout scale. The load launcher refuses an invalid declaration before it creates its journal or
+  workspace.
 - Test hang guards follow the executing host: each is written for the reference profile and is
   multiplied by the timeout scale a host declares in `WITNESS_HOST_TIMEOUT_SCALE`, which the new
   `loop_timing_witness.host_profile` module reads and validates. Without a declared scale every

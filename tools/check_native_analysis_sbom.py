@@ -23,6 +23,7 @@ from cyclonedx.validation.json import JsonStrictValidator
 
 from check_analysis_package import audit as package_audit
 from check_analysis_package import read_package_file
+from loop_timing_witness.host_profile import scaled
 from manifest_io import parse_json_object
 
 _TOOL = [{"vendor": "CycloneDX", "name": "cargo-cyclonedx", "version": "0.5.10"}]
@@ -67,7 +68,7 @@ def _metadata(crate: Path) -> dict[str, Any]:
         ],
         capture_output=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     return parse_json_object(result.stdout, "Cargo metadata")
 

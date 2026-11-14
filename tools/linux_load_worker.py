@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 
 from linux_load_config import PROFILES, LoadConfiguration
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import BinaryIO
@@ -76,7 +78,7 @@ class _Workload:
             receiver = resources.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
             sender = resources.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
             receiver.bind(("127.0.0.1", 0))
-            receiver.settimeout(1)
+            receiver.settimeout(scaled(1))
             sender.bind(("127.0.0.1", 0))
             self.operation = partial(self._network, receiver, sender)
         elif self.profile == "storage":

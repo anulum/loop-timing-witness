@@ -19,6 +19,7 @@ from typing import Any
 from amp_rust_vectors import rust_vectors
 from amp_tool_runtime import elf_interpreter, library_identities
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 
@@ -76,7 +77,7 @@ def compiler_identity(name: str, frontend: str) -> dict[str, Any]:
     programs = {}
     for program in (frontend, "collect2", "as", "ld"):
         advertised = subprocess.check_output(
-            [str(compiler), "-print-prog-name=" + program], text=True, timeout=10
+            [str(compiler), "-print-prog-name=" + program], text=True, timeout=scaled(10)
         ).strip()
         path = Path(advertised)
         if not path.is_absolute():
@@ -86,7 +87,7 @@ def compiler_identity(name: str, frontend: str) -> dict[str, Any]:
             raise ValueError(message)
         resolved = path.resolve()
         programs[program] = {"path": str(resolved), "sha256": sha256_of_file(resolved)}
-    version = subprocess.check_output([str(compiler), "--version"], text=True, timeout=10)
+    version = subprocess.check_output([str(compiler), "--version"], text=True, timeout=scaled(10))
     libraries = runtime_libraries([compiler, *(Path(item["path"]) for item in programs.values())])
     return {
         "driver": driver,
@@ -135,7 +136,7 @@ def rust_program_query(path: Path, query: str) -> str:
     return subprocess.check_output(
         [str(path), *options[query]],
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         env={
             key: value
             for key, value in os.environ.items()
@@ -163,7 +164,7 @@ def program_identity(name: str) -> dict[str, str]:
         [str(path), "--version"],
         stderr=subprocess.STDOUT,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         env={
             key: value
             for key, value in os.environ.items()
@@ -197,7 +198,7 @@ def runtime_libraries(programs: list[Path]) -> dict[str, str]:
     for program in sorted(set(programs)):
         interpreter = elf_interpreter(program)
         listing = subprocess.check_output(
-            [str(interpreter), "--list", str(program)], text=True, timeout=10
+            [str(interpreter), "--list", str(program)], text=True, timeout=scaled(10)
         )
         identities.update(library_identities(interpreter, listing))
     return identities
@@ -234,7 +235,12 @@ def preprocess_image(directory: Path, commands: list[list[str]]) -> tuple[Path, 
         ]
         with (output / f"input_{index}.log").open("xb") as log:
             subprocess.run(
-                argv, cwd=directory, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=30
+                argv,
+                cwd=directory,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=True,
+                timeout=scaled(30),
             )
         records.append(record)
     return tuple(records)
@@ -270,7 +276,7 @@ def preprocess_rust(directory: Path, compiler: str) -> tuple[Path, ...]:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 check=True,
-                timeout=60,
+                timeout=scaled(60),
                 env={
                     key: value
                     for key, value in os.environ.items()
@@ -298,7 +304,7 @@ def simulator_identity(executable: Path, plugin: Path) -> dict[str, Any]:
     selected = executable_path(str(executable))
     version = (
         subprocess.check_output(
-            [str(selected), "--help"], stderr=subprocess.STDOUT, text=True, timeout=10
+            [str(selected), "--help"], stderr=subprocess.STDOUT, text=True, timeout=scaled(10)
         )
         .strip()
         .partition("\n")[0]
@@ -306,7 +312,7 @@ def simulator_identity(executable: Path, plugin: Path) -> dict[str, Any]:
     interpreter = elf_interpreter(selected)
     libraries = runtime_libraries([selected])
     listing = subprocess.check_output(
-        [str(interpreter), "--list", str(plugin)], text=True, timeout=10
+        [str(interpreter), "--list", str(plugin)], text=True, timeout=scaled(10)
     )
     libraries.update(library_identities(interpreter, listing))
     return {
@@ -334,10 +340,10 @@ def spike_sdk_identity(source: Path, build: Path) -> dict[str, str]:
     """
     git = executable_path("git")
     revision = subprocess.check_output(
-        [str(git), "-C", str(source), "rev-parse", "HEAD"], text=True, timeout=10
+        [str(git), "-C", str(source), "rev-parse", "HEAD"], text=True, timeout=scaled(10)
     ).strip()
     patch = subprocess.check_output(
-        [str(git), "-C", str(source), "diff", "--binary", "HEAD"], text=True, timeout=10
+        [str(git), "-C", str(source), "diff", "--binary", "HEAD"], text=True, timeout=scaled(10)
     )
     return {
         "source": str(source.resolve()),
@@ -365,7 +371,7 @@ def verilator_identity() -> dict[str, Any]:
         raise ValueError(message)
     wrapper = program_identity("verilator")
     root = subprocess.check_output(
-        [wrapper["path"], "--getenv", "VERILATOR_ROOT"], text=True, timeout=10
+        [wrapper["path"], "--getenv", "VERILATOR_ROOT"], text=True, timeout=scaled(10)
     ).strip()
     backend = program_identity(str(Path(wrapper["path"]).parent / "verilator_bin"))
     return {**wrapper, "backend": backend, "root": str(Path(root).resolve())}

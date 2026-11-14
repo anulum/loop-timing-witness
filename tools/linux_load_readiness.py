@@ -16,41 +16,37 @@ import select
 import time
 from typing import BinaryIO
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import parse_json_object
 
 READINESS_TIMEOUT_SECONDS = 10
 MAX_READINESS_BYTES = 4096
 
 
-def read_ready_pid(stream: BinaryIO, timeout: float = READINESS_TIMEOUT_SECONDS) -> int:
-    """Require a complete readiness line, exact field types and a positive process ID.
+def _read_frame(stream: BinaryIO, deadline: float) -> bytes:
+    """Read pipe chunks until a newline arrives, under one deadline for the whole frame.
 
     Parameters
     ----------
     stream
         Actual parent read end of the exclusively owned worker pipe.
-    timeout
-        Finite positive seconds for the entire frame, without resetting between chunks.
+    deadline
+        Monotonic time by which the complete line must have arrived.
 
     Returns
     -------
-    int
-        Positive integer PID from an actual Boolean-true readiness frame.
+    bytes
+        The bytes read, through the first newline, at most 4096 bytes.
 
     Raises
     ------
     TimeoutError
-        If the full line does not arrive before the single deadline.
+        If the full line does not arrive before the deadline.
     ValueError
-        If timeout, framing, strict UTF-8 JSON or readiness fields are invalid, or the frame
-        exceeds 4096 bytes including its terminating newline.
+        If the pipe ends before a newline or the frame exceeds 4096 bytes.
     OSError
         If the actual pipe cannot be selected or read.
     """
-    if not math.isfinite(timeout) or timeout <= 0:
-        message = "readiness timeout must be finite and positive"
-        raise ValueError(message)
-    deadline = time.monotonic() + timeout
     frame = bytearray()
     while b"\n" not in frame:
         remaining = deadline - time.monotonic()
@@ -65,7 +61,41 @@ def read_ready_pid(stream: BinaryIO, timeout: float = READINESS_TIMEOUT_SECONDS)
         if len(frame) > MAX_READINESS_BYTES:
             message = "worker readiness exceeds the 4096-byte frame limit"
             raise ValueError(message)
-    ready = parse_json_object(bytes(frame), "worker readiness")
+    return bytes(frame)
+
+
+def read_ready_pid(stream: BinaryIO, timeout: float | None = None) -> int:
+    """Require a complete readiness line, exact field types and a positive process ID.
+
+    Parameters
+    ----------
+    stream
+        Actual parent read end of the exclusively owned worker pipe.
+    timeout
+        Finite positive seconds for the entire frame, without resetting between chunks;
+        by default the reference profile's ten seconds, scaled for the executing host.
+
+    Returns
+    -------
+    int
+        Positive integer PID from an actual Boolean-true readiness frame.
+
+    Raises
+    ------
+    TimeoutError
+        If the full line does not arrive before the single deadline.
+    ValueError
+        If timeout, the host's declared timeout scale, framing, strict UTF-8 JSON or readiness
+        fields are invalid, or the frame exceeds 4096 bytes including its terminating newline.
+    OSError
+        If the actual pipe cannot be selected or read.
+    """
+    if timeout is None:
+        timeout = scaled(READINESS_TIMEOUT_SECONDS)
+    if not math.isfinite(timeout) or timeout <= 0:
+        message = "readiness timeout must be finite and positive"
+        raise ValueError(message)
+    ready = parse_json_object(_read_frame(stream, time.monotonic() + timeout), "worker readiness")
     if ready.keys() != {"ready", "pid"} or ready["ready"] is not True:
         message = "worker readiness requires exactly Boolean ready and integer pid fields"
         raise ValueError(message)

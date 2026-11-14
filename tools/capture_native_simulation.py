@@ -27,6 +27,7 @@ from producer_source_context import snapshot_producer_context
 from report_outputs import write_report
 from run_manifest import load_run
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,7 +117,7 @@ def capture_simulation(
     versions = {}
     for tool in ["verilator", "gcc", "g++", "make"]:
         versions[tool] = subprocess.run(
-            [tool, "--version"], check=True, text=True, capture_output=True, timeout=10
+            [tool, "--version"], check=True, text=True, capture_output=True, timeout=scaled(10)
         ).stdout.splitlines()[0]
     (output / "build_versions.json").write_bytes(canonical_json_bytes(versions))
     with (output / "build.log").open("wb") as log:
@@ -131,7 +132,7 @@ def capture_simulation(
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
-            timeout=90,
+            timeout=scaled(90),
         )
     binary = source / f"build/run_simulation_{thermal}/run_simulation"
     started = datetime.now(UTC).isoformat()
@@ -147,7 +148,7 @@ def capture_simulation(
         ]
         if options.host_load is None:
             native_result = subprocess.run(
-                command, stdout=log, stderr=subprocess.STDOUT, check=False, timeout=120
+                command, stdout=log, stderr=subprocess.STDOUT, check=False, timeout=scaled(120)
             )
         else:
             native_result = execute_with_load(

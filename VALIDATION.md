@@ -91,13 +91,18 @@ of every new or changed package in `development-dependency-licences.json`.
 
 ## Host-derived limits
 
-Hang guards in the tests are written for the reference profile: the development hosts and hosted
-runners the project runs on today, whose timeout scale is 1. Another host declares its scale in
-`WITNESS_HOST_TIMEOUT_SCALE`, a positive finite number, and `loop_timing_witness.host_profile`
+Hang guards in the tests and tools are written for the reference profile: the development hosts and
+hosted runners the project runs on today, whose timeout scale is 1. Another host declares its scale
+in `WITNESS_HOST_TIMEOUT_SCALE`, a positive finite number, and `loop_timing_witness.host_profile`
 multiplies every hang guard by it; any other declared value is refused. A guard that an interface
 takes in whole seconds, such as a command-line `--timeout` or a fuzz campaign length, is rounded up.
 Waits that a test expects to expire, non-blocking polls and polling intervals keep their values,
 because they are the behaviour under test rather than a host assumption.
+
+The tools follow the same scale: toolchain probes, benchmark and capture commands, the native
+analysis SBOM check and the load launcher's readiness and cleanup waits. `tools/linux_load.py`
+bounds its native command by 120 seconds on the reference profile unless `--timeout` names another
+bound, and refuses an invalid declaration before it creates its journal or workspace.
 
 ## Native lifecycle profiles
 

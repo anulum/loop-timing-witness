@@ -16,6 +16,8 @@ import subprocess
 import time
 from contextlib import suppress
 
+from loop_timing_witness.host_profile import scaled
+
 
 def _signal_group(pid: int, signal_number: int) -> None:
     """Signal an owned group while its unreaped leader retains the numeric identity.
@@ -94,7 +96,7 @@ def _reap(process: subprocess.Popen[bytes]) -> None:
     try:
         _signal_group(process.pid, signal.SIGTERM)
         with suppress(subprocess.TimeoutExpired):
-            _wait_exit(process, 2)
+            _wait_exit(process, scaled(2))
     finally:
         _signal_group(process.pid, signal.SIGKILL)
-        process.wait(timeout=2)
+        process.wait(timeout=scaled(2))

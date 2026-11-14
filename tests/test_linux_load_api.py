@@ -18,11 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import pytest
-from linux_load import LoadExecution, execute_with_load
+from linux_load import LoadExecution, execute_with_load, main
 from linux_load_config import LoadConfiguration
 from test_native_run import configuration, native_run
 
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import SCALE_VARIABLE, scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -205,3 +205,29 @@ def test_actual_worker_receipt_failure(native_run: Path, tmp_path: Path) -> None
     assert "File exists" in (workspace / "worker.log").read_text()
     assert (tmp_path / "stdout.log").read_text().startswith("simulation_only ")
     assert not journal.exists()
+
+
+def test_invalid_host_scale_refuses_before_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refuse an invalid declared host timeout scale before any journal or workspace exists.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned journal and workspace parent, left empty.
+    monkeypatch
+        Environment fixture declaring the invalid scale.
+    capsys
+        Captured command refusal.
+    """
+    monkeypatch.setenv(SCALE_VARIABLE, "0")
+    journal, workspace = tmp_path / "load.json", tmp_path / "worker"
+    refusal = f"{SCALE_VARIABLE} must be a positive finite number"
+    cpu = str(min(os.sched_getaffinity(0)))
+    arguments = ["--profile", "cpu", "--cpu", cpu, "--journal", str(journal)]
+    assert main([*arguments, "--workspace", str(workspace), "--", "true"]) == 1
+    assert capsys.readouterr().err == f"Linux load: FAIL: {refusal}\n"
+    with pytest.raises(ValueError, match=f"^{refusal}$"):
+        LoadExecution(journal, workspace)
+    assert list(tmp_path.iterdir()) == []

@@ -17,7 +17,8 @@ import subprocess
 import sys
 import time
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import BinaryIO
 
@@ -26,9 +27,11 @@ from linux_load_config import PROFILES, LoadConfiguration
 from linux_load_process import _exit_status, _reap, _wait_exit
 from linux_load_readiness import READINESS_TIMEOUT_SECONDS, read_ready_pid
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import load_json_object
 
 MAX_TIMEOUT_SECONDS = 3600
+DEFAULT_TIMEOUT_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -42,14 +45,15 @@ class LoadExecution:
     workspace
         New private worker resource directory.
     timeout
-        Native lifetime in seconds, between one and 3600.
+        Native lifetime in seconds, between one and 3600; by default the reference profile's
+        120 seconds, scaled for the executing host.
     worker_path
         Optional frozen worker source for a captured run.
     """
 
     journal: Path
     workspace: Path
-    timeout: float = 120
+    timeout: float = field(default_factory=partial(scaled, DEFAULT_TIMEOUT_SECONDS))
     worker_path: Path | None = None
 
 
@@ -63,10 +67,11 @@ def _await_ready(worker: subprocess.Popen[bytes], channels: WorkerChannels) -> N
     channels
         Owned pipe endpoints kept open throughout worker admission and cleanup.
     """
+    timeout = scaled(READINESS_TIMEOUT_SECONDS)
     try:
-        pid = read_ready_pid(channels.readiness)
+        pid = read_ready_pid(channels.readiness, timeout)
     except TimeoutError:
-        raise subprocess.TimeoutExpired(worker.args, READINESS_TIMEOUT_SECONDS) from None
+        raise subprocess.TimeoutExpired(worker.args, timeout) from None
     if pid != worker.pid:
         message = "load worker readiness differs from owned process"
         raise ValueError(message)
@@ -125,7 +130,7 @@ def _write_receipt(
         Owned control writer closed to finish collection before reading its receipt.
     """
     channels.stop()
-    worker_returncode = _wait_exit(worker, 10)
+    worker_returncode = _wait_exit(worker, scaled(10))
     if worker_returncode:
         raise subprocess.CalledProcessError(worker_returncode, worker.args)
     receipt = load_json_object(execution.workspace / "worker.json")
@@ -242,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--working-set-bytes", default=4096, type=int)
     parser.add_argument("--journal", required=True, type=Path)
     parser.add_argument("--workspace", required=True, type=Path)
-    parser.add_argument("--timeout", default=120, type=float)
+    parser.add_argument("--timeout", type=float)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -250,7 +255,11 @@ def main(argv: list[str] | None = None) -> int:
         result = execute_with_load(
             command,
             LoadConfiguration(args.profile, args.cpu, args.working_set_bytes),
-            LoadExecution(args.journal, args.workspace, args.timeout),
+            LoadExecution(
+                args.journal,
+                args.workspace,
+                scaled(DEFAULT_TIMEOUT_SECONDS) if args.timeout is None else args.timeout,
+            ),
             sys.stdout.buffer,
         )
     except (OSError, ValueError, subprocess.SubprocessError) as exc:

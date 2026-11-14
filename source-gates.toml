@@ -46,6 +46,7 @@ paths = [
 checks = ["tests", "native-format"]
 roots = []
 paths = [
+    "benchmarks/closed_loop_harness.cpp",
     "fuzz/controller_fuzz.cpp",
     "runtime/isa/spike_axi_device.cpp",
     "runtime/linux/amp_uio_configuration.cpp",

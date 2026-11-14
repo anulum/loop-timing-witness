@@ -12,6 +12,15 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Added
+
+- Closed-loop benchmark data: `make closed-loop-harness` builds a Verilator harness over the
+  production `control_plant_witness` at the minimum declared period with the production FIFO
+  depth. `tools/closed_loop_run.py` writes hash-bound repeat runs and their campaign. A seeded
+  service stimulus reads and writes at declared offsets with the production C PID kernel,
+  withholds one write in 97 cycles and injects one tripping delay fault. Python and native
+  analyses publish byte-equal reports for these runs.
+
 ### Changed
 
 - Source release signatures cover every registered release. `source-release-signatures.yml` takes

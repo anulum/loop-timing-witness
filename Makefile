@@ -241,6 +241,21 @@ run-simulation:
 		$(RTL_SOURCES) $(abspath runtime/rtl/run_simulation.cpp) \
 		$(abspath runtime/run_configuration.cpp) $(abspath runtime/linux/file_digest.cpp) -o run_simulation
 
+# Closed-loop benchmark data: the production plant witness at the minimum declared period, with
+# production FIFO depth, driven by a declared service stimulus that computes with the C kernel.
+CLOSED_LOOP_DIRECTORY ?= build/closed_loop
+CLOSED_LOOP_CFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Werror
+.PHONY: closed-loop-harness
+closed-loop-harness:
+	mkdir -p "$(CLOSED_LOOP_DIRECTORY)"
+	gcc -std=gnu11 -O2 $(CONTROLLER_WARNINGS) -c controllers/c/witness_controller.c \
+		-o "$(CLOSED_LOOP_DIRECTORY)/witness_controller.o"
+	verilator --cc --exe --build --Wall --top-module control_plant_witness -j $(VERILATOR_JOBS) \
+		-GPERIOD_TICKS=5000 -O3 --x-assign 0 --x-initial 0 --Mdir "$(CLOSED_LOOP_DIRECTORY)" \
+		-MAKEFLAGS "OPT_FAST=-O2 OPT_SLOW=-O2 OPT_GLOBAL=-O2" -CFLAGS "$(CLOSED_LOOP_CFLAGS)" \
+		-LDFLAGS "$(abspath $(CLOSED_LOOP_DIRECTORY)/witness_controller.o)" \
+		$(RTL_SOURCES) $(abspath benchmarks/closed_loop_harness.cpp) -o closed_loop_harness
+
 .PHONY: run-uio
 run-uio:
 	mkdir -p "$(LINUX_BUILD_DIRECTORY)"

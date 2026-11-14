@@ -261,6 +261,55 @@ when the surviving records can be analyzed. A failed native run without a valid 
 receipt is not converted into a successful capture. No buffer experiment qualifies board
 acceptance or advances an instrument acceptance flag.
 
+## Closed-loop benchmark data
+
+Campaign-scale benchmark data come from the production closed loop
+[`control_plant_witness`](../rtl/control_plant_witness.sv): plant, reference generator,
+deadline monitor, fault injector, event capture and dual-clock FIFO, unchanged. A Verilator
+harness, [`benchmarks/closed_loop_harness.cpp`](../benchmarks/closed_loop_harness.cpp), clocks
+it at the minimum declared period of 5000 ticks with the production FIFO depth. A simulated
+service stands in for an interrupt-driven bare-metal loop. It reads each sample and writes
+each command at offsets drawn from a seeded SplitMix64 sequence, and it computes the command
+with the production C PID kernel. The offsets are a declared stimulus, not processor
+execution time.
+
+```bash
+make closed-loop-harness
+.venv/bin/python tools/closed_loop_run.py --output path/to/new-campaign \
+  --cycles 1000000 --repeats 5 --seed 1
+```
+
+Each repeat directory holds:
+
+- the drained 16-byte events (`events.bin`);
+- the raw Q8.24 plant trajectory (`trajectory.csv`) and the tracking series derived from it;
+- `stimulus.json`, which records every harness argument and the RTL build parameters;
+- the harness summary, the measurement domain and the run manifest;
+- a snapshot of the RTL, the harness, the controller sources, the Makefile and the harness
+  binary.
+
+All of these are bound by SHA-256. `campaign.json` orders the repeats; repeat `i` uses
+seed `seed + i - 1`. Repeats run in parallel up to `--jobs`, which defaults to the host's
+CPU count.
+
+The stimulus is deterministic: the same seed reproduces every data byte. One write in every
+97 cycles is withheld, which gives a single deadline miss below the trip limit. One delay
+fault of three periods, eight cycles before the end, trips the deadline monitor, so the last
+cycles run in the safe state. The command checks the harness's withheld writes and deadline
+misses against these rules and refuses a run that differs. The harness refuses an event FIFO
+loss, a trajectory without one row per cycle, an interrupt off the declared period, and any
+unknown, missing or out-of-range argument. A failed repeat keeps its evidence; an existing
+output directory is refused. Each harness run has a policy hang guard of 100 000 simulated
+ticks per second, scaled by `WITNESS_HOST_TIMEOUT_SCALE`.
+
+RTL simulation has no power monitor, so `files.power` is `null`. Every report therefore
+states `power series unavailable` and is invalid as measurement evidence, and a campaign of
+these repeats is reported `INCOMPLETE` with no pooled repeat. The data exercise the event,
+interval, jitter, fault and tracking analysis at scale; they are not a physical timing claim.
+The [native simulation capture](#native-simulation-capture) remains the integration path for
+the native runtime; it advances the AXI model every simulated nanosecond, which is too slow for
+10⁶-cycle repeats.
+
 ## Calculations
 
 Same-cycle event intervals are differences of captured fabric ticks. For `CONTROL`, a deadline

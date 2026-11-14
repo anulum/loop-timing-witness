@@ -45,7 +45,7 @@ fn refused<T>(text: &str) -> Result<T, AmpFailure> {
 }
 
 /// A member of a decoded object, or JSON null as Python's `dict.get` gives `None`.
-fn member<'a>(object: &'a Map<String, Value>, name: &str) -> &'a Value {
+pub(crate) fn member<'a>(object: &'a Map<String, Value>, name: &str) -> &'a Value {
     object.get(name).unwrap_or(&Value::Null)
 }
 

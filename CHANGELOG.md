@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP image receipt checks in the Rust analysis crate: the public `amp_image_receipt`
+  module checks a captured image's declarations, recorded verification request, platform, run,
+  firmware contract and exit channel with the Python check's refusal texts and read errors. A
+  corpus of a real image folder, changed per rule, holds both implementations to the same outcomes.
 - Native AMP image contract and exit channel admission in the Rust analysis crate: the public
   `amp_image_contract` and `amp_exit_channel` modules admit a firmware image's constants, entry
   points, stack geometry and ISA completion channel with the Python checks' refusal texts. A corpus

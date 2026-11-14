@@ -41,6 +41,9 @@ pub enum PlicBinding {
     Sifive,
     /// The actual Spike simulator's legacy `riscv,plic0` layout.
     Spike,
+    /// Any other recorded layout name, which no platform binds; Python
+    /// refuses it only when the binding is checked.
+    Unbound,
 }
 
 /// The controller path, dedicated U54 hart, device source and concrete layout of one binding.
@@ -170,6 +173,7 @@ pub fn bind_plic(tree: &DeviceTree, selection: &PlicSelection) -> Result<PlicReg
             declares("riscv,plic0")
                 && tree.existing("/").property("model") == Some(b"ucbbar,spike-bare\0")
         }
+        PlicBinding::Unbound => false,
     };
     if !bound {
         return Err(

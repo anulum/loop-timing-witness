@@ -266,6 +266,19 @@ image's two HTIF words: aligned, distinct, initially zero, in writable file
 bytes. A shared corpus of the whole firmware of the ELF corpus, changed per
 rule and per input, holds both implementations to the same outcomes.
 
+## AMP image receipts
+
+`amp_image_receipt::validate_image_receipt(directory, &image, &preparation)`
+checks a captured ISA image as the Python module `amp_image_receipt` does: the
+image's declarations against its preparation, the Rust kernel receipt, the
+verification request recorded in `build_commands.json` (read, never run: a
+fixed vector of canonical arguments), the platform bound from the captured
+blob, the run configuration, the firmware contract and exit channel, and the
+image's declared platform, run, stack and segments compared with Python's
+equality. A shared corpus of a real image folder, changed per declaration,
+argument, file and comparison, holds both implementations to the same value,
+refusal or read error.
+
 ## Selected installation
 
 The compiled registry admits source contract

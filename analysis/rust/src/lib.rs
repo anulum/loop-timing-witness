@@ -22,6 +22,8 @@ mod amp_files;
 pub mod amp_image_contract;
 /// Firmware preprocessing dependency snapshots and record counts of AMP images.
 pub mod amp_image_dependencies;
+/// Receipt checks of captured AMP images against their topology and firmware.
+pub mod amp_image_receipt;
 mod amp_memory;
 /// Memory, device and PLIC resource binding of AMP platforms.
 pub mod amp_platform;

@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
+
 
 @pytest.mark.parametrize(
     ("overflow", "counter_bits", "drain_period", "count"),
@@ -66,14 +68,14 @@ def test_parallel_capture_shared_ticks_and_independent_loss(
         capture_output=True,
         text=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     result = subprocess.run(
         ["vvp", str(binary), f"+EVENT_DIRECTORY={tmp_path}"],
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "SHARED_CAPTURE_PASS reset_pass=1" in result.stdout
@@ -145,10 +147,10 @@ def test_shared_capture_refuses_invalid_parameters(
         capture_output=True,
         text=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     result = subprocess.run(
-        ["vvp", str(binary)], capture_output=True, text=True, check=False, timeout=30
+        ["vvp", str(binary)], capture_output=True, text=True, check=False, timeout=scaled(30)
     )
     assert result.returncode != 0
     assert message in result.stdout
@@ -177,7 +179,7 @@ def test_shared_capture_synthesis_preserves_counter_and_independent_memories(
         capture_output=True,
         text=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     design = json.loads(netlist.read_text(encoding="utf-8"))
     top = design["modules"]["shared_event_witness"]

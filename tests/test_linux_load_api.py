@@ -22,6 +22,8 @@ from linux_load import LoadExecution, execute_with_load
 from linux_load_config import LoadConfiguration
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -174,7 +176,7 @@ def test_actual_worker_receipt_failure(native_run: Path, tmp_path: Path) -> None
 
     def create_conflict() -> None:
         """Create a real exclusive receipt collision after workspace allocation."""
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + scaled(5)
         while not (workspace / "worker.log").exists() and time.monotonic() < deadline:
             time.sleep(0.001)
         assert (workspace / "worker.log").exists()
@@ -198,7 +200,7 @@ def test_actual_worker_receipt_failure(native_run: Path, tmp_path: Path) -> None
                 LoadExecution(journal, workspace),
                 stream,
             )
-        pending.result(timeout=5)
+        pending.result(timeout=scaled(5))
     assert (workspace / "worker.json").read_bytes() == b"preserve owner bytes"
     assert "File exists" in (workspace / "worker.log").read_text()
     assert (tmp_path / "stdout.log").read_text().startswith("simulation_only ")

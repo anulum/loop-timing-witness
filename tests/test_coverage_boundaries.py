@@ -19,6 +19,7 @@ from pathlib import Path
 from coverage import CoverageData
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 def test_canonical_and_snapshot_commands_have_distinct_coverage(tmp_path: Path) -> None:
@@ -68,7 +69,7 @@ def test_canonical_and_snapshot_commands_have_distinct_coverage(tmp_path: Path) 
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     # Python 3.14 and later name a module command by its -m invocation in the usage line.
@@ -81,7 +82,7 @@ def test_canonical_and_snapshot_commands_have_distinct_coverage(tmp_path: Path) 
         capture_output=True,
         text=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     data = CoverageData(basename=str(data_file))
     data.read()

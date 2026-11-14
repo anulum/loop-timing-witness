@@ -22,6 +22,7 @@ from amp_plugin_inputs import PluginBuild
 from test_capture_amp_simulation import ROOT
 from write_amp_plugin_manifest import main, write_plugin_manifest
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 
@@ -55,7 +56,7 @@ def original_plugin(tmp_path_factory: pytest.TempPathFactory) -> PluginBuild:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=scaled(180),
         check=False,
     )
     (output / "build.log").write_text(result.stdout + result.stderr, encoding="utf-8")
@@ -91,7 +92,7 @@ def owned_plugin(original_plugin: PluginBuild, tmp_path: Path) -> PluginBuild:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=scaled(180),
         check=False,
     )
     (tmp_path / "owned-build.log").write_text(result.stdout + result.stderr, encoding="utf-8")
@@ -196,7 +197,7 @@ def test_real_public_receipt_process(owned_plugin: PluginBuild) -> None:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -228,7 +229,7 @@ def test_original_receipt_stops_rebuild(original_plugin: PluginBuild) -> None:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode != 0

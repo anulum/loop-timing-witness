@@ -22,6 +22,7 @@ from linux_load_config import PROFILES
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -73,7 +74,7 @@ def actual_receipt(
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return (directory / "load.json").read_bytes()

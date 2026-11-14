@@ -15,6 +15,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -34,7 +35,7 @@ def test_native_commit_and_state_proofs(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=150,
+        timeout=scaled(150),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     for module in (

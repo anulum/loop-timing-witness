@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 from test_controller_parity import DEFAULT
 
+from loop_timing_witness.host_profile import scaled
+
 
 @pytest.mark.parametrize(
     "row",
@@ -90,11 +92,11 @@ def test_commands_arrive_before_input_eof(native_controllers: tuple[Path, Path])
                 process.stdin.flush()
                 with selectors.DefaultSelector() as selector:
                     selector.register(process.stdout, selectors.EVENT_READ)
-                    assert selector.select(timeout=5), "command buffered until EOF"
+                    assert selector.select(timeout=scaled(5)), "command buffered until EOF"
                 assert process.stdout.readline() == "0,33571209,16777,0,0,0\n"
             finally:
                 process.stdin.close()
-            assert process.wait(timeout=5) == 0
+            assert process.wait(timeout=scaled(5)) == 0
 
 
 def test_output_failure_is_refused(native_controllers: tuple[Path, Path]) -> None:

@@ -14,6 +14,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,7 +45,7 @@ def test_original_counter_progression_and_reset(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=90,
+        timeout=scaled(90),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "CHECK steps=1000000 late=1000000 misses=1000000 overflow=1000021" in result.stdout

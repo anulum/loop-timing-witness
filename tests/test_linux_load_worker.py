@@ -24,6 +24,7 @@ from linux_load_config import PROFILES
 from process_lifetime_support import finish_process, retain_process
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.mark.parametrize("profile", PROFILES)
@@ -55,7 +56,7 @@ def test_actual_eof_chunk(tmp_path: Path, profile: str, size: int) -> None:
         input=b"",
         capture_output=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stderr
     ready = json.loads(result.stdout)
@@ -123,7 +124,7 @@ def test_real_worker_refusal(tmp_path: Path, failure: str) -> None:
         input=b"",
         capture_output=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert b"Linux load worker: FAIL:" in result.stderr
@@ -156,7 +157,7 @@ def test_actual_worker_api(tmp_path: Path) -> None:
         input=b"",
         capture_output=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stderr
     ready = json.loads(result.stdout)
@@ -213,13 +214,13 @@ def test_actual_transfer_corruption(tmp_path: Path, profile: str) -> None:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
                 for port in ports:
                     sender.sendto(b"unexpected peer data", ("127.0.0.1", port))
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + scaled(5)
         while process.poll() is None and time.monotonic() < deadline:
             if profile == "storage":
                 with (tmp_path / "storage.bin").open("r+b") as stream:
                     stream.write(b"\xff" * 4096)
             time.sleep(0.001)
         assert process.poll() == 1
-        _, stderr = process.communicate(timeout=5)
+        _, stderr = process.communicate(timeout=scaled(5))
         assert (b"datagram differs" if profile == "network" else b"readback differs") in stderr
     assert not (tmp_path / "worker.json").exists()

@@ -25,6 +25,7 @@ from device_tree_blob import decode_device_tree
 from test_amp_logger import FLAGS, logger_image
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,7 +119,9 @@ def test_actual_startup_publication_fault(
         tools, tree, platform, plic_path=REQUEST.plic.path, paths=SpikePaths(image, output)
     )
     (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode != 0
     assert finding in result.stderr
@@ -187,7 +190,9 @@ def test_actual_delayed_firmware_initialization(
         paths=SpikePaths(image, output),
     )
     (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     assert '"samples":10,"events":40,"misses":0,"overflow":0,"safe":false' in result.stdout

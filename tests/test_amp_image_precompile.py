@@ -25,6 +25,7 @@ from test_amp_spike_command import REQUEST
 from verify_amp_image import verify_image
 from verify_amp_preparation import main as preparation_main
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import canonical_json_bytes, sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,7 +89,7 @@ def test_actual_original_preprocessing(original_preparation: Path, *, compiled: 
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert cli.returncode == 0, cli.stderr
     assert "AMP original preparation: PASS" in cli.stdout
@@ -98,7 +99,7 @@ def test_actual_original_preprocessing(original_preparation: Path, *, compiled: 
             capture_output=True,
             text=True,
             check=False,
-            timeout=60,
+            timeout=scaled(60),
         )
         assert result.returncode == 0, result.stdout + result.stderr
         manifest = json.loads((original_preparation / "image.json").read_bytes())
@@ -177,7 +178,7 @@ def test_public_precompile_refusal(original_preparation: Path, fault: str) -> No
         capture_output=True,
         text=True,
         check=False,
-        timeout=60,
+        timeout=scaled(60),
     )
     assert result.returncode != 0
     assert finding in result.stderr
@@ -212,7 +213,7 @@ def test_unbound_arithmetic_backend_refused(original_preparation: Path, backend:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 1
     assert "arithmetic backend or Rust preparation identity is invalid" in result.stderr
@@ -232,7 +233,7 @@ def test_actual_late_compiler_dependency_refused(original_preparation: Path) -> 
         capture_output=True,
         text=True,
         check=False,
-        timeout=60,
+        timeout=scaled(60),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     data = json.loads((original_preparation / "preparation.json").read_bytes())
@@ -242,7 +243,12 @@ def test_actual_late_compiler_dependency_refused(original_preparation: Path) -> 
     command = commands["compile"][3]
     actual = [command[0], "-include", str(header), *command[1:]]
     result = subprocess.run(
-        actual, cwd=original_preparation, capture_output=True, text=True, check=False, timeout=30
+        actual,
+        cwd=original_preparation,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stderr
     linked = subprocess.run(
@@ -251,7 +257,7 @@ def test_actual_late_compiler_dependency_refused(original_preparation: Path) -> 
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert linked.returncode == 0, linked.stderr
     with pytest.raises(ValueError, match="differ from original preprocessing"):
@@ -261,12 +267,8 @@ def test_actual_late_compiler_dependency_refused(original_preparation: Path) -> 
             original_preparation / "configuration.txt",
             REQUEST,
         )
-    assert (
-        data["compiler_dependencies"]
-        == json.loads((original_preparation / "preparation.json").read_bytes())[
-            "compiler_dependencies"
-        ]
-    )
+    after = json.loads((original_preparation / "preparation.json").read_bytes())
+    assert data["compiler_dependencies"] == after["compiler_dependencies"]
 
 
 def test_real_original_header_drift_before_snapshot(original_preparation: Path) -> None:

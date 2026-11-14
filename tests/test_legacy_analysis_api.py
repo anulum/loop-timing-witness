@@ -34,6 +34,7 @@ from test_native_run import configuration, native_run
 from tracking_observations import observed_tracking_error
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -117,7 +118,7 @@ def test_legacy_observations_preserve_actual_native_samples(
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stderr
     domain = json.loads((REPOSITORY_ROOT / "measurement-domain.json").read_text())
@@ -153,7 +154,7 @@ def test_package_module_commands_analyse_real_rtl(make_rtl_run: MakeRtlRun) -> N
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stderr
     assert json.loads((report / "report.json").read_text())["valid"] is True
@@ -163,7 +164,7 @@ def test_package_module_commands_analyse_real_rtl(make_rtl_run: MakeRtlRun) -> N
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert validation.returncode == 0, validation.stdout + validation.stderr
     assert "measurement-domain: PASS" in validation.stdout

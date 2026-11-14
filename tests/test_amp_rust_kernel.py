@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "runtime/bare_metal/rust_kernel/Cargo.toml"
 WARNINGS = [
@@ -40,7 +42,7 @@ def run_command(command: list[str], directory: Path, name: str) -> None:
     name
         Diagnostic file stem.
     """
-    result = subprocess.run(command, cwd=ROOT, capture_output=True, check=False, timeout=90)
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, check=False, timeout=scaled(90))
     (directory / (name + ".log")).write_bytes(result.stdout + result.stderr)
     assert result.returncode == 0, (result.stdout + result.stderr).decode(errors="replace")
 
@@ -177,7 +179,7 @@ def test_c_stream_calls_rust_kernel(rust_kernel: Path, mode: str) -> None:
             input=payload,
             capture_output=True,
             check=False,
-            timeout=10,
+            timeout=scaled(10),
         )
         assert result.returncode == 0, result.stderr
         assert not result.stderr

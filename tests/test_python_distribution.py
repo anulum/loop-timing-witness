@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from loop_timing_witness import build_report, load_run
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from conftest import MakeRtlRun
@@ -46,7 +47,13 @@ def _run(argv: list[str], cwd: Path, output: Path, name: str) -> subprocess.Comp
         environment.pop(key, None)
     environment["PIP_CONFIG_FILE"] = os.devnull
     result = subprocess.run(
-        argv, cwd=cwd, env=environment, capture_output=True, text=True, timeout=120, check=False
+        argv,
+        cwd=cwd,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=scaled(120),
+        check=False,
     )
     (output / f"{name}.argv.json").write_text(json.dumps(argv, indent=2) + "\n")
     (output / f"{name}.log").write_text(result.stdout + result.stderr)

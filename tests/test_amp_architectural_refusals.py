@@ -27,6 +27,7 @@ from device_tree_blob import decode_device_tree
 from event_stream import decode_events
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +97,9 @@ def execute_damaged_contract(
         ),
         encoding="ascii",
     )
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr, encoding="ascii")
     return result, output
 

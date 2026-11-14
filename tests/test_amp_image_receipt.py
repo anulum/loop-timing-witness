@@ -27,6 +27,7 @@ from capture_amp_simulation import main as capture_main
 from device_tree_blob import decode_device_tree
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled, scaled_seconds
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,7 +72,7 @@ def original_capture(tmp_path_factory: pytest.TempPathFactory) -> Path:
                 "--time-limit",
                 "100000000",
                 "--timeout",
-                "60",
+                str(scaled_seconds(60)),
             ]
         )
         == 0
@@ -125,7 +126,7 @@ def analyze_copy(directory: Path) -> subprocess.CompletedProcess[str]:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
 

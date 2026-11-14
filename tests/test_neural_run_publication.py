@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_publication import write_neural_report
@@ -84,7 +85,7 @@ def test_failed_staging_write_removes_the_staging_directory(tmp_path: Path) -> N
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     assert result.returncode == 0, result.stderr

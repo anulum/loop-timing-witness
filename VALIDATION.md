@@ -89,6 +89,16 @@ truthfulness of the `architecture_only` state.
 The lock is regenerated only with the command recorded in its header, followed by a licence review
 of every new or changed package in `development-dependency-licences.json`.
 
+## Host-derived limits
+
+Hang guards in the tests are written for the reference profile: the development hosts and hosted
+runners the project runs on today, whose timeout scale is 1. Another host declares its scale in
+`WITNESS_HOST_TIMEOUT_SCALE`, a positive finite number, and `loop_timing_witness.host_profile`
+multiplies every hang guard by it; any other declared value is refused. A guard that an interface
+takes in whole seconds, such as a command-line `--timeout` or a fuzz campaign length, is rounded up.
+Waits that a test expects to expire, non-blocking polls and polling intervals keep their values,
+because they are the behaviour under test rather than a host assumption.
+
 ## Native lifecycle profiles
 
 The lifecycle and configuration API tests compile the actual production RTL top and

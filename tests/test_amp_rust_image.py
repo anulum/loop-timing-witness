@@ -28,6 +28,7 @@ from loop_timing_witness.amp_rust_receipt import (
     validate_rust_image_receipt,
     validate_rust_preparation_snapshot,
 )
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +54,7 @@ def rust_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
         [dtc, "-I", "dts", "-O", "dtb", "-o", str(tmp_path / "platform.dtb"), str(source)],
         capture_output=True,
         check=True,
-        timeout=10,
+        timeout=scaled(10),
     )
     configuration = tmp_path / "configuration.txt"
     configuration.write_bytes(CONFIGURATION)
@@ -84,7 +85,7 @@ def rust_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
-            timeout=90,
+            timeout=scaled(90),
         )
     return output
 

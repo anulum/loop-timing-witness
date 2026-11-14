@@ -16,6 +16,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,7 +38,7 @@ def test_doxygen_refuses_an_undocumented_actual_mailbox_member(tmp_path: Path) -
     config.write_text(configuration)
     binary = REPOSITORY_ROOT / ".venv/native/doxygen/doxygen-1.18.0/bin/doxygen"
     result = subprocess.run(
-        [str(binary), str(config)], capture_output=True, text=True, check=False, timeout=30
+        [str(binary), str(config)], capture_output=True, text=True, check=False, timeout=scaled(30)
     )
     assert result.returncode != 0
     assert "Member status" in result.stderr
@@ -71,7 +72,7 @@ def test_rustdoc_refuses_an_undocumented_actual_command_member(tmp_path: Path) -
         capture_output=True,
         text=True,
         check=False,
-        timeout=60,
+        timeout=scaled(60),
     )
     assert result.returncode != 0
     assert "missing documentation for a struct field" in result.stderr
@@ -112,7 +113,7 @@ def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) ->
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert version.returncode == 0, version.stdout + version.stderr
     assert version.stdout.startswith("rustc 1.99.1 ")
@@ -134,7 +135,7 @@ def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) ->
             capture_output=True,
             text=True,
             check=False,
-            timeout=60,
+            timeout=scaled(60),
         )
         assert result.returncode == 0, result.stdout + result.stderr
     reference = captured / "native-api/rust/doc"

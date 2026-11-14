@@ -20,6 +20,7 @@ import pytest
 from amp_rust_toolchain import TARGET, rust_toolchain
 from amp_rust_vectors import ADAPTER, CORE
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,7 +63,7 @@ def drift_interposer(tmp_path_factory: pytest.TempPathFactory) -> Path:
         cwd=ROOT,
         capture_output=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stderr.decode(errors="replace")
     return library
@@ -119,7 +120,7 @@ def _prepare_with_drift(
         "WITNESS_DRIFT_MARKER": str(marker),
     }
     result = subprocess.run(
-        command, cwd=ROOT, env=selected, capture_output=True, timeout=90, check=False
+        command, cwd=ROOT, env=selected, capture_output=True, timeout=scaled(90), check=False
     )
     (output.parent / f"{output.name}.log").write_bytes(result.stdout + result.stderr)
     assert result.returncode != 0
@@ -196,7 +197,7 @@ def test_original_target_archive_changed_between_hash_and_copy_refused(
         [rustup, "toolchain", "link", "witness-snapshot-drift", str(owned)],
         env={**os.environ, **env},
         capture_output=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert linked.returncode == 0, linked.stderr.decode(errors="replace")

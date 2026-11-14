@@ -22,6 +22,7 @@ from linux_load_channels import worker_channels
 from linux_load_readiness import MAX_READINESS_BYTES, read_ready_pid
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +52,7 @@ def actual_ready_frame(tmp_path_factory: pytest.TempPathFactory) -> tuple[bytes,
         input=b"",
         capture_output=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stderr
     receipt = json.loads((workspace / "worker.json").read_bytes())
@@ -171,7 +172,7 @@ def test_actual_framing_failure(actual_ready_frame: tuple[bytes, int], violation
         channels.child_output.flush()
         if violation == "unterminated":
             channels.release_child_ends()
-        timeout = 1e-30 if violation == "expired" else 0.01 if violation == "empty" else 1
+        timeout = 1e-30 if violation == "expired" else 0.01 if violation == "empty" else scaled(1)
         with pytest.raises((TimeoutError, ValueError)):
             read_ready_pid(channels.readiness, timeout)
 
@@ -208,10 +209,10 @@ def test_actual_chunked_frame(actual_ready_frame: tuple[bytes, int], *, slow: bo
                 with pytest.raises(TimeoutError, match="complete worker readiness"):
                     read_ready_pid(channels.readiness, 0.05)
             else:
-                assert read_ready_pid(channels.readiness, 1) == pid
+                assert read_ready_pid(channels.readiness, scaled(1)) == pid
         finally:
             stopping.set()
-            pending.result(timeout=1)
+            pending.result(timeout=scaled(1))
 
 
 @pytest.mark.parametrize(

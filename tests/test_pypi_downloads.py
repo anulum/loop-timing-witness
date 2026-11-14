@@ -23,6 +23,7 @@ import pytest
 from pypi_downloads import MAX_BYTES, PACKAGE, main, snapshot
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -74,7 +75,7 @@ def endpoint(
     finally:
         server.shutdown()
         server.server_close()
-        thread.join(timeout=5)
+        thread.join(timeout=scaled(5))
         assert not thread.is_alive()
 
 
@@ -93,7 +94,7 @@ def command(
         capture_output=True,
         text=True,
         check=False,
-        timeout=20,
+        timeout=scaled(20),
     )
 
 
@@ -358,7 +359,7 @@ def test_real_verified_tls_fetch(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=15,
+        timeout=scaled(15),
     )
     assert result.returncode == 0
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -379,7 +380,7 @@ def test_real_verified_tls_fetch(tmp_path: Path) -> None:
             capture_output=True,
             text=True,
             check=False,
-            timeout=10,
+            timeout=scaled(10),
         )
         assert legacy.returncode != 0
         assert "alert protocol version" in legacy.stderr.lower()

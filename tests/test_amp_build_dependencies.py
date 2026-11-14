@@ -18,6 +18,7 @@ from typing import Final
 import pytest
 from amp_build_dependencies import dependency_hashes
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,7 +58,7 @@ def compiled_dependencies(tmp_path: Path) -> tuple[Path, Path]:
         cwd=tmp_path,
         check=True,
         capture_output=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     return tmp_path, record
 

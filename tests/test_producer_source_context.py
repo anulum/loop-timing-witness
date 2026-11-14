@@ -26,6 +26,7 @@ from test_native_run import configuration
 
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness import manifest_io as actual_json
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture
@@ -239,7 +240,7 @@ def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, m
             start_new_session=True,
         ) as process,
     ):
-        limit = time.monotonic() + 30
+        limit = time.monotonic() + scaled(30)
         while (
             not (output / "build.log").exists()
             and process.poll() is None
@@ -254,7 +255,7 @@ def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, m
         }
         target = targets[member]
         target.write_bytes(target.read_bytes() + b"\n")
-        assert process.wait(timeout=120) == 1
+        assert process.wait(timeout=scaled(120)) == 1
     diagnostic = (tmp_path / "capture.log").read_text()
     assert "capture producer" in diagnostic
     assert "changed" in diagnostic

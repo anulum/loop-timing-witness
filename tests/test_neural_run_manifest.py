@@ -23,6 +23,7 @@ import pytest
 from neural_operator_support import measure_package_copy
 
 from loop_timing_witness import load_neural_run
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_manifest import decode_neural_manifest, load_neural_manifest
 
@@ -288,7 +289,7 @@ def test_complete_source_population_uses_byte_bounds_and_separate_admission(tmp_
         [str(command), str(path), "--output-dir", str(tmp_path / "report")],
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=scaled(20),
         check=False,
     )
     assert result.returncode == 1
@@ -343,7 +344,7 @@ def test_actual_package_schema_damage_is_refused(tmp_path: Path, kind: str) -> N
         env={**os.environ, "PYTHONPATH": str(package_root), "PYTHONDONTWRITEBYTECODE": "1"},
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 1, result.stdout + result.stderr
@@ -450,7 +451,7 @@ def test_installed_schema_must_be_present_and_admitted(
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 0, result.stderr

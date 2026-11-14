@@ -23,6 +23,8 @@ from test_amp_image_flow import CONFIGURATION, REQUEST, ROOT, prepared_image
 from test_amp_platform import SOURCE
 from test_device_tree_resources import CompileTree, compile_tree
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -55,7 +57,7 @@ def test_public_cli_refusals(prepared_image: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert preparation.returncode == 1
     assert "FAIL" in preparation.stderr
@@ -70,7 +72,7 @@ def test_public_cli_refusals(prepared_image: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert verification.returncode == 0, verification.stderr
 

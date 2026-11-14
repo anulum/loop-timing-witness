@@ -26,6 +26,7 @@ from linux_load_trace_support import trace_command
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from linux_load_trace_support import OwnedTrace
@@ -48,7 +49,7 @@ def _actual_worker(trace: OwnedTrace) -> tuple[int, int]:
     """
     # Coverage starts the launcher before strace can observe its worker creation.
     # The production readiness timeout and syscall delay are unchanged.
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + scaled(30)
     found: tuple[int, int] | None = None
     while found is None and time.monotonic() < deadline:
         trace.observe()
@@ -141,7 +142,7 @@ def test_real_startup_refusal(native_run: Path, tmp_path: Path, violation: str) 
             assert pipe.write(payload) == len(payload)
         if violation == "eof":
             signal.pidfd_send_signal(descriptor, signal.SIGKILL)
-        stdout, stderr = trace.process.communicate(timeout=20)
+        stdout, stderr = trace.process.communicate(timeout=scaled(20))
         (tmp_path / "launcher.log").write_text(stdout + stderr, encoding="utf-8")
         assert trace.process.returncode == 1, stdout + stderr
         assert stdout == ""

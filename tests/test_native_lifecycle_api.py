@@ -19,6 +19,7 @@ import pytest
 from test_native_run import configuration
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module", params=[0, 1])
@@ -100,7 +101,12 @@ def lifecycle_program(
     ]
     for command in commands:
         result = subprocess.run(
-            command, cwd=REPOSITORY_ROOT, capture_output=True, text=True, check=False, timeout=90
+            command,
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=scaled(90),
         )
         assert result.returncode == 0, result.stdout + result.stderr
     return directory / "run_lifecycle_test"
@@ -172,7 +178,7 @@ def test_actual_lifecycle_api(lifecycle_program: Path, tmp_path: Path, scenario:
         capture_output=True,
         text=True,
         check=False,
-        timeout=180 if scenario in {"run_timeout", "final_drain_timeout"} else 10,
+        timeout=scaled(180 if scenario in {"run_timeout", "final_drain_timeout"} else 10),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified {scenario}\n"

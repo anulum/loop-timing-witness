@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
+
 
 def test_actual_checker_profile_denies_socket_and_sets_finite_limits() -> None:
     """Apply the production profile and observe actual kernel refusal without sending data."""
@@ -50,7 +52,7 @@ print(json.dumps({
         ],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -94,7 +96,7 @@ print(json.dumps({
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -153,7 +155,7 @@ else:
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -202,7 +204,7 @@ else:
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -236,7 +238,7 @@ else:
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -296,7 +298,7 @@ print(json.dumps({
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=scaled(15),
         check=False,
     )
     assert result.returncode == 0, result.stderr

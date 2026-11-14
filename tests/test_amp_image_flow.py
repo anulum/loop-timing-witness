@@ -29,6 +29,8 @@ from test_device_tree_resources import CompileTree, compile_tree
 from verify_amp_image import main as verify_main
 from verify_amp_image import verify_image
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["compile_tree"]
 ROOT = Path(__file__).resolve().parents[1]
 REQUEST = ImageRequest(MEMORY_SELECTION, PLIC_SELECTION, PATH)
@@ -69,7 +71,7 @@ def prepared_image(compile_tree: CompileTree, tmp_path: Path) -> Path:
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
-            timeout=60,
+            timeout=scaled(60),
         )
     return output
 
@@ -264,7 +266,7 @@ def test_actual_parked_exit_build(prepared_image: Path) -> None:
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
-            timeout=60,
+            timeout=scaled(60),
         )
     manifest = verify_image(output, output / "platform.dtb", output / "configuration.txt", REQUEST)
     assert json.loads(manifest.read_bytes())["exit_mode"] == "parked"

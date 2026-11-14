@@ -16,6 +16,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from loop_timing_witness.host_profile import scaled
+
 ROOT = Path(__file__).resolve().parents[1]
 RUST_FLAGS = "-C instrument-coverage -Z coverage-options=branch"
 RUST_ENV = {"RUSTC_BOOTSTRAP": "1", "RUSTFLAGS": RUST_FLAGS}
@@ -67,7 +69,7 @@ def _run(
         env=env,
         input=payload,
         capture_output=True,
-        timeout=90,
+        timeout=scaled(90),
         check=False,
     )
     (directory / f"{name}.log").write_bytes(result.stdout + result.stderr)
@@ -305,7 +307,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
         cwd=ROOT,
         env={**os.environ, **_profile(tmp_path, "panic")},
         capture_output=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     (tmp_path / "panic.log").write_bytes(panic.stdout + panic.stderr)

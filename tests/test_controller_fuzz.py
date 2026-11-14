@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled, scaled_seconds
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,7 +62,7 @@ def campaign(directory: Path, source: Path, seconds: int) -> subprocess.Complete
     source
         Controller implementation compiled into the target.
     seconds
-        Wall-clock bound of the campaign.
+        Wall-clock bound of the campaign, already scaled for the executing host.
 
     Returns
     -------
@@ -81,7 +82,7 @@ def campaign(directory: Path, source: Path, seconds: int) -> subprocess.Complete
         capture_output=True,
         text=True,
         check=False,
-        timeout=300,
+        timeout=scaled(300),
     )
 
 
@@ -101,7 +102,7 @@ def replay(program: Path, sample: Path) -> int:
         Exit status of the target.
     """
     return subprocess.run(
-        [str(program), str(sample)], capture_output=True, check=False, timeout=60
+        [str(program), str(sample)], capture_output=True, check=False, timeout=scaled(60)
     ).returncode
 
 
@@ -133,7 +134,7 @@ def test_build_refuses_an_incompatible_compiler(
         capture_output=True,
         text=True,
         check=False,
-        timeout=60,
+        timeout=scaled(60),
     )
     assert result.returncode != 0
     assert ' = "18.1.3"' in result.stdout
@@ -155,7 +156,7 @@ def qualified(tmp_path_factory: pytest.TempPathFactory) -> Path:
         Directory holding the unmodified instrumented target and its campaign outputs.
     """
     directory = tmp_path_factory.mktemp("controller-fuzz")
-    completed = campaign(directory, CONTROLLER, 5)
+    completed = campaign(directory, CONTROLLER, scaled_seconds(5))
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return directory
 
@@ -187,7 +188,7 @@ def test_engine_finds_and_retains_a_controlled_defect(
     broken = tmp_path / "witness_controller.c"
     broken.write_text(text.replace(original, replacement), encoding="utf-8")
     directory = tmp_path / "campaign"
-    completed = campaign(directory, broken, 30)
+    completed = campaign(directory, broken, scaled_seconds(30))
     assert completed.returncode != 0
     assert signature in completed.stdout
     retained = sorted((directory / "crashes").iterdir())

@@ -26,6 +26,8 @@ from amp_stall_plugin import stall_plugin
 from device_tree_blob import decode_device_tree
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled
+
 ROOT = Path(__file__).resolve().parents[1]
 __all__ = ["stall_plugin"]
 
@@ -72,7 +74,9 @@ def test_actual_producer_refuses_stalled_consumer(tmp_path: Path, stall_plugin: 
         paths=SpikePaths(image, output),
     )
     (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode != 0
     assert "AMP firmware refused or telemetry overflowed: cause=256 value=257" in result.stderr

@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 import pytest
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -122,7 +124,7 @@ def assert_refusal(native_run: Path, tmp_path: Path, text: str, error: str) -> N
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     assert result.stdout == ""
@@ -151,7 +153,7 @@ def test_absent_configuration_without_metadata(native_run: Path, tmp_path: Path)
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     assert result.stdout == ""
@@ -204,7 +206,7 @@ def test_simulation_power_contract_refusal(
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     assert result.stdout == ""

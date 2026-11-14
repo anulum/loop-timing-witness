@@ -25,6 +25,7 @@ from linux_load_trace_support import OwnedTrace
 from report_outputs import write_report
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 MakeRtlRun = Callable[..., tuple[Path, dict[str, Any]]]
 RunTool = Callable[..., subprocess.CompletedProcess[str]]
@@ -138,7 +139,7 @@ def test_concurrent_destination_is_preserved(
     )
     owned = OwnedTrace(process, log, {process.pid: os.pidfd_open(process.pid)})
     try:
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + scaled(10)
         staging = None
         while True:
             assert time.monotonic() < deadline, "actual completed staging was not observed in 10s"
@@ -165,14 +166,14 @@ def test_concurrent_destination_is_preserved(
                 "jitter_p99.svg",
                 "energy_per_cycle.svg",
             }
-            stdout, stderr = process.communicate(timeout=10)
+            stdout, stderr = process.communicate(timeout=scaled(10))
             assert process.returncode == 0, stdout + stderr
             assert {path.name: path.read_bytes() for path in target.iterdir()} == expected
             assert not list(tmp_path.glob(".racing-report.*"))
             assert "(DELAYED)" in log.read_text()
             return
         original_inode = create_concurrent_destination(target, kind)
-        stdout, stderr = process.communicate(timeout=10)
+        stdout, stderr = process.communicate(timeout=scaled(10))
         assert process.returncode == 1, stdout + stderr
         assert target.lstat().st_ino == original_inode
         if kind == "file":

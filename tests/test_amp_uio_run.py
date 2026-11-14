@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 from test_native_run import configuration
 
+from loop_timing_witness.host_profile import scaled
+
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCE = (
     "uio4294967295 loop-timing-witness devicetree "
@@ -40,7 +42,9 @@ def amp_uio_program(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """
     directory = tmp_path_factory.mktemp("amp-uio-build")
     argv = ["make", "run-amp-uio", "LINUX_BUILD_DIRECTORY=" + str(directory)]
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(60), check=False
+    )
     (directory / "build.log").write_text(result.stdout + result.stderr, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
     return directory / "run_amp_uio"
@@ -117,7 +121,7 @@ def test_amp_uio_original_resource_refusal(
         [str(amp_uio_program), str(run), str(resource), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1
@@ -158,7 +162,7 @@ def test_amp_uio_actual_unavailable_device(amp_uio_program: Path, tmp_path: Path
         ],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

@@ -28,6 +28,8 @@ from test_amp_memory import SELECTION as MEMORY_SELECTION
 from test_amp_platform import SOURCE
 from test_device_tree_resources import CompileTree, compile_tree
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -97,7 +99,7 @@ def native_image(compile_tree: CompileTree, tmp_path: Path) -> tuple[bytes, AmpP
         ],
         capture_output=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     return image.read_bytes(), platform
 

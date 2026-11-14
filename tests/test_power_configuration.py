@@ -18,6 +18,8 @@ import pytest
 from test_native_run import configuration
 from test_native_uio_run import native_uio
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -137,7 +139,7 @@ def test_refused_power_configuration(
         ],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

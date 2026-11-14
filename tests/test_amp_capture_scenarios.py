@@ -21,6 +21,8 @@ from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST
 from test_capture_amp_simulation import ROOT, capture_arguments
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["capture_arguments"]
 
 
@@ -90,7 +92,7 @@ def scenario_capture(
         ["make", "-C", str(image), "-j2"],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

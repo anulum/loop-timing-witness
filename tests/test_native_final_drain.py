@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 import pytest
 from test_native_run import check_native_commands, configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -73,7 +75,7 @@ def test_actual_final_backlog(
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stderr == ""

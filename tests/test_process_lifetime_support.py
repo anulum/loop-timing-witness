@@ -20,6 +20,8 @@ from pathlib import Path
 import pytest
 from process_lifetime_support import finish_process, retain_process
 
+from loop_timing_witness.host_profile import scaled
+
 
 @pytest.mark.parametrize("state", ["running", "reaped"])
 def test_actual_process_cleanup_preserves_unrelated_process(state: str) -> None:
@@ -40,7 +42,7 @@ def test_actual_process_cleanup_preserves_unrelated_process(state: str) -> None:
         with subprocess.Popen([sys.executable, "-c", command]) as process:
             descriptor = retain_process(process)
             if state == "reaped":
-                assert process.wait(timeout=5) == 0
+                assert process.wait(timeout=scaled(5)) == 0
             finish_process(process, descriptor)
             assert process.returncode == (-signal.SIGKILL if state == "running" else 0)
             with pytest.raises(OSError, match="Bad file descriptor"):
@@ -106,7 +108,7 @@ print('actual EMFILE child cleanup verified')
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
         env=environment,
     )

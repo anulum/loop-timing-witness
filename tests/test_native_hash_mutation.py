@@ -19,6 +19,8 @@ from pathlib import Path
 import pytest
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["native_run"]
 
 
@@ -37,7 +39,7 @@ def stop_reader(process: subprocess.Popen[str], config: Path) -> int:
     int
         Kernel-reported byte offset of the actual configuration descriptor.
     """
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + scaled(5)
     original_size = config.stat().st_size
     position = 0
     while not 0 < position < original_size:
@@ -107,7 +109,7 @@ def test_actual_configuration_changed_during_hash(
         else:
             config.unlink()
         os.kill(process.pid, signal.SIGCONT)
-        stdout, stderr = process.communicate(timeout=10)
+        stdout, stderr = process.communicate(timeout=scaled(10))
         assert process.returncode == 1
         assert stdout == ""
         expected = (
@@ -120,4 +122,4 @@ def test_actual_configuration_changed_during_hash(
     finally:
         process.send_signal(signal.SIGCONT)
         process.kill()
-        process.communicate(timeout=5)
+        process.communicate(timeout=scaled(5))

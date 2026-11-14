@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from conftest import MakeRtlRun
 
@@ -63,7 +65,7 @@ print(json.dumps(value, sort_keys=True))
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout) == manifest
@@ -142,7 +144,7 @@ print(json.dumps({"first_export": first_name, "evidence_status": report["evidenc
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout) == {

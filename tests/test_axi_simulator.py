@@ -23,6 +23,7 @@ from process_lifetime_support import finish_process, retain_process
 from test_controller_parity import DEFAULT, oracle
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -69,7 +70,7 @@ def simulator(request: pytest.FixtureRequest) -> Path:
         capture_output=True,
         text=True,
         check=False,
-        timeout=90,
+        timeout=scaled(90),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return build / "axi_simulator"
@@ -138,7 +139,7 @@ def exchange(process: subprocess.Popen[str], message: str) -> tuple[int, int, in
     assert process.stdout is not None
     process.stdin.write(message + "\n")
     process.stdin.flush()
-    assert select.select([process.stdout], [], [], 5)[0], message
+    assert select.select([process.stdout], [], [], scaled(5))[0], message
     row = process.stdout.readline().strip().split(",")
     assert len(row) == 3, row
     return int(row[0]), int(row[1]), int(row[2])
@@ -175,7 +176,7 @@ def test_register_reset_and_irq(simulator: Path) -> None:
         assert process.stdin is not None
         process.stdin.write("Q\n")
         process.stdin.flush()
-        assert process.wait(timeout=5) == 0
+        assert process.wait(timeout=scaled(5)) == 0
         if os.environ.get("WITNESS_RTL_COVERAGE") == "1":
             assert Path(f"{simulator}.{process.pid}.coverage.dat").stat().st_size > 0
 
@@ -208,7 +209,7 @@ def test_configuration_write_refusals(simulator: Path) -> None:
         assert process.stdin is not None
         process.stdin.write("Q\n")
         process.stdin.flush()
-        assert process.wait(timeout=5) == 0
+        assert process.wait(timeout=scaled(5)) == 0
 
 
 def read_available_codes(process: subprocess.Popen[str], maximum: int) -> list[tuple[int, int]]:
@@ -265,7 +266,7 @@ def test_complete_two_cycle_drain_reaches_the_caller_limit(simulator: Path) -> N
         assert process.stdin is not None
         process.stdin.write("Q\n")
         process.stdin.flush()
-        assert process.wait(timeout=5) == 0
+        assert process.wait(timeout=scaled(5)) == 0
 
 
 def test_stale_command_records_late_event(simulator: Path) -> None:
@@ -293,7 +294,7 @@ def test_stale_command_records_late_event(simulator: Path) -> None:
         assert process.stdin is not None
         process.stdin.write("Q\n")
         process.stdin.flush()
-        assert process.wait(timeout=5) == 0
+        assert process.wait(timeout=scaled(5)) == 0
 
 
 @pytest.mark.parametrize(
@@ -339,7 +340,7 @@ def test_reference_waveform_through_axi(
         assert process.stdin is not None
         process.stdin.write("Q\n")
         process.stdin.flush()
-        assert process.wait(timeout=5) == 0
+        assert process.wait(timeout=scaled(5)) == 0
 
 
 def drain_capture(
@@ -421,7 +422,7 @@ def test_native_feedback_and_capture(
                 samples.append(row)
                 kernel.stdin.write(row + "\n")
                 kernel.stdin.flush()
-                assert select.select([kernel.stdout], [], [], 5)[0]
+                assert select.select([kernel.stdout], [], [], scaled(5))[0]
                 command = kernel.stdout.readline()
                 commands.append(command)
                 raw = int(command.split(",")[1]) & 0xFFFFFFFF
@@ -433,11 +434,11 @@ def test_native_feedback_and_capture(
             assert "".join(commands) == oracle(mode, DEFAULT, samples)
             histories.append((samples, commands, records))
             kernel.stdin.close()
-            assert kernel.wait(timeout=5) == 0
+            assert kernel.wait(timeout=scaled(5)) == 0
             assert process.stdin is not None
             process.stdin.write("Q\n")
             process.stdin.flush()
-            assert process.wait(timeout=5) == 0
+            assert process.wait(timeout=scaled(5)) == 0
     assert histories[0] == histories[1]
 
 
@@ -474,7 +475,7 @@ def test_protocol_refusal(simulator: Path, message: str) -> None:
         input=message + "\n",
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

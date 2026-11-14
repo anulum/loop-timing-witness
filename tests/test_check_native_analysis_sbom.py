@@ -21,6 +21,7 @@ from check_native_analysis_sbom import audit, main
 from test_check_analysis_package import analysis_package
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -56,7 +57,7 @@ def native_sbom(tmp_path: Path) -> Path:
         capture_output=True,
         text=True,
         check=False,
-        timeout=90,
+        timeout=scaled(90),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stderr == ""
@@ -100,7 +101,7 @@ def test_original_inventory_and_exclusive_builder(
         capture_output=True,
         text=True,
         check=False,
-        timeout=90,
+        timeout=scaled(90),
     )
     assert repeated.returncode != 0
     assert "FileExistsError" in repeated.stderr

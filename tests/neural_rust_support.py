@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import loop_timing_witness
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.neural_checker_image import ImageCheckerExecutor
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import build_neural_run_report, load_neural_run
@@ -68,7 +69,7 @@ def consumer() -> Path:
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=1200,
+        timeout=scaled(1200),
         check=True,
     )
     for line in result.stdout.splitlines():
@@ -191,7 +192,7 @@ def rust_outcome(
         capture_output=True,
         text=True,
         env=environment,
-        timeout=600,
+        timeout=scaled(600),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

@@ -18,6 +18,7 @@ import pytest
 from amp_build_toolchain import compiler_identity, executable_path, runtime_libraries
 from amp_tool_runtime import elf_interpreter, library_identities
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 
@@ -147,7 +148,9 @@ def test_disappearing_actual_loaded_library(tmp_path: Path) -> None:
     owned = tmp_path / "original-loader"
     owned.write_bytes(interpreter.read_bytes())
     owned.chmod(0o700)
-    listing = subprocess.check_output([str(owned), "--list", str(compiler)], text=True, timeout=10)
+    listing = subprocess.check_output(
+        [str(owned), "--list", str(compiler)], text=True, timeout=scaled(10)
+    )
     assert str(owned) in listing
     owned.unlink()
     with pytest.raises(ValueError, match="available absolute library"):

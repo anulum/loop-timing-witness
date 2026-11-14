@@ -19,6 +19,8 @@ from typing import Any
 
 from analyze_run import main
 
+from loop_timing_witness.host_profile import scaled
+
 MakeRtlRun = Callable[[], tuple[Path, dict[str, Any]]]
 RunTool = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -222,7 +224,7 @@ def test_module_command_reports_real_jitter(make_rtl_run: MakeRtlRun, tmp_path: 
         ],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 0, result.stderr

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 import loop_timing_witness as package
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import NeuralRunInputs
@@ -78,7 +79,7 @@ def _command(path: Path, output: Path) -> subprocess.CompletedProcess[str]:
         [str(command), str(path), "--output-dir", str(output)],
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=scaled(20),
         check=False,
     )
 

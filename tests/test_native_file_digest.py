@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 import pytest
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -49,7 +51,7 @@ def test_actual_artifact_digests(native_run: Path, tmp_path: Path, padding: int)
         [str(native_run), str(config), str(events), str(raw), "--metadata", str(metadata)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -99,7 +101,7 @@ def test_configuration_hash_refusal(native_run: Path, tmp_path: Path, kind: str)
         [str(native_run), str(config), str(events), str(raw), "--metadata", str(metadata)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 1
@@ -134,7 +136,7 @@ def test_unavailable_sha256_provider(native_run: Path, tmp_path: Path) -> None:
         [str(native_run), str(config), str(events), str(raw), "--metadata", str(metadata)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
         env=environment,
     )
@@ -168,7 +170,7 @@ def test_actual_kernel_read_error(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     assert result.stderr.strip() == "cannot read native artifact bytes"

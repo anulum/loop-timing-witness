@@ -15,6 +15,7 @@ import subprocess
 import pytest
 
 from conftest import REPOSITORY_ROOT, RunRtl
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.mark.parametrize("limit", [1, 2, 3, 7])
@@ -41,7 +42,7 @@ def test_strict_deadline_limit(limit: int, run_rtl: RunRtl) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert lint.returncode == 0, lint.stdout + lint.stderr
     assert lint.stderr == ""

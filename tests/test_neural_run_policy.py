@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 from neural_operator_support import adopt_operator_descriptors, image_binding
 
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.neural_checker_image import ImageCheckerExecutor
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_manifest import load_neural_manifest
@@ -432,7 +433,7 @@ else:
         env={**os.environ, IMAGE_ROOT_VARIABLE: _IMAGE},
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=scaled(20),
         check=False,
     )
     assert result.returncode == 0, result.stderr

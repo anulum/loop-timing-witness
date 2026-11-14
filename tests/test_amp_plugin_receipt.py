@@ -23,6 +23,7 @@ from test_write_amp_plugin_manifest import original_plugin, owned_plugin
 from write_amp_plugin_manifest import write_plugin_manifest
 
 from loop_timing_witness.amp_plugin_receipt import decode_plugin_receipt
+from loop_timing_witness.host_profile import scaled
 from manifest_io import canonical_json_bytes, sha256_of_file
 
 __all__ = ["original_plugin", "owned_plugin"]
@@ -139,7 +140,7 @@ def test_actual_build_drift_refused(admitted_build: Path, fault: str) -> None:
             cwd=root,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=scaled(30),
             check=False,
         )
         assert result.returncode == 0, result.stderr

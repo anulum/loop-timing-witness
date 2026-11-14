@@ -22,6 +22,8 @@ import pytest
 from capture_native_simulation import CaptureOptions, capture_simulation
 from test_native_run import configuration
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -126,7 +128,7 @@ def test_native_summary_write_failure(tmp_path: Path) -> None:
     output = tmp_path / "capture"
     with ThreadPoolExecutor(max_workers=1) as executor:
         capture = executor.submit(capture_simulation, config, output, 0)
-        limit = time.monotonic() + 30
+        limit = time.monotonic() + scaled(30)
         while (
             not (output / "build.log").exists() and not capture.done() and time.monotonic() < limit
         ):
@@ -134,7 +136,7 @@ def test_native_summary_write_failure(tmp_path: Path) -> None:
         assert (output / "build.log").exists(), "actual source snapshot did not reach compilation"
         (output / "native.log").symlink_to("/dev/full")
         with pytest.raises(subprocess.CalledProcessError):
-            capture.result(timeout=120)
+            capture.result(timeout=scaled(120))
     metadata = json.loads((output / "native_metadata.json").read_text())
     assert metadata["result"]["samples"] == 32
     assert metadata["result"]["overflow"] == 0

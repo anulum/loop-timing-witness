@@ -20,6 +20,8 @@ import pytest
 from amp_elf import admit_elf
 from device_tree_resources import Region
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -73,7 +75,7 @@ def linked_image(tmp_path: Path) -> bytes:
         ],
         capture_output=True,
         check=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     return image.read_bytes()
 

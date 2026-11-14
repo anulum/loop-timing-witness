@@ -19,6 +19,7 @@ import pytest
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 __all__ = ["native_run"]
 
@@ -56,7 +57,7 @@ def policy_program() -> Path:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return program
@@ -102,7 +103,11 @@ def test_actual_policy_api(policy_program: Path, scenario: str) -> None:
     scheduler = os.sched_getscheduler(0)
     priority = os.sched_getparam(0).sched_priority
     result = subprocess.run(
-        [str(policy_program), scenario], capture_output=True, text=True, check=False, timeout=5
+        [str(policy_program), scenario],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(5),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified {scenario}\n"
@@ -141,7 +146,7 @@ def test_inherited_batch_metadata(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stderr == ""

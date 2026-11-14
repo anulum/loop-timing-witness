@@ -23,6 +23,7 @@ from capture_amp_simulation import main as capture_main
 from run_manifest import load_run
 from test_capture_amp_simulation import ROOT, capture_arguments
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import canonical_json_bytes, sha256_of_file
 
 __all__ = ["capture_arguments"]
@@ -386,7 +387,7 @@ def test_public_reanalysis_refuses_rehashed_plugin_source(actual_capture: Path, 
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 1
@@ -455,7 +456,7 @@ def test_public_reanalysis_refuses_incomplete_compiler_metadata(
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 1

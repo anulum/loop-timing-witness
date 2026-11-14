@@ -20,6 +20,8 @@ from pathlib import Path
 import pytest
 from neural_operator_support import adopt_operator_descriptors, measure_package_copy
 
+from loop_timing_witness.host_profile import scaled
+
 _ROOT = Path(__file__).resolve().parents[1]
 _ASSETS = (
     "neural-selected-source-contract.json",
@@ -71,7 +73,7 @@ def _analysis(package_root: Path, manifest: Path, output: Path) -> subprocess.Co
         capture_output=True,
         text=True,
         check=False,
-        timeout=20,
+        timeout=scaled(20),
     )
 
 

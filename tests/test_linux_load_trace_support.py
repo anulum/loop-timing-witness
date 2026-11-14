@@ -19,6 +19,8 @@ from pathlib import Path
 
 from linux_load_trace_support import trace_command
 
+from loop_timing_witness.host_profile import scaled
+
 
 def test_tracer_exit_ends_unobserved_owned_child(tmp_path: Path) -> None:
     """End the actual unknown tracee and close its inherited pipes on tracer death.
@@ -34,7 +36,7 @@ def test_tracer_exit_ends_unobserved_owned_child(tmp_path: Path) -> None:
         tmp_path / "unobserved-child.strace",
     ) as trace:
         assert trace.process.stdout is not None
-        assert select.select([trace.process.stdout], [], [], 5)[0]
+        assert select.select([trace.process.stdout], [], [], scaled(5))[0]
         child = int(trace.process.stdout.readline())
         assert child in map(
             int,
@@ -47,8 +49,8 @@ def test_tracer_exit_ends_unobserved_owned_child(tmp_path: Path) -> None:
             assert list(trace.descriptors) == [trace.process.pid]
             assert not select.select([descriptor], [], [], 0)[0]
             signal.pidfd_send_signal(trace.descriptors[trace.process.pid], signal.SIGKILL)
-            assert select.select([descriptor], [], [], 5)[0]
-            assert trace.process.wait(timeout=5) == -signal.SIGKILL
+            assert select.select([descriptor], [], [], scaled(5))[0]
+            assert trace.process.wait(timeout=scaled(5)) == -signal.SIGKILL
         finally:
             with suppress(ProcessLookupError):
                 signal.pidfd_send_signal(descriptor, signal.SIGKILL)

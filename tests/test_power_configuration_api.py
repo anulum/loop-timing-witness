@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +60,7 @@ def power_api_program() -> Path:
         str(program),
     ]
     result = subprocess.run(
-        command, cwd=directory, capture_output=True, text=True, check=False, timeout=30
+        command, cwd=directory, capture_output=True, text=True, check=False, timeout=scaled(30)
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return program
@@ -121,7 +122,7 @@ def test_typed_power_refusal(power_api_program: Path, tmp_path: Path, scenario: 
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified {scenario}\n"

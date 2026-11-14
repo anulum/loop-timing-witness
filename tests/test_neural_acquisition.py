@@ -29,6 +29,7 @@ from neural_acquisition_support import (
 )
 from neural_rust_support import assert_command_in_both, assert_report_in_both
 
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.neural_checker_trace import _OPEN, checker_opened_files
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import (
@@ -216,7 +217,7 @@ def test_a_real_checker_trace_names_the_same_files_in_another_process(tmp_path: 
             env=environment,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=scaled(300),
             check=False,
         )
         assert child.returncode == 0, child.stderr

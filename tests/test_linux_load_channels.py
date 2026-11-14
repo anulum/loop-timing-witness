@@ -20,6 +20,7 @@ import pytest
 from linux_load_channels import worker_channels
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 def test_actual_pipe_transfer_and_stop() -> None:
@@ -41,7 +42,7 @@ def test_actual_pipe_transfer_and_stop() -> None:
         assert channels.child_input.read(len(b"owner command")) == b"owner command"
         channels.child_output.write(b"worker readiness\n")
         channels.child_output.flush()
-        assert select.select([channels.readiness], [], [], 1)[0]
+        assert select.select([channels.readiness], [], [], scaled(1))[0]
         assert channels.readiness.readline() == b"worker readiness\n"
         channels.stop()
         channels.stop()
@@ -57,7 +58,7 @@ def test_actual_early_child_end_release() -> None:
         descriptors = [channels.child_input.fileno(), channels.child_output.fileno()]
         channels.release_child_ends()
         channels.release_child_ends()
-        assert select.select([channels.readiness], [], [], 1)[0]
+        assert select.select([channels.readiness], [], [], scaled(1))[0]
         assert channels.readiness.read() == b""
         for descriptor in descriptors:
             with pytest.raises(OSError, match="Bad file descriptor"):
@@ -145,7 +146,7 @@ print('actual second-pipe allocation failure cleaned up')
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip() == "actual second-pipe allocation failure cleaned up"

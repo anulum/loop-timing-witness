@@ -22,6 +22,8 @@ import pytest
 from amp_image_options import verification_arguments
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled, scaled_seconds
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -64,7 +66,7 @@ def _run(command: list[str], log: Path, timeout: int) -> None:
     log
         Exclusive diagnostic path for the command.
     timeout
-        Bounded host wall-clock seconds.
+        Wall-clock hang guard in seconds on the reference profile.
     """
     with log.open("xb") as stream:
         result = subprocess.run(
@@ -72,7 +74,7 @@ def _run(command: list[str], log: Path, timeout: int) -> None:
             cwd=ROOT,
             stdout=stream,
             stderr=subprocess.STDOUT,
-            timeout=timeout,
+            timeout=scaled(timeout),
             check=False,
         )
     assert result.returncode == 0, log.read_text(encoding="utf-8")
@@ -193,7 +195,7 @@ def test_public_c_rust_capture_parity(
                 "--time-limit",
                 "100000000",
                 "--timeout",
-                "60",
+                str(scaled_seconds(60)),
             ],
             parity_assets.directory / f"{backend}-{plant}.log",
             90,

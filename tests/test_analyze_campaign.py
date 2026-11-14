@@ -21,6 +21,7 @@ import pytest
 
 from loop_timing_witness import build_campaign_report, load_campaign
 from loop_timing_witness.analyze_campaign import main
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from conftest import MakeRepeatCampaign
@@ -46,7 +47,7 @@ def _command(*arguments: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
-        timeout=120,
+        timeout=scaled(120),
     )
 
 

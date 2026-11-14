@@ -17,6 +17,8 @@ from pathlib import Path
 import pytest
 from test_amp_image_flow import compile_tree, prepared_image
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["compile_tree", "prepared_image"]
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -49,7 +51,7 @@ def test_firmware_refuses_changed_verifier_package(prepared_image: Path, relativ
         ["make", "-C", str(prepared_image), "verify"],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     assert result.returncode != 0

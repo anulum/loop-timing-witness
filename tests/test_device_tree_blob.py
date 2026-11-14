@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 import pytest
 from device_tree_blob import decode_device_tree
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -62,7 +64,7 @@ def compiled_tree(tmp_path: Path) -> bytes:
         [compiler, "-I", "dts", "-O", "dtb", "-o", str(output), str(source)],
         check=True,
         capture_output=True,
-        timeout=10,
+        timeout=scaled(10),
     )
     return output.read_bytes()
 

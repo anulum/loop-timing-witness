@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -56,7 +58,7 @@ def _run(tmp_path: Path, body: str, *roots: Path) -> tuple[subprocess.CompletedP
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     path = work / "checker-observation.json"

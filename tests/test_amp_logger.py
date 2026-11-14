@@ -29,6 +29,7 @@ from event_stream import decode_events
 from test_amp_spike_command import REQUEST
 from test_native_run_output import OUTPUT_LIMIT_COMMAND
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -205,7 +206,9 @@ def test_actual_target_mailbox_admission(
         paths=SpikePaths(image, output),
     )
     (output / "command.json").write_text(json.dumps(argv, indent=2), encoding="ascii")
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr, encoding="ascii")
     if finding:
         assert result.returncode != 0
@@ -273,7 +276,7 @@ def test_actual_amp_output_failure(
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     (output / "spike.log").write_text(result.stdout + result.stderr, encoding="ascii")

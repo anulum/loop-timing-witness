@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 import pytest
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -35,7 +37,7 @@ def wait_for_events(process: subprocess.Popen[str], events: Path) -> None:
     events
         Exclusive event output created by that controller.
     """
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + scaled(5)
     while not events.exists():
         assert time.monotonic() < deadline, "native controller did not create its event output"
         assert process.poll() is None, "native controller exited before creating its event output"
@@ -87,7 +89,7 @@ def test_configuration_changed_during_run(native_run: Path, tmp_path: Path, muta
             config.rename(saved)
             config.symlink_to(saved)
         os.kill(process.pid, signal.SIGCONT)
-        stdout, stderr = process.communicate(timeout=10)
+        stdout, stderr = process.communicate(timeout=scaled(10))
         assert process.returncode == 1
         assert stdout == ""
         expected = (
@@ -103,4 +105,4 @@ def test_configuration_changed_during_run(native_run: Path, tmp_path: Path, muta
     finally:
         process.send_signal(signal.SIGCONT)
         process.kill()
-        process.communicate(timeout=5)
+        process.communicate(timeout=scaled(5))

@@ -15,6 +15,8 @@ import signal
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     import subprocess
 
@@ -54,20 +56,20 @@ def retain_process(process: subprocess.Popen[bytes] | subprocess.Popen[str]) -> 
     OSError
         If the kernel descriptor cannot be acquired, after ending the child.
     subprocess.TimeoutExpired
-        If failure cleanup exceeds the existing five-second wait limit.
+        If failure cleanup exceeds the host-scaled five-second wait limit.
     """
     try:
         return os.pidfd_open(process.pid)
     except OSError:
         process.kill()
-        process.wait(timeout=5)
+        process.wait(timeout=scaled(5))
         raise
 
 
 def finish_process(
     process: subprocess.Popen[bytes] | subprocess.Popen[str], descriptor: int
 ) -> None:
-    """End and reap the owned process within five seconds and release its pidfd.
+    """End and reap the owned process within the host-scaled five seconds and release its pidfd.
 
     Parameters
     ----------
@@ -81,10 +83,10 @@ def finish_process(
     OSError
         If signalling or releasing the actual descriptor fails.
     subprocess.TimeoutExpired
-        If the actual process cannot be reaped within the existing five-second bound.
+        If the actual process cannot be reaped within the host-scaled five-second bound.
     """
     try:
         stop_pidfd(descriptor)
-        process.wait(timeout=5)
+        process.wait(timeout=scaled(5))
     finally:
         os.close(descriptor)

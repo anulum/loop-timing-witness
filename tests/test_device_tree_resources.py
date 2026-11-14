@@ -19,6 +19,8 @@ import pytest
 from device_tree_blob import DeviceTree, decode_device_tree
 from device_tree_resources import Region, property_cells, register_regions
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -81,7 +83,7 @@ def compile_tree(tmp_path: Path) -> CompileTree:
             [compiler, "-I", "dts", "-O", "dtb", "-o", str(binary), str(source_path)],
             capture_output=True,
             check=True,
-            timeout=10,
+            timeout=scaled(10),
         )
         return decode_device_tree(binary.read_bytes())
 

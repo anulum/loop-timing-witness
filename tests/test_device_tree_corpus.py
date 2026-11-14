@@ -49,6 +49,7 @@ from loop_timing_witness.device_tree_blob import DeviceTree, decode_device_tree
 from loop_timing_witness.device_tree_interrupts import PlicSelection, bind_plic
 from loop_timing_witness.device_tree_properties import phandle_nodes, single_cell, string_list
 from loop_timing_witness.device_tree_resources import register_regions
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -374,12 +375,14 @@ def _compile(source: str, directory: Path, *, force: bool) -> bytes:
     text, blob = directory / "tree.dts", directory / "tree.dtb"
     text.write_text(source, encoding="utf-8")
     command = [compiler, "-q", "-I", "dts", "-O", "dtb", "-o", str(blob), str(text)]
-    plain = subprocess.run(command, capture_output=True, check=False, timeout=60)
+    plain = subprocess.run(command, capture_output=True, check=False, timeout=scaled(60))
     if not force:
         assert plain.returncode == 0, plain.stderr.decode(errors="replace")
         return blob.read_bytes()
     assert plain.returncode != 0, "a forced source must be one that dtc refuses"
-    subprocess.run([*command[:2], "-f", *command[2:]], capture_output=True, check=True, timeout=60)
+    subprocess.run(
+        [*command[:2], "-f", *command[2:]], capture_output=True, check=True, timeout=scaled(60)
+    )
     return blob.read_bytes()
 
 

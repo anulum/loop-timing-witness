@@ -25,6 +25,7 @@ from linux_load_trace_support import trace_command
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from typing import Any
@@ -58,7 +59,7 @@ def test_actual_policy_readback_mismatch(tmp_path: Path) -> None:
         "sched_getscheduler:delay_enter=2s:when=1",
         tmp_path / "policy.strace",
     ) as trace:
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + scaled(10)
         observed = False
         while not observed and time.monotonic() < deadline:
             trace.observe()
@@ -78,7 +79,7 @@ def test_actual_policy_readback_mismatch(tmp_path: Path) -> None:
         assert b"linux_load_worker.py" in Path(f"/proc/{worker}/cmdline").read_bytes()
         os.sched_setscheduler(worker, os.SCHED_BATCH, os.sched_param(0))
         assert os.sched_getscheduler(worker) == os.SCHED_BATCH
-        stdout, stderr = trace.process.communicate(timeout=10)
+        stdout, stderr = trace.process.communicate(timeout=scaled(10))
         assert trace.process.returncode == 1, stdout + stderr
         assert stdout == ""
         assert "load worker policy differs from request" in stderr
@@ -154,7 +155,7 @@ def test_actual_completed_receipt_corruption(native_run: Path, tmp_path: Path, f
             expected = "load collection does not cover native execution"
         receipt_file.write_bytes(altered)
         assert hashlib.sha256(original).digest() != hashlib.sha256(altered).digest()
-        stdout, stderr = trace.process.communicate(timeout=12)
+        stdout, stderr = trace.process.communicate(timeout=scaled(12))
         assert trace.process.returncode == 1, stdout + stderr
         assert stdout.startswith("simulation_only ")
         assert expected in stderr
@@ -172,7 +173,7 @@ def _wait_for_receipt(trace: OwnedTrace, receipt_file: Path) -> tuple[bytes, dic
     trace
         Exclusively owned tracer and descendant pidfds.
     receipt_file
-        Actual worker completion file to observe for at most thirty seconds.
+        Actual worker completion file to observe for at most the host-scaled thirty seconds.
 
     Returns
     -------
@@ -180,7 +181,7 @@ def _wait_for_receipt(trace: OwnedTrace, receipt_file: Path) -> tuple[bytes, dic
         Original producer bytes and their decoded receipt.
     """
     # Both Python processes initialize subprocess coverage before producing a receipt.
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + scaled(30)
     receipt: dict[str, Any] | None = None
     original = b""
     while receipt is None and time.monotonic() < deadline:

@@ -20,6 +20,7 @@ import pytest
 from test_controller_parity import DEFAULT
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module", params=[0, 1])
@@ -50,7 +51,7 @@ def native_run(request: pytest.FixtureRequest) -> Path:
         capture_output=True,
         text=True,
         check=False,
-        timeout=90,
+        timeout=scaled(90),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return directory / "run_simulation"
@@ -127,7 +128,7 @@ def test_real_native_run(
         [str(native_run), str(config), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -150,7 +151,7 @@ def test_real_native_run(
         [str(native_run), str(config), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert refused.returncode == 1
@@ -224,7 +225,7 @@ def check_native_commands(
             input=payload,
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=scaled(5),
             check=False,
         )
         assert result.returncode == 0, result.stderr
@@ -263,7 +264,7 @@ def test_invalid_configuration(native_run: Path, invalid: str, tmp_path: Path) -
         [str(native_run), str(config), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1
@@ -294,7 +295,7 @@ def test_configuration_integer_overflow_has_an_authored_refusal(
         [str(native_run), str(config), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1
@@ -323,7 +324,7 @@ def test_configuration_preserves_explicit_positive_signs(native_run: Path, tmp_p
         [str(native_run), str(config), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 0
@@ -355,7 +356,7 @@ def test_run_timer_overflow(native_run: Path, tmp_path: Path) -> None:
         [str(native_run), str(config), str(events), str(tracking)],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

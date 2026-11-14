@@ -21,6 +21,7 @@ from native_simulation_manifest import write_native_manifest
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -100,12 +101,12 @@ def test_bound_completion(
         ],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     version = subprocess.run(
-        ["verilator", "--version"], check=True, text=True, capture_output=True, timeout=10
+        ["verilator", "--version"], check=True, text=True, capture_output=True, timeout=scaled(10)
     ).stdout.strip()
     path = write_native_manifest(
         tmp_path, "2026-09-27T00:00:00Z", [program, config, metadata], version

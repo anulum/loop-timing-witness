@@ -26,6 +26,7 @@ from amp_spike_command import SpikePaths, SpikeTools, spike_command
 from device_tree_blob import decode_device_tree
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 if TYPE_CHECKING:
@@ -436,7 +437,13 @@ def test_public_logger_api(
     (output / "command.json").write_text(json.dumps(argv, indent=2))
     (output / "api_mode.json").write_text(json.dumps({"mode": mode}))
     result = subprocess.run(
-        argv, cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False
+        argv,
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=scaled(30),
+        check=False,
     )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     if finding:

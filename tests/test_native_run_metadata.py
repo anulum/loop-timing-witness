@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from test_native_run import configuration, native_run
 from test_native_run_output import OUTPUT_LIMIT_COMMAND, limited_profile_environment
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -51,7 +53,7 @@ def test_metadata_write_failure(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert "cannot write native metadata" in result.stderr
@@ -81,7 +83,7 @@ def test_existing_metadata_preserved(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert "cannot create exclusive native metadata" in result.stderr

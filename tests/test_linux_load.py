@@ -26,6 +26,7 @@ from process_lifetime_support import finish_process, retain_process, stop_pidfd
 from test_native_run import configuration, native_run
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled, scaled_seconds
 
 __all__ = ["native_run"]
 
@@ -72,7 +73,7 @@ def test_actual_profiles(native_run: Path, tmp_path: Path, profile: str) -> None
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.startswith("simulation_only ")
@@ -147,7 +148,7 @@ def test_native_failure_retained(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 1
     assert json.loads(journal.read_bytes())["native_returncode"] == 1
@@ -183,7 +184,7 @@ def test_actual_owned_failure(native_run: Path, tmp_path: Path, failure: str) ->
         "--workspace",
         str(tmp_path / "worker"),
         "--timeout",
-        "1" if failure != "worker_exit" else "10",
+        "1" if failure != "worker_exit" else str(scaled_seconds(10)),
         "--",
         str(native_run.resolve()),
         str(config),
@@ -195,7 +196,7 @@ def test_actual_owned_failure(native_run: Path, tmp_path: Path, failure: str) ->
     ) as process:
         # Coverage initializes each Python child before the launcher creates workers.
         # This bounds observation only; the actual native lifetime remains unchanged.
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + scaled(30)
         children: list[int] = []
         while len(children) < 2 and process.poll() is None and time.monotonic() < deadline:
             children = [
@@ -221,7 +222,7 @@ def test_actual_owned_failure(native_run: Path, tmp_path: Path, failure: str) ->
                 )
             finally:
                 os.close(descriptor)
-        stdout, stderr = process.communicate(timeout=15)
+        stdout, stderr = process.communicate(timeout=scaled(15))
         assert process.returncode == 1, stdout + stderr
         assert ("worker exited" if failure == "worker_exit" else "timed out") in stderr
     assert not (tmp_path / "load.json").exists()
@@ -267,7 +268,7 @@ def test_actual_readiness_failure(native_run: Path, tmp_path: Path, failure: str
         parent_descriptor = retain_process(process)
         resources.callback(finish_process, process, parent_descriptor)
         # Allow subprocess coverage startup before observing the real worker.
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + scaled(30)
         workers: list[int] = []
         while not workers and process.poll() is None and time.monotonic() < deadline:
             children = Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()
@@ -286,7 +287,7 @@ def test_actual_readiness_failure(native_run: Path, tmp_path: Path, failure: str
         if failure == "identity":
             with Path(f"/proc/{workers[0]}/fd/1").open("wb", buffering=0) as pipe:
                 pipe.write((json.dumps({"ready": True, "pid": workers[0] + 1}) + "\n").encode())
-        stdout, stderr = process.communicate(timeout=20)
+        stdout, stderr = process.communicate(timeout=scaled(20))
         assert process.returncode == 1, stdout + stderr
         assert ("timed out" if failure == "timeout" else "readiness differs") in stderr
         assert not (tmp_path / "load.json").exists()

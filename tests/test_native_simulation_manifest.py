@@ -19,6 +19,8 @@ import pytest
 from native_simulation_manifest import convert_tracking, native_metadata, write_native_manifest
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -54,7 +56,7 @@ def native_capture(native_run: Path, tmp_path: Path) -> Path:
         ],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -161,7 +163,7 @@ def test_configuration_receipt_refusal(native_capture: Path, field: str) -> None
     receipt[field] = "0" * 64 if field == "sha256" else receipt["bytes"] + 1
     metadata_path.write_text(json.dumps(facts), encoding="utf-8")
     version = subprocess.run(
-        ["verilator", "--version"], capture_output=True, text=True, timeout=10, check=True
+        ["verilator", "--version"], capture_output=True, text=True, timeout=scaled(10), check=True
     ).stdout.strip()
     with pytest.raises(ValueError, match="native configuration digest is absent"):
         write_native_manifest(

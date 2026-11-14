@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 from test_native_run import configuration, native_run
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["native_run"]
 
 
@@ -66,7 +68,7 @@ def test_summary_write_failure(native_run: Path, tmp_path: Path) -> None:
             stderr=subprocess.PIPE,
             text=True,
             check=False,
-            timeout=10,
+            timeout=scaled(10),
         )
     assert result.returncode == 1
     assert "cannot write run summary" in result.stderr
@@ -93,7 +95,7 @@ def test_existing_tracking_preserved(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     assert "exclusive tracking" in result.stderr
@@ -133,7 +135,7 @@ def test_header_write_refusal(native_run: Path, tmp_path: Path, maximum: int) ->
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert "cannot write tracking header" in result.stderr
@@ -152,7 +154,7 @@ def test_usage_refusal(native_run: Path) -> None:
         Actual native entry point.
     """
     result = subprocess.run(
-        [str(native_run)], capture_output=True, text=True, check=False, timeout=5
+        [str(native_run)], capture_output=True, text=True, check=False, timeout=scaled(5)
     )
     assert result.returncode == 1
     assert "usage: run_simulation" in result.stderr
@@ -196,7 +198,7 @@ def test_runtime_write_refusal(native_run: Path, tmp_path: Path, fault: str, err
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert f"cannot write {error}" in result.stderr
@@ -233,7 +235,7 @@ def test_close_write_refusal(native_run: Path, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert "cannot finish run output" in result.stderr
@@ -263,7 +265,7 @@ def test_compiled_period_refusal_retains_only_header(native_run: Path, tmp_path:
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     assert result.stderr.strip() == "compiled register ABI, Q format or period mismatch"
@@ -314,7 +316,7 @@ def test_output_limit_literal_paths(
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 1
     assert f"cannot {finding}" in result.stderr

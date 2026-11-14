@@ -25,6 +25,8 @@ from test_amp_memory import SELECTION as MEMORY_SELECTION
 from test_amp_platform import SOURCE
 from test_device_tree_resources import CompileTree, compile_tree
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -150,7 +152,7 @@ def test_actual_compiled_mailbox_capacity(
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     if capacity == 4096:
         assert result.returncode != 0

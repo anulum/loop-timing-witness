@@ -26,6 +26,7 @@ from amp_plugin_preparation import freeze_plugin, main, verified_preparation
 from amp_tool_runtime import elf_interpreter
 from test_write_amp_plugin_manifest import original_plugin
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 __all__ = ["original_plugin"]
@@ -59,7 +60,7 @@ def prepared_plugin(original_plugin: PluginBuild, tmp_path: Path) -> PluginBuild
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     (tmp_path / "preparation.log").write_text(result.stdout + result.stderr, encoding="utf-8")
@@ -205,7 +206,7 @@ def test_public_backend_override_refused(
         env=environment,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 1
@@ -287,7 +288,7 @@ def test_public_make_preserves_existing_inputs(
     if fault == "runtime":
         command.append("AMP_VERILATOR_ROOT=" + str(original_plugin.sdk))
     result = subprocess.run(
-        command, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False
+        command, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
     )
     assert result.returncode != 0
     finding = (
@@ -321,7 +322,7 @@ def test_real_loaded_library_drift(
     """
     frontend = Path(compiler_identity("gcc", "cc1")["programs"]["cc1"]["path"])
     listing = subprocess.check_output(
-        [str(elf_interpreter(frontend)), "--list", str(frontend)], text=True, timeout=10
+        [str(elf_interpreter(frontend)), "--list", str(frontend)], text=True, timeout=scaled(10)
     )
     record = next(line for line in listing.splitlines() if "=>" in line)
     name, target = record.split("=>", 1)
@@ -345,7 +346,7 @@ def test_real_loaded_library_drift(
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     (tmp_path / "library-preparation.log").write_text(

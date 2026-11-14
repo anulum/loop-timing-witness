@@ -23,6 +23,8 @@ from device_tree_blob import decode_device_tree
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST, SOURCE
 
+from loop_timing_witness.host_profile import scaled
+
 ROOT = Path(__file__).resolve().parents[1]
 ARGUMENT = "Witness device arguments must be unsigned decimal integers"
 CONTRACT = "Witness device simulation contract outside bounds"
@@ -114,7 +116,9 @@ def test_native_plugin_refusal(
         fields[field] = value
     argv[index] = "--device=witness_axi," + ",".join(fields)
     (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode != 0
     assert finding in result.stderr
@@ -166,7 +170,9 @@ def test_actual_selected_small_ram(tmp_path: Path, plugin_environment: str) -> N
     )
     assert "-m2147483648:1048576" in argv
     (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     assert '"samples":10,"events":40,"misses":0,"overflow":0,"safe":false' in result.stdout
@@ -203,7 +209,9 @@ def test_actual_original_device_tree(tmp_path: Path, plugin_environment: str) ->
     )
     argv.insert(-1, "--dump-dts")
     (tmp_path / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (tmp_path / "device-tree.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     compiler = shutil.which("dtc")
@@ -262,7 +270,9 @@ def test_native_synthetic_overload_refused(tmp_path: Path, plugin_environment: s
     fields[6] = str(configuration)
     argv[index] = ",".join(fields)
     (tmp_path / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (tmp_path / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode != 0
     assert "AMP overload must execute actual target instructions" in result.stderr
@@ -335,7 +345,9 @@ def test_actual_native_topology_refusal(
     )
     argv = ["--dtb=" + str(dtb) if text.startswith("--dtb=") else text for text in argv]
     (tmp_path / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (tmp_path / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode != 0
     assert finding in result.stderr
@@ -377,7 +389,7 @@ def test_actual_completion_output_refusal(tmp_path: Path, plugin_environment: st
             stdout=refused_output,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=30,
+            timeout=scaled(30),
             check=False,
         )
     (tmp_path / "spike.log").write_text(result.stderr)
@@ -420,7 +432,11 @@ def test_actual_native_safe_completion(tmp_path: Path, plugin_environment: str) 
         REQUEST,
     )
     build = subprocess.run(
-        ["make", "-C", str(image), "-j2"], capture_output=True, text=True, timeout=60, check=False
+        ["make", "-C", str(image), "-j2"],
+        capture_output=True,
+        text=True,
+        timeout=scaled(60),
+        check=False,
     )
     (tmp_path / "build.log").write_text(build.stdout + build.stderr)
     assert build.returncode == 0, build.stdout + build.stderr
@@ -438,7 +454,9 @@ def test_actual_native_safe_completion(tmp_path: Path, plugin_environment: str) 
         paths=SpikePaths(image, output),
     )
     (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     completion = json.loads(

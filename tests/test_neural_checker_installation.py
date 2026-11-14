@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 from neural_operator_support import measure_package_copy
 
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.neural_checker_installation import (
     CheckerInstalledFile,
     NeuralCheckerInstallation,
@@ -160,7 +161,7 @@ def test_public_installation_constructor_bounds_actual_worker_sources(
     )
     command = [sys.executable, "-B", "-c", program, str(installed.parent)]
     baseline = subprocess.run(
-        command, input=payload, capture_output=True, text=True, timeout=20, check=False
+        command, input=payload, capture_output=True, text=True, timeout=scaled(20), check=False
     )
     assert baseline.returncode == 0, baseline.stderr
     assert baseline.stdout == "installation verified\n"
@@ -169,7 +170,7 @@ def test_public_installation_constructor_bounds_actual_worker_sources(
     raw = target.read_bytes()
     target.write_bytes(raw + b" " * (1048577 - len(raw)))
     refused = subprocess.run(
-        command, input=payload, capture_output=True, text=True, timeout=20, check=False
+        command, input=payload, capture_output=True, text=True, timeout=scaled(20), check=False
     )
     assert refused.returncode == 1
     assert refused.stdout == ""
@@ -310,7 +311,7 @@ def test_installed_file_allocation_requires_a_finite_exact_integer(
         capture_output=True,
         text=True,
         check=False,
-        timeout=20,
+        timeout=scaled(20),
     )
     assert result.returncode == 0
     assert "exceeds its allocation" in result.stdout
@@ -425,7 +426,7 @@ def test_excessive_worker_source_refuses_installation(
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 0, result.stderr

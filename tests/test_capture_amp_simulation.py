@@ -27,6 +27,8 @@ from capture_amp_simulation import capture_amp
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled, scaled_seconds
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -71,7 +73,7 @@ def capture_arguments(tmp_path: Path) -> list[str]:
         "--time-limit",
         "100000000",
         "--timeout",
-        "60",
+        str(scaled_seconds(60)),
     ]
 
 
@@ -88,7 +90,7 @@ def test_actual_public_capture(capture_arguments: list[str]) -> None:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=75,
+        timeout=scaled(75),
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -146,7 +148,7 @@ def test_public_failure_retains_evidence(capture_arguments: list[str], fault: st
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=75,
+        timeout=scaled(75),
         check=False,
     )
     assert result.returncode == 1
@@ -177,7 +179,7 @@ def _copy_runtime_library(executable: Path, directory: Path, environment: dict[s
         Actual copied library observed by the simulator identity and drift checks.
     """
     listing = subprocess.check_output(
-        [str(elf_interpreter(executable)), "--list", str(executable)], text=True, timeout=10
+        [str(elf_interpreter(executable)), "--list", str(executable)], text=True, timeout=scaled(10)
     )
     record = next(line for line in listing.splitlines() if "=>" in line)
     name, source = record.split("=>", 1)
@@ -241,7 +243,7 @@ def test_live_input_mutation_or_stall_refused(capture_arguments: list[str], faul
         text=True,
         start_new_session=True,
     ) as process:
-        deadline = time.monotonic() + 75
+        deadline = time.monotonic() + scaled(75)
         try:
             while (
                 not (output / "spike.log").exists()
@@ -271,8 +273,8 @@ def test_live_input_mutation_or_stall_refused(capture_arguments: list[str], faul
         finally:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGKILL)
-                process.wait(timeout=10)
-        stdout, stderr = process.communicate(timeout=10)
+                process.wait(timeout=scaled(10))
+        stdout, stderr = process.communicate(timeout=scaled(10))
     if fault == "watchdog":
         assert process.returncode == -signal.SIGKILL
         assert not (output / "capture.json").exists()
@@ -309,7 +311,7 @@ def test_parked_image_refused(capture_arguments: list[str]) -> None:
         env=environment,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=scaled(60),
         check=False,
     )
     assert build.returncode == 0, build.stderr + build.stdout

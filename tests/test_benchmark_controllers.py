@@ -24,6 +24,7 @@ from benchmark_batches import decode_batch
 from benchmark_controllers import BINARIES, SOURCES
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from conftest import RunTool
@@ -43,11 +44,15 @@ def native_batches() -> list[str]:
         cwd=REPOSITORY_ROOT,
         check=True,
         capture_output=True,
-        timeout=90,
+        timeout=scaled(90),
     )
     return [
         subprocess.run(
-            [str(REPOSITORY_ROOT / binary)], check=True, capture_output=True, text=True, timeout=30
+            [str(REPOSITORY_ROOT / binary)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=scaled(30),
         ).stdout
         for binary in (
             "build/controller_benchmark",
@@ -205,7 +210,7 @@ def frozen_checkout(native_batches: list[str], tmp_path: Path) -> Path:
         ["git", "clone", "--shared", "--no-checkout", str(REPOSITORY_ROOT), str(root)],
         check=True,
         capture_output=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     for relative in (*SOURCES, *BINARIES.values()):
         destination = root / relative
@@ -243,7 +248,7 @@ def test_actual_checksum_mismatch(frozen_checkout: Path, tmp_path: Path, run_too
         cwd=frozen_checkout,
         check=True,
         capture_output=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     output = tmp_path / "mismatch.json"
     result = run_tool(
@@ -292,7 +297,7 @@ def test_actual_source_change(frozen_checkout: Path, tmp_path: Path) -> None:
     with subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     ) as run:
-        limit = time.monotonic() + 10
+        limit = time.monotonic() + scaled(10)
         children = Path(f"/proc/{run.pid}/task/{run.pid}/children")
         while not children.read_text().strip():
             assert run.poll() is None
@@ -300,7 +305,7 @@ def test_actual_source_change(frozen_checkout: Path, tmp_path: Path) -> None:
             time.sleep(0.001)
         source = frozen_checkout / "controllers/c/witness_controller.h"
         source.write_bytes(source.read_bytes() + b"\n")
-        _, stderr = run.communicate(timeout=30)
+        _, stderr = run.communicate(timeout=scaled(30))
     assert run.returncode == 1
     assert "changed during measurement" in stderr
     assert not output.exists()

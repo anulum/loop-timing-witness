@@ -25,6 +25,7 @@ from check_commit_trailers import SUPERLATIVE
 from check_dependency_licences import locked_pins
 from check_provenance_headers import BRAND_ASSET_DIGESTS, EXEMPT_PATHS
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 from manifest_io import load_json_object, sha256_of_file
 from preflight import ACTIONLINT_MODULE, GITLEAKS_MODULE, TYPOS_VERSION
 from repository_files import candidate_files
@@ -393,7 +394,7 @@ def test_public_wording_guard_rejects_an_actual_bad_readme(tmp_path: Path) -> No
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "AssertionError" in result.stdout

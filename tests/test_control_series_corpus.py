@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.event_stream import Event
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.manifest_io import load_json_object
 from loop_timing_witness.run_series import count, energy_per_cycle, measurement, tracking_error
 from loop_timing_witness.tracking_observations import observed_tracking_error
@@ -766,7 +767,7 @@ def test_series_corpus_is_the_same_without_the_c_decimal_module() -> None:
         env=environment,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=scaled(300),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

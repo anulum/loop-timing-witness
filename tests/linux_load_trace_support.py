@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -87,7 +89,7 @@ class OwnedTrace:
             for descriptor in reversed(list(self.descriptors.values())):
                 with suppress(ProcessLookupError):
                     signal.pidfd_send_signal(descriptor, signal.SIGKILL)
-            self.process.communicate(timeout=5)
+            self.process.communicate(timeout=scaled(5))
         finally:
             for descriptor in self.descriptors.values():
                 os.close(descriptor)

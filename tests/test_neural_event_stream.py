@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError, decode_neural_channel
 
 CaptureStreams = Callable[[int, int, int, int, int], tuple[bytes, bytes, bytes]]
@@ -69,14 +70,14 @@ def capture_streams(tmp_path: Path) -> CaptureStreams:
             capture_output=True,
             text=True,
             check=True,
-            timeout=30,
+            timeout=scaled(30),
         )
         result = subprocess.run(
             ["vvp", str(binary), f"+EVENT_DIRECTORY={directory}"],
             capture_output=True,
             text=True,
             check=False,
-            timeout=30,
+            timeout=scaled(30),
         )
         assert result.returncode == 0, result.stdout + result.stderr
         assert "SHARED_CAPTURE_PASS reset_pass=1" in result.stdout

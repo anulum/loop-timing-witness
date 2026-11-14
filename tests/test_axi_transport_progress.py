@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 import pytest
 from test_axi_simulator import simulator
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["simulator"]
 
 if TYPE_CHECKING:
@@ -50,7 +52,12 @@ def test_aperture_response_progress(simulator: Path, tmp_path: Path, state: str)
     payload = "\n".join(requests) + "\n"
     (tmp_path / "requests.txt").write_text(payload, encoding="utf-8")
     result = subprocess.run(
-        [str(simulator)], input=payload, capture_output=True, text=True, check=False, timeout=10
+        [str(simulator)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(10),
     )
     (tmp_path / "responses.txt").write_text(result.stdout, encoding="utf-8")
     assert result.returncode == 0, result.stderr

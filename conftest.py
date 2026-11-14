@@ -27,6 +27,8 @@ from typing import Any
 
 import pytest
 
+from loop_timing_witness.host_profile import scaled
+
 pytest_plugins = ("controller_test_support",)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent
@@ -377,14 +379,14 @@ def run_rtl(tmp_path: Path) -> RunRtl:
             check=True,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=scaled(30),
         )
         return subprocess.run(
             ["vvp", str(simulation), *arguments],
             check=False,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=scaled(60),
         )
 
     return run

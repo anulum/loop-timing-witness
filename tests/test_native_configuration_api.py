@@ -18,6 +18,8 @@ import pytest
 from test_native_lifecycle_api import lifecycle_program
 from test_native_run import configuration
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -65,7 +67,7 @@ def test_configuration_api_refusal(lifecycle_program: Path, tmp_path: Path, scen
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified config_{scenario}\n"

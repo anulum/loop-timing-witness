@@ -17,6 +17,7 @@ import pytest
 from test_native_run import configuration
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module")
@@ -34,7 +35,7 @@ def native_uio() -> Path:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
+        timeout=scaled(30),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return REPOSITORY_ROOT / "build/run_uio"
@@ -73,7 +74,7 @@ def test_unavailable_uio_run(native_uio: Path, tmp_path: Path, fault: str) -> No
         capture_output=True,
         text=True,
         check=False,
-        timeout=5,
+        timeout=scaled(5),
     )
     assert result.returncode == 1
     expected = "cannot read sysfs attribute" if fault == "none" else "simulation-only"

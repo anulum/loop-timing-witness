@@ -17,6 +17,8 @@ import pytest
 from test_native_run import configuration, native_run
 from test_native_uio_run import native_uio
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -53,7 +55,7 @@ def test_incomplete_power_options(native_uio: Path, tmp_path: Path, option: str)
         ],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1
@@ -90,7 +92,7 @@ def test_simulation_refuses_physical_power(native_run: Path, tmp_path: Path) -> 
         ],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1
@@ -126,7 +128,7 @@ def test_power_requires_metadata(native_uio: Path, tmp_path: Path) -> None:
         ],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

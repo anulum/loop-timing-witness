@@ -21,6 +21,7 @@ from amp_image_options import verification_arguments
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled, scaled_seconds
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,7 +81,7 @@ def panic_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
-            timeout=120,
+            timeout=scaled(120),
         )
     return image
 
@@ -125,11 +126,11 @@ def test_public_target_rust_panic_refuses_before_first_sample(
         "--time-limit",
         "100000000",
         "--timeout",
-        "60",
+        str(scaled_seconds(60)),
     ]
     (tmp_path / "command.txt").write_text("\n".join(command) + "\n", encoding="utf-8")
     result = subprocess.run(
-        command, cwd=ROOT, capture_output=True, text=True, timeout=75, check=False
+        command, cwd=ROOT, capture_output=True, text=True, timeout=scaled(75), check=False
     )
     (tmp_path / "cli.log").write_text(result.stdout + result.stderr, encoding="utf-8")
     assert result.returncode == 1, result.stdout + result.stderr

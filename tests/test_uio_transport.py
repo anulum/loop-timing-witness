@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +33,7 @@ def uio_transport() -> Path:
         cwd=REPOSITORY_ROOT,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=scaled(30),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -69,7 +70,7 @@ def test_invalid_uio_request(uio_transport: Path, arguments: list[str]) -> None:
         input="R 124\n",
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1
@@ -92,7 +93,7 @@ def test_missing_real_uio_device(uio_transport: Path) -> None:
         input="R 124\n",
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

@@ -18,6 +18,8 @@ import pytest
 from test_native_run import configuration
 from test_native_uio_run import native_uio
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["native_uio"]
 
 
@@ -70,7 +72,7 @@ def test_actual_iio_refusal(native_uio: Path, tmp_path: Path, kernel: str) -> No
         ],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=scaled(5),
         check=False,
     )
     assert result.returncode == 1

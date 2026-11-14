@@ -28,6 +28,7 @@ from neural_rust_support import consumer
 
 from loop_timing_witness.analyze_run import build_report, events_block
 from loop_timing_witness.event_stream import Event, decode_events
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.run_manifest import load_run
 
 HANG_GUARD_SECONDS = 600
@@ -174,7 +175,7 @@ def python_outcome_under(
         capture_output=True,
         text=True,
         env=environment,
-        timeout=HANG_GUARD_SECONDS,
+        timeout=scaled(HANG_GUARD_SECONDS),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -230,7 +231,7 @@ def rust_outcome(
         capture_output=True,
         text=True,
         env=environment,
-        timeout=HANG_GUARD_SECONDS,
+        timeout=scaled(HANG_GUARD_SECONDS),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -307,7 +308,7 @@ def python_command(
         text=True,
         cwd=cwd,
         env=environment,
-        timeout=HANG_GUARD_SECONDS,
+        timeout=scaled(HANG_GUARD_SECONDS),
         check=False,
     )
     return {"status": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
@@ -405,7 +406,7 @@ def _consumer_command(
         text=True,
         cwd=cwd,
         env=environment,
-        timeout=HANG_GUARD_SECONDS,
+        timeout=scaled(HANG_GUARD_SECONDS),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr

@@ -19,6 +19,8 @@ from test_amp_uio_run import RESOURCE, amp_uio_program
 from test_native_run import configuration
 from test_native_uio_run import native_uio
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["amp_uio_program", "native_uio"]
 
 
@@ -95,7 +97,9 @@ def test_authored_and_unexpected_native_refusals(
             str(journal),
         ]
     )
-    result = subprocess.run(arguments, capture_output=True, text=True, check=False, timeout=10)
+    result = subprocess.run(
+        arguments, capture_output=True, text=True, check=False, timeout=scaled(10)
+    )
     assert result.returncode == 1
     assert result.stdout == ""
     messages = {

@@ -22,6 +22,7 @@ from test_native_lifecycle_api import lifecycle_program
 from test_native_run import configuration
 
 from conftest import REPOSITORY_ROOT
+from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,7 +54,7 @@ def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenari
         capture_output=True,
         text=True,
         check=False,
-        timeout=10,
+        timeout=scaled(10),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"verified metadata_{scenario}\n"

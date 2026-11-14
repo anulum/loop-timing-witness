@@ -20,6 +20,8 @@ import pytest
 from test_native_run import configuration, native_run
 from test_native_uio_run import native_uio
 
+from loop_timing_witness.host_profile import scaled
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -61,7 +63,7 @@ def test_actual_policy(native_run: Path, tmp_path: Path, policy: str) -> None:
         ],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -111,7 +113,7 @@ def test_refused_policy(native_run: Path, tmp_path: Path, options: list[str]) ->
         [str(native_run), str(config), str(events), str(raw), *options],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 1
@@ -152,7 +154,7 @@ def test_fifo_permissions(native_run: Path, tmp_path: Path) -> None:
         ],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     if result.returncode == 0:
@@ -200,7 +202,7 @@ def test_uio_policy_refusal(native_uio: Path, tmp_path: Path, options: list[str]
         ],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode == 1

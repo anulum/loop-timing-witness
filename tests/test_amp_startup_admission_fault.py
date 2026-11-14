@@ -24,6 +24,8 @@ from device_tree_blob import decode_device_tree
 from test_amp_logger import FLAGS
 from test_amp_spike_command import REQUEST
 
+from loop_timing_witness.host_profile import scaled
+
 ROOT = Path(__file__).resolve().parents[1]
 __all__ = ["startup_admission_fault_plugin"]
 
@@ -75,7 +77,13 @@ def test_actual_firmware_startup_admission_short_circuit(
     environment = os.environ.copy()
     environment["WITNESS_STARTUP_ADMISSION_FAULT"] = fault
     result = subprocess.run(
-        argv, cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False
+        argv,
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=scaled(30),
+        check=False,
     )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     if fault == "submit-blocked":
@@ -133,7 +141,9 @@ def test_actual_zero_iteration_overload_skips_target_loop(
         plic_path=REQUEST.plic.path,
         paths=SpikePaths(image, output),
     )
-    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
+    )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'WITNESS_AMP_COMPLETION {"samples":10,"events":41' in result.stdout
@@ -211,7 +221,13 @@ def test_actual_main_refuses_hart_changed_after_entry(
     environment = os.environ.copy()
     environment["WITNESS_STARTUP_ADMISSION_FAULT"] = "hart-range"
     result = subprocess.run(
-        argv, cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False
+        argv,
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=scaled(30),
+        check=False,
     )
     (output / "spike.log").write_text(result.stdout + result.stderr)
     assert result.returncode != 0

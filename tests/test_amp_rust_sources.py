@@ -22,6 +22,7 @@ from amp_rust_dependencies import rust_dependency_hashes
 from amp_rust_vectors import ADAPTER, CORE
 
 from loop_timing_witness.amp_rust_receipt import validate_rust_preparation_snapshot
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +47,7 @@ def compiled_sources(tmp_path_factory: pytest.TempPathFactory) -> Path:
     for phase in ["compile_commands"]:
         for index, argv in enumerate(record[phase]):
             result = subprocess.run(
-                argv, cwd=directory, capture_output=True, timeout=60, check=False
+                argv, cwd=directory, capture_output=True, timeout=scaled(60), check=False
             )
             (directory / f"{phase}_{index}.log").write_bytes(result.stdout + result.stderr)
             assert result.returncode == 0, result.stderr

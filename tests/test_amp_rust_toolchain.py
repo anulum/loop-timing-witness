@@ -21,6 +21,7 @@ from amp_build_toolchain import rust_program_query
 from amp_rust_build import prepare_rust_sources
 from amp_rust_toolchain import TARGET, rust_toolchain
 
+from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 if TYPE_CHECKING:
@@ -127,7 +128,7 @@ def owned_rustup(
         [rustup, "toolchain", "link", "witness-actual", str(toolchain)],
         check=True,
         capture_output=True,
-        timeout=30,
+        timeout=scaled(30),
     )
     proxy = shutil.which("rustc")
     assert proxy is not None
@@ -249,7 +250,7 @@ def watch_owned_archive(output: Path, archive: Path) -> Iterator[threading.Event
         yield mutated
     finally:
         stopped.set()
-        watcher.join(timeout=2)
+        watcher.join(timeout=scaled(2))
     assert not watcher.is_alive()
 
 

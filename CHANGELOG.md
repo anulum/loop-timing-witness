@@ -131,6 +131,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Test hang guards follow the executing host: each is written for the reference profile and is
+  multiplied by the timeout scale a host declares in `WITNESS_HOST_TIMEOUT_SCALE`, which the new
+  `loop_timing_witness.host_profile` module reads and validates. Without a declared scale every
+  guard keeps its value.
 - Raw tracking cells accept leading zeros at any length and refuse a magnitude longer than any
   column's bound as outside its ABI bounds, instead of failing with the interpreter's integer
   string conversion limit text past 4300 digits.

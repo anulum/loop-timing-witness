@@ -19,6 +19,8 @@ import pytest
 from capture_amp_simulation import main as capture_main
 from test_capture_amp_simulation import ROOT, capture_arguments
 
+from loop_timing_witness.host_profile import scaled
+
 __all__ = ["capture_arguments"]
 
 
@@ -51,7 +53,7 @@ def test_public_plugin_build_and_capture(capture_arguments: list[str], thermal: 
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=scaled(120),
         check=False,
     )
     (image.parent / "plugin-build.log").write_text(result.stdout + result.stderr, encoding="utf-8")
@@ -102,7 +104,7 @@ def test_missing_original_sdk_refused(tmp_path: Path, fault: str) -> None:
         cwd=ROOT,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=scaled(10),
         check=False,
     )
     assert result.returncode != 0

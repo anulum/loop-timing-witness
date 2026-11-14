@@ -24,6 +24,7 @@ use crate::amp_observations::{fault_schedule, tracking_csv};
 use crate::amp_run_input::{AmpRun, read_amp_run};
 use crate::control_analysis::full_control;
 use crate::control_events::Event;
+use crate::control_manifest::Failure;
 use crate::control_number::Num;
 use crate::control_paths::pure;
 use crate::control_receipts::python_equal;
@@ -46,10 +47,13 @@ const COEFFICIENT_NAMES: [&str; 11] = [
     "integral_max",
 ];
 
-/// The text the command prints for a read error or a refusal alike.
-fn printed(failure: AmpFailure) -> String {
+/// A capture's read error or refusal as the report's failure: Python's
+/// `OSError` stays a read error, which a campaign does not take for a refused
+/// repeat.
+fn classified(failure: AmpFailure) -> Failure {
     match failure {
-        AmpFailure::Os(text) | AmpFailure::Refused(text) => text,
+        AmpFailure::Os(text) => Failure::Os(text),
+        AmpFailure::Refused(text) => Failure::Refused(text),
     }
 }
 
@@ -95,12 +99,12 @@ fn declared(
     files: &BTreeMap<String, Vec<u8>>,
     directory: &Path,
     admitted: &Admitted<'_>,
-) -> Result<bool, String> {
+) -> Result<bool, Failure> {
     let (capture, completion, run) = (admitted.capture, admitted.completion, admitted.run);
     let (name, coefficients) = controller(&run);
     let tracking = || {
-        let raw = file_bytes(&pure(&directory.join("tracking_raw.csv"))).map_err(printed)?;
-        tracking_csv(&raw, run.cycles, completion.samples)
+        let raw = file_bytes(&pure(&directory.join("tracking_raw.csv"))).map_err(classified)?;
+        tracking_csv(&raw, run.cycles, completion.samples).map_err(Failure::Refused)
     };
     let same = |value: &Value, expected: &Value| python_equal(value, expected);
     let captured = &capture["files"];
@@ -160,12 +164,12 @@ pub(crate) fn attach_amp_completion(
     directory: &Path,
     events: &[Event],
     report: &mut Map<String, Value>,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
     let Some(content) = files.get("amp_capture") else {
         return Ok(());
     };
-    let capture = admitted_capture(directory, content).map_err(printed)?;
-    let read = |name: &str| file_bytes(&pure(&directory.join(name))).map_err(printed);
+    let capture = admitted_capture(directory, content).map_err(classified)?;
+    let read = |name: &str| file_bytes(&pure(&directory.join(name))).map_err(classified);
     let completion = completion_receipt(&read("spike.log")?)?;
     let configuration = read("image/configuration.txt")?;
     let run = read_amp_run(&configuration)?;
@@ -176,10 +180,14 @@ pub(crate) fn attach_amp_completion(
         run,
     };
     if !declared(manifest, files, directory, &admitted)? {
-        return Err("AMP capture configuration does not match the run declaration".to_owned());
+        return Err(Failure::Refused(
+            "AMP capture configuration does not match the run declaration".to_owned(),
+        ));
     }
     if !counters_agree(manifest, contracts, events, &completion, &run)? {
-        return Err("AMP completion counters do not match captured events".to_owned());
+        return Err(Failure::Refused(
+            "AMP completion counters do not match captured events".to_owned(),
+        ));
     }
     report.insert("amp_completion".to_owned(), capture["completion"].clone());
     report["input_sha256"]["amp_capture"] = manifest["amp_capture"]["sha256"].clone();

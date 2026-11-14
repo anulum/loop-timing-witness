@@ -736,9 +736,10 @@ stays a refused repeat, while a bound file that cannot be read refuses the
 whole campaign, as Python's `OSError` does. The configuration every loaded
 repeat must share is compared with Python's equality, exact between integers
 and floats of either sign. Counts, minima, maxima and the fewest analysed
-cycles keep Python's integer or float type. A campaign whose repeat binds an
-AMP capture is refused by the native command; AMP campaigns are analysed by the
-Python command.
+cycles keep Python's integer or float type. A repeat that binds an AMP capture
+is analysed as a single AMP run is: a refused capture refuses the repeat, and a
+captured artifact that cannot be read while its report is built refuses the
+whole campaign with Python's `OSError` text.
 
 Every run-bound JSON document is decoded with three limits that both analyses
 share: arrays and objects nest at most 64 deep, checked before decoding;

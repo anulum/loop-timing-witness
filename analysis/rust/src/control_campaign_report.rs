@@ -20,8 +20,9 @@
 
 use crate::control_analysis::{JITTER_METHOD, Row, distribution};
 use crate::control_campaign::{Campaign, Repeat, configuration};
+use crate::control_manifest::Failure;
 use crate::control_number::{Num, python_number};
-use crate::control_report::{AMP_UNSUPPORTED, build_report};
+use crate::control_report::build_report;
 use serde_json::{Map, Value, json};
 use std::cmp::Ordering;
 
@@ -51,8 +52,9 @@ struct Analysed {
     rows: Vec<Row>,
 }
 
-/// Analyse one repeat with the per-run report and summarise its outcome.
-fn analyse_repeat(repeat: &Repeat) -> (Map<String, Value>, Option<Analysed>) {
+/// A repeat's campaign entry before its report: refused, with the loader's
+/// refusal and no measurements.
+fn refused_entry(repeat: &Repeat) -> Map<String, Value> {
     let mut entry = Map::new();
     entry.insert("repeat_index".to_owned(), repeat.index.clone());
     entry.insert("run_manifest_sha256".to_owned(), json!(repeat.sha256));
@@ -76,16 +78,26 @@ fn analyse_repeat(repeat: &Repeat) -> (Map<String, Value>, Option<Analysed>) {
     ] {
         entry.insert(name.to_owned(), Value::Null);
     }
+    entry
+}
+
+/// Analyse one repeat with the per-run report and summarise its outcome.
+///
+/// A refused report refuses the repeat; an artifact that cannot be read while
+/// the report is built refuses the campaign, as Python's `OSError` does.
+fn analyse_repeat(repeat: &Repeat) -> Result<(Map<String, Value>, Option<Analysed>), String> {
+    let mut entry = refused_entry(repeat);
     let Some(run) = &repeat.run else {
-        return (entry, None);
+        return Ok((entry, None));
     };
     let (report, rows) = match build_report(&run.manifest, &run.domain, &run.files, &run.directory)
     {
         Ok(analysed) => analysed,
-        Err(refusal) => {
+        Err(Failure::Refused(refusal)) => {
             entry.insert("refusal".to_owned(), json!(refusal));
-            return (entry, None);
+            return Ok((entry, None));
         }
+        Err(Failure::Os(text)) => return Err(text),
     };
     let events = &report["events"];
     let status = if report["valid"] == true {
@@ -102,7 +114,7 @@ fn analyse_repeat(repeat: &Repeat) -> (Map<String, Value>, Option<Analysed>) {
     for name in ["duration_ticks", "intervals", "jitter", "control"] {
         entry.insert(name.to_owned(), events[name].clone());
     }
-    (entry, Some(Analysed { report, rows }))
+    Ok((entry, Some(Analysed { report, rows })))
 }
 
 /// The pooled jitter summary of one periodic interval.
@@ -351,16 +363,10 @@ pub(crate) fn build_campaign_report(campaign: &Campaign) -> Result<Value, String
         .iter()
         .filter_map(|repeat| repeat.run.as_ref())
         .collect();
-    if loaded
-        .iter()
-        .any(|run| run.files.contains_key("amp_capture"))
-    {
-        return Err(AMP_UNSUPPORTED.to_owned());
-    }
     let mut entries = Vec::new();
     let mut analysed = Vec::new();
     for repeat in &campaign.repeats {
-        let (entry, result) = analyse_repeat(repeat);
+        let (entry, result) = analyse_repeat(repeat)?;
         let valid = entry["status"] == "valid";
         entries.push(entry);
         if let Some(result) = result {

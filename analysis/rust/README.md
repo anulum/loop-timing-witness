@@ -35,8 +35,9 @@ loop-timing-witness-campaign-native campaign.json --output-dir new-report
 It returns status 0 for a published complete campaign, 2 for a published
 incomplete campaign after printing each nonconformity, and 1 with the Python
 command's diagnostic when the campaign is refused or its report cannot be
-written. A campaign whose repeat binds an AMP capture is refused; the Python
-command analyses AMP campaigns.
+written. A repeat that binds an AMP capture is analysed as a single AMP run is:
+a refused capture refuses the repeat, and a captured artifact that cannot be read
+refuses the whole campaign, as Python's `OSError` does.
 
 The output directory must be new and have an existing parent. Publication is
 atomic and refuses to replace an existing file, directory or symlink.

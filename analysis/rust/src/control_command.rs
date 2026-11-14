@@ -18,7 +18,7 @@
 //! analysed and published.
 
 use crate::control_json::decode_dispatch_object;
-use crate::control_manifest::load;
+use crate::control_manifest::{Failure, load};
 use crate::control_outputs::report_files;
 use crate::control_publication::publish_report_directory;
 use crate::control_report::build_report;
@@ -94,6 +94,7 @@ pub(crate) fn dispatch(path: &Path) -> Result<Dispatch, String> {
 /// Load, analyse and publish one CONTROL or COMPUTE run, as Python's command does.
 pub(crate) fn analyze_control(manifest: &Path, output: &Path, raw: &[u8]) -> Result<(), String> {
     let run = load(manifest, Some(raw))?;
-    let (report, rows) = build_report(&run.manifest, &run.domain, &run.files, &run.directory)?;
+    let (report, rows) = build_report(&run.manifest, &run.domain, &run.files, &run.directory)
+        .map_err(Failure::text)?;
     publish_report_directory(output, &report_files(&report, &rows))
 }

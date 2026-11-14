@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP repeat campaigns: the native campaign command no longer refuses a campaign whose
+  repeats bind AMP captures. Each repeat's report attaches the capture as a single run does; a
+  refused capture refuses the repeat and an artifact that cannot be read refuses the campaign, as
+  Python's `OSError` does. A parity test on campaigns of real Spike captures holds both commands to
+  the same output.
 - Native AMP run analysis: the native report completes a run that binds an AMP capture as the
   Python report does, admitting the capture and every artifact it binds and holding the run
   declaration and the logger's counters to them, with Python's refusal texts and read errors. A

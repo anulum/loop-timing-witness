@@ -673,10 +673,10 @@ def test_publication_refusals_are_identical(
     assert rust == {**python, "stderr": python["stderr"].replace(*OUTPUTS)}
 
 
-def test_a_campaign_with_an_amp_capture_is_refused_by_the_native_command(
+def test_a_campaign_whose_repeats_bind_invalid_captures_runs_alike(
     make_repeat_campaign: MakeRepeatCampaign, tmp_path: Path
 ) -> None:
-    """Refuse a campaign whose repeat binds an AMP capture, which only Python completes.
+    """Refuse each repeat whose AMP capture is not a receipt, in both commands alike.
 
     Parameters
     ----------
@@ -701,11 +701,8 @@ def test_a_campaign_with_an_amp_capture_is_refused_by_the_native_command(
 
     for index in (1, 2):
         _edit_run(path, document, index, amp)
-    rust = rust_campaign_command([str(path), "--output-dir", "report"], tmp_path, tmp_path / "rs")
-    assert rust == {
-        "status": 1,
-        "stdout": "",
-        "stderr": "repeat campaign: FAIL: AMP capture completion is not analysed by the native "
-        "analysis\n",
-    }
-    assert not (tmp_path / "report").exists()
+    outcome = _same(path, tmp_path)
+    assert outcome["status"] in {0, 2}
+    report = json.loads((tmp_path / OUTPUTS[0] / "campaign_report.json").read_bytes())
+    refusals = [entry["refusal"] for entry in report["repeats"][:2]]
+    assert all(refusal.startswith("AMP capture: ") for refusal in refusals)

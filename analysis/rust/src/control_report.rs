@@ -17,6 +17,7 @@
 use crate::amp_report_completion::attach_amp_completion;
 use crate::control_analysis::{Row, events_block, full_control, whole};
 use crate::control_events::{Event, Names, decode};
+use crate::control_manifest::Failure;
 use crate::control_number::{Num, python_number};
 use crate::control_receipts::{completion_statistics, host_load, native_metadata, python_equal};
 use crate::control_series::{energy_per_cycle, observed_tracking_error, tracking_error};
@@ -26,10 +27,6 @@ use std::path::Path;
 
 /// Report schema identifier.
 const REPORT_SCHEMA: &str = "loop-timing-witness.analysis-report.v1";
-/// The refusal of a campaign whose runs bind an AMP capture, which the native campaign does not
-/// analyse.
-pub(crate) const AMP_UNSUPPORTED: &str =
-    "AMP capture completion is not analysed by the native analysis";
 /// Hardware artefacts whose digests a board report lists.
 const HARDWARE: [&str; 4] = ["bitstream", "firmware", "linux_image", "controller_binary"];
 /// The limit stated when the event FIFO overflowed.
@@ -43,12 +40,15 @@ const HOST_LOAD_LIMIT: &str = "Host load counters cover the whole worker span, i
                                not qualify processor timing or power.";
 
 /// The report and interval rows of one validated run.
+///
+/// A refusal is [`Failure::Refused`]; an AMP artifact that cannot be read while
+/// the report is built is [`Failure::Os`], as Python raises `OSError`.
 pub(crate) fn build_report(
     manifest: &Map<String, Value>,
     domain: &Value,
     files: &BTreeMap<String, Vec<u8>>,
     directory: &Path,
-) -> Result<(Value, Vec<Row>), String> {
+) -> Result<(Value, Vec<Row>), Failure> {
     let contracts = &domain["design_contracts"];
     let names = Names::of(contracts);
     let profile = manifest["profile"]

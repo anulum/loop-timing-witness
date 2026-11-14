@@ -18,7 +18,7 @@
 
 use crate::control_analysis::events_block;
 use crate::control_events::{Names, decode};
-use crate::control_manifest::{ControlRun, load};
+use crate::control_manifest::{ControlRun, Failure, load};
 use crate::control_number::Num;
 use crate::control_report::build_report;
 use serde_json::{Map, Value};
@@ -172,15 +172,16 @@ pub fn control_events_summary(inputs: &ControlInputs) -> Result<(Value, Vec<Inte
 /// # Errors
 ///
 /// Returns the Python analysis's refusal text for events, series or receipts
-/// that contradict the run. A run that binds an AMP capture is refused: the
-/// native analysis does not yet implement AMP completion.
+/// that contradict the run, and the `OSError` text of an AMP artifact that
+/// cannot be read.
 pub fn control_run_report(inputs: &ControlInputs) -> Result<(Value, Vec<IntervalRow>), String> {
     let (report, rows) = build_report(
         inputs.manifest(),
         inputs.domain(),
         inputs.files(),
         inputs.directory(),
-    )?;
+    )
+    .map_err(Failure::text)?;
     let rows = rows
         .into_iter()
         .map(|row| IntervalRow {

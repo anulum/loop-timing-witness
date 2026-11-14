@@ -12,9 +12,43 @@ from __future__ import annotations
 
 from typing import Any
 
+from source_release import RELEASES
+
+DISPATCH_INPUT: dict[str, object] = {
+    "description": "Published source release to verify and sign",
+    "required": True,
+    "type": "choice",
+    "options": list(RELEASES),
+}
+
+
+def dispatch_findings(file: str, trigger: object) -> list[str]:
+    """Require manual dispatch with exactly the registered release choice.
+
+    Parameters
+    ----------
+    file
+        Workflow filename used in findings.
+    trigger
+        Parsed ``on`` value.
+
+    Returns
+    -------
+    list[str]
+        At most one violation.
+    """
+    if not isinstance(trigger, dict) or set(trigger) != {"workflow_dispatch"}:
+        return [f"{file}: signatures permit only explicit manual dispatch"]
+    if trigger["workflow_dispatch"] != {"inputs": {"release": DISPATCH_INPUT}}:
+        return [f"{file}: dispatch must offer exactly the registered source releases"]
+    return []
+
 
 def release_findings(file: str, workflow: dict[str, Any]) -> list[str]:
-    """Check the manually dispatched source signature workflow's job boundaries.
+    """Check the source signature workflow's dispatch input and job boundaries.
+
+    The only trigger is a manual dispatch whose single required choice input
+    offers exactly the releases registered in ``source_release.RELEASES``.
 
     Parameters
     ----------
@@ -30,9 +64,7 @@ def release_findings(file: str, workflow: dict[str, Any]) -> list[str]:
     """
     if file != "source-release-signatures.yml":
         return []
-    findings = []
-    if workflow.get("on") != {"workflow_dispatch": None}:
-        findings.append(f"{file}: signatures permit only explicit manual dispatch")
+    findings = dispatch_findings(file, workflow.get("on"))
     policies = {
         "verify": ({"contents": "read", "actions": "read"}, None, None),
         "sign": (

@@ -6,7 +6,7 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Loop Timing Witness — public digest recognition keeps credential scanning active
 
-"""Run the actual secret scanner against the frozen manifest and refused mutations."""
+"""Run the actual secret scanner against each frozen manifest and refused mutations."""
 
 from __future__ import annotations
 
@@ -21,14 +21,21 @@ from conftest import REPOSITORY_ROOT
 if TYPE_CHECKING:
     from pathlib import Path
 
+# Lines the default generic-api-key rule flags in each manifest when it is not recognised.
+FLAGGED = {
+    "0.1.0": ("controllers/rust/tests/controller_api.rs", 15),
+    "0.2.0": ("analysis/rust/src/control_api.rs", 22),
+}
 
+
+@pytest.mark.parametrize("version", list(FLAGGED))
 @pytest.mark.parametrize("case", ["original", "changed-digest", "other-path", "api-field"])
-def test_public_digest_recognition_is_exact(tmp_path: Path, case: str) -> None:
-    """Only exact public hash lines in the one frozen fixture are recognised."""
-    relative = "tests/data/source-release-v0.1.0-provenance.json"
+def test_public_digest_recognition_is_exact(tmp_path: Path, version: str, case: str) -> None:
+    """Only exact public hash lines in that release's own frozen fixture are recognised."""
+    relative = f"tests/data/source-release-v{version}-provenance.json"
     text = (REPOSITORY_ROOT / relative).read_text()
-    value = json.loads(text)
-    digest = value["source_file_sha256"]["controllers/rust/tests/controller_api.rs"]
+    source_file, flagged = FLAGGED[version]
+    digest = json.loads(text)["source_file_sha256"][source_file]
     if case == "changed-digest":
         text = text.replace(digest, digest[::-1])
     if case == "other-path":
@@ -58,5 +65,5 @@ def test_public_digest_recognition_is_exact(tmp_path: Path, case: str) -> None:
     )
     assert result.returncode == (0 if case == "original" else 1), result.stderr
     findings = json.loads(report.read_text())
-    assert len(findings) == (0 if case == "original" else 15 if case == "other-path" else 1)
+    assert len(findings) == {"original": 0, "other-path": flagged}.get(case, 1)
     assert digest not in result.stdout + result.stderr

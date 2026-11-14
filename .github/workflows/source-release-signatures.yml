@@ -10,11 +10,19 @@ name: Source release signatures
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Published source release to verify and sign
+        required: true
+        type: choice
+        options:
+          - "0.1.0"
+          - "0.2.0"
 
 permissions: {}
 
 concurrency:
-  group: source-release-signatures-v0.1.0
+  group: source-release-signatures-${{ inputs.release }}
   cancel-in-progress: false
 
 jobs:
@@ -58,20 +66,21 @@ jobs:
       - name: Reconstruct and verify the immutable source release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
           TZ: Europe/Zurich
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = anulum/loop-timing-witness
-          test "$(git rev-parse 'refs/tags/v0.1.0^{commit}')" = \
-            1d12e0342d5320f62182fef41709773f3c555b50
+          tag_commit="$(git rev-parse "refs/tags/v${RELEASE}^{commit}")"
           mkdir verified
-          gh release download v0.1.0 --repo "$GITHUB_REPOSITORY" --dir verified \
-            --pattern loop-timing-witness-0.1.0.zip --pattern release-provenance.json
-          git archive --format=zip --prefix=loop-timing-witness-0.1.0/ \
-            1d12e0342d5320f62182fef41709773f3c555b50 --output=reconstructed.zip
+          gh release download "v${RELEASE}" --repo "$GITHUB_REPOSITORY" --dir verified \
+            --pattern "loop-timing-witness-${RELEASE}.zip" --pattern release-provenance.json
+          git archive --format=zip --prefix="loop-timing-witness-${RELEASE}/" \
+            "$tag_commit" --output=reconstructed.zip
           git --version
-          sha256sum reconstructed.zip verified/loop-timing-witness-0.1.0.zip
-          python tools/source_release.py --assets verified --reconstructed reconstructed.zip \
+          sha256sum reconstructed.zip "verified/loop-timing-witness-${RELEASE}.zip"
+          python tools/source_release.py --release "$RELEASE" --tag-commit "$tag_commit" \
+            --assets verified --reconstructed reconstructed.zip \
             --workflow-revision "$GITHUB_SHA" --predicate verified/predicate.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -101,7 +110,7 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            verified/loop-timing-witness-0.1.0.zip
+            verified/loop-timing-witness-${{ inputs.release }}.zip
             verified/release-provenance.json
           predicate-type: https://github.com/anulum/loop-timing-witness/source-release-verification/v1
           predicate-path: verified/predicate.json
@@ -109,7 +118,8 @@ jobs:
       - name: Retain the portable signature bundle
         env:
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
-        run: cp "$BUNDLE_PATH" verified/source-v0.1.0.sigstore.json
+          RELEASE: ${{ inputs.release }}
+        run: cp "$BUNDLE_PATH" "verified/source-v${RELEASE}.sigstore.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-source-release
@@ -134,15 +144,16 @@ jobs:
       - name: Cryptographically verify both subjects before attaching the bundle
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
         run: |
           set -euo pipefail
-          for asset in loop-timing-witness-0.1.0.zip release-provenance.json; do
+          for asset in "loop-timing-witness-${RELEASE}.zip" release-provenance.json; do
             gh attestation verify "verified/$asset" --repo "$GITHUB_REPOSITORY" \
-              --bundle verified/source-v0.1.0.sigstore.json \
+              --bundle "verified/source-v${RELEASE}.sigstore.json" \
               --predicate-type https://github.com/anulum/loop-timing-witness/source-release-verification/v1 \
               --signer-workflow anulum/loop-timing-witness/.github/workflows/source-release-signatures.yml \
               --source-ref refs/heads/main --source-digest "$GITHUB_SHA" \
               --deny-self-hosted-runners --format json > "verified/$asset.verification.json"
           done
-          gh release upload v0.1.0 verified/source-v0.1.0.sigstore.json \
+          gh release upload "v${RELEASE}" "verified/source-v${RELEASE}.sigstore.json" \
             --repo "$GITHUB_REPOSITORY"

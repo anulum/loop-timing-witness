@@ -12,6 +12,15 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Changed
+
+- Source release signatures cover every registered release. `source-release-signatures.yml` takes
+  a required `release` choice; `tools/source_release.py` holds a frozen registry of each release's
+  source commit and published asset digests, refuses a tag that names another commit and records
+  the chosen tag in the predicate. The workflow auditor requires the choice options to equal the
+  registry. Release 0.2.0 is registered with its byte-exact provenance record and the exact
+  public digest lines the secret scanner recognises in it.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added

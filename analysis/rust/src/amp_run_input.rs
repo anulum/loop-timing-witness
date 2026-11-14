@@ -94,7 +94,7 @@ impl AmpRun {
 
 /// Python's `native_words`: the ASCII fields between runs of the C locale's
 /// whitespace, which the native stream reader skips.
-fn native_words(content: &[u8]) -> Result<Vec<&str>, String> {
+pub(crate) fn native_words(content: &[u8]) -> Result<Vec<&str>, String> {
     if !content.is_ascii() {
         return Err("AMP native configuration must be ASCII".into());
     }
@@ -130,7 +130,7 @@ fn native_integer(token: &str, minimum: i64, maximum: i64) -> Result<i64, String
 }
 
 /// A field within the unsigned 32-bit range.
-fn unsigned(token: &str) -> Result<u32, String> {
+pub(crate) fn unsigned(token: &str) -> Result<u32, String> {
     native_integer(token, 0, i64::from(u32::MAX))
         .map(|value| u32::try_from(value).expect("an admitted unsigned field"))
 }

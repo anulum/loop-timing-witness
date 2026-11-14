@@ -294,6 +294,17 @@ requires the completion's event count and the sampled cycles to agree. A
 shared corpus of the real ISA capture, changed per rule, holds both
 implementations to the same outcomes.
 
+## AMP observed tracking and fault schedules
+
+`amp_observations::tracking_csv(&content, cycles, samples)` converts a
+capture's raw tracking to the public tracking CSV as the Python module
+`amp_capture_observations` does, byte for byte: Python's `csv.writer` lines
+and each Q8.24 value as `str(Decimal(raw) / 2**24)`, plain or with an
+exponent as `Decimal` writes it. `fault_schedule(&configuration)` returns the
+configured fault in the run contract's form. A shared corpus of 1103 raw
+values, tracking tables and every run configuration of the run input corpus
+holds both implementations to the same outcomes.
+
 ## Selected installation
 
 The compiled registry admits source contract

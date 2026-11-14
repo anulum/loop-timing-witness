@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP tracking CSV and fault schedule in the Rust analysis crate: the public
+  `amp_observations` module writes a capture's observed tracking as Python's `csv.writer` and
+  `Decimal` write it, byte for byte, and reads the configured fault schedule. A corpus of raw values,
+  tracking tables and run configurations holds both implementations to the same outcomes.
 - Native AMP completion and capture stream checks in the Rust analysis crate: the public
   `amp_completion` and `amp_tracking` modules read the logger completion, decode the raw controller
   tracking and hold the completion to the captured events and tracking with the Python readers'

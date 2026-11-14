@@ -27,6 +27,8 @@ pub mod amp_image_dependencies;
 /// Receipt checks of captured AMP images against their topology and firmware.
 pub mod amp_image_receipt;
 mod amp_memory;
+/// Observed tracking CSV and fault schedules of AMP captures.
+pub mod amp_observations;
 /// Memory, device and PLIC resource binding of AMP platforms.
 pub mod amp_platform;
 /// Plugin build receipt decoding of AMP captures.

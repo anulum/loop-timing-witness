@@ -163,7 +163,10 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     crate = tomllib.loads(publishable_text("controllers/rust/Cargo.toml"))["package"]
     version = project["version"]
     assert crate["version"] == version
-    assert re.findall(r"^## \[(.+?)\]", changelog, flags=re.MULTILINE) == ["Unreleased", version]
+    headings = re.findall(r"^## \[(.+?)\]", changelog, flags=re.MULTILINE)
+    assert headings[:2] == ["Unreleased", version]
+    releases = [tuple(map(int, heading.split("."))) for heading in headings[1:]]
+    assert releases == sorted(set(releases), reverse=True)
     citation = publishable_text("CITATION.cff")
     zenodo = load_json_object(REPOSITORY_ROOT / ".zenodo.json")
     assert re.findall(r"^version: (.+)$", citation, flags=re.MULTILINE) == [version]

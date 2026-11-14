@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from conftest import MakeRtlRun
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
 PROFILE_RESOURCES = frozenset(
     {
         "neural-selected-source-contract.json",
@@ -115,7 +117,7 @@ def built_distribution(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
                 ),
                 str(rebuilt),
             ],
-            unpacked / "loop_timing_witness-0.1.0",
+            unpacked / f"loop_timing_witness-{VERSION}",
             tmp_path,
             "rebuild",
         )

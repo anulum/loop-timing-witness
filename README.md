@@ -13,7 +13,7 @@ Loop Timing Witness — README
 [![Sponsor](https://img.shields.io/badge/Sponsor-anulum-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/anulum)
 [![PyPI](https://img.shields.io/pypi/v/loop-timing-witness.svg)](https://pypi.org/project/loop-timing-witness/)
 [![crates.io](https://img.shields.io/crates/v/witness-controller.svg)](https://crates.io/crates/witness-controller)
-[![DOI](https://zenodo.org/badge/doi/10.5281%2Fzenodo.23092361.svg)](https://doi.org/10.5281/zenodo.23092361)
+[![DOI](https://zenodo.org/badge/doi/10.5281%2Fzenodo.24222960.svg)](https://doi.org/10.5281/zenodo.24222960)
 [![CI](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml)
 [![Docs](https://github.com/anulum/loop-timing-witness/actions/workflows/docs.yml/badge.svg?branch=main)](https://anulum.github.io/loop-timing-witness/)
 [![CodeQL](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml)
@@ -184,21 +184,22 @@ The IRQ-free Linux AMP logger, mailbox startup and board qualification requireme
 
 ## Python package and native interfaces
 
-The software package version is `0.1.0`. It installs the typed
+The software package version is `0.2.0`. It installs the typed
 `loop_timing_witness` API, packaged JSON schemas and the
 `loop-timing-witness-analyze` command. The package analyses existing hash-bound
 run records; native simulation, firmware preparation and hardware access remain
 separate source tools with the dependencies stated in `VALIDATION.md`.
 
-Install the published host analysis package in a Python 3.13 environment:
+Install the published host analysis package in a Python 3.15 environment:
 
 ```bash
-python -m pip install loop-timing-witness==0.1.0
+python -m pip install loop-timing-witness==0.2.0
 loop-timing-witness-analyze path/to/manifest.json --output-dir report
 ```
 
 The standalone `no_std` Rust controller is published as
-[`witness-controller`](https://crates.io/crates/witness-controller):
+[`witness-controller`](https://crates.io/crates/witness-controller); its code is unchanged in
+0.2.0, so the registry keeps version 0.1.0:
 
 ```toml
 [dependencies]
@@ -216,12 +217,12 @@ make venv
 .venv/bin/loop-timing-witness-analyze path/to/manifest.json --output-dir build/report
 ```
 
-The unreleased source analyser reports absolute adjacent-cycle latency jitter
+The analyser reports absolute adjacent-cycle latency jitter
 in JSON, summary and pair CSV files, and an SVG comparison. Counts expose missing
-pairs; warm-up and missing cycles are never bridged. This addition is separate
-from the published 0.1.0 artefact. See the [definition and outputs](docs/HOST_ANALYSIS.md#latency-jitter).
+pairs; warm-up and missing cycles are never bridged. This addition is new in 0.2.0; the 0.1.0
+artefact does not contain it. See the [definition and outputs](docs/HOST_ANALYSIS.md#latency-jitter).
 
-The unreleased report writer supports Linux with capability-checked
+The report writer supports Linux with capability-checked
 `renameat2(RENAME_NOREPLACE)` publication. A destination created during staging
 is preserved and the write fails. Other OS report publication remains unqualified;
 the pure loading and calculation API below is independent of this native binding.
@@ -283,6 +284,10 @@ The [GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/
 includes the same source ZIP and a provenance manifest with verified artifact hashes.
 Published PyPI/crates.io 0.1.0 artifacts retain their original build provenance
 and are not replaced by the later source archive.
+The [0.2.0 source archive](https://doi.org/10.5281/zenodo.24222960) is a new version of the
+same Zenodo record and binds the tagged 0.2.0 release commit; the
+[0.2.0 GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.2.0)
+includes its source ZIP and provenance manifest.
 Cite the software version and the commit you inspected. Software version numbers
 do not establish physical board qualification or measured platform performance.
 

@@ -19,8 +19,8 @@ simulation_only` and cannot be cited as a PolarFire SoC result.
 .venv/bin/python tools/analyze_run.py path/to/manifest.json --output-dir path/to/new-report
 ```
 
-The Python distribution is named `loop-timing-witness` and requires Python 3.15 or later; the
-published 0.1.0 release accepts Python 3.13.
+The Python distribution is named `loop-timing-witness` and requires Python 3.15 or later since
+0.2.0; the earlier 0.1.0 release accepts Python 3.13.
 Its installed command runs the same analysis implementation:
 
 ```bash
@@ -45,7 +45,7 @@ measurement-domain snapshot. Firmware preparation, capture execution and vendor-
 remain repository build surfaces. Local distribution verification does not establish publication
 on PyPI or qualify a board instrument.
 
-Report-directory publication in the unreleased source and its locally built Python distributions
+Report-directory publication, since 0.2.0 and in locally built Python distributions,
 is supported on Linux with an available `renameat2(RENAME_NOREPLACE)` native binding, kernel and
 target filesystem. The writer resolves this binding lazily and exercises it in a disposable
 sibling capability directory before staging report artefacts. An unavailable binding or failed
@@ -290,10 +290,10 @@ hardware gates in [`MEASUREMENT_PROTOCOL.md`](MEASUREMENT_PROTOCOL.md).
 
 ### Latency jitter
 
-The unreleased source analyser adds `events.jitter` and the method identifier
+Since 0.2.0 the analyser adds `events.jitter` and the method identifier
 `absolute_cycle_to_cycle_latency_change.v1` to the existing analysis-report v1
 summary. These derived fields do not change the event, domain or run-manifest
-input contracts. They are not present in the published Python 0.1.0 artefact.
+input contracts. The Python 0.1.0 artefact does not contain them.
 
 For each periodic interval, let `L[c]` be its same-cycle latency in fabric ticks.
 The jitter sample for adjacent analysed cycles is `abs(L[c] - L[c-1])`.

@@ -69,10 +69,10 @@ Software implementation does not qualify a board capability or advance measureme
 
 ## Planned — in implementation order, without dates
 
-Software publication already includes the Python analysis package and standalone Rust controller
-crate at version 0.1.0, plus the public Python, C/C++ and Rust API references. Subsequent source
-verification is recorded with source release 0.1.0 in [CHANGELOG.md](CHANGELOG.md); it does not alter
-those immutable registry artifacts. The [versioned source archive](https://doi.org/10.5281/zenodo.23092361)
+Software publication includes the Python analysis package at version 0.2.0 and the standalone
+Rust controller crate at version 0.1.0, plus the public Python, C/C++ and Rust API references.
+Subsequent source verification is recorded with source release 0.1.0 in
+[CHANGELOG.md](CHANGELOG.md); it does not alter those immutable registry artifacts. The [versioned source archive](https://doi.org/10.5281/zenodo.23092361)
 and [GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0)
 are published with verified hashes and explicit software-only evidence scope.
 

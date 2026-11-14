@@ -7,7 +7,7 @@
       "orcid": "0009-0009-3560-0851"
     }
   ],
-  "description": "Loop Timing Witness provides hash-bound host analysis, native C/Rust/RTL controllers and RTL/RISC-V simulation for hardware-timestamped real-time control-loop events. Physical evidence remains architecture_only: the PolarFire SoC board instrument is unqualified and no measured hardware performance result is claimed. Source release0.1.0 archives the verified repository snapshot, including subsequent documentation and verification. Immutable Python/Rust registry0.1.0 distributions were originally published from commit4cffb60f176e8fb5037770ccdaee863f6aa758c9; package implementations are unchanged and their artifact provenance is recorded separately.",
+  "description": "Loop Timing Witness provides hash-bound host analysis, native C/Rust/RTL controllers and RTL/RISC-V simulation for hardware-timestamped real-time control-loop events. Physical evidence remains architecture_only: the PolarFire SoC board instrument is unqualified and no measured hardware performance result is claimed. Source release 0.2.0 archives the tagged repository snapshot of version 0.2.0. Its Python analysis package is published on PyPI as version 0.2.0; the standalone Rust controller crate is unchanged and remains version 0.1.0 on crates.io. Version 0.1.0 of this record archives the earlier verified snapshot.",
   "keywords": [
     "real-time control",
     "latency measurement",
@@ -20,9 +20,9 @@
   "license": "AGPL-3.0-or-later",
   "title": "Loop Timing Witness",
   "upload_type": "software",
-  "version": "0.1.0",
-  "publication_date": "2026-10-01",
-  "doi": "10.5281/zenodo.23092361",
+  "version": "0.2.0",
+  "publication_date": "2026-11-14",
+  "doi": "10.5281/zenodo.24222960",
   "related_identifiers": [
     {
       "identifier": "https://github.com/anulum/loop-timing-witness",

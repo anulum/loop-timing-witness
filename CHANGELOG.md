@@ -12,6 +12,8 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-14
+
 ### Added
 
 - Native AMP repeat campaigns: the native campaign command no longer refuses a campaign whose

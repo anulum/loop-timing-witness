@@ -18,22 +18,22 @@ certifi==2026.10.23
 filelock==4.2.10
 virtualenv==21.15.6
 # Lint, format, strict typing
-ruff==0.17.4
+ruff==0.17.5
 mypy==2.4.1
-types-PyYAML==6.0.12.20261103
+types-PyYAML==6.0.12.20261113
 types-jsonschema==4.26.0.20261006
 types-defusedxml==0.7.0.20260504
 # Tests and coverage
 pytest==9.2.0
 pytest-cov==7.1.0
-coverage==7.17.2
+coverage==7.17.3
 # Safe parsing of JUnit reports for shard timing
 defusedxml==0.7.1
 # Manifest schema validation and workflow parsing
 jsonschema==4.26.0
 PyYAML==6.0.3
 # Spelling
-typos==1.52.0
+typos==1.52.2
 # Licensing, workflow security, dependency audit, software inventory
 reuse==6.3.0
 zizmor==1.32.0
@@ -44,4 +44,4 @@ cyclonedx-bom==8.0.1
 flit_core==4.2.0
 
 # Source documentation rendering; also used transitively by REUSE.
-markdown-it-py==4.2.0
+markdown-it-py==4.3.0

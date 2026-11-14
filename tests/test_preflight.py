@@ -162,7 +162,7 @@ def test_typos_gate_reports_a_misspelling_and_a_wrong_version(tmp_path: Path) ->
     (impostor / ".venv" / "bin" / "typos").symlink_to(sys.executable)
     wrong = typos_gate(impostor)
     assert not wrong.passed
-    assert wrong.detail.startswith("expected 'typos-cli 1.52.0', got")
+    assert wrong.detail.startswith("expected 'typos-cli 1.52.2', got")
 
 
 def test_secret_scan_passes_clean_files_and_fails_a_token(make_git_tree: MakeGitTree) -> None:

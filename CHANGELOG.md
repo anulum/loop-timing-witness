@@ -131,6 +131,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Development tools move to their newest releases: Ruff 0.17.5, coverage 7.17.3, typos 1.52.2,
+  markdown-it-py 4.3.0, the PyYAML typing stubs and jsonpointer 3.12. All three locks share one upload
+  cut-off, 2026-11-14T14:00Z; the runtime and build locks resolve unchanged.
 - `VALIDATION.md` names the policy limits apart from the host-derived ones: the hosted jobs'
   `timeout-minutes`, the neural checker's sandbox limits, the commands' 3600-second maximum
   `--timeout`, the fuzz target's per-input memory limit and the PyPI request's network timeout.

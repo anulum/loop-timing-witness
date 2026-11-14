@@ -61,7 +61,7 @@
     },
     "coverage": {
       "licence": "Apache-2.0",
-      "version": "7.17.2"
+      "version": "7.17.3"
     },
     "cyclonedx-bom": {
       "licence": "Apache-2.0",
@@ -113,7 +113,7 @@
     },
     "jsonpointer": {
       "licence": "BSD-3-Clause",
-      "version": "3.10"
+      "version": "3.12"
     },
     "jsonschema": {
       "licence": "MIT",
@@ -141,7 +141,7 @@
     },
     "markdown-it-py": {
       "licence": "MIT",
-      "version": "4.2.0"
+      "version": "4.3.0"
     },
     "markupsafe": {
       "licence": "BSD-3-Clause",
@@ -281,7 +281,7 @@
     },
     "ruff": {
       "licence": "MIT",
-      "version": "0.17.4"
+      "version": "0.17.5"
     },
     "setuptools": {
       "licence": "MIT",
@@ -317,7 +317,7 @@
     },
     "types-pyyaml": {
       "licence": "Apache-2.0",
-      "version": "6.0.12.20261103"
+      "version": "6.0.12.20261113"
     },
     "typing-extensions": {
       "licence": "PSF-2.0",
@@ -325,7 +325,7 @@
     },
     "typos": {
       "licence": "Apache-2.0 OR MIT",
-      "version": "1.52.0"
+      "version": "1.52.2"
     },
     "tzdata": {
       "licence": "Apache-2.0",

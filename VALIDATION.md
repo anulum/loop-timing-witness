@@ -84,7 +84,7 @@ truthfulness of the `architecture_only` state.
 - `actionlint` v1.7.12 and `gitleaks` v8.30.1 built with `go install` from their module sources; the
   preflight runner reads each binary's recorded module version and checksum with
   `go version -m` and refuses any other build.
-- `typos` 1.52.0, installed from the same lock and checked by its reported version.
+- `typos` 1.52.2, installed from the same lock and checked by its reported version.
 
 The lock is regenerated only with the command recorded in its header, followed by a licence review
 of every new or changed package in `development-dependency-licences.json`.

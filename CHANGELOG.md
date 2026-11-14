@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP run configuration reading in the Rust analysis crate: the public `amp_run_input`
+  module reads an image's native run configuration with the Python reader's separators, field
+  rules and refusal texts. A corpus of the ISA image's configuration, changed per rule, holds both
+  implementations to the same outcomes.
 - Native AMP platform binding in the Rust analysis crate: the public `amp_platform` module admits
   the firmware and telemetry reservations, the Witness device with its PLIC source and aperture,
   and the PLIC aperture from a decoded device tree, with the Python binding's refusal texts. A

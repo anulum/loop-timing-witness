@@ -25,6 +25,8 @@ pub mod amp_platform;
 pub mod amp_plugin_receipt;
 /// Plugin build receipt and source snapshot checks of AMP captures.
 pub mod amp_plugin_snapshot;
+/// Run configuration reading of AMP images.
+pub mod amp_run_input;
 /// Runtime library snapshots of AMP images and captures.
 pub mod amp_runtime_snapshot;
 /// Rust dependency record reading of AMP images built with the Rust kernel.

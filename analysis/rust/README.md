@@ -241,6 +241,17 @@ reservation. A shared corpus compiles the repository's Spike platform with the
 real `dtc`, changed per rule, and holds both implementations to the same
 platform or refusal.
 
+## AMP run configuration
+
+`amp_run_input::read_amp_run(&content)` reads an AMP image's complete native
+run configuration as the Python modules `amp_run_input` and `amp_contract` do:
+ASCII fields separated by the C locale's whitespace, as the native stream
+reader separates them; the controller, every field's whole decimal syntax and
+bound (with any count of leading zeros); a fault schedule inside the run
+without modeled latency; and the run's integer contract and controller
+invariants. A shared corpus of the ISA image's configuration, changed per
+rule, holds both implementations to the same run or refusal.
+
 ## Selected installation
 
 The compiled registry admits source contract

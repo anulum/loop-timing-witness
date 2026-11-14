@@ -118,6 +118,14 @@ Spike and the image with `make -j"$(nproc)"`. The bound of the Makefile's Yosys 
 seconds), are reference-profile values; the tests pass them scaled, and a direct `make` on another
 host can override them.
 
+Policy limits are reviewed values, not host assumptions, and the declared scale does not change
+them: each hosted workflow job's `timeout-minutes`, which `tools/audit_workflows.py` requires to be
+an integer from 1 to 360; the neural checker's sandbox, which limits its worker to 768 MiB of
+address space, 30 CPU seconds, 8 MiB per written file and no core file, within a 45-second
+wall-clock deadline (an image binding may name at most 300 seconds); the 3600-second maximum
+`--timeout` of the capture and load commands; the fuzz target's 512 MB resident memory limit per
+input; and the 15-second network timeout of the PyPI download statistics request.
+
 ## Native lifecycle profiles
 
 The lifecycle and configuration API tests compile the actual production RTL top and

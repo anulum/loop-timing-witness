@@ -131,6 +131,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `VALIDATION.md` names the policy limits apart from the host-derived ones: the hosted jobs'
+  `timeout-minutes`, the neural checker's sandbox limits, the commands' 3600-second maximum
+  `--timeout`, the fuzz target's per-input memory limit and the PyPI request's network timeout.
 - Build parallelism follows the executing host instead of two jobs: the Makefile's Verilator builds
   use `VERILATOR_JOBS` (by default `nproc`), the tests build generated image Makefiles with every usable
   processor, and the hosted workflow builds Spike and the image with `make -j"$(nproc)"`. The

@@ -18,6 +18,7 @@ import pytest
 from check_source_gates import main
 
 from conftest import REPOSITORY_ROOT
+from repository_files import candidate_files
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,7 +39,8 @@ def source_tree(make_git_tree: MakeGitTree) -> Path:
     -------
     Path
         Candidate containing the original catalogue, Python configuration,
-        each native file and original Python files in every registered scope.
+        each publishable native file and original Python files in every
+        registered scope; ignored build output beside the sources is not copied.
     """
     catalogue = (REPOSITORY_ROOT / "source-gates.toml").read_text(encoding="utf-8")
     profiles = tomllib.loads(catalogue)["profiles"]
@@ -51,9 +53,9 @@ def source_tree(make_git_tree: MakeGitTree) -> Path:
         "runtime/bare_metal/rust_kernel/Cargo.toml",
     }
     paths.update(
-        str(path.relative_to(REPOSITORY_ROOT))
-        for path in (REPOSITORY_ROOT / "analysis/rust").rglob("*")
-        if path.is_file()
+        relative
+        for relative in candidate_files(REPOSITORY_ROOT)
+        if relative.startswith("analysis/rust/")
     )
     paths.update(
         f"src/loop_timing_witness/{name}"

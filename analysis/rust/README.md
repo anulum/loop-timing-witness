@@ -24,6 +24,12 @@ cargo install --locked --path analysis/rust
 loop-timing-witness-analyze-native run.json --output-dir new-report
 ```
 
+Measured against the Python commands on a deterministic closed-loop campaign, the native run
+command was 3.5 times faster per 2·10⁵-cycle repeat and the native campaign command 13.4 times
+faster per 10⁶-cycle campaign, on a shared, non-isolated workstation. The native run command used
+about 2.1 times Python's peak memory. Method, host attribution and the hosted measurement are in
+[`HOST_ANALYSIS.md`](../../docs/HOST_ANALYSIS.md#control-run-analysis-timing).
+
 The `loop-timing-witness-campaign-native` command analyses a repeat campaign
 as the Python `loop-timing-witness-campaign` command does, and publishes a
 byte-equal campaign report directory:

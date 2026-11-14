@@ -20,6 +20,12 @@ Loop Timing Witness — changelog
   service stimulus reads and writes at declared offsets with the production C PID kernel,
   withholds one write in 97 cycles and injects one tripping delay fault. Python and native
   analyses publish byte-equal reports for these runs.
+- Control-run analysis timing: `tools/benchmark_control_runs.py` times the Python and native run
+  and campaign commands on a closed-loop campaign of five 2·10⁵-cycle repeats, pinned to one CPU.
+  It uses one warm-up and five measured passes, requires byte-identical reports in every pass, and
+  records percentiles, peak memory and provenance. The dispatched `control-run-benchmark.yml`
+  workflow regenerates the data on the fixed runner, holds them to the committed digests and
+  uploads its measurement. The local result is `benchmarks/control_run_analysis.local.json`.
 
 ### Changed
 

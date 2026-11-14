@@ -27,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from loop_timing_witness.host_profile import scaled
+from loop_timing_witness.host_profile import build_jobs, scaled
 
 pytest_plugins = ("controller_test_support",)
 
@@ -390,3 +390,79 @@ def run_rtl(tmp_path: Path) -> RunRtl:
         )
 
     return run
+
+
+@pytest.fixture(scope="session")
+def closed_loop_harness(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build the closed-loop benchmark harness once with the repository's Make target.
+
+    Parameters
+    ----------
+    tmp_path_factory
+        Session temporary directory factory.
+
+    Returns
+    -------
+    Path
+        Built harness executable in an owned directory.
+    """
+    directory = tmp_path_factory.mktemp("closed-loop-build")
+    subprocess.run(
+        [
+            "make",
+            "closed-loop-harness",
+            f"CLOSED_LOOP_DIRECTORY={directory}",
+            f"VERILATOR_JOBS={build_jobs()}",
+        ],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        timeout=scaled(900),
+    )
+    return directory / "closed_loop_harness"
+
+
+@pytest.fixture(scope="session")
+def native_analysis_commands(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build both published native analysis commands and copy them into one directory.
+
+    The executables are selected from Cargo's JSON messages, never by a build-directory path.
+
+    Parameters
+    ----------
+    tmp_path_factory
+        Session temporary directory factory.
+
+    Returns
+    -------
+    Path
+        Directory holding ``loop-timing-witness-analyze-native`` and
+        ``loop-timing-witness-campaign-native``.
+    """
+    names = ("loop-timing-witness-analyze-native", "loop-timing-witness-campaign-native")
+    result = subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--offline",
+            "--locked",
+            "--message-format=json",
+            "--manifest-path",
+            str(REPOSITORY_ROOT / "analysis/rust/Cargo.toml"),
+            *(item for name in names for item in ("--bin", name)),
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=scaled(1200),
+        check=True,
+    )
+    built = {}
+    for line in result.stdout.splitlines():
+        message = json.loads(line) if line.startswith("{") else {}
+        if message.get("reason") == "compiler-artifact" and message.get("executable"):
+            built[message["target"]["name"]] = Path(message["executable"])
+    directory = tmp_path_factory.mktemp("native-analysis")
+    for name in names:
+        shutil.copy2(built[name], directory / name)
+    return directory

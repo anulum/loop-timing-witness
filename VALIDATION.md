@@ -417,6 +417,18 @@ snapshot is not a performance measurement of the current compiler. Non-isolated 
 are local regression evidence only.
 C/Rust command checksums must agree; host wall time cannot establish fabric speedup.
 
+## Control-run analysis timing
+
+`tests/test_closed_loop_run.py` builds the closed-loop harness through `make closed-loop-harness`
+and holds a generated campaign to its declared stimulus. `tests/test_benchmark_control_runs.py`
+times both real analysis commands on such a campaign and exercises every refusal of the timing
+tool. To reproduce the recorded measurement, follow
+[`HOST_ANALYSIS.md`](docs/HOST_ANALYSIS.md#control-run-analysis-timing). The SHA-256 values of the
+generated events, tracking and stimulus files must equal those in
+[`control_run_analysis.local.json`](benchmarks/control_run_analysis.local.json). The dispatched
+`control-run-benchmark.yml` workflow checks the same equality before it measures on the hosted
+runner.
+
 ## Native Linux runtime verification
 
 `make run-simulation` compiles the in-process native controller with the actual production

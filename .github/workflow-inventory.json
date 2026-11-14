@@ -133,6 +133,15 @@
       "owner": "native comparison measurement and retained runner provenance"
     },
     {
+      "category": 7,
+      "file": "control-run-benchmark.yml",
+      "jobs": [
+        "measure"
+      ],
+      "kind": "standalone",
+      "owner": "dispatched Python and native control-run analysis timing on deterministic closed-loop data"
+    },
+    {
       "category": 10,
       "file": "publish.yml",
       "jobs": [

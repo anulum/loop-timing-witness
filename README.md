@@ -177,7 +177,7 @@ The IRQ-free Linux AMP logger, mailbox startup and board qualification requireme
 | `controllers/` | dependency-free C and Rust kernels, streaming CLIs and API documentation |
 | `runtime/rtl/` | native process transport through the actual production AXI simulation |
 | `runtime/linux/` | UIO transport, native controller and AMP logger entries, bracketed PAC1934 IIO journal; hardware qualification pending |
-| `benchmarks/` | matching native workloads and labelled local regression records |
+| `benchmarks/` | matching native workloads, the closed-loop data harness and labelled timing records |
 | `tools/` | host analysis, validators, inventory generator, repository guards and preflight runner |
 | `tests/` | command-line, file and RTL-simulation tests |
 | `.github/` | workflow definitions, workflow inventory and contribution metadata |

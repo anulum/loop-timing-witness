@@ -34,7 +34,7 @@ from control_rust_support import python_command, rust_campaign_command, rust_com
 from run_manifest import load_run
 
 from conftest import REPOSITORY_ROOT
-from loop_timing_witness.host_profile import build_jobs, scaled
+from loop_timing_witness.host_profile import scaled
 from manifest_io import canonical_json_bytes
 
 CYCLES = 200
@@ -56,33 +56,20 @@ REPLACEMENTS: dict[str, tuple[str, str | None]] = {
 
 
 @pytest.fixture(scope="module")
-def harness(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Build the harness with the repository's Make target into an owned directory.
+def harness(closed_loop_harness: Path) -> Path:
+    """Return the harness the session built through the repository's Make target.
 
     Parameters
     ----------
-    tmp_path_factory
-        Session temporary directory factory.
+    closed_loop_harness
+        Session-built harness executable.
 
     Returns
     -------
     Path
         Built harness executable.
     """
-    directory = tmp_path_factory.mktemp("closed-loop-build")
-    subprocess.run(
-        [
-            "make",
-            "closed-loop-harness",
-            f"CLOSED_LOOP_DIRECTORY={directory}",
-            f"VERILATOR_JOBS={build_jobs()}",
-        ],
-        cwd=REPOSITORY_ROOT,
-        check=True,
-        capture_output=True,
-        timeout=scaled(900),
-    )
-    return directory / "closed_loop_harness"
+    return closed_loop_harness
 
 
 @pytest.fixture(scope="module")

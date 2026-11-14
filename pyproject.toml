@@ -113,6 +113,10 @@ ignore = [
 # Closed-loop capture runs the caller-selected harness binary and the Verilator version
 # query with closed argument vectors and no shell.
 "tools/closed_loop_run.py" = ["S603", "S607"]
+# Analysis timing runs the two published analysis commands, taskset and the version and Git
+# queries with closed argument vectors and no shell.
+"tools/benchmark_control_runs.py" = ["S603", "S607"]
+"tools/timed_command.py" = ["S603", "S607"]
 # AMP execution uses an explicitly admitted absolute simulator with a closed argv, no shell.
 "tools/capture_amp_simulation.py" = ["S603"]
 # Build provenance introspects explicitly resolved actual compiler/Git/tool programs, no shell.

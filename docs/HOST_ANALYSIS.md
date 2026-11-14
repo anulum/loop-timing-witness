@@ -310,6 +310,66 @@ The [native simulation capture](#native-simulation-capture) remains the integrat
 the native runtime; it advances the AXI model every simulated nanosecond, which is too slow for
 10⁶-cycle repeats.
 
+## Control-run analysis timing
+
+[`tools/benchmark_control_runs.py`](../tools/benchmark_control_runs.py) times both published
+analysis implementations on a closed-loop campaign. The Python commands run as
+`python -m loop_timing_witness.analyze_run` and `python -m loop_timing_witness.analyze_campaign`,
+the modules behind `loop-timing-witness-analyze` and `loop-timing-witness-campaign`. The native
+commands are `loop-timing-witness-analyze-native` and `loop-timing-witness-campaign-native`.
+
+The measurement runs one warm-up pass and five measured passes:
+
+- Each pass analyses every repeat run, then the campaign, once with each backend.
+- Each child is pinned to one CPU with `taskset`.
+- The wall time runs from process creation to reaping. It includes interpreter or program
+  start-up, input verification and report publication, which is what a user of the command
+  waits for.
+- Peak resident memory and CPU time come from the child's own `wait4` record.
+- Every pass requires both backends to exit with the same status, print the same text and
+  publish byte-identical report files. A difference refuses the measurement, as does any change
+  to the producers, the native commands or the inputs.
+- Percentiles are inclusive and linearly interpolated.
+
+```bash
+make closed-loop-harness
+.venv/bin/python tools/closed_loop_run.py --output build/control-run-campaign \
+  --cycles 200000 --repeats 5 --seed 1
+cargo build --release --offline --locked --message-format=json \
+  --manifest-path analysis/rust/Cargo.toml \
+  --bin loop-timing-witness-analyze-native --bin loop-timing-witness-campaign-native
+# copy the two executables that Cargo reports into build/native-commands
+.venv/bin/python tools/benchmark_control_runs.py --campaign build/control-run-campaign/campaign.json \
+  --native build/native-commands --output build/control_run_analysis.local.json \
+  --cpu 0 --label local
+```
+
+The campaign holds five repeats of 2·10⁵ cycles, 10⁶ cycles in all. Its events, tracking and
+stimulus files are deterministic. The workstation and ML350 produced identical SHA-256 values,
+which the artefact records. The workflow
+[`control-run-benchmark.yml`](../.github/workflows/control-run-benchmark.yml) regenerates the
+campaign on the fixed hosted runner. It refuses data that differ from the committed local
+artefact, measures with `--label ci` and uploads the result with a runner receipt.
+
+Local measurement:
+
+- artefact: [`control_run_analysis.local.json`](../benchmarks/control_run_analysis.local.json),
+  base commit `ae10270`;
+- host: Intel Core i5-11600K, shared workstation, `powersave` governor, child pinned to CPU 11;
+- load average 13.3–15.6 during the run, so the evidence is non-isolated.
+
+| Command | Cycles | Backend | P50 | P95 | Mean | Peak resident memory | Native speed-up of mean |
+|---|---|---|---|---|---|---|---|
+| run | 2·10⁵ | Python | 15.29 s | 18.58 s | 15.66 s | 763 MiB | — |
+| run | 2·10⁵ | native | 4.50 s | 5.41 s | 4.53 s | 1.60 GiB | 3.5× |
+| campaign | 10⁶ | Python | 39.31 s | 44.88 s | 38.58 s | 978 MiB | — |
+| campaign | 10⁶ | native | 2.70 s | 3.38 s | 2.88 s | 397 MiB | 13.4× |
+
+The run command publishes per-cycle interval and jitter tables, 37.7 MB and 75.2 MB for one
+repeat. The native run command reaches a peak memory about 2.1 times Python's, which is a known
+limitation of its report publication. The numbers time host analysis of RTL simulation data.
+They are not controller, processor or hardware timing.
+
 ## Calculations
 
 Same-cycle event intervals are differences of captured fabric ticks. For `CONTROL`, a deadline

@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — Python and native control-run analysis timing on the fixed runner
+
+name: Control-run benchmark
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: control-run-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    name: Python and native control-run analysis on closed-loop data
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    permissions:
+      contents: read # read benchmark sources, without repository write authority
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15.2"
+      - name: Install the pinned RTL simulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes verilator=5.020-1
+          verilator --version
+      - name: Install the hashed development lock and repository package
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-build.txt
+          PYYAML_FORCE_LIBYAML=0 .venv/bin/python -m pip install --require-hashes --no-deps --no-build-isolation -r requirements-dev.txt
+          .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.100.0
+      - name: Build the closed-loop harness and both native analysis commands
+        run: |
+          make closed-loop-harness VERILATOR_JOBS="$(nproc)"
+          cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
+          cargo build --release --offline --locked --message-format=json \
+            --manifest-path analysis/rust/Cargo.toml \
+            --bin loop-timing-witness-analyze-native --bin loop-timing-witness-campaign-native \
+            > build/native-commands.json
+          mkdir -p build/native-commands
+          jq -r 'select(.reason == "compiler-artifact" and .executable != null
+            and (.target.name == "loop-timing-witness-analyze-native"
+              or .target.name == "loop-timing-witness-campaign-native")) | .executable' \
+            build/native-commands.json | xargs -I '{}' cp '{}' build/native-commands/
+          test "$(find build/native-commands -type f | wc -l)" = 2
+          find build/native-commands -type f
+      - name: Generate the deterministic closed-loop campaign
+        run: |
+          .venv/bin/python tools/closed_loop_run.py --output build/control-run-campaign \
+            --cycles 200000 --repeats 5 --seed 1
+      - name: Hold the generated data to the committed local measurement
+        run: |
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import pathlib
+
+          committed = json.loads(
+              pathlib.Path("benchmarks/control_run_analysis.local.json").read_text(encoding="utf-8")
+          )["sha256"]
+          for index in range(1, 6):
+              for name in ("events.bin", "tracking.csv", "stimulus.json"):
+                  path = pathlib.Path(f"build/control-run-campaign/repeat-{index}/{name}")
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  if digest != committed[f"repeat-{index}:{name}"]:
+                      raise SystemExit(f"generated {path} differs from the committed data")
+          print("Generated data equal the committed local measurement's data.")
+          PY
+      - name: Measure both backends and retain runner context
+        run: |
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+
+          subprocess.run(
+              [sys.executable, "tools/benchmark_control_runs.py",
+               "--campaign", "build/control-run-campaign/campaign.json",
+               "--native", "build/native-commands",
+               "--output", "build/control_run_analysis.ci.json",
+               "--cpu", str(min(os.sched_getaffinity(0))), "--label", "ci"],
+              check=True, timeout=10800,
+          )
+          keys = ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_RUN_ID",
+                  "GITHUB_RUN_ATTEMPT", "GITHUB_SHA", "GITHUB_REF",
+                  "RUNNER_OS", "RUNNER_ARCH", "RUNNER_ENVIRONMENT")
+          receipt = {key: os.environ[key] for key in keys}
+          artifact = pathlib.Path("build/control_run_analysis.ci.json").read_bytes()
+          if json.loads(artifact)["base_commit"] != receipt["GITHUB_SHA"]:
+              raise ValueError("benchmark commit differs from the hosted run")
+          receipt["artifact_sha256"] = hashlib.sha256(artifact).hexdigest()
+          pathlib.Path("build/control_run_analysis.runner.json").write_text(
+              json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8",
+          )
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: control-run-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/control_run_analysis.ci.json
+            build/control_run_analysis.runner.json
+          retention-days: 30
+          if-no-files-found: error

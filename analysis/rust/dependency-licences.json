@@ -1,7 +1,7 @@
 {
   "notices_ref": {
     "byte_length": 35341,
-    "sha256": "75500f0e2622ec2543c74788a9a93bd73f3a34e73f30c8843f6cd0b4a1340393"
+    "sha256": "4e7d4b1bf0c9e19b6efda02769b25e96987c6e628fa31687a25928b9867d3452"
   },
   "packages": {
     "bitflags@2.13.2": {
@@ -16,8 +16,8 @@
       "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600",
       "licence": "MIT"
     },
-    "const-oid@0.10.2": {
-      "checksum": "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c",
+    "const-oid@0.10.3": {
+      "checksum": "be95d4a884358a21a199689323c29e9256b4a1b315e22f183d155422041d3a9a",
       "licence": "MIT"
     },
     "cpufeatures@0.3.1": {
@@ -32,8 +32,8 @@
       "checksum": "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2",
       "licence": "MIT"
     },
-    "errno@0.3.14": {
-      "checksum": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+    "errno@0.3.15": {
+      "checksum": "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776",
       "licence": "MIT"
     },
     "hybrid-array@0.4.15": {

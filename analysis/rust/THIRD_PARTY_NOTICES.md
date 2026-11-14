@@ -110,9 +110,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## const-oid 0.10.2
+## const-oid 0.10.3
 
-Selected licence: `MIT`. Cargo archive SHA-256: `a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c`.
+Selected licence: `MIT`. Cargo archive SHA-256: `be95d4a884358a21a199689323c29e9256b4a1b315e22f183d155422041d3a9a`.
 
 ```text
 Copyright (c) 2020-2026 The RustCrypto Project Developers
@@ -239,9 +239,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## errno 0.3.14
+## errno 0.3.15
 
-Selected licence: `MIT`. Cargo archive SHA-256: `39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb`.
+Selected licence: `MIT`. Cargo archive SHA-256: `e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776`.
 
 ```text
 Copyright (c) 2014 Chris Wong

@@ -131,6 +131,8 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The analysis crate's lock moves const-oid to 0.10.3 and errno to 0.3.15; the licence record and the
+  third-party notices carry their archives, whose MIT texts are unchanged.
 - Development tools move to their newest releases: Ruff 0.17.5, coverage 7.17.3, typos 1.52.2,
   markdown-it-py 4.3.0, the PyYAML typing stubs and jsonpointer 3.12. All three locks share one upload
   cut-off, 2026-11-14T14:00Z; the runtime and build locks resolve unchanged.

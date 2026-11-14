@@ -66,7 +66,7 @@ class RunInputs:
     directory: Path | None = None
 
 
-def _load_domain(raw: bytes, source: str) -> dict[str, Any]:
+def load_domain(raw: bytes, source: str) -> dict[str, Any]:
     """Load and validate the run-bound measurement-domain contract.
 
     Parameters
@@ -331,7 +331,7 @@ def load_run(manifest_path: Path, *, manifest_bytes: bytes | None = None) -> Run
     _validate_run_schema(manifest)
     directory = manifest_path.resolve().parent
     domain_item = manifest["measurement_domain"]
-    domain = _load_domain(_read_bound_file(directory, domain_item), domain_item["path"])
+    domain = load_domain(_read_bound_file(directory, domain_item), domain_item["path"])
     _validate_run_domain(manifest, domain)
     for item in manifest["source"]["files"]:
         _verify_artifact(directory, item)

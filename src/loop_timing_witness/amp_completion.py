@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from .event_stream import decode_events
 from .manifest_io import parse_bounded_json_object
 from .native_tracking import decode_tracking
+from .run_manifest import load_domain
 
 PREFIX = b"WITNESS_AMP_COMPLETION "
 FIELDS = frozenset({"samples", "events", "misses", "overflow", "safe", "thermal"})
@@ -131,9 +132,10 @@ def validate_capture(
     Raises
     ------
     ValueError
-        If a stream is malformed, its observations disagree, or the FIFO overflowed.
+        If the measurement domain breaks its contract, a stream is malformed, its observations
+        disagree, or the FIFO overflowed.
     """
-    contracts = parse_bounded_json_object(domain, "AMP measurement domain")["design_contracts"]
+    contracts = load_domain(domain, "AMP measurement domain")["design_contracts"]
     decoded = decode_events(events, contracts, "CONTROL", cycles)
     observations = decode_tracking(tracking, cycles, completion.samples)
     observed_cycles = [row[0] for row in observations]

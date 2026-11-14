@@ -243,6 +243,9 @@ run-bound documents: nesting at most 64 deep, integers within 64 bits and no unp
 surrogate escape. The capture's `started_utc` and `completed_utc` must each be one RFC 3339
 date-time in UTC, the rule the run manifest's `started_utc` follows; no optional date-time
 validator is consulted.
+The retained measurement domain is held to the measurement-domain schema, its semantic rules
+and the 16-byte event wire layout, as a run's domain is, before its contracts decode the
+captured events.
 A capture or plugin build receipt that breaks its schema is refused with the first broken
 location in path order and an authored text, never the validator's own words:
 `AMP capture receipt <location>: does not satisfy the AMP capture schema` and

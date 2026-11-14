@@ -132,6 +132,22 @@ def test_capture_domain_outside_the_bounded_json_rules_is_refused() -> None:
         validate_capture(completion_receipt(LOG), EVENTS, TRACKING, deep, 10)
 
 
+@pytest.mark.parametrize(
+    "domain",
+    [b"{}", b'{"design_contracts": 5}', b'{"design_contracts": {"event_profiles": {}}}'],
+)
+def test_capture_domain_outside_its_contract_is_refused(domain: bytes) -> None:
+    """Refuse a retained measurement domain that breaks its schema before reading its contracts.
+
+    Parameters
+    ----------
+    domain
+        Retained domain bytes that are bounded JSON but not a measurement domain.
+    """
+    with pytest.raises(ValueError, match=r"^measurement domain invalid: schema: "):
+        validate_capture(completion_receipt(LOG), EVENTS, TRACKING, domain, 10)
+
+
 @pytest.mark.parametrize("fault", ["overflow", "events", "samples", "cycle", "reserved", "missing"])
 def test_corrupt_capture_refused(fault: str) -> None:
     """Refuse inconsistent or lost records while preserving genuine missing-cycle semantics.

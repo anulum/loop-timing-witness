@@ -112,6 +112,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- A captured measurement domain is held to the measurement-domain schema, its semantic rules and
+  the 16-byte event wire layout, as a run's domain is, before its contracts decode the captured
+  events. A capture whose domain lacked its contracts failed with the interpreter's `KeyError` or
+  `TypeError` text instead of a refusal.
 - The AMP run configuration reader separates fields only at the C locale's whitespace, as the
   native reader does; the ASCII information separators no longer separate fields. Whole numbers
   with more than 4300 digits (leading zeros included) are read as the native reader reads them,

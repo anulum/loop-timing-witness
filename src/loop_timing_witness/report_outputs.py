@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from xml.sax.saxutils import escape
 
 from .latency_jitter import jitter_pairs
@@ -21,6 +21,45 @@ from .report_publication import publish_report_directory
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+INTERVAL_SUMMARY_COLUMNS: Final = (
+    "run_id",
+    "evidence_status",
+    "interval",
+    "sample_count",
+    "median_ticks",
+    "p95_ticks",
+    "p99_ticks",
+    "p999_ticks",
+    "maximum_ticks",
+    "duration_ticks",
+)
+JITTER_SUMMARY_COLUMNS: Final = (
+    "interval",
+    "status",
+    "latency_sample_count",
+    "sample_count",
+    "expected_pair_count",
+    "missing_pair_count",
+    "pair_coverage_fraction",
+    "median_ticks",
+    "p95_ticks",
+    "p99_ticks",
+    "p999_ticks",
+    "maximum_ticks",
+    "peak_to_peak_ticks",
+    "duration_ticks",
+)
+CYCLE_JITTER_COLUMNS: Final = (
+    "interval",
+    "previous_cycle",
+    "cycle",
+    "previous_ticks",
+    "ticks",
+    "delta_ticks",
+    "absolute_delta_ticks",
+)
 
 
 def csv_table_bytes(columns: tuple[str, ...], rows: list[dict[str, Any]]) -> bytes:
@@ -167,6 +206,77 @@ def _plots(report: dict[str, Any]) -> dict[str, bytes]:
     return result
 
 
+def jitter_tables(
+    report: dict[str, Any], cycle_rows: list[dict[str, int | str]]
+) -> dict[str, bytes]:
+    """Return the jitter summary and adjacent-cycle jitter tables with their provenance.
+
+    Parameters
+    ----------
+    report
+        Complete validated report.
+    cycle_rows
+        Per-cycle event intervals.
+
+    Returns
+    -------
+    dict[str, bytes]
+        ``jitter_summary.csv`` and ``cycle_jitter.csv``, each row led by the jitter provenance.
+    """
+    provenance = {
+        "run_id": report["run_id"],
+        "evidence_status": report["evidence_status"],
+        "jitter_method": report["events"]["jitter_method"],
+        "timebase_resolution_ns": report["timebase_resolution_ns"],
+        "instrument_floor_ticks": report["instrument_floor_ticks"],
+    }
+    return {
+        "jitter_summary.csv": csv_table_bytes(
+            (*provenance, *JITTER_SUMMARY_COLUMNS),
+            [{**row, **provenance} for row in _interval_summary_rows(report, "jitter")],
+        ),
+        "cycle_jitter.csv": csv_table_bytes(
+            (*provenance, *CYCLE_JITTER_COLUMNS),
+            [{**provenance, **pair} for pair in jitter_pairs(cycle_rows)],
+        ),
+    }
+
+
+def report_files(
+    report: dict[str, Any], cycle_rows: list[dict[str, int | str]]
+) -> dict[str, bytes]:
+    """Return every published file of a run report, in publication order.
+
+    Parameters
+    ----------
+    report
+        Complete validated report.
+    cycle_rows
+        Per-cycle event intervals.
+
+    Returns
+    -------
+    dict[str, bytes]
+        The report, the interval and jitter tables, the per-cycle intervals and the plots.
+    """
+    files: dict[str, bytes] = {
+        "report.json": canonical_json_bytes(report),
+        "interval_summary.csv": csv_table_bytes(
+            INTERVAL_SUMMARY_COLUMNS, _interval_summary_rows(report, "intervals")
+        ),
+        **jitter_tables(report, cycle_rows),
+        "cycle_intervals.csv": csv_table_bytes(
+            ("run_id", "evidence_status", "cycle", "interval", "ticks"),
+            [
+                {"run_id": report["run_id"], "evidence_status": report["evidence_status"], **row}
+                for row in cycle_rows
+            ],
+        ),
+    }
+    files.update(_plots(report))
+    return files
+
+
 def write_report(
     output_directory: Path, report: dict[str, Any], cycle_rows: list[dict[str, int | str]]
 ) -> None:
@@ -189,73 +299,4 @@ def write_report(
         If Linux atomic publication is unavailable, an artefact cannot be
         written or the transaction cannot land.
     """
-    files: dict[str, bytes] = {"report.json": canonical_json_bytes(report)}
-    files["interval_summary.csv"] = csv_table_bytes(
-        (
-            "run_id",
-            "evidence_status",
-            "interval",
-            "sample_count",
-            "median_ticks",
-            "p95_ticks",
-            "p99_ticks",
-            "p999_ticks",
-            "maximum_ticks",
-            "duration_ticks",
-        ),
-        _interval_summary_rows(report, "intervals"),
-    )
-    jitter_provenance = {
-        "run_id": report["run_id"],
-        "evidence_status": report["evidence_status"],
-        "jitter_method": report["events"]["jitter_method"],
-        "timebase_resolution_ns": report["timebase_resolution_ns"],
-        "instrument_floor_ticks": report["instrument_floor_ticks"],
-    }
-    provenance_columns = tuple(jitter_provenance)
-    files["jitter_summary.csv"] = csv_table_bytes(
-        (
-            *provenance_columns,
-            "interval",
-            "status",
-            "latency_sample_count",
-            "sample_count",
-            "expected_pair_count",
-            "missing_pair_count",
-            "pair_coverage_fraction",
-            "median_ticks",
-            "p95_ticks",
-            "p99_ticks",
-            "p999_ticks",
-            "maximum_ticks",
-            "peak_to_peak_ticks",
-            "duration_ticks",
-        ),
-        [{**row, **jitter_provenance} for row in _interval_summary_rows(report, "jitter")],
-    )
-    files["cycle_jitter.csv"] = csv_table_bytes(
-        (
-            *provenance_columns,
-            "interval",
-            "previous_cycle",
-            "cycle",
-            "previous_ticks",
-            "ticks",
-            "delta_ticks",
-            "absolute_delta_ticks",
-        ),
-        [{**jitter_provenance, **pair} for pair in jitter_pairs(cycle_rows)],
-    )
-    files["cycle_intervals.csv"] = csv_table_bytes(
-        ("run_id", "evidence_status", "cycle", "interval", "ticks"),
-        [
-            {
-                "run_id": report["run_id"],
-                "evidence_status": report["evidence_status"],
-                **row,
-            }
-            for row in cycle_rows
-        ],
-    )
-    files.update(_plots(report))
-    publish_report_directory(output_directory, files)
+    publish_report_directory(output_directory, report_files(report, cycle_rows))

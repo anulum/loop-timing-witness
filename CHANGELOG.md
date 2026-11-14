@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP image contract and exit channel admission in the Rust analysis crate: the public
+  `amp_image_contract` and `amp_exit_channel` modules admit a firmware image's constants, entry
+  points, stack geometry and ISA completion channel with the Python checks' refusal texts. A corpus
+  of the committed whole firmware, changed per rule, holds both implementations to the same
+  outcomes.
 - Native AMP run configuration reading in the Rust analysis crate: the public `amp_run_input`
   module reads an image's native run configuration with the Python reader's separators, field
   rules and refusal texts. A corpus of the ISA image's configuration, changed per rule, holds both

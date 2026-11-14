@@ -252,6 +252,20 @@ without modeled latency; and the run's integer contract and controller
 invariants. A shared corpus of the ISA image's configuration, changed per
 rule, holds both implementations to the same run or refusal.
 
+## AMP image contract and exit channel
+
+`amp_image_contract::admit_image_contract(&content, &platform, &run,
+stack_bytes)` admits a firmware image as the Python module
+`amp_image_contract` does: its load segments inside the firmware reservation,
+the entry and resource symbols with `_start` at the reservation, the three
+controller entry points in executable file bytes, the platform and run
+constants as single read-only objects holding exactly the bytes their inputs
+give, and the BSS and stack geometry inside writable memory.
+`amp_exit_channel::admit_exit_channel(&content, &segments)` then admits an ISA
+image's two HTIF words: aligned, distinct, initially zero, in writable file
+bytes. A shared corpus of the whole firmware of the ELF corpus, changed per
+rule and per input, holds both implementations to the same outcomes.
+
 ## Selected installation
 
 The compiled registry admits source contract

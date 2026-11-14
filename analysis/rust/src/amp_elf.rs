@@ -46,13 +46,13 @@ const LOAD_TYPE: u32 = 1;
 const DYNAMIC_TYPE: u32 = 2;
 const INTERPRETER_TYPE: u32 = 3;
 /// Read and execute permissions.
-const READ_EXECUTE: u32 = 5;
+pub(crate) const READ_EXECUTE: u32 = 5;
 /// Read and write permissions.
-const READ_WRITE: u32 = 6;
+pub(crate) const READ_WRITE: u32 = 6;
 /// The compressed-instruction flag, the only header flag admitted.
 const RVC_FLAG: u32 = 1;
 /// Smallest load alignment.
-const PAGE_BYTES: u64 = 4096;
+pub(crate) const PAGE_BYTES: u64 = 4096;
 /// The exclusive end of the RV64 address space.
 const ADDRESS_LIMIT: u128 = 1 << 64;
 /// The identity bytes of a 64-bit little-endian current-version ELF file.

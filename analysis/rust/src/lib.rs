@@ -13,9 +13,13 @@ mod amp_device;
 /// Firmware ELF admission and global symbol reading of AMP images.
 pub mod amp_elf;
 mod amp_elf_symbols;
+/// Target-produced ISA completion channel admission of AMP images.
+pub mod amp_exit_channel;
 /// Read errors and refusals of AMP inputs, as Python raises them.
 pub mod amp_failure;
 mod amp_files;
+/// Compiled contract, entry point and stack admission of AMP images.
+pub mod amp_image_contract;
 /// Firmware preprocessing dependency snapshots and record counts of AMP images.
 pub mod amp_image_dependencies;
 mod amp_memory;

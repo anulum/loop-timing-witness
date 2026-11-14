@@ -16,6 +16,10 @@ pub mod amp_failure;
 mod amp_files;
 /// Firmware preprocessing dependency snapshots and record counts of AMP images.
 pub mod amp_image_dependencies;
+/// Plugin build receipt decoding of AMP captures.
+pub mod amp_plugin_receipt;
+/// Plugin build receipt and source snapshot checks of AMP captures.
+pub mod amp_plugin_snapshot;
 /// Runtime library snapshots of AMP images and captures.
 pub mod amp_runtime_snapshot;
 /// Rust dependency record reading of AMP images built with the Rust kernel.

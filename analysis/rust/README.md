@@ -198,6 +198,20 @@ Python's own snapshot writers build: changed, missing, linked and escaping
 copies, disagreeing and malformed indexes, invalid identities, document order
 and every kernel declaration.
 
+## AMP plugin receipts
+
+`amp_plugin_receipt::decode_plugin_receipt(&bytes)` decodes an AMP plugin
+build receipt as the Python module of the same name does: bounded JSON, the
+first location that breaks the committed plugin build schema, and the
+receipt's agreement with the preparation it binds (identities, every
+preparation and compiler identity among its dependencies, the preparation's
+canonical JSON digest and its generation record beside it).
+`amp_plugin_snapshot::validate_plugin_snapshot(output, plugin_digest,
+thermal)` checks a capture's `plugin_build.json` against the executed library
+and observed plant, its source index against the receipt, and every copy as
+the other snapshot checks do. A shared corpus, built from a reduced real
+receipt, holds both to Python's outcomes.
+
 ## Selected installation
 
 The compiled registry admits source contract

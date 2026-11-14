@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP plugin receipt checks in the Rust analysis crate: the public `amp_plugin_receipt`
+  module decodes a plugin build receipt and checks it against its preparation, and
+  `amp_plugin_snapshot` checks a capture's plugin receipt and source copies, with Python's
+  refusal texts and read errors. A corpus built from a reduced real receipt holds both
+  implementations to the same outcomes.
 - Native AMP snapshot checks in the Rust analysis crate: the public `amp_runtime_snapshot` and
   `amp_image_dependencies` modules check an image's or capture's runtime library and firmware
   preprocessing source copies against their index and the recorded identities, and read the

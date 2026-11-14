@@ -19,7 +19,7 @@ use crate::amp_image_dependencies::{
     image_dependency_record_count, validate_image_dependency_snapshot,
 };
 use crate::amp_runtime_snapshot::validate_runtime_snapshot;
-use crate::unit_files::{Scratch, hex_bytes};
+use crate::unit_files::{Scratch, materialise};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 
@@ -39,24 +39,6 @@ fn rooted(value: &Value, root: &str) -> Value {
                 .collect(),
         ),
         other => other.clone(),
-    }
-}
-
-/// Write one case tree: text files, bytes, symbolic links and empty folders.
-fn materialise(directory: &Path, tree: &Map<String, Value>) {
-    let root = directory.to_str().expect("UTF-8 case directory");
-    for (name, entry) in tree {
-        let path = directory.join(name);
-        std::fs::create_dir_all(path.parent().expect("parent")).expect("tree folder");
-        if let Some(text) = entry.as_str() {
-            std::fs::write(&path, text.replace("{root}", root)).expect("text file");
-        } else if let Some(target) = entry["symlink"].as_str() {
-            std::os::unix::fs::symlink(target.replace("{root}", root), &path).expect("link");
-        } else if let Some(hex) = entry["hex"].as_str() {
-            std::fs::write(&path, hex_bytes(hex)).expect("byte file");
-        } else {
-            std::fs::create_dir(&path).expect("empty folder");
-        }
     }
 }
 

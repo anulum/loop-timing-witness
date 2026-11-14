@@ -18,11 +18,16 @@ use crate::files::digest;
 use serde_json::{Map, Value};
 use std::path::Path;
 
+/// Python's `path.read_bytes()`: the whole file, or the `OSError` text of
+/// opening or reading it.
+pub(crate) fn file_bytes(path: &Path) -> Result<Vec<u8>, AmpFailure> {
+    read_file(path).map_err(|failure| AmpFailure::Os(failure.text()))
+}
+
 /// Python's `sha256_of_file`: the digest of a whole file, or the `OSError`
 /// text of opening or reading it.
 pub(crate) fn file_digest(path: &Path) -> Result<String, AmpFailure> {
-    let content = read_file(path).map_err(|failure| AmpFailure::Os(failure.text()))?;
-    Ok(digest(&content))
+    Ok(digest(&file_bytes(path)?))
 }
 
 /// Python's `load_bounded_json_object(directory / name)`: the `OSError` text
@@ -33,6 +38,5 @@ pub(crate) fn load_document(
     name: &str,
 ) -> Result<(Map<String, Value>, Orders), AmpFailure> {
     let path = pure(&directory.join(name));
-    let raw = read_file(&path).map_err(|failure| AmpFailure::Os(failure.text()))?;
-    decode_object(&raw, &python_display(&path)).map_err(AmpFailure::Refused)
+    decode_object(&file_bytes(&path)?, &python_display(&path)).map_err(AmpFailure::Refused)
 }

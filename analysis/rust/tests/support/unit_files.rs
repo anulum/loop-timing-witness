@@ -6,10 +6,11 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — corpus bytes and owned folders of the crate tests
 
-//! Decode the hexadecimal bytes the shared corpora hold, and own a folder
-//! for corpus file trees.
+//! Decode the hexadecimal bytes the shared corpora hold, own a folder for
+//! corpus file trees, and write those trees.
 
-use std::path::PathBuf;
+use serde_json::{Map, Value};
+use std::path::{Path, PathBuf};
 
 /// Decode a hexadecimal byte string of a corpus.
 pub(crate) fn hex_bytes(text: &str) -> Vec<u8> {
@@ -40,5 +41,33 @@ impl Scratch {
 impl Drop for Scratch {
     fn drop(&mut self) {
         std::fs::remove_dir_all(&self.0).ok();
+    }
+}
+
+/// Write one corpus tree entry under a case folder: text with `{root}`
+/// replaced by the folder, hexadecimal bytes, a symbolic link (replacing an
+/// empty folder left by an earlier removal) or an empty folder.
+pub(crate) fn write_entry(directory: &Path, name: &str, entry: &Value) {
+    let root = directory.to_str().expect("UTF-8 case folder");
+    let path = directory.join(name);
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("tree folder");
+    if let Some(text) = entry.as_str() {
+        std::fs::write(&path, text.replace("{root}", root)).expect("text file");
+    } else if let Some(target) = entry["symlink"].as_str() {
+        if path.is_dir() && !path.is_symlink() {
+            std::fs::remove_dir(&path).expect("empty folder under a link");
+        }
+        std::os::unix::fs::symlink(target.replace("{root}", root), &path).expect("link");
+    } else if let Some(hex) = entry["hex"].as_str() {
+        std::fs::write(&path, hex_bytes(hex)).expect("byte file");
+    } else {
+        std::fs::create_dir_all(&path).expect("empty folder");
+    }
+}
+
+/// Write a whole corpus tree under a case folder, in path order.
+pub(crate) fn materialise(directory: &Path, tree: &Map<String, Value>) {
+    for (name, entry) in tree {
+        write_entry(directory, name, entry);
     }
 }

@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP completion and capture stream checks in the Rust analysis crate: the public
+  `amp_completion` and `amp_tracking` modules read the logger completion, decode the raw controller
+  tracking and hold the completion to the captured events and tracking with the Python readers'
+  refusal texts. A corpus of the real ISA capture, changed per rule, holds both implementations to
+  the same outcomes.
 - Native AMP image receipt checks in the Rust analysis crate: the public `amp_image_receipt`
   module checks a captured image's declarations, recorded verification request, platform, run,
   firmware contract and exit channel with the Python check's refusal texts and read errors. A

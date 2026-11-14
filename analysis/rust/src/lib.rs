@@ -9,6 +9,8 @@
 //! Verify complete source-bound simulated neural acquisitions through an independent native API.
 
 mod amp_collisions;
+/// Logger completion and captured stream agreement of AMP captures.
+pub mod amp_completion;
 mod amp_device;
 /// Firmware ELF admission and global symbol reading of AMP images.
 pub mod amp_elf;
@@ -42,6 +44,8 @@ pub mod amp_rust_receipt;
 mod amp_rust_vectors;
 mod amp_shell_words;
 mod amp_snapshot_index;
+/// Raw controller tracking of AMP captures.
+pub mod amp_tracking;
 mod binding;
 /// The repeat campaign command, as Python's `analyze_campaign` runs it.
 pub mod campaign_command;

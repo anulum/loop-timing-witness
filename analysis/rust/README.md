@@ -279,6 +279,21 @@ equality. A shared corpus of a real image folder, changed per declaration,
 argument, file and comparison, holds both implementations to the same value,
 refusal or read error.
 
+## AMP completion and captured streams
+
+`amp_completion::completion_receipt(&log)` requires exactly one logger
+completion line in a simulator log and `decode_completion` admits its six
+typed counters, as the Python module `amp_completion` does.
+`amp_tracking::decode_tracking(&content, cycles, samples)` decodes the raw
+controller tracking as Python's `native_tracking.decode_tracking`: the CSV
+read as `csv.DictReader` reads it, the raw ABI header, each cell's ASCII
+decimal syntax and bound, unique increasing cycles and the sample count.
+`amp_completion::validate_capture` holds the retained measurement domain to
+its contract, decodes the events and the tracking, refuses a FIFO overflow and
+requires the completion's event count and the sampled cycles to agree. A
+shared corpus of the real ISA capture, changed per rule, holds both
+implementations to the same outcomes.
+
 ## Selected installation
 
 The compiled registry admits source contract

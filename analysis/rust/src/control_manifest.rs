@@ -248,7 +248,7 @@ pub(crate) fn utc_timestamp(value: &str) -> bool {
 }
 
 /// Load and validate the run-bound measurement-domain contract.
-fn load_domain(raw: &[u8], source: &str) -> Result<Value, String> {
+pub(crate) fn load_domain(raw: &[u8], source: &str) -> Result<Value, String> {
     let (domain, _) = decode_object(raw, source)?;
     let domain = Value::Object(domain);
     let mut findings: Vec<String> = DOMAIN_SCHEMA

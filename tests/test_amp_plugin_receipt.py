@@ -22,6 +22,7 @@ from amp_plugin_receipt import admit_plugin
 from test_write_amp_plugin_manifest import original_plugin, owned_plugin
 from write_amp_plugin_manifest import write_plugin_manifest
 
+from loop_timing_witness.amp_plugin_receipt import decode_plugin_receipt
 from manifest_io import canonical_json_bytes, sha256_of_file
 
 __all__ = ["original_plugin", "owned_plugin"]
@@ -185,3 +186,20 @@ def test_original_runtime_library_omission(original_plugin: PluginBuild, tmp_pat
     library.with_name("plugin.json").write_bytes(canonical_json_bytes(data))
     with pytest.raises(ValueError, match="preparation identities"):
         admit_plugin(library)
+
+
+def test_preparation_path_without_a_name_refused() -> None:
+    """Refuse a preparation path that names no file in the receipt's words, not pathlib's.
+
+    The reduced real receipt binds the root folder as its preparation, so every earlier
+    cross-check holds and only the missing file name beside which the generation record
+    would lie can refuse it.
+    """
+    fixture = Path(__file__).with_name("data") / "amp-plugin-build-reduced.json"
+    data = json.loads(fixture.read_text(encoding="utf-8"))
+    data["preparation_path"] = "/"
+    digest = hashlib.sha256(canonical_json_bytes(data["preparation"])).hexdigest()
+    data["dependencies"]["/"] = digest
+    refusal = r"^AMP plugin receipt omits or contradicts original preparation identities$"
+    with pytest.raises(ValueError, match=refusal):
+        decode_plugin_receipt(canonical_json_bytes(data))

@@ -42,7 +42,8 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
     Raises
     ------
     ValueError
-        If JSON, schema identifier, types, bounds or required build identity fields are invalid.
+        If JSON, schema identifier, types, bounds or required build identity fields are invalid,
+        or the preparation path names no file beside which its generation record would lie.
     """
     data = parse_bounded_json_object(content, "AMP plugin build")
     locations = schema_locations(data, load_json_object(ROOT / "amp-plugin-build.schema.json"))
@@ -69,6 +70,7 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
         )
         or data["dependencies"].get(preparation_path)
         != hashlib.sha256(canonical_json_bytes(preparation)).hexdigest()
+        or not Path(preparation_path).name
         or data["dependencies"].get(str(Path(preparation_path).with_name("generation.json")))
         != preparation["generation_sha256"]
     ):

@@ -85,6 +85,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- An AMP plugin build receipt whose preparation path names no file (the root folder) is refused
+  as `AMP plugin receipt omits or contradicts original preparation identities` instead of with
+  pathlib's `PosixPath('/') has an empty name`.
 - The sources of a Rust dependency record are checked and read in sorted order. When several
   sources fail, the refusal or read error reported is the first in that order; it no longer
   depends on the interpreter's string hash seed.

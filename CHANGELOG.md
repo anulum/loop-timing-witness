@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native AMP run analysis: the native report completes a run that binds an AMP capture as the
+  Python report does, admitting the capture and every artifact it binds and holding the run
+  declaration and the logger's counters to them, with Python's refusal texts and read errors. A
+  parity test on real Spike captures, C and Rust kernels, and 39 changed copies holds both analyses
+  to the same report or refusal.
 - Native AMP tracking CSV and fault schedule in the Rust analysis crate: the public
   `amp_observations` module writes a capture's observed tracking as Python's `csv.writer` and
   `Decimal` write it, byte for byte, and reads the configured fault schedule. A corpus of raw values,

@@ -14,6 +14,7 @@
 //! receipt are attached when the run binds them. A run that binds an AMP
 //! capture is refused first, until the native analysis implements AMP completion.
 
+use crate::amp_report_completion::attach_amp_completion;
 use crate::control_analysis::{Row, events_block, full_control, whole};
 use crate::control_events::{Event, Names, decode};
 use crate::control_number::{Num, python_number};
@@ -21,10 +22,12 @@ use crate::control_receipts::{completion_statistics, host_load, native_metadata,
 use crate::control_series::{energy_per_cycle, observed_tracking_error, tracking_error};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
+use std::path::Path;
 
 /// Report schema identifier.
 const REPORT_SCHEMA: &str = "loop-timing-witness.analysis-report.v1";
-/// The refusal of a run that binds an AMP capture, which the native analysis does not complete.
+/// The refusal of a campaign whose runs bind an AMP capture, which the native campaign does not
+/// analyse.
 pub(crate) const AMP_UNSUPPORTED: &str =
     "AMP capture completion is not analysed by the native analysis";
 /// Hardware artefacts whose digests a board report lists.
@@ -44,10 +47,8 @@ pub(crate) fn build_report(
     manifest: &Map<String, Value>,
     domain: &Value,
     files: &BTreeMap<String, Vec<u8>>,
+    directory: &Path,
 ) -> Result<(Value, Vec<Row>), String> {
-    if files.contains_key("amp_capture") {
-        return Err(AMP_UNSUPPORTED.to_owned());
-    }
     let contracts = &domain["design_contracts"];
     let names = Names::of(contracts);
     let profile = manifest["profile"]
@@ -170,6 +171,7 @@ pub(crate) fn build_report(
     }));
     report.insert("events".to_owned(), std::mem::take(&mut summary));
     attach_completion(manifest, contracts, files, &events, &names, &mut report)?;
+    attach_amp_completion(manifest, contracts, files, directory, &events, &mut report)?;
     attach_host_load(manifest, files, &mut report)?;
     Ok((Value::Object(report), rows))
 }

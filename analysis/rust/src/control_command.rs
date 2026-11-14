@@ -94,6 +94,6 @@ pub(crate) fn dispatch(path: &Path) -> Result<Dispatch, String> {
 /// Load, analyse and publish one CONTROL or COMPUTE run, as Python's command does.
 pub(crate) fn analyze_control(manifest: &Path, output: &Path, raw: &[u8]) -> Result<(), String> {
     let run = load(manifest, Some(raw))?;
-    let (report, rows) = build_report(&run.manifest, &run.domain, &run.files)?;
+    let (report, rows) = build_report(&run.manifest, &run.domain, &run.files, &run.directory)?;
     publish_report_directory(output, &report_files(&report, &rows))
 }

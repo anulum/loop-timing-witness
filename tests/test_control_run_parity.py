@@ -958,10 +958,10 @@ def test_invalid_reports_are_identical(
     assert report["invalid_reasons"]
 
 
-def test_runs_with_an_amp_capture_are_refused_by_the_native_report(
+def test_runs_binding_an_invalid_amp_capture_are_refused_alike(
     make_rtl_run: MakeRtlRun, tmp_path: Path
 ) -> None:
-    """The native report refuses an AMP capture until AMP completion is native.
+    """Both reports admit an AMP run's capture first and refuse one that is not a receipt alike.
 
     Parameters
     ----------
@@ -974,6 +974,6 @@ def test_runs_with_an_amp_capture_are_refused_by_the_native_report(
     manifest.update(placement="bare_metal_amp", tracking_sampling="observed")
     manifest["files"]["power"] = None
     manifest["amp_capture"] = manifest["files"]["events"].copy()
-    rust = rust_outcome(_write(run, manifest), tmp_path)
-    assert rust["events_refusal"] is None
-    assert rust["report_refusal"] == "AMP capture completion is not analysed by the native analysis"
+    outcome = _same(_write(run, manifest), tmp_path)
+    assert outcome["events_refusal"] is None
+    assert outcome["report_refusal"].startswith("AMP capture: ")

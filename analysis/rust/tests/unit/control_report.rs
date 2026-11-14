@@ -7,12 +7,11 @@
 // Loop Timing Witness — report assembly, crate-internal controls
 
 //! Report parts that the RTL parity runs do not reach: board artefact digests,
-//! repeated source paths, absent declared files and the AMP refusal. The complete reports are
+//! repeated source paths and absent declared files. The complete reports are
 //! held to Python by `tests/test_control_run_parity.py`.
 
-use super::{build_report, input_hashes};
-use serde_json::{Map, json};
-use std::collections::BTreeMap;
+use super::input_hashes;
+use serde_json::json;
 
 #[test]
 fn input_digests_follow_python_order_and_board_artefacts() {
@@ -39,16 +38,5 @@ fn input_digests_follow_python_order_and_board_artefacts() {
             "linux_image": "l",
             "controller_binary": "c",
         })
-    );
-}
-
-#[test]
-fn runs_with_an_amp_capture_are_refused_first() {
-    let files = BTreeMap::from([("amp_capture".to_owned(), Vec::new())]);
-    assert_eq!(
-        build_report(&Map::new(), &json!({}), &files)
-            .err()
-            .as_deref(),
-        Some("AMP capture completion is not analysed by the native analysis")
     );
 }

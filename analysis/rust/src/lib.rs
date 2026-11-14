@@ -8,6 +8,8 @@
 
 //! Verify complete source-bound simulated neural acquisitions through an independent native API.
 
+/// Admission of AMP captures and every artifact they bind.
+pub mod amp_capture;
 mod amp_collisions;
 /// Logger completion and captured stream agreement of AMP captures.
 pub mod amp_completion;
@@ -35,6 +37,7 @@ pub mod amp_platform;
 pub mod amp_plugin_receipt;
 /// Plugin build receipt and source snapshot checks of AMP captures.
 pub mod amp_plugin_snapshot;
+mod amp_report_completion;
 /// Run configuration reading of AMP images.
 pub mod amp_run_input;
 /// Runtime library snapshots of AMP images and captures.

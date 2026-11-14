@@ -35,8 +35,8 @@ loop-timing-witness-campaign-native campaign.json --output-dir new-report
 It returns status 0 for a published complete campaign, 2 for a published
 incomplete campaign after printing each nonconformity, and 1 with the Python
 command's diagnostic when the campaign is refused or its report cannot be
-written. A campaign whose repeat binds an AMP capture is refused, because the
-native analysis does not complete AMP captures.
+written. A campaign whose repeat binds an AMP capture is refused; the Python
+command analyses AMP campaigns.
 
 The output directory must be new and have an existing parent. Publication is
 atomic and refuses to replace an existing file, directory or symlink.
@@ -110,8 +110,9 @@ CONTROL or COMPUTE run and keep its hash-bound input bytes, available through
 `IntervalRow` table, and `control_run_report(&inputs)` the complete report with
 the same rows: tracking error, observed tracking, energy per cycle, validity,
 input digests, stated limits and any bound native completion and host load
-receipts. Its floats equal the Python report's bit for bit. A run that binds an
-AMP capture is refused until AMP completion is implemented natively.
+receipts, and an AMP capture's logger completion, attached after the capture
+and every artifact it binds are admitted. Its floats equal the Python report's
+bit for bit.
 Every refusal is the text of the Python `load_run` and `decode_events` for the
 same files, and every report refusal the text of the Python `build_report`;
 the parity tests run both on real RTL captures, damaged series, malformed
@@ -304,6 +305,23 @@ exponent as `Decimal` writes it. `fault_schedule(&configuration)` returns the
 configured fault in the run contract's form. A shared corpus of 1103 raw
 values, tracking tables and every run configuration of the run input corpus
 holds both implementations to the same outcomes.
+
+## AMP run analysis
+
+The native report completes a run that binds an AMP capture as Python's
+`attach_amp_completion` does, at the same point of the report.
+`amp_capture::admitted_capture(directory, &content)` admits the capture as
+Python's `admitted_capture`: the receipt against the crate's copy of
+`amp-capture.schema.json` and the UTC rule, every captured artifact's path and
+digest in document order, the image's compiler identity, preprocessing records
+and inputs, the tool and image identities, the runtime, compiler and plugin
+snapshots, the image receipt, the logged completion against the receipt's, the
+run configuration and the captured streams. The run's declaration is then held
+to the capture, the configuration and the observed tracking, and the logger's
+counters to the full event history; the report gains the completion, the
+capture's digest and the functional clock limit. `tests/test_amp_run_parity.py`
+holds both analyses to the same report or refusal on real Spike captures, C and
+Rust kernels, and 39 changed copies of a capture.
 
 ## Selected installation
 

@@ -707,8 +707,11 @@ rounded half to even at 28 digits, floats are converted with correct rounding
 and summed with Neumaier's compensation as Python 3.12 and later sum them, and
 the native completion counters and host load receipt are checked against the
 run with Python's equality between integers, floats and booleans. A run that
-binds an AMP capture is refused by the native report until AMP completion is
-implemented natively.
+binds an AMP capture gets its logger completion as Python's
+`attach_amp_completion` attaches it: the capture is admitted with every
+artifact it binds, the run's declaration is held to the capture, the run
+configuration and the observed tracking, and the logger's counters to the full
+event history, with Python's refusal texts and read errors in Python's order.
 
 The native `loop-timing-witness-analyze-native` command analyses CONTROL and
 COMPUTE runs end to end. It publishes the same report directory as the Python
@@ -734,7 +737,8 @@ whole campaign, as Python's `OSError` does. The configuration every loaded
 repeat must share is compared with Python's equality, exact between integers
 and floats of either sign. Counts, minima, maxima and the fewest analysed
 cycles keep Python's integer or float type. A campaign whose repeat binds an
-AMP capture is refused by the native command until AMP completion is native.
+AMP capture is refused by the native command; AMP campaigns are analysed by the
+Python command.
 
 Every run-bound JSON document is decoded with three limits that both analyses
 share: arrays and objects nest at most 64 deep, checked before decoding;

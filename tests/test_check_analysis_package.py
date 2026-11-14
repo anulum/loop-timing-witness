@@ -44,6 +44,7 @@ _COPIED = (
     "native-run.schema.json",
     "host-load.schema.json",
     "amp-plugin-build.schema.json",
+    "amp-capture.schema.json",
     "tests/data/neural-selected-original.run.json",
 )
 
@@ -90,6 +91,7 @@ def analysis_package(tmp_path: Path) -> Path:
         "native-run.schema.json",
         "host-load.schema.json",
         "amp-plugin-build.schema.json",
+        "amp-capture.schema.json",
         "tests/data/neural-selected-original.run.json",
         "measurement-domain.json",
     )

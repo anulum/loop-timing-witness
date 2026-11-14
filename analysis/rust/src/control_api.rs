@@ -175,7 +175,12 @@ pub fn control_events_summary(inputs: &ControlInputs) -> Result<(Value, Vec<Inte
 /// that contradict the run. A run that binds an AMP capture is refused: the
 /// native analysis does not yet implement AMP completion.
 pub fn control_run_report(inputs: &ControlInputs) -> Result<(Value, Vec<IntervalRow>), String> {
-    let (report, rows) = build_report(inputs.manifest(), inputs.domain(), inputs.files())?;
+    let (report, rows) = build_report(
+        inputs.manifest(),
+        inputs.domain(),
+        inputs.files(),
+        inputs.directory(),
+    )?;
     let rows = rows
         .into_iter()
         .map(|row| IntervalRow {

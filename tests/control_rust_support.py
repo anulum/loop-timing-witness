@@ -105,7 +105,7 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
     report_refusal: str | None = None
     try:
         built, report_rows = build_report(inputs)
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         report_refusal = _printed(error)
     else:
         rows_listed = [[row["cycle"], row["interval"], row["ticks"]] for row in report_rows]

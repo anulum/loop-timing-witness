@@ -79,7 +79,8 @@ fn analyse_repeat(repeat: &Repeat) -> (Map<String, Value>, Option<Analysed>) {
     let Some(run) = &repeat.run else {
         return (entry, None);
     };
-    let (report, rows) = match build_report(&run.manifest, &run.domain, &run.files) {
+    let (report, rows) = match build_report(&run.manifest, &run.domain, &run.files, &run.directory)
+    {
         Ok(analysed) => analysed,
         Err(refusal) => {
             entry.insert("refusal".to_owned(), json!(refusal));

@@ -220,7 +220,7 @@ function and instance must still be fully executed.
 Dependency vulnerabilities are checked for both hashed Python locks with
 `pip-audit --require-hashes --disable-pip -r requirements-dev.txt` and the corresponding
 `requirements-runtime.txt` command. Both Cargo locks are checked with `cargo audit --file`
-and cargo-audit 0.22.2, installed with `cargo install cargo-audit --version 0.22.2 --locked`.
+and cargo-audit 0.23.0, installed with `cargo install cargo-audit --version 0.23.0 --locked`.
 `make security` runs the same four lock audits. Registry or advisory database failures
 fail the audit; these network checks are separate from the offline preflight. The workflow
 policy guard binds all maintained locks to exact unconditional commands and the required

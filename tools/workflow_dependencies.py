@@ -22,7 +22,7 @@ AUDIT_WORKFLOW: Final = "reusable-security-audit.yml"
 UNSUPPORTED_LOCK_NAMES: Final = frozenset(
     {"package-lock.json", "pnpm-lock.yaml", "yarn.lock", "go.sum", "Manifest.toml"}
 )
-CARGO_AUDIT_INSTALL: Final = "cargo install cargo-audit --version 0.22.2 --locked"
+CARGO_AUDIT_INSTALL: Final = "cargo install cargo-audit --version 0.23.0 --locked"
 # The components named by rust-toolchain.toml are installed with the toolchain;
 # adding them to a minimal toolchain on first use has failed on hosted runners.
 RUST_TOOLCHAIN_INSTALL: Final = (
@@ -118,7 +118,7 @@ def dependency_audit_findings(root: Path, workflows: dict[str, dict[str, Any]]) 
             RUST_TOOLCHAIN_INSTALL,
             "rustup default 1.100.0",
             CARGO_AUDIT_INSTALL,
-            'test "$(cargo-audit --version)" = "cargo-audit 0.22.2"',
+            'test "$(cargo-audit --version)" = "cargo-audit 0.23.0"',
         ]
     ):
         findings.append("dependency audits: cargo-audit installation must keep its exact pin")

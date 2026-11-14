@@ -90,7 +90,7 @@ def test_weakened_lock_command_fails_the_public_guard(
             ),
         ),
         (
-            "          cargo install cargo-audit --version 0.22.2 --locked\n",
+            "          cargo install cargo-audit --version 0.23.0 --locked\n",
             "          cargo install cargo-audit\n",
         ),
     ],

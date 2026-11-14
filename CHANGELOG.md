@@ -131,6 +131,7 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Hosted workflows use Go 1.27.4 and cargo-audit 0.23.0; `make security` requires the same auditor.
 - The native crates build with Rust 1.100.0, also their minimum supported version; every hosted
   workflow, the toolchain files, the source enrolment pin and the guides move with them.
 - The analysis crate's lock moves const-oid to 0.10.3 and errno to 0.3.15; the licence record and the

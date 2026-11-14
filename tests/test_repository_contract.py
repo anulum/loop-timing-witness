@@ -255,7 +255,7 @@ def test_workflows_share_one_exact_toolchain_matching_the_local_pins() -> None:
         version for text in texts.values() for version in re.findall(r'go-version: "([^"]+)"', text)
     }
     assert python_versions == {"3.15.2"}
-    assert go_versions == {"1.27.3"}
+    assert go_versions == {"1.27.4"}
     installs = {
         install for text in texts.values() for install in re.findall(r"\bgo install (\S+)", text)
     }

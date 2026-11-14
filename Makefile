@@ -106,7 +106,7 @@ security:
 	$(PREFLIGHT) --only secrets
 	$(VENV)/pip-audit --require-hashes --disable-pip -r requirements-dev.txt
 	$(VENV)/pip-audit --require-hashes --disable-pip -r requirements-runtime.txt
-	test "$$(cargo-audit --version)" = "cargo-audit 0.22.2"
+	test "$$(cargo-audit --version)" = "cargo-audit 0.23.0"
 	cargo audit --file analysis/rust/Cargo.lock
 	cargo audit --file controllers/rust/Cargo.lock
 	cargo audit --file runtime/bare_metal/rust_kernel/Cargo.lock

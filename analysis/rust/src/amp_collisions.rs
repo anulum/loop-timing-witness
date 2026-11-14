@@ -89,6 +89,22 @@ fn sources(tree: &DeviceTree, node: &Node) -> Result<Vec<Source>, String> {
     Ok(result)
 }
 
+/// Tell whether a node's registers are root addresses: every bus between it
+/// and the root passes addresses through with `ranges`.
+fn on_root_bus(tree: &DeviceTree, path: &str) -> bool {
+    let mut parent = parent_path(path);
+    while parent != "/"
+        && tree
+            .node(parent)
+            .expect("a decoded parent")
+            .property("ranges")
+            .is_some()
+    {
+        parent = parent_path(parent);
+    }
+    parent == "/"
+}
+
 /// Refuse another consumer of the source, another root-level register extent
 /// meeting the aperture, and a header reservation meeting it, in document order.
 pub(crate) fn check_collisions(
@@ -112,17 +128,7 @@ pub(crate) fn check_collisions(
         if node.property("reg").is_none() {
             continue;
         }
-        let mut parent = parent_path(node.path());
-        while parent != "/"
-            && tree
-                .node(parent)
-                .expect("a decoded parent")
-                .property("ranges")
-                .is_some()
-        {
-            parent = parent_path(parent);
-        }
-        if parent != "/" {
+        if !on_root_bus(tree, node.path()) {
             continue;
         }
         if register_regions(tree, node.path())?

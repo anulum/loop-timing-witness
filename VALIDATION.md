@@ -104,6 +104,12 @@ analysis SBOM check and the load launcher's readiness and cleanup waits. `tools/
 bounds its native command by 120 seconds on the reference profile unless `--timeout` names another
 bound, and refuses an invalid declaration before it creates its journal or workspace.
 
+The native crate's integration tests bound their child processes with `timeout(1)` durations from
+the same declaration, read by `analysis/rust/tests/support/host_profile.rs`. The corpus
+`analysis/rust/tests/data/host-timeout-scales.json`, which the Python tests rebuild from
+`loop_timing_witness.host_profile`, holds both readers to the same scales, whole-second rounding and
+refusals.
+
 ## Native lifecycle profiles
 
 The lifecycle and configuration API tests compile the actual production RTL top and

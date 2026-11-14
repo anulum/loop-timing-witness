@@ -131,6 +131,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The native crate's integration tests bound their child processes with `timeout(1)` durations
+  scaled by the same declaration. A corpus of declarations shared with the Python tests holds both
+  readers to the same scale, whole-second rounding and refusal.
 - Tool hang guards follow the executing host as the tests' do: toolchain probes, benchmark and
   capture commands, the native analysis SBOM check, the load worker's loopback receive and the load
   launcher's readiness wait, cleanup waits and default `--timeout` are multiplied by the declared

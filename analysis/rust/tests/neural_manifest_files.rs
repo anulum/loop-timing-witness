@@ -11,8 +11,11 @@
 //! The refusal texts are Python's: a descriptor that cannot be opened,
 //! inspected or read, or that names a directory, is unreadable there.
 
+#[path = "support/host_profile.rs"]
+mod host_profile;
 mod support;
 
+use host_profile::timeout_arguments;
 use std::path::Path;
 use std::process::Command;
 use support::Declaration;
@@ -55,8 +58,9 @@ fn manifest_metadata_failure_is_refused_as_unreadable() {
     let input = fixture.write("manifest.json", Declaration::raw());
     let trace_path = fixture.root().join("metadata.trace");
     let output = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "5s", "strace"])
+        .args(timeout_arguments(5))
         .args([
+            "strace",
             "-f",
             "-yy",
             "-e",
@@ -106,7 +110,7 @@ fn manifest_fifo_without_a_writer_is_refused_without_waiting() {
         return;
     }
     let output = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "5s"])
+        .args(timeout_arguments(5))
         .arg(std::env::current_exe().expect("current public manifest test executable"))
         .args([
             "--exact",

@@ -11,6 +11,10 @@
 //! Kernel failures are real: a file-size limit stops staging, and an injected
 //! rename error stops publication, each in an owned child process.
 
+#[path = "support/host_profile.rs"]
+mod host_profile;
+
+use host_profile::timeout_arguments;
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use serde_json::{Value, json};
 use std::ffi::OsStr;
@@ -81,7 +85,7 @@ fn child(name: &str, root: &Path, wrapper: &[&str]) -> std::process::Output {
     arguments.push(executable.as_os_str());
     arguments.extend(["--exact", name, "--test-threads=1"].map(OsStr::new));
     let output = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "20s"])
+        .args(timeout_arguments(20))
         .args(arguments)
         .env(CHILD, root)
         .current_dir(root)

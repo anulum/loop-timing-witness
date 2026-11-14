@@ -1,0 +1,168 @@
+{
+ "cases": [
+  {
+   "declared": null,
+   "scale": "1.0",
+   "ten_seconds": 10
+  },
+  {
+   "declared": "1",
+   "scale": "1.0",
+   "ten_seconds": 10
+  },
+  {
+   "declared": "2",
+   "scale": "2.0",
+   "ten_seconds": 20
+  },
+  {
+   "declared": "0.5",
+   "scale": "0.5",
+   "ten_seconds": 5
+  },
+  {
+   "declared": "0.25",
+   "scale": "0.25",
+   "ten_seconds": 3
+  },
+  {
+   "declared": "1e-3",
+   "scale": "0.001",
+   "ten_seconds": 1
+  },
+  {
+   "declared": "1E+2",
+   "scale": "100.0",
+   "ten_seconds": 1000
+  },
+  {
+   "declared": "+2",
+   "scale": "2.0",
+   "ten_seconds": 20
+  },
+  {
+   "declared": "2.",
+   "scale": "2.0",
+   "ten_seconds": 20
+  },
+  {
+   "declared": ".5",
+   "scale": "0.5",
+   "ten_seconds": 5
+  },
+  {
+   "declared": "0.1",
+   "scale": "0.1",
+   "ten_seconds": 1
+  },
+  {
+   "declared": "3.3333333333333335",
+   "scale": "3.3333333333333335",
+   "ten_seconds": 34
+  },
+  {
+   "declared": "1e-300",
+   "scale": "1e-300",
+   "ten_seconds": 1
+  },
+  {
+   "declared": "1e15",
+   "scale": "1000000000000000.0",
+   "ten_seconds": 10000000000000000
+  },
+  {
+   "declared": "0",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "-0",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "-1",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "1e-400",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "1e400",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "nan",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "NaN",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "inf",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "infinity",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": " 2",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "2 ",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "2\n",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "1_0",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "0x10",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "two",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "\u0661",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "1e",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": ".",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "e5",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "--2",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "+-2",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  },
+  {
+   "declared": "1.2.3",
+   "refusal": "WITNESS_HOST_TIMEOUT_SCALE must be a positive finite number"
+  }
+ ],
+ "description": "WITNESS_HOST_TIMEOUT_SCALE declarations (null when absent) with Python's repr of the scale and the ten-second guard in whole seconds rounded up, or the refusal.",
+ "schema": "loop-timing-witness.host-timeout-scales.v1"
+}

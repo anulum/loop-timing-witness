@@ -8,6 +8,10 @@
 
 //! Exercise complete-byte acquisition through the public API and actual Linux files.
 
+#[path = "support/host_profile.rs"]
+mod host_profile;
+
+use host_profile::timeout_arguments;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -332,20 +336,19 @@ fn metadata_failure_after_open_refuses_original_file() {
             sha256: ORIGINAL_DIGEST.into(),
             byte_length: ORIGINAL.len() as u64,
         };
+        let path = &reference.path;
         assert_eq!(
             read_bound(&PathBuf::from(root), &reference, ORIGINAL.len()),
-            Err(format!(
-                "Cannot inspect original file descriptor: {}.",
-                reference.path
-            ))
+            Err(format!("Cannot inspect original file descriptor: {path}."))
         );
         return;
     }
     let original = OriginalFile::create();
     let trace_path = original.root.join("metadata-injection.trace");
     let output = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "5s", "strace"])
+        .args(timeout_arguments(5))
         .args([
+            "strace",
             "-f",
             "-yy",
             "-e",
@@ -400,7 +403,7 @@ fn a_fifo_without_a_writer_is_refused_without_waiting_for_input() {
         return;
     }
     let output = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "5s"])
+        .args(timeout_arguments(5))
         .arg(std::env::current_exe().expect("current public API test executable"))
         .args([
             "--exact",

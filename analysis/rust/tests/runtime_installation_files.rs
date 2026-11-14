@@ -10,8 +10,11 @@
 
 #[path = "support/digest.rs"]
 mod digest;
+#[path = "support/host_profile.rs"]
+mod host_profile;
 
 use digest::sha256_hex;
+use host_profile::timeout_arguments;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -156,7 +159,7 @@ fn unwritten_fifo_is_refused_without_waiting_for_a_writer() {
         return;
     }
     let result = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "5s"])
+        .args(timeout_arguments(5))
         .arg(std::env::current_exe().expect("actual public integration test executable"))
         .args([
             "--exact",

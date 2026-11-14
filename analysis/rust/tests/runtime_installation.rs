@@ -13,8 +13,11 @@
 
 #[path = "support/digest.rs"]
 mod digest;
+#[path = "support/host_profile.rs"]
+mod host_profile;
 
 use digest::sha256_hex;
+use host_profile::timeout_arguments;
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -248,7 +251,7 @@ fn construct_requested(path: &Path) -> Result<Installation, String> {
 fn child(name: &str, request: &Path, wrapper: &[&str], temporary: &Path) {
     let executable = std::env::current_exe().expect("current test executable");
     let output = Command::new("timeout")
-        .args(["--signal=TERM", "--kill-after=1s", "20s"])
+        .args(timeout_arguments(20))
         .args(wrapper)
         .arg(executable)
         .args(["--exact", name, "--test-threads=1"])
@@ -737,15 +740,8 @@ fn runtime_file_and_kernel_read_failures_are_named_refusals() {
     ] {
         let trace = selected.root.join(format!("{syscall}.trace"));
         let output = Command::new("timeout")
-            .args([
-                "--signal=TERM",
-                "--kill-after=1s",
-                "20s",
-                "strace",
-                "-f",
-                "-P",
-                path,
-            ])
+            .args(timeout_arguments(20))
+            .args(["strace", "-f", "-P", path])
             .args(["-e", &format!("trace={syscall}")])
             .args(["-e", &format!("inject={syscall}:error=EIO")])
             .arg("-o")

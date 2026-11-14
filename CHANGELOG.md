@@ -131,6 +131,8 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The native crates build with Rust 1.100.0, also their minimum supported version; every hosted
+  workflow, the toolchain files, the source enrolment pin and the guides move with them.
 - The analysis crate's lock moves const-oid to 0.10.3 and errno to 0.3.15; the licence record and the
   third-party notices carry their archives, whose MIT texts are unchanged.
 - Development tools move to their newest releases: Ruff 0.17.5, coverage 7.17.3, typos 1.52.2,

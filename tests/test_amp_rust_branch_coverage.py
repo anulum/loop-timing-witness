@@ -77,6 +77,45 @@ def _run(
     return result
 
 
+def cargo_artifact(stdout: str, name: str, *, executable: bool) -> Path:
+    """Return the one file Cargo reports for a built target, wherever its layout puts it.
+
+    Parameters
+    ----------
+    stdout
+        Standard output of a Cargo command run with ``--message-format=json``;
+        lines that are not JSON messages, such as test output, are skipped.
+    name
+        Cargo target name.
+    executable
+        Select the target's executable when true, else its ``.rlib`` archive.
+
+    Returns
+    -------
+    Path
+        The single file of that kind among the target's compiler artifacts; an
+        executable is also required to be runnable.
+    """
+    found: set[str] = set()
+    for line in stdout.splitlines():
+        if not line.startswith("{"):
+            continue
+        message: dict[str, Any] = json.loads(line)
+        if message.get("reason") != "compiler-artifact" or message["target"]["name"] != name:
+            continue
+        if executable:
+            if message["executable"] is not None:
+                found.add(message["executable"])
+        else:
+            found.update(path for path in message["filenames"] if path.endswith(".rlib"))
+    assert len(found) == 1, sorted(found)
+    path = Path(found.pop())
+    assert path.is_file()
+    if executable:
+        assert os.access(path, os.X_OK)
+    return path
+
+
 def _profile(directory: Path, name: str) -> dict[str, str]:
     """Select a unique genuine LLVM raw profile for one executed client.
 
@@ -95,7 +134,7 @@ def _profile(directory: Path, name: str) -> dict[str, str]:
     return {"LLVM_PROFILE_FILE": str(directory / f"{name}-%p.profraw")}
 
 
-def _rust_consumer(directory: Path, source: Path) -> Path:
+def _rust_consumer(directory: Path, source: Path, library: Path) -> Path:
     """Build and exercise a real public Rust client of the original release library.
 
     Parameters
@@ -104,14 +143,14 @@ def _rust_consumer(directory: Path, source: Path) -> Path:
         Exclusive original release archive, native clients and profiles.
     source
         Complete source of the public state-reset consumer.
+    library
+        Instrumented controller library archive that Cargo built for the adapter.
 
     Returns
     -------
     Path
         Executed binary whose active mapping joins the complete original profile set.
     """
-    libraries = list((directory / "target/release/deps").glob("libwitness_controller-*.rlib"))
-    assert len(libraries) == 1
     rust_client = directory / "rust-client"
     rust_arguments = [
         "--edition=2024",
@@ -128,18 +167,18 @@ def _rust_consumer(directory: Path, source: Path) -> Path:
         "-D",
         "unsafe_code",
         "--extern",
-        f"witness_controller={libraries[0]}",
+        f"witness_controller={library}",
         "-L",
-        f"dependency={libraries[0].parent}",
+        f"dependency={library.parent}",
         str(source),
     ]
     _run(
-        ["rustfmt", "+1.99.1", "--edition", "2024", "--check", str(source)],
+        ["rustfmt", "+1.100.0", "--edition", "2024", "--check", str(source)],
         directory,
         "rust-client-format",
     )
     _run(
-        ["rustc", "+1.99.1", *rust_arguments, "-o", str(rust_client)],
+        ["rustc", "+1.100.0", *rust_arguments, "-o", str(rust_client)],
         directory,
         "rust-client-build",
         extra_env={"RUSTC_BOOTSTRAP": "1"},
@@ -148,7 +187,7 @@ def _rust_consumer(directory: Path, source: Path) -> Path:
         [
             "rustup",
             "run",
-            "1.99.1",
+            "1.100.0",
             "clippy-driver",
             *rust_arguments,
             "--emit=metadata",
@@ -184,15 +223,15 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     adapter = ROOT / "runtime/bare_metal/rust_kernel/src/lib.rs"
     consumer = ROOT / "tests/native/amp_rust_reset_client.rs"
     source_bytes = {path: path.read_bytes() for path in [core, adapter, consumer]}
-    version = _run(["rustc", "+1.99.1", "-vV"], tmp_path, "rust-version")
-    assert version.stdout.startswith(b"rustc 1.99.1 ")
+    version = _run(["rustc", "+1.100.0", "-vV"], tmp_path, "rust-version")
+    assert version.stdout.startswith(b"rustc 1.100.0 ")
     host = next(
         line.removeprefix("host: ")
         for line in version.stdout.decode().splitlines()
         if line.startswith("host: ")
     )
     sysroot = Path(
-        _run(["rustc", "+1.99.1", "--print", "sysroot"], tmp_path, "sysroot")
+        _run(["rustc", "+1.100.0", "--print", "sysroot"], tmp_path, "sysroot")
         .stdout.decode()
         .strip()
     )
@@ -201,14 +240,15 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     assert len(profilers) == 1
     profiler = profilers[0]
     tools = sysroot / "lib/rustlib" / host / "bin"
-    _run(
+    built = _run(
         [
             "cargo",
-            "+1.99.1",
+            "+1.100.0",
             "build",
             "--release",
             "--offline",
             "--locked",
+            "--message-format=json",
             "--manifest-path",
             str(manifest),
             "--target-dir",
@@ -219,7 +259,11 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
         extra_env=RUST_ENV,
     )
     archive = tmp_path / "target/release/libwitness_amp_rust_kernel.a"
-    rust_client = _rust_consumer(tmp_path, consumer)
+    rust_client = _rust_consumer(
+        tmp_path,
+        consumer,
+        cargo_artifact(built.stdout.decode(), "witness_controller", executable=False),
+    )
     runtime = ROOT / "tests/native/amp_rust_profile_runtime.c"
     compiler = ["gcc", "-std=gnu11", "-O2", *WARNINGS, "-Icontrollers/c"]
     for name, source_name in [
@@ -244,7 +288,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     _run(
         [
             "rustc",
-            "+1.99.1",
+            "+1.100.0",
             "--crate-type",
             "rlib",
             "--edition",
@@ -312,13 +356,14 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
     )
     (tmp_path / "panic.log").write_bytes(panic.stdout + panic.stderr)
     assert panic.returncode == 42
-    _run(
+    core_run = _run(
         [
             "cargo",
-            "+1.99.1",
+            "+1.100.0",
             "test",
             "--offline",
             "--locked",
+            "--message-format=json",
             "--test",
             "controller_api",
             "--manifest-path",
@@ -330,12 +375,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
         "core-tests",
         extra_env={**RUST_ENV, **_profile(tmp_path, "core")},
     )
-    core_tests = [
-        path
-        for path in (tmp_path / "core-target/debug/deps").glob("controller_api-*")
-        if path.is_file() and os.access(path, os.X_OK)
-    ]
-    assert len(core_tests) == 1
+    core_tests = cargo_artifact(core_run.stdout.decode(), "controller_api", executable=True)
     profiles = sorted(tmp_path.glob("*.profraw"))
     assert len(profiles) >= 6
     profile = tmp_path / "merged.profdata"
@@ -352,7 +392,7 @@ def test_original_rust_core_and_adapter_line_branch_coverage(tmp_path: Path) -> 
             f"-object={tmp_path / 'api'}",
             f"-object={tmp_path / 'cli'}",
             f"-object={tmp_path / 'panic'}",
-            f"-object={core_tests[0]}",
+            f"-object={core_tests}",
             f"-instr-profile={profile}",
         ],
         tmp_path,

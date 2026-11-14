@@ -29,8 +29,8 @@ jobs:
           python-version: "3.15.2"
       - name: Install the pinned Rust toolchain
         run: |
-          rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
-          rustup default 1.99.1
+          rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.100.0
       - name: Install the pinned native formatter
         run: |
           sudo apt-get update

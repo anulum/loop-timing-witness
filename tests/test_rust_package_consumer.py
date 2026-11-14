@@ -16,6 +16,8 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+from test_amp_rust_branch_coverage import cargo_artifact
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -84,26 +86,25 @@ def test_packaged_rust_public_api(tmp_path: Path) -> None:
             "--lib",
             "--target",
             "riscv64imac-unknown-none-elf",
+            "--message-format=json",
         ],
     ]
     (client / "commands.json").write_text(json.dumps(commands, indent=2))
+    observed: subprocess.CompletedProcess[str] | None = None
     for index, argv in enumerate(commands):
         observed = subprocess.run(argv, cwd=client, capture_output=True, text=True, check=False)
         (client / f"command_{index}.log").write_text(observed.stdout + observed.stderr)
         assert observed.returncode == 0, observed.stdout + observed.stderr
     assert "2 passed" in (client / "command_1.log").read_text()
     # Inspect the shipped kernel's actual generated target objects, beyond Cargo's exit status.
-    libraries = list(
-        (client / "target/riscv64imac-unknown-none-elf/debug/deps").glob(
-            "libwitness_controller-*.rlib"
-        )
-    )
-    assert len(libraries) == 1
-    members = subprocess.check_output(["ar", "t", str(libraries[0])], text=True).splitlines()
+    assert observed is not None
+    library = cargo_artifact(observed.stdout, "witness_controller", executable=False)
+    assert "riscv64imac-unknown-none-elf" in library.parts
+    members = subprocess.check_output(["ar", "t", str(library)], text=True).splitlines()
     objects = [member for member in members if member.endswith(".o")]
     assert objects
     for member in objects:
-        data = subprocess.check_output(["ar", "p", str(libraries[0]), member])
+        data = subprocess.check_output(["ar", "p", str(library), member])
         assert data[:6] == b"\x7fELF\x02\x01", "little-endian ELF64 target object required"
         assert int.from_bytes(data[18:20], "little") == 243, "RISC-V target object required"
         assert int.from_bytes(data[48:52], "little") & 6 == 0, "soft-float target ABI required"

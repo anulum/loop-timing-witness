@@ -26,7 +26,7 @@ CARGO_AUDIT_INSTALL: Final = "cargo install cargo-audit --version 0.22.2 --locke
 # The components named by rust-toolchain.toml are installed with the toolchain;
 # adding them to a minimal toolchain on first use has failed on hosted runners.
 RUST_TOOLCHAIN_INSTALL: Final = (
-    "rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy"
+    "rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy"
 )
 
 
@@ -116,7 +116,7 @@ def dependency_audit_findings(root: Path, workflows: dict[str, dict[str, Any]]) 
         or str(installation_steps[0]["run"]).splitlines()
         != [
             RUST_TOOLCHAIN_INSTALL,
-            "rustup default 1.99.1",
+            "rustup default 1.100.0",
             CARGO_AUDIT_INSTALL,
             'test "$(cargo-audit --version)" = "cargo-audit 0.22.2"',
         ]

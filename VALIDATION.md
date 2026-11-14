@@ -55,7 +55,7 @@ truthfulness of the `architecture_only` state.
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
   is not evidence of board acceptance.
-- Rust 1.99.1 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs.
+- Rust 1.100.0 (Cargo, rustfmt, Clippy and matching LLVM profiling tools), installed explicitly with rustup in native CI jobs.
   The repository's `rust-toolchain.toml` pins the compiler, rustfmt and Clippy in relocated checkouts;
   source enrolment rejects drift between this pin and each maintained crate's Rust version.
   C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
@@ -371,7 +371,7 @@ importer through actual HTTP/TLS sockets, file imports and separate CLI consumer
 `make documentation-toolchain` installs the official Doxygen 1.18.0 Linux binary
 archive only after verifying SHA-256
 `14fa81bdc34171edb5f1f02b1d60e74802f0439b77fa44e592565d517d72df90`.
-Local and hosted builds use that same archive and Rust 1.99.1.
+Local and hosted builds use that same archive and Rust 1.100.0.
 `make native-api` treats Doxygen warnings, undocumented public members and enum
 values as errors. All Rust crates deny missing public documentation; Rustdoc
 also denies warnings and broken intra-doc links. Tests remove descriptions from
@@ -407,7 +407,7 @@ and streaming CLIs.
 source and raw-report hashes of that recorded snapshot; its C hashes predate the current
 sources. Coverage is host execution evidence; no numeric RTL
 coverage or physical timing qualification is inferred. The production Rust compiler
-remains 1.99.1; the separate branch analysis pins nightly-2026-08-21.
+remains 1.100.0; the separate branch analysis pins nightly-2026-08-21.
 
 `make controller-benchmarks` executes matching million-sample native workloads.
 [`benchmarks/controller_regression.json`](benchmarks/controller_regression.json)

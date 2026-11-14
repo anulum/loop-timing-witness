@@ -41,8 +41,8 @@ jobs:
           .venv/bin/python -m pip install --no-index --no-build-isolation --no-deps -e .
       - name: Install the pinned Rust toolchain
         run: |
-          rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
-          rustup default 1.99.1
+          rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.100.0
       - name: Build both actual native benchmark programs
         run: make controller-build
       - name: Measure both backends and retain runner context

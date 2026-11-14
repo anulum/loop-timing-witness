@@ -89,7 +89,7 @@ LANGUAGE_CHECKS: Final = {
 }
 PYTHON_ROOTS: Final = ("src/loop_timing_witness", "tools", "tests")
 PYTHON_PATHS: Final = ("conftest.py", "controller_test_support.py")
-RUST_CHANNEL: Final = "1.99.1"
+RUST_CHANNEL: Final = "1.100.0"
 RUST_MANIFESTS: Final = (
     "analysis/rust/Cargo.toml",
     "controllers/rust/Cargo.toml",

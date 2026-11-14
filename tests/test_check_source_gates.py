@@ -281,18 +281,18 @@ def test_actual_python_configuration_scope_or_threshold_drift_fails(
 @pytest.mark.parametrize(
     "change",
     [
-        ("rust-toolchain.toml", 'channel = "1.99.1"', 'channel = "stable"', "compiler"),
+        ("rust-toolchain.toml", 'channel = "1.100.0"', 'channel = "stable"', "compiler"),
         ("rust-toolchain.toml", 'profile = "minimal"', 'profile = "complete"', "minimal"),
         ("rust-toolchain.toml", '["rustfmt", "clippy"]', '["rustfmt"]', "static checks"),
         (
             "controllers/rust/Cargo.toml",
-            'rust-version = "1.99.1"',
+            'rust-version = "1.100.0"',
             'rust-version = "1.98.1"',
             "Rust version differs",
         ),
         (
             "runtime/bare_metal/rust_kernel/Cargo.toml",
-            'rust-version = "1.99.1"',
+            'rust-version = "1.100.0"',
             'rust-version = "1.98.1"',
             "Rust version differs",
         ),

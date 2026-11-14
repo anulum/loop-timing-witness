@@ -35,10 +35,14 @@ BOUNDS: Final = {
     **dict.fromkeys(FIELDS[7:10], (0, 1)),
     **dict.fromkeys(FIELDS[10:], (0, (1 << 64) - 1)),
 }
+SIGNIFICANT_DIGITS: Final = len(str((1 << 64) - 1))
 
 
 def _integer(text: object, low: int, high: int) -> int:
     """Parse one nonempty ASCII decimal token within its native field bounds.
+
+    Leading zeros are accepted at any length; a magnitude with more significant digits than
+    any bound is outside every bound and is refused before conversion.
 
     Parameters
     ----------
@@ -66,11 +70,13 @@ def _integer(text: object, low: int, high: int) -> int:
     if not digits.isascii() or not digits.isdecimal():
         message = "native tracking integer is not ASCII decimal"
         raise ValueError(message)
-    value = int(text)
-    if not low <= value <= high:
-        message = "native tracking integer is outside its ABI bounds"
-        raise ValueError(message)
-    return value
+    significant = digits.lstrip("0") or "0"
+    if len(significant) <= SIGNIFICANT_DIGITS:
+        value = -int(significant) if text.startswith("-") else int(significant)
+        if low <= value <= high:
+            return value
+    message = "native tracking integer is outside its ABI bounds"
+    raise ValueError(message)
 
 
 def decode_tracking(content: bytes, cycles: int, sample_count: int) -> list[list[int | Decimal]]:

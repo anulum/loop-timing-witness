@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
-from decimal import Inexact, localcontext
+from decimal import Decimal, Inexact, localcontext
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
@@ -20,6 +20,8 @@ import pytest
 from native_simulation_manifest import convert_tracking, native_metadata
 from test_native_run import native_run
 from test_native_simulation_manifest import native_capture
+
+from loop_timing_witness.native_tracking import FIELDS, decode_tracking
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -125,3 +127,35 @@ def test_q24_precision_is_independent(native_capture: Path) -> None:
         assert int(row["cycle"]) == int(original["cycle"])
         assert Fraction(row["reference"]) == Fraction(int(original["reference_raw"]), 1 << 24)
         assert Fraction(row["output"]) == Fraction(int(original["output_raw"]), 1 << 24)
+
+
+def _table(cycle: str, ticks: str = "1") -> bytes:
+    """Return a one-row raw tracking table.
+
+    Parameters
+    ----------
+    cycle
+        Cycle field.
+    ticks
+        Sample tick field.
+
+    Returns
+    -------
+    bytes
+        Header and row.
+    """
+    row = [cycle, "16777216", "0", "0", "0", "0", "0", "0", "0", "1", ticks, "1", "0"]
+    return (",".join(FIELDS) + "\n" + ",".join(row) + "\n").encode("ascii")
+
+
+def test_long_fields_are_bounded_before_conversion() -> None:
+    """Admit leading zeros at any length and refuse magnitudes beyond every bound."""
+    expected = [[0, Decimal(1), Decimal(0)]]
+    assert decode_tracking(_table("0" * 5000), 10, 1) == expected
+    assert decode_tracking(_table("-" + "0" * 5000), 10, 1) == expected
+    assert decode_tracking(_table("0", ticks="18446744073709551615"), 10, 1) == expected
+    for table in (_table("9" * 5000), _table("1" + "0" * 20), _table("0", "18446744073709551616")):
+        with pytest.raises(
+            ValueError, match=r"^native tracking integer is outside its ABI bounds$"
+        ):
+            decode_tracking(table, 10, 1)

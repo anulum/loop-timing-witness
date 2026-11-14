@@ -112,6 +112,9 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Raw tracking cells accept leading zeros at any length and refuse a magnitude longer than any
+  column's bound as outside its ABI bounds, instead of failing with the interpreter's integer
+  string conversion limit text past 4300 digits.
 - A captured measurement domain is held to the measurement-domain schema, its semantic rules and
   the 16-byte event wire layout, as a run's domain is, before its contracts decode the captured
   events. A capture whose domain lacked its contracts failed with the interpreter's `KeyError` or

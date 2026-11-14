@@ -523,7 +523,9 @@ must be regenerated before import under this schema.
 
 Native raw conversion validates all 13 ABI columns: cycle, six signed 32-bit Q8.24 values,
 three boolean flags and three unsigned 64-bit timing/work counters. Fields must be nonempty
-ASCII decimal integers within their bounds. Observed cycles must be unique and increasing;
+ASCII decimal integers within their bounds; leading zeros are accepted at any length, and a
+magnitude longer than any bound is refused as outside its bounds before conversion. Observed
+cycles must be unique and increasing;
 gaps remain valid observations. Header, row completeness and native sample count are checked
 before writing any converted tracking file. Hash agreement does not replace these semantic checks.
 

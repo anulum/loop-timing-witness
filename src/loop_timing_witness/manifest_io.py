@@ -266,6 +266,44 @@ def _holds_unpaired_surrogate(value: object) -> bool:
     return False
 
 
+def _strict_loads(text: str, source: str, parse_int: Callable[[str], object]) -> object:
+    """Decode JSON text with duplicate names, nonfinite numbers and refused integers refused.
+
+    Parameters
+    ----------
+    text
+        Complete JSON text within the nesting limit.
+    source
+        Source label for refusal messages.
+    parse_int
+        Decoder of each integer token.
+
+    Returns
+    -------
+    object
+        The decoded value.
+
+    Raises
+    ------
+    JsonInputRefusalError
+        If the text is not valid JSON, or a hook refuses a name or number.
+    """
+    try:
+        return json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_finite_json_float,
+            parse_int=parse_int,
+        )
+    except json.JSONDecodeError as exc:
+        message = f"{source}: invalid JSON"
+        raise JsonInputRefusalError(message, source) from exc
+    except JsonInputRefusalError as exc:
+        message = f"{source}: {exc}"
+        raise JsonInputRefusalError(message, source) from exc
+
+
 def _decode_bounded(
     raw: bytes, source: str, parse_int: Callable[[str], object], *, refuse_unpaired: bool
 ) -> dict[str, Any]:
@@ -304,20 +342,7 @@ def _decode_bounded(
     if nesting_depth(text) > MAX_BOUNDED_DEPTH:
         message = f"{source}: JSON input exceeds decoder limits"
         raise JsonInputRefusalError(message, source)
-    try:
-        value = json.loads(
-            text,
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite_constant,
-            parse_float=_finite_json_float,
-            parse_int=parse_int,
-        )
-    except json.JSONDecodeError as exc:
-        message = f"{source}: invalid JSON"
-        raise JsonInputRefusalError(message, source) from exc
-    except JsonInputRefusalError as exc:
-        message = f"{source}: {exc}"
-        raise JsonInputRefusalError(message, source) from exc
+    value = _strict_loads(text, source, parse_int)
     if refuse_unpaired and _holds_unpaired_surrogate(value):
         message = f"{source}: JSON text holds an unpaired surrogate escape"
         raise JsonInputRefusalError(message, source)

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -23,6 +23,35 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from conftest import MakeRepeatCampaign
+
+
+# Repeat summary row of a refused repeat: identity and status only.
+REFUSED_ROW = {
+    "campaign_id": "rtl-repeat-campaign",
+    "evidence_status": "simulation_only",
+    "repeat_index": "2",
+    "run_id": "",
+    "status": "refused",
+    "metric": "",
+    "interval": "",
+    "sample_count": "",
+    "median_ticks": "",
+    "p95_ticks": "",
+    "p99_ticks": "",
+    "p999_ticks": "",
+    "maximum_ticks": "",
+    "duration_ticks": "",
+}
+LOOP_MEDIAN_SPREAD = {
+    "campaign_id": "rtl-repeat-campaign",
+    "evidence_status": "simulation_only",
+    "metric": "latency",
+    "interval": "loop_latency",
+    "statistic": "median_ticks",
+    "minimum": "20.0",
+    "maximum": "20.0",
+    "range": "0.0",
+}
 
 
 def _table(path: Path) -> list[dict[str, str]]:
@@ -40,6 +69,59 @@ def _table(path: Path) -> list[dict[str, str]]:
     """
     with path.open(newline="", encoding="utf-8") as stream:
         return list(csv.DictReader(stream))
+
+
+def _check_repeat_summary(output: Path, report: dict[str, Any]) -> None:
+    """Require the refused repeat's empty row and the first repeat's metric rows.
+
+    Parameters
+    ----------
+    output
+        Published campaign report directory.
+    report
+        The campaign report it was written from.
+    """
+    repeats = _table(output / "repeat_summary.csv")
+    refused = [row for row in repeats if row["repeat_index"] == "2"]
+    assert refused == [REFUSED_ROW]
+    first = [row for row in repeats if row["repeat_index"] == "1"]
+    assert sorted((row["metric"], row["interval"]) for row in first) == [
+        ("jitter", "compute_time"),
+        ("jitter", "loop_latency"),
+        ("jitter", "scheduling_latency"),
+        ("latency", "compute_time"),
+        ("latency", "fault_detection"),
+        ("latency", "loop_latency"),
+        ("latency", "scheduling_latency"),
+        ("latency", "time_to_safe_state"),
+    ]
+    latency = next(r for r in first if r["metric"] == "latency" and r["interval"] == "compute_time")
+    assert float(latency["median_ticks"]) == 10
+    assert latency["maximum_ticks"] == "5000"
+    assert latency["duration_ticks"] == str(report["repeats"][0]["duration_ticks"])
+
+
+def _check_pooled_summary(output: Path, report: dict[str, Any]) -> None:
+    """Require the pooled rows of the two valid repeats.
+
+    Parameters
+    ----------
+    output
+        Published campaign report directory.
+    report
+        The campaign report it was written from.
+    """
+    pooled = _table(output / "pooled_summary.csv")
+    assert len(pooled) == 6
+    jitter = next(r for r in pooled if r["metric"] == "jitter" and r["interval"] == "compute_time")
+    assert jitter["repeat_count"] == "2"
+    assert jitter["sample_count"] == "4"
+    assert jitter["expected_pair_count"] == "4"
+    assert (
+        float(jitter["median_ticks"]) == report["pooled"]["jitter"]["compute_time"]["median_ticks"]
+    )
+    pooled_latency = next(r for r in pooled if r["metric"] == "latency")
+    assert pooled_latency["expected_pair_count"] == ""
 
 
 def test_campaign_files_match_the_report(
@@ -67,52 +149,8 @@ def test_campaign_files_match_the_report(
         "repeat_summary.csv",
     ]
     assert json.loads((output / "campaign_report.json").read_bytes()) == report
-    repeats = _table(output / "repeat_summary.csv")
-    refused = [row for row in repeats if row["repeat_index"] == "2"]
-    assert refused == [
-        {
-            "campaign_id": "rtl-repeat-campaign",
-            "evidence_status": "simulation_only",
-            "repeat_index": "2",
-            "run_id": "",
-            "status": "refused",
-            "metric": "",
-            "interval": "",
-            "sample_count": "",
-            "median_ticks": "",
-            "p95_ticks": "",
-            "p99_ticks": "",
-            "p999_ticks": "",
-            "maximum_ticks": "",
-            "duration_ticks": "",
-        }
-    ]
-    first = [row for row in repeats if row["repeat_index"] == "1"]
-    assert sorted((row["metric"], row["interval"]) for row in first) == [
-        ("jitter", "compute_time"),
-        ("jitter", "loop_latency"),
-        ("jitter", "scheduling_latency"),
-        ("latency", "compute_time"),
-        ("latency", "fault_detection"),
-        ("latency", "loop_latency"),
-        ("latency", "scheduling_latency"),
-        ("latency", "time_to_safe_state"),
-    ]
-    latency = next(r for r in first if r["metric"] == "latency" and r["interval"] == "compute_time")
-    assert float(latency["median_ticks"]) == 10
-    assert latency["maximum_ticks"] == "5000"
-    assert latency["duration_ticks"] == str(report["repeats"][0]["duration_ticks"])
-    pooled = _table(output / "pooled_summary.csv")
-    assert len(pooled) == 6
-    jitter = next(r for r in pooled if r["metric"] == "jitter" and r["interval"] == "compute_time")
-    assert jitter["repeat_count"] == "2"
-    assert jitter["sample_count"] == "4"
-    assert jitter["expected_pair_count"] == "4"
-    assert (
-        float(jitter["median_ticks"]) == report["pooled"]["jitter"]["compute_time"]["median_ticks"]
-    )
-    pooled_latency = next(r for r in pooled if r["metric"] == "latency")
-    assert pooled_latency["expected_pair_count"] == ""
+    _check_repeat_summary(output, report)
+    _check_pooled_summary(output, report)
     spread = _table(output / "repeat_spread.csv")
     assert len(spread) == 2 * 3 * 5
     median = next(
@@ -121,16 +159,7 @@ def test_campaign_files_match_the_report(
         if (r["metric"], r["interval"], r["statistic"])
         == ("latency", "loop_latency", "median_ticks")
     )
-    assert median == {
-        "campaign_id": "rtl-repeat-campaign",
-        "evidence_status": "simulation_only",
-        "metric": "latency",
-        "interval": "loop_latency",
-        "statistic": "median_ticks",
-        "minimum": "20.0",
-        "maximum": "20.0",
-        "range": "0.0",
-    }
+    assert median == LOOP_MEDIAN_SPREAD
 
 
 def test_existing_report_directory_is_preserved(

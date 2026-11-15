@@ -16,10 +16,64 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Final
 
 import pytest
 
 from loop_timing_witness.host_profile import scaled
+
+# Programs run in a fresh interpreter, so isolation applies to that process alone.
+PRCTL_PROGRAM: Final = """
+import ctypes, json
+from loop_timing_witness.neural_checker_isolation import isolate_checker
+try:
+    isolate_checker()
+except OSError as error:
+    print(json.dumps({'error': str(error), 'errno': ctypes.get_errno()}))
+else:
+    raise SystemExit(3)
+"""
+INHERITANCE_PROGRAM: Final = """
+import json, socket, subprocess, sys, threading
+from loop_timing_witness.neural_checker_isolation import isolate_checker
+
+def blocked_socket() -> int:
+    '''Return the actual kernel error without connecting or transmitting.'''
+    try:
+        connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except OSError as error:
+        return error.errno or 0
+    connection.close()
+    return 0
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM):
+    before_socket_allowed = True
+isolate_checker()
+thread_errors: list[int] = []
+thread = threading.Thread(target=lambda: thread_errors.append(blocked_socket()))
+thread.start()
+thread.join()
+child = subprocess.run(
+    [sys.executable, '-B', '-c', '''
+import json, socket
+try:
+    connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+except OSError as error:
+    print(json.dumps({'errno': error.errno}))
+else:
+    connection.close()
+    raise SystemExit(3)
+'''],
+    stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10, check=False,
+)
+print(json.dumps({
+    'before_socket_allowed': before_socket_allowed,
+    'thread_errors': thread_errors,
+    'child_errno': json.loads(child.stdout)['errno'],
+    'child_exit': child.returncode,
+    'child_stderr': child.stderr,
+}))
+"""
 
 
 def test_actual_checker_profile_denies_socket_and_sets_finite_limits() -> None:
@@ -141,16 +195,7 @@ def test_actual_prctl_refusal_is_not_treated_as_isolation(
             sys.executable,
             "-B",
             "-c",
-            """
-import ctypes, json
-from loop_timing_witness.neural_checker_isolation import isolate_checker
-try:
-    isolate_checker()
-except OSError as error:
-    print(json.dumps({'error': str(error), 'errno': ctypes.get_errno()}))
-else:
-    raise SystemExit(3)
-""",
+            PRCTL_PROGRAM,
         ],
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -253,47 +298,7 @@ def test_actual_filter_is_inherited_by_new_threads_and_spawned_children() -> Non
             sys.executable,
             "-B",
             "-c",
-            """
-import json, socket, subprocess, sys, threading
-from loop_timing_witness.neural_checker_isolation import isolate_checker
-
-def blocked_socket() -> int:
-    '''Return the actual kernel error without connecting or transmitting.'''
-    try:
-        connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    except OSError as error:
-        return error.errno or 0
-    connection.close()
-    return 0
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM):
-    before_socket_allowed = True
-isolate_checker()
-thread_errors: list[int] = []
-thread = threading.Thread(target=lambda: thread_errors.append(blocked_socket()))
-thread.start()
-thread.join()
-child = subprocess.run(
-    [sys.executable, '-B', '-c', '''
-import json, socket
-try:
-    connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-except OSError as error:
-    print(json.dumps({'errno': error.errno}))
-else:
-    connection.close()
-    raise SystemExit(3)
-'''],
-    stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10, check=False,
-)
-print(json.dumps({
-    'before_socket_allowed': before_socket_allowed,
-    'thread_errors': thread_errors,
-    'child_errno': json.loads(child.stdout)['errno'],
-    'child_exit': child.returncode,
-    'child_stderr': child.stderr,
-}))
-""",
+            INHERITANCE_PROGRAM,
         ],
         stdin=subprocess.DEVNULL,
         capture_output=True,

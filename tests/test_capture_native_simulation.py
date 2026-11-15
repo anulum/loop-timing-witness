@@ -16,7 +16,7 @@ import os
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from capture_native_simulation import CaptureOptions, capture_simulation
@@ -61,6 +61,34 @@ def test_real_capture(scenario: tuple[int, str], tmp_path: Path, run_tool: RunTo
         *policy_options,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    manifest, report = _check_capture(run, thermal, fault)
+    repeat = run_tool("capture_native_simulation", str(config), "--output-dir", str(run))
+    assert repeat.returncode == 1
+    assert json.loads((run / "manifest.json").read_text()) == manifest
+    analysis = run_tool(
+        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "reanalysis")
+    )
+    assert analysis.returncode == 0, analysis.stdout + analysis.stderr
+    assert json.loads((run / "reanalysis/report.json").read_text()) == report
+
+
+def _check_capture(run: Path, thermal: int, fault: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Require the captured receipt, manifest, report and every bound source digest.
+
+    Parameters
+    ----------
+    run
+        Completed capture directory.
+    thermal
+        Compiled plant.
+    fault
+        Injected RTL fault.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any]]
+        The capture's manifest and report.
+    """
     manifest = json.loads((run / "manifest.json").read_text())
     metadata = json.loads((run / "native_metadata.json").read_text())
     report = json.loads((run / "reports/report.json").read_text())
@@ -84,14 +112,7 @@ def test_real_capture(scenario: tuple[int, str], tmp_path: Path, run_tool: RunTo
             hashlib.sha256((run / reference["path"]).read_bytes()).hexdigest()
             == reference["sha256"]
         )
-    repeat = run_tool("capture_native_simulation", str(config), "--output-dir", str(run))
-    assert repeat.returncode == 1
-    assert json.loads((run / "manifest.json").read_text()) == manifest
-    analysis = run_tool(
-        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "reanalysis")
-    )
-    assert analysis.returncode == 0, analysis.stdout + analysis.stderr
-    assert json.loads((run / "reanalysis/report.json").read_text()) == report
+    return manifest, report
 
 
 @pytest.mark.parametrize(("thermal", "fifo_bits"), [(-1, 8), (2, 8), (0, 0), (0, 15)])
@@ -173,8 +194,32 @@ def test_actual_fifo_loss(tmp_path: Path, run_tool: RunTool, fault: str) -> None
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "INVALID: FIFO overflow" in result.stderr
+    report = _check_loss_report(run)
+    assert json.loads((run / "build_parameters.json").read_text())["fifo_address_bits"] == 1
+    reanalysis = run_tool(
+        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "reanalysis")
+    )
+    assert reanalysis.returncode == 0, reanalysis.stdout + reanalysis.stderr
+    assert json.loads((run / "reanalysis/report.json").read_text()) == report
+    if fault == "overload":
+        _check_post_warmup(run, run_tool)
+
+
+def _check_loss_report(run: Path) -> dict[str, Any]:
+    """Require the invalid report of a capture whose FIFO lost records.
+
+    Parameters
+    ----------
+    run
+        Capture directory.
+
+    Returns
+    -------
+    dict[str, Any]
+        The capture's report.
+    """
     native = json.loads((run / "native_metadata.json").read_text())
-    report = json.loads((run / "reports/report.json").read_text())
+    report: dict[str, Any] = json.loads((run / "reports/report.json").read_text())
     assert native["result"]["overflow"] > 0
     assert report["native_completion"] == native["result"]
     assert report["fifo_overflow_count"] == native["result"]["overflow"]
@@ -183,25 +228,31 @@ def test_actual_fifo_loss(tmp_path: Path, run_tool: RunTool, fault: str) -> None
     assert "event FIFO overflow" in report["invalid_reasons"]
     assert report["evidence_status"] == "simulation_only"
     assert report["events"]["control"]["deadline_misses"] != native["result"]["misses"]
-    assert json.loads((run / "build_parameters.json").read_text())["fifo_address_bits"] == 1
-    reanalysis = run_tool(
-        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "reanalysis")
+    return report
+
+
+def _check_post_warmup(run: Path, run_tool: RunTool) -> None:
+    """Declare one warm-up cycle and require no tracking samples after it.
+
+    Parameters
+    ----------
+    run
+        Overload capture directory.
+    run_tool
+        Public analyzer subprocess.
+    """
+    manifest_path = run / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["warmup_cycles"] = 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    post_warmup = run_tool(
+        "analyze_run", str(manifest_path), "--output-dir", str(run / "post_warmup")
     )
-    assert reanalysis.returncode == 0, reanalysis.stdout + reanalysis.stderr
-    assert json.loads((run / "reanalysis/report.json").read_text()) == report
-    if fault == "overload":
-        manifest_path = run / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        manifest["warmup_cycles"] = 1
-        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-        post_warmup = run_tool(
-            "analyze_run", str(manifest_path), "--output-dir", str(run / "post_warmup")
-        )
-        assert post_warmup.returncode == 0, post_warmup.stdout + post_warmup.stderr
-        scoped_report = json.loads((run / "post_warmup/report.json").read_text())
-        assert scoped_report["tracking_error"]["status"] == "unavailable"
-        assert scoped_report["tracking_error"]["sample_count"] == 0
-        assert scoped_report["tracking_error"]["coverage_fraction"] == 0
+    assert post_warmup.returncode == 0, post_warmup.stdout + post_warmup.stderr
+    scoped_report = json.loads((run / "post_warmup/report.json").read_text())
+    assert scoped_report["tracking_error"]["status"] == "unavailable"
+    assert scoped_report["tracking_error"]["sample_count"] == 0
+    assert scoped_report["tracking_error"]["coverage_fraction"] == 0
 
 
 def test_native_priority_refusal(tmp_path: Path, run_tool: RunTool) -> None:

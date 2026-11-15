@@ -64,6 +64,110 @@ class PluginBuild:
     runtime_root: Path | None = None
 
 
+_PLUGIN_TOOLS = (
+    "amp_plugin_inputs.py",
+    "amp_plugin_preparation.py",
+    "write_amp_plugin_manifest.py",
+    "amp_build_dependencies.py",
+    "amp_build_toolchain.py",
+    "amp_tool_runtime.py",
+    "manifest_io.py",
+)
+
+
+def _check_parameters(build: PluginBuild) -> None:
+    """Refuse a plant mode other than zero or one and an out-of-range FIFO width.
+
+    Parameters
+    ----------
+    build
+        Requested plugin build.
+
+    Raises
+    ------
+    ValueError
+        If the thermal mode or the FIFO address width is invalid.
+    """
+    if type(build.thermal) is not int or build.thermal not in (0, 1):
+        message = "AMP plugin thermal parameter must be zero or one"
+        raise ValueError(message)
+    if (
+        type(build.fifo_address_bits) is not int
+        or not 1 <= build.fifo_address_bits <= MAX_FIFO_ADDRESS_BITS
+    ):
+        message = "AMP plugin FIFO address bits must be in [1,14]"
+        raise ValueError(message)
+
+
+def _build_sources(build: PluginBuild, runtime: Path) -> list[Path]:
+    """List every source, header, tool and package file the plugin build reads.
+
+    Parameters
+    ----------
+    build
+        Requested plugin build with its SDK and plugin sources.
+    runtime
+        Verilator installation root.
+
+    Returns
+    -------
+    list[Path]
+        Build files, RTL, C/C++ sources and headers, plugin tools and the
+        installed package's Python and JSON files.
+    """
+    sources = [
+        ROOT / "Makefile",
+        ROOT / "amp-plugin-build.schema.json",
+        ROOT / "runtime/isa/spike_plugin.mk",
+        build.sdk / "config.h",
+        runtime / "include/verilated.mk",
+        runtime / "bin/verilator_includer",
+    ]
+    sources.extend((ROOT / "rtl").glob("*.sv"))
+    for directory in (ROOT / "controllers/c", ROOT / "runtime", build.source, runtime / "include"):
+        sources.extend(
+            path
+            for path in directory.rglob("*")
+            if path.is_file() and path.suffix in (".h", ".hpp", ".c", ".cpp", ".inc")
+        )
+    sources.extend(ROOT / "tools" / name for name in _PLUGIN_TOOLS)
+    # The installed package implementations and schemas are actual Python build inputs.
+    sources.extend(
+        path
+        for path in (ROOT / "src/loop_timing_witness").rglob("*")
+        if path.is_file() and (path.suffix in (".py", ".json") or path.name == "py.typed")
+    )
+    return sources
+
+
+def _programs(
+    build_tools: dict[str, Any], verilator: dict[str, Any], compilers: dict[str, Any]
+) -> list[Path]:
+    """Return every executable whose runtime libraries the build depends on.
+
+    Parameters
+    ----------
+    build_tools
+        Make, ar, Python and Perl identities.
+    verilator
+        Verilator identity with its backend.
+    compilers
+        C and C++ compiler identities.
+
+    Returns
+    -------
+    list[Path]
+        Build tools, the Verilator backend and every compiler driver and program.
+    """
+    programs = [Path(item["path"]) for item in build_tools.values()]
+    programs.append(Path(verilator["backend"]["path"]))
+    for compiler in compilers.values():
+        programs.extend(
+            Path(item["path"]) for item in [compiler["driver"], *compiler["programs"].values()]
+        )
+    return programs
+
+
 def original_identity(build: PluginBuild) -> dict[str, Any]:
     """Freeze actual original sources and tools before RTL generation.
 
@@ -82,53 +186,13 @@ def original_identity(build: PluginBuild) -> dict[str, Any]:
     ValueError
         If concrete plant or event FIFO parameters are invalid.
     """
-    if type(build.thermal) is not int or build.thermal not in (0, 1):
-        message = "AMP plugin thermal parameter must be zero or one"
-        raise ValueError(message)
-    if (
-        type(build.fifo_address_bits) is not int
-        or not 1 <= build.fifo_address_bits <= MAX_FIFO_ADDRESS_BITS
-    ):
-        message = "AMP plugin FIFO address bits must be in [1,14]"
-        raise ValueError(message)
+    _check_parameters(build)
     verilator = verilator_identity()
     runtime = Path(verilator["root"])
     if build.runtime_root is not None and build.runtime_root.resolve() != runtime:
         message = "AMP plugin runtime root differs from the actual Verilator installation"
         raise ValueError(message)
-    sources = [
-        ROOT / "Makefile",
-        ROOT / "amp-plugin-build.schema.json",
-        ROOT / "runtime/isa/spike_plugin.mk",
-        build.sdk / "config.h",
-        runtime / "include/verilated.mk",
-        runtime / "bin/verilator_includer",
-    ]
-    sources.extend((ROOT / "rtl").glob("*.sv"))
-    for directory in (ROOT / "controllers/c", ROOT / "runtime", build.source, runtime / "include"):
-        sources.extend(
-            path
-            for path in directory.rglob("*")
-            if path.is_file() and path.suffix in (".h", ".hpp", ".c", ".cpp", ".inc")
-        )
-    sources.extend(
-        ROOT / "tools" / name
-        for name in (
-            "amp_plugin_inputs.py",
-            "amp_plugin_preparation.py",
-            "write_amp_plugin_manifest.py",
-            "amp_build_dependencies.py",
-            "amp_build_toolchain.py",
-            "amp_tool_runtime.py",
-            "manifest_io.py",
-        )
-    )
-    # The installed package implementations and schemas are actual Python build inputs.
-    sources.extend(
-        path
-        for path in (ROOT / "src/loop_timing_witness").rglob("*")
-        if path.is_file() and (path.suffix in (".py", ".json") or path.name == "py.typed")
-    )
+    sources = _build_sources(build, runtime)
     compilers = {
         "c": compiler_identity(build.cc, "cc1"),
         "cxx": compiler_identity(build.cxx, "cc1plus"),
@@ -138,13 +202,7 @@ def original_identity(build: PluginBuild) -> dict[str, Any]:
         "python3": program_identity(sys.executable),
         "perl": program_identity("/usr/bin/perl"),
     }
-    programs = [Path(item["path"]) for item in build_tools.values()]
-    programs.append(Path(verilator["backend"]["path"]))
-    for compiler in compilers.values():
-        programs.extend(
-            Path(item["path"]) for item in [compiler["driver"], *compiler["programs"].values()]
-        )
-    libraries = runtime_libraries(programs)
+    libraries = runtime_libraries(_programs(build_tools, verilator, compilers))
     return {
         "working_directory": str(ROOT),
         "thermal": build.thermal,

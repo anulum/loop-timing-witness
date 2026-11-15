@@ -43,6 +43,69 @@ _FIELDS = {
     "elapsed_ns",
     "cleanup",
 }
+_CHECK_INPUTS = {
+    "stimuli": "original_stimulus",
+    "reference": "reference_projection",
+    "observed": "numerical_projection",
+}
+_GENERATE_OUTPUTS = {"stimuli": "original_stimulus", "reference": "reference_projection"}
+
+
+def _inventory_rows(run: BoundNeuralRun, reference: object) -> list[Any]:
+    """Read an observed inventory and return its rows after the closed-shape check.
+
+    Parameters
+    ----------
+    run
+        Complete admitted acquisition.
+    reference
+        Original observed inventory file reference.
+
+    Returns
+    -------
+    list[Any]
+        Inventory rows, not yet checked.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If the inventory is not its closed versioned structure.
+    """
+    inventory = parse_json_object(
+        read_neural_run_file(run.directory, reference, 1048576), "observed checker inventory"
+    )
+    if (
+        set(inventory) != {"schema_id", "files"}
+        or inventory["schema_id"] != "loop-timing-witness.checker-observed-inventory.v1"
+        or not isinstance(inventory["files"], list)
+    ):
+        message = "Checker observed inventory requires its closed versioned structure."
+        raise NeuralCaptureRefusalError(message)
+    rows: list[Any] = inventory["files"]
+    return rows
+
+
+def _well_formed_row(item: object) -> bool:
+    """Tell whether an inventory row holds exactly its four typed fields.
+
+    Parameters
+    ----------
+    item
+        One decoded inventory row.
+
+    Returns
+    -------
+    bool
+        Whether the row is an object with text ``path`` and ``actual_path``, an
+        integer ``byte_length`` and a ``sha256``, and nothing else.
+    """
+    return (
+        isinstance(item, dict)
+        and set(item) == {"path", "actual_path", "sha256", "byte_length"}
+        and type(item["path"]) is str
+        and type(item["actual_path"]) is str
+        and type(item["byte_length"]) is int
+    )
 
 
 def _bound_inventory(
@@ -69,26 +132,10 @@ def _bound_inventory(
     NeuralCaptureRefusalError
         If closed inventory shape, whole population, role, digest or length differs.
     """
-    inventory = parse_json_object(
-        read_neural_run_file(run.directory, reference, 1048576), "observed checker inventory"
-    )
-    if (
-        set(inventory) != {"schema_id", "files"}
-        or inventory["schema_id"] != "loop-timing-witness.checker-observed-inventory.v1"
-        or not isinstance(inventory["files"], list)
-    ):
-        message = "Checker observed inventory requires its closed versioned structure."
-        raise NeuralCaptureRefusalError(message)
     paths = {}
     roles = set()
-    for item in inventory["files"]:
-        if (
-            not isinstance(item, dict)
-            or set(item) != {"path", "actual_path", "sha256", "byte_length"}
-            or type(item["path"]) is not str
-            or type(item["actual_path"]) is not str
-            or type(item["byte_length"]) is not int
-        ):
+    for item in _inventory_rows(run, reference):
+        if not _well_formed_row(item):
             message = "Checker observed inventory row is malformed."
             raise NeuralCaptureRefusalError(message)
         name = item["path"]
@@ -106,6 +153,88 @@ def _bound_inventory(
         message = "Checker observed inventory omits a reviewed role."
         raise NeuralCaptureRefusalError(message)
     return paths
+
+
+def _argv_matches(
+    argv: object, paths: dict[str, str], policy: dict[str, Any], operation: str
+) -> bool:
+    """Tell whether recorded argv runs the bound entry point with the fixed arguments.
+
+    Parameters
+    ----------
+    argv
+        Recorded ``actual_argv`` of the receipt.
+    paths
+        Observed physical source path to portable role.
+    policy
+        Complete static reviewed checker policy.
+    operation
+        Fixed ``generate`` or ``check`` operation.
+
+    Returns
+    -------
+    bool
+        Whether argv is six texts naming the entry point and the operation's arguments.
+    """
+    return (
+        isinstance(argv, list)
+        and len(argv) == _ARGV_LENGTH
+        and all(type(value) is str for value in argv)
+        and paths.get(argv[0]) == policy["entry_point"]["path"]
+        and argv[1:] == policy[f"{operation}_arguments"]
+    )
+
+
+def _environment_matches(run: BoundNeuralRun, receipt: dict[str, Any]) -> bool:
+    """Tell whether the recorded environment is the closed worker profile.
+
+    Parameters
+    ----------
+    run
+        Complete admitted acquisition.
+    receipt
+        Original interpretable source execution receipt.
+
+    Returns
+    -------
+    bool
+        Whether every fixed variable is equal and ``TMPDIR`` is text.
+    """
+    environment = parse_json_object(
+        read_neural_run_file(run.directory, receipt["environment_ref"], 65536),
+        "actual checker environment",
+    )
+    expected = checker_environment(run.directory)
+    return (
+        set(environment) == set(expected)
+        and all(environment[key] == value for key, value in expected.items() if key != "TMPDIR")
+        and type(environment["TMPDIR"]) is str
+    )
+
+
+def _completed_cleanly(run: BoundNeuralRun, receipt: dict[str, Any], operation: str) -> bool:
+    """Bind the original logs and tell whether the invocation passed and was reaped.
+
+    Parameters
+    ----------
+    run
+        Complete admitted acquisition, which receives both original logs.
+    receipt
+        Original interpretable source execution receipt.
+    operation
+        Fixed ``generate`` or ``check`` operation.
+
+    Returns
+    -------
+    bool
+        Whether the native status is zero, the group was reaped and nothing was
+        written to standard error.
+    """
+    stdout = read_neural_run_file(run.directory, receipt["stdout_ref"], 1048576)
+    stderr = read_neural_run_file(run.directory, receipt["stderr_ref"], 1048576)
+    run.files[f"original_checker_{operation}_stdout"] = stdout
+    run.files[f"original_checker_{operation}_stderr"] = stderr
+    return receipt["native_returncode"] == 0 and receipt["cleanup"] == "reaped" and not stderr
 
 
 def checker_receipt_findings(run: BoundNeuralRun, policy: dict[str, Any]) -> tuple[str, ...]:
@@ -143,40 +272,16 @@ def checker_receipt_findings(run: BoundNeuralRun, policy: dict[str, Any]) -> tup
             )
         paths = _bound_inventory(run, receipt["observed_source_inventory_ref"], source_roles)
         _bound_inventory(run, receipt["observed_runtime_inventory_ref"], runtime_roles)
-        argv = receipt["actual_argv"]
-        if (
-            not isinstance(argv, list)
-            or len(argv) != _ARGV_LENGTH
-            or any(type(value) is not str for value in argv)
-            or paths.get(argv[0]) != policy["entry_point"]["path"]
-            or argv[1:] != policy[f"{operation}_arguments"]
-        ):
+        if not _argv_matches(receipt["actual_argv"], paths, policy, operation):
             failures.append(
                 "Original source-program argv differs from the bound fixed checker operation."
             )
-        environment = parse_json_object(
-            read_neural_run_file(run.directory, receipt["environment_ref"], 65536),
-            "actual checker environment",
-        )
-        expected_environment = checker_environment(run.directory)
-        if (
-            set(environment) != set(expected_environment)
-            or any(
-                environment[key] != value
-                for key, value in expected_environment.items()
-                if key != "TMPDIR"
-            )
-            or type(environment["TMPDIR"]) is not str
-        ):
+        if not _environment_matches(run, receipt):
             failures.append(
                 "Original checker environment differs from the selected closed worker profile."
             )
         failures.extend(_input_output_findings(run, receipt, operation))
-        stdout = read_neural_run_file(run.directory, receipt["stdout_ref"], 1048576)
-        stderr = read_neural_run_file(run.directory, receipt["stderr_ref"], 1048576)
-        run.files[f"original_checker_{operation}_stdout"] = stdout
-        run.files[f"original_checker_{operation}_stderr"] = stderr
-        if receipt["native_returncode"] != 0 or receipt["cleanup"] != "reaped" or stderr:
+        if not _completed_cleanly(run, receipt, operation):
             failures.append(
                 "Original checker invocation did not complete cleanly with a passing comparison."
             )
@@ -250,20 +355,8 @@ def _input_output_findings(
         If required operation roles or referenced file identities are invalid.
     """
     failures = []
-    inputs = (
-        {
-            "stimuli": "original_stimulus",
-            "reference": "reference_projection",
-            "observed": "numerical_projection",
-        }
-        if operation == "check"
-        else {}
-    )
-    outputs = (
-        {"stimuli": "original_stimulus", "reference": "reference_projection"}
-        if operation == "generate"
-        else {}
-    )
+    inputs = _CHECK_INPUTS if operation == "check" else {}
+    outputs = _GENERATE_OUTPUTS if operation == "generate" else {}
     for name, roles in (("inputs", inputs), ("outputs", outputs)):
         if not isinstance(receipt[name], dict) or set(receipt[name]) != set(roles):
             message = "Original checker invocation lacks its complete input/output roles."

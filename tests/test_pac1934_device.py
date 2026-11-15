@@ -21,6 +21,54 @@ from test_native_uio_run import native_uio
 from loop_timing_witness.host_profile import scaled
 
 __all__ = ["native_uio"]
+# An absent UIO device, then its name, version, map index and physical address (run_uio).
+UIO_DEVICE = ("uio4294967295", "witness", "devicetree", "0", "0")
+
+
+def _run(
+    native_uio: Path, directory: Path, controller: int
+) -> tuple[subprocess.CompletedProcess[str], list[Path]]:
+    """Run the native UIO controller with the power configuration in its directory.
+
+    Parameters
+    ----------
+    native_uio
+        Actual native controller executable.
+    directory
+        Exclusive run paths, holding ``power.conf``.
+    controller
+        Controller CPU.
+
+    Returns
+    -------
+    tuple[subprocess.CompletedProcess[str], list[Path]]
+        The process and its event, raw sample and power journal outputs.
+    """
+    config = directory / "run.conf"
+    config.write_text(configuration("pid", "none"), encoding="utf-8")
+    outputs = [directory / name for name in ("events.bin", "raw.csv", "power.csv")]
+    result = subprocess.run(
+        [
+            str(native_uio),
+            str(config),
+            str(outputs[0]),
+            str(outputs[1]),
+            *UIO_DEVICE,
+            "--cpu",
+            str(controller),
+            "--metadata",
+            str(directory / "metadata.json"),
+            "--power-config",
+            str(directory / "power.conf"),
+            "--power-journal",
+            str(outputs[2]),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=scaled(5),
+        check=False,
+    )
+    return result, outputs
 
 
 @pytest.mark.parametrize("kernel", ["actual", "mismatch"])
@@ -47,34 +95,7 @@ def test_actual_iio_refusal(native_uio: Path, tmp_path: Path, kernel: str) -> No
         "VDD 1 10000 rail1\nVDD25 2 10000 rail2\nVDDA25 3 10000 rail3\nVDDA 4 10000 rail4\n",
         encoding="utf-8",
     )
-    config = tmp_path / "run.conf"
-    config.write_text(configuration("pid", "none"), encoding="utf-8")
-    outputs = [tmp_path / name for name in ("events.bin", "raw.csv", "power.csv")]
-    result = subprocess.run(
-        [
-            str(native_uio),
-            str(config),
-            str(outputs[0]),
-            str(outputs[1]),
-            "uio4294967295",
-            "witness",
-            "devicetree",
-            "0",
-            "0",
-            "--cpu",
-            str(controller),
-            "--metadata",
-            str(tmp_path / "metadata.json"),
-            "--power-config",
-            str(power),
-            "--power-journal",
-            str(outputs[2]),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=scaled(5),
-        check=False,
-    )
+    result, outputs = _run(native_uio, tmp_path, controller)
     assert result.returncode == 1
     expected = (
         "separate controller"

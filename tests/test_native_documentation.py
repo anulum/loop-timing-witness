@@ -93,17 +93,32 @@ def test_actual_native_reference_includes_members_and_enum_values() -> None:
     assert (native / "rust/doc/witness_amp_rust_kernel/index.html").is_file()
 
 
-def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) -> None:
-    """All real crate references build outside the checkout's local Rust override."""
-    captured = tmp_path / "captured"
+# Every crate of the repository, documented together.
+CRATES = ("analysis/rust", "controllers/rust", "runtime/bare_metal/rust_kernel")
+
+
+def _capture_crates(captured: Path) -> None:
+    """Copy the toolchain pin and every crate, without build output, to a new directory.
+
+    Parameters
+    ----------
+    captured
+        Directory to create.
+    """
     captured.mkdir()
     shutil.copyfile(REPOSITORY_ROOT / "rust-toolchain.toml", captured / "rust-toolchain.toml")
-    for relative in ["analysis/rust", "controllers/rust", "runtime/bare_metal/rust_kernel"]:
+    for relative in CRATES:
         shutil.copytree(
             REPOSITORY_ROOT / relative,
             captured / relative,
             ignore=shutil.ignore_patterns("target"),
         )
+
+
+def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) -> None:
+    """All real crate references build outside the checkout's local Rust override."""
+    captured = tmp_path / "captured"
+    _capture_crates(captured)
     environment = {key: value for key, value in os.environ.items() if key != "RUSTUP_TOOLCHAIN"}
     environment["RUSTDOCFLAGS"] = "-D warnings -D rustdoc::broken_intra_doc_links"
     version = subprocess.run(
@@ -117,7 +132,7 @@ def test_relocated_original_crates_select_the_pinned_compiler(tmp_path: Path) ->
     )
     assert version.returncode == 0, version.stdout + version.stderr
     assert version.stdout.startswith("rustc 1.100.0 ")
-    for relative in ["analysis/rust", "controllers/rust", "runtime/bare_metal/rust_kernel"]:
+    for relative in CRATES:
         result = subprocess.run(
             [
                 "cargo",

@@ -174,6 +174,42 @@ def _context(tree: DeviceTree, plic: Node, hart: int) -> int:
     return candidates[0]
 
 
+def _check_controller(tree: DeviceTree, plic: Node, selection: PlicSelection) -> None:
+    """Require the selected layout's binding and the controller's source geometry.
+
+    Parameters
+    ----------
+    tree
+        Original admitted topology.
+    plic
+        Selected PLIC node.
+    selection
+        Explicit hart, source and register layout.
+
+    Raises
+    ------
+    ValueError
+        If the platform does not bind the layout, or the node is not a one-cell
+        interrupt controller with enough sources for the selected one.
+    """
+    compatible = string_list(plic, "compatible")
+    binding_ok = (selection.binding == "sifive" and "sifive,plic-1.0.0" in compatible) or (
+        selection.binding == "spike"
+        and "riscv,plic0" in compatible
+        and tree.nodes["/"].properties.get("model") == b"ucbbar,spike-bare\0"
+    )
+    if not binding_ok:
+        message = "PLIC concrete register layout is not bound by the original platform"
+        raise ValueError(message)
+    if (
+        plic.properties.get("interrupt-controller") != b""
+        or single_cell(plic, "#interrupt-cells") != 1
+        or not selection.source <= single_cell(plic, "riscv,ndev") <= MAX_SOURCE
+    ):
+        message = "PLIC source or interrupt-controller geometry is invalid"
+        raise ValueError(message)
+
+
 def bind_plic(tree: DeviceTree, selection: PlicSelection) -> PlicRegisters:
     """Validate one concrete PLIC binding and derive all dedicated machine register addresses.
 
@@ -204,22 +240,7 @@ def bind_plic(tree: DeviceTree, selection: PlicSelection) -> PlicRegisters:
         message = "dedicated PLIC selection is outside the admitted U54/source bounds"
         raise ValueError(message)
     plic = tree.nodes[selection.path]
-    compatible = string_list(plic, "compatible")
-    binding_ok = (selection.binding == "sifive" and "sifive,plic-1.0.0" in compatible) or (
-        selection.binding == "spike"
-        and "riscv,plic0" in compatible
-        and tree.nodes["/"].properties.get("model") == b"ucbbar,spike-bare\0"
-    )
-    if not binding_ok:
-        message = "PLIC concrete register layout is not bound by the original platform"
-        raise ValueError(message)
-    if (
-        plic.properties.get("interrupt-controller") != b""
-        or single_cell(plic, "#interrupt-cells") != 1
-        or not selection.source <= single_cell(plic, "riscv,ndev") <= MAX_SOURCE
-    ):
-        message = "PLIC source or interrupt-controller geometry is invalid"
-        raise ValueError(message)
+    _check_controller(tree, plic, selection)
     regions = register_regions(tree, selection.path)
     if len(regions) != 1 or not regions[0].address or regions[0].address % WORD_BYTES:
         message = "PLIC must declare one aligned nonzero physical register aperture"

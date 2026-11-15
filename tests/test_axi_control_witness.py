@@ -71,6 +71,81 @@ def test_production_axi_records(
     analyze_simulation(run, manifest, scenario, run_tool)
 
 
+def _copy_sources(run: Path) -> list[str]:
+    """Copy every RTL source, the AXI testbench and its simulation into the run.
+
+    Parameters
+    ----------
+    run
+        Run directory beside the compiled simulation.
+
+    Returns
+    -------
+    list[str]
+        Copied source paths, simulation excluded.
+    """
+    sources = [
+        str(path.relative_to(REPOSITORY_ROOT))
+        for path in sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
+    ]
+    sources.append("tests/rtl/axi_control_witness_tb.sv")
+    for relative in sources:
+        destination = run / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPOSITORY_ROOT / relative, destination)
+    shutil.copyfile(run.parent / "axi_control_witness_tb.vvp", run / "axi_control_witness_tb.vvp")
+    return sources
+
+
+def _write_tracking(run: Path) -> None:
+    """Write the raw Q8.24 reference and output as the run's tracking series.
+
+    Parameters
+    ----------
+    run
+        Run directory holding ``tracking_raw.csv``.
+    """
+    with (run / "tracking_raw.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    (run / "tracking.csv").write_text(
+        "cycle,reference,output\n"
+        + "".join(
+            f"{row['cycle']},{int(row['reference_raw']) / (1 << 24)},"
+            f"{int(row['output_raw']) / (1 << 24)}\n"
+            for row in rows
+        ),
+        encoding="utf-8",
+    )
+
+
+def _declare_axi_run(manifest: dict[str, Any], scenario: tuple[int, int]) -> None:
+    """Declare the two-cycle constant-command AXI run of one scenario.
+
+    Parameters
+    ----------
+    manifest
+        Declaration changed in place.
+    scenario
+        Bus half period and plant selection.
+    """
+    bus_half_period, thermal = scenario
+    manifest["run_id"] = f"axi-top-{thermal}-{bus_half_period}"
+    manifest["cycle_count"] = 2
+    manifest["sample_period_ticks"] = 32768
+    manifest["files"]["power"] = None
+    manifest["fault_schedule"] = []
+    manifest["plant"]["name"] = "first_order_thermal" if thermal else "second_order_mechanical"
+    manifest["plant"]["fixed_point_format"] = "Q8.24"
+    manifest["controller"] = {
+        "name": "simulation_constant_command",
+        "coefficients": {"command_raw": 16777216},
+    }
+    manifest["operator_notes"] = (
+        "Simulation: testbench drives constant commands through production AXI; "
+        "no processor timing or power measurements."
+    )
+
+
 def analyze_simulation(
     run: Path, manifest: dict[str, Any], scenario: tuple[int, int], run_tool: RunTool
 ) -> None:
@@ -87,43 +162,9 @@ def analyze_simulation(
     run_tool
         Public host analyzer subprocess runner.
     """
-    bus_half_period, thermal = scenario
-    sources = [
-        str(path.relative_to(REPOSITORY_ROOT))
-        for path in sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
-    ]
-    sources.append("tests/rtl/axi_control_witness_tb.sv")
-    for relative in sources:
-        destination = run / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(REPOSITORY_ROOT / relative, destination)
-    shutil.copyfile(run.parent / "axi_control_witness_tb.vvp", run / "axi_control_witness_tb.vvp")
-    with (run / "tracking_raw.csv").open(newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    (run / "tracking.csv").write_text(
-        "cycle,reference,output\n"
-        + "".join(
-            f"{row['cycle']},{int(row['reference_raw']) / (1 << 24)},"
-            f"{int(row['output_raw']) / (1 << 24)}\n"
-            for row in rows
-        ),
-        encoding="utf-8",
-    )
-    manifest["run_id"] = f"axi-top-{thermal}-{bus_half_period}"
-    manifest["cycle_count"] = 2
-    manifest["sample_period_ticks"] = 32768
-    manifest["files"]["power"] = None
-    manifest["fault_schedule"] = []
-    manifest["plant"]["name"] = "first_order_thermal" if thermal else "second_order_mechanical"
-    manifest["plant"]["fixed_point_format"] = "Q8.24"
-    manifest["controller"] = {
-        "name": "simulation_constant_command",
-        "coefficients": {"command_raw": 16777216},
-    }
-    manifest["operator_notes"] = (
-        "Simulation: testbench drives constant commands through production AXI; "
-        "no processor timing or power measurements."
-    )
+    sources = _copy_sources(run)
+    _write_tracking(run)
+    _declare_axi_run(manifest, scenario)
     manifest["source"]["files"] = [
         {"path": relative, "sha256": hashlib.sha256((run / relative).read_bytes()).hexdigest()}
         for relative in [*sources, "axi_control_witness_tb.vvp", "tracking_raw.csv"]

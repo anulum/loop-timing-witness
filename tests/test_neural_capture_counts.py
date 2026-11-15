@@ -29,6 +29,67 @@ if TYPE_CHECKING:
 pytest_plugins = ("test_neural_event_stream",)
 
 
+# Counter snapshot changes of the input channel and the refusals each reaches, in order.
+SNAPSHOT_CASES: list[tuple[dict[str, object], tuple[str, ...]]] = [
+    ({"attempts": 7}, ("attempted, accepted and dropped counts disagree",)),
+    (
+        {"accepted": 7},
+        (
+            "attempted, accepted and dropped counts disagree",
+            "accepted records were not completely drained",
+        ),
+    ),
+    (
+        {"drained": 5},
+        (
+            "accepted records were not completely drained",
+            "exported records differ from drain count",
+        ),
+    ),
+    (
+        {"attempts": 7, "dropped": 1},
+        (
+            "overflow flag and drop counter disagree",
+            "capture lost records",
+        ),
+    ),
+    (
+        {"overflowed": True},
+        (
+            "overflow flag and drop counter disagree",
+            "capture lost records",
+        ),
+    ),
+    (
+        {"attempts": 7, "dropped": 7, "overflowed": True},
+        (
+            "attempted, accepted and dropped counts disagree",
+            "capture lost records",
+            "drop counter is a lower bound at saturation",
+        ),
+    ),
+]
+ROOT_CHANGES: list[dict[str, object]] = [
+    {"schema_id": "other"},
+    {"extra": 0},
+    {"drop_counter_bits": 0},
+    {"drop_counter_bits": 33},
+    {"drop_counter_bits": True},
+    {"channels": {}},
+    {"channels": []},
+]
+CHANNEL_CHANGES: list[dict[str, object]] = [
+    {"role": "service"},
+    {"extra": 0},
+    {"overflowed": 0},
+    {"attempts": True},
+    {"attempts": -1},
+    {"accepted": 1 << 64},
+    {"dropped": 8},
+    {"drained": 1.0},
+]
+
+
 @pytest.mark.parametrize(("empty_service", "count", "bits"), [(0, 4, 3), (1, 1000, 32)])
 def test_actual_lossless_capture_counters_match_original_exports(
     capture_streams: CaptureStreams, tmp_path: Path, empty_service: int, count: int, bits: int
@@ -126,46 +187,7 @@ def test_actual_counts_refuse_damaged_export_and_incoherent_snapshots(
     report = reconcile_neural_capture(missing, snapshots[0])
     assert report.observed_records == 5
     assert report.refusals == ("input: exported records differ from drain count",)
-    cases = [
-        ({"attempts": 7}, ("attempted, accepted and dropped counts disagree",)),
-        (
-            {"accepted": 7},
-            (
-                "attempted, accepted and dropped counts disagree",
-                "accepted records were not completely drained",
-            ),
-        ),
-        (
-            {"drained": 5},
-            (
-                "accepted records were not completely drained",
-                "exported records differ from drain count",
-            ),
-        ),
-        (
-            {"attempts": 7, "dropped": 1},
-            (
-                "overflow flag and drop counter disagree",
-                "capture lost records",
-            ),
-        ),
-        (
-            {"overflowed": True},
-            (
-                "overflow flag and drop counter disagree",
-                "capture lost records",
-            ),
-        ),
-        (
-            {"attempts": 7, "dropped": 7, "overflowed": True},
-            (
-                "attempted, accepted and dropped counts disagree",
-                "capture lost records",
-                "drop counter is a lower bound at saturation",
-            ),
-        ),
-    ]
-    for changes, expected in cases:
+    for changes, expected in SNAPSHOT_CASES:
         value = json.loads(receipt)
         value["channels"][0].update(changes)
         altered = decode_neural_capture_counts(json.dumps(value).encode())[0]
@@ -188,42 +210,42 @@ def test_actual_counter_receipt_schema_and_types_refuse_damage(
     """
     capture_streams(0, 0, 1, 4, 3)
     receipt = (tmp_path / "capture-0-0-1-4-3/capture-counts.json").read_bytes()
+    for content in _damaged_receipts(receipt):
+        with pytest.raises(NeuralCaptureRefusalError):
+            decode_neural_capture_counts(content)
+    with pytest.raises(NeuralCaptureRefusalError, match="must be bytes"):
+        decode_neural_capture_counts(json.loads('"not bytes"'))
+
+
+def _damaged_receipts(receipt: bytes) -> list[bytes]:
+    """Return damaged copies of an actual counter receipt.
+
+    Parameters
+    ----------
+    receipt
+        Original receipt bytes.
+
+    Returns
+    -------
+    list[bytes]
+        Malformed and duplicate-key texts, then root and first-channel member changes,
+        then a missing first channel.
+    """
     damaged = [
         b"{",
         b"\xff",
         b"[]",
         receipt.replace(b'"attempts":', b'"attempts":0,"attempts":', 1),
     ]
-    for changes in [
-        {"schema_id": "other"},
-        {"extra": 0},
-        {"drop_counter_bits": 0},
-        {"drop_counter_bits": 33},
-        {"drop_counter_bits": True},
-        {"channels": {}},
-        {"channels": []},
-    ]:
+    for changes in ROOT_CHANGES:
         value = json.loads(receipt)
         value.update(changes)
         damaged.append(json.dumps(value).encode())
-    for changes in [
-        {"role": "service"},
-        {"extra": 0},
-        {"overflowed": 0},
-        {"attempts": True},
-        {"attempts": -1},
-        {"accepted": 1 << 64},
-        {"dropped": 8},
-        {"drained": 1.0},
-    ]:
+    for changes in CHANNEL_CHANGES:
         value = json.loads(receipt)
         value["channels"][0].update(changes)
         damaged.append(json.dumps(value).encode())
     value = json.loads(receipt)
     value["channels"][0] = None
     damaged.append(json.dumps(value).encode())
-    for content in damaged:
-        with pytest.raises(NeuralCaptureRefusalError):
-            decode_neural_capture_counts(content)
-    with pytest.raises(NeuralCaptureRefusalError, match="must be bytes"):
-        decode_neural_capture_counts(json.loads('"not bytes"'))
+    return damaged

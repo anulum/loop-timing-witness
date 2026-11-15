@@ -27,11 +27,20 @@ from .neural_run_traces import analyze_original_traces
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from .neural_checker import NeuralCheckerFindings
     from .neural_run_binding import BoundNeuralRun
     from .neural_run_policy import NeuralRegistry
+    from .neural_run_receipts import NeuralReceiptFindings
+    from .neural_run_traces import NeuralTraceAnalysis
 
 _INPUT_SEAL = object()
 NEURAL_REPORT_SCHEMA = "loop-timing-witness.neural-step-analysis-report.v1"
+_LIMITS = (
+    "Capture ticks are simulator edges; physical timing and calibration are unavailable.",
+    "File integrity and correspondence do not authenticate a remote producer.",
+    "This verdict covers the selected single-neuron source cohort and full original acquisition.",
+    "A passing run does not establish model-family, physical or whole-project acceptance.",
+)
 
 
 class NeuralRunError(RuntimeError):
@@ -72,6 +81,113 @@ class NeuralRunInputs:
         raise NeuralCaptureRefusalError(message)
 
 
+def _verdicts(
+    run: BoundNeuralRun,
+    traces: NeuralTraceAnalysis,
+    receipts: NeuralReceiptFindings,
+    reset: tuple[str, ...],
+    checker: NeuralCheckerFindings,
+) -> dict[str, dict[str, Any]]:
+    """Group every finding into its independent verdict dimension.
+
+    Parameters
+    ----------
+    run
+        Entire byte-bound acquisition, whose capture refusals count as findings.
+    traces, receipts, reset, checker
+        Original trace, receipt, reset and actual source-checker analyses.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        Pass flag and distinct findings of each of the five dimensions.
+    """
+    dimensions = {
+        "source_binding": (*traces.source, *receipts.source, *checker.source),
+        "capture": (*run.capture.refusals, *traces.joins, *receipts.capture, *traces.service),
+        "numerical": (*traces.numerical, *checker.numerical),
+        "completion": (*receipts.completion, *receipts.publication, *reset, *checker.completion),
+        "clock": receipts.clock,
+    }
+    return {
+        name: {"pass": not findings, "findings": list(findings)}
+        for name, findings in dimensions.items()
+    }
+
+
+def _source_binding(run: BoundNeuralRun, verdict: dict[str, Any]) -> dict[str, Any]:
+    """Return the source-binding block with its original identities and receipts.
+
+    Parameters
+    ----------
+    run
+        Entire byte-bound acquisition.
+    verdict
+        Source-binding pass flag and findings.
+
+    Returns
+    -------
+    dict[str, Any]
+        Verdict, source identity, tool and runtime receipts, both checker
+        executions and the digest and length of every original input.
+    """
+    return {
+        **verdict,
+        "source_contract_ref": run.manifest["source_contract_ref"],
+        "admitted_source_identity": list(run.contract.key),
+        "tool_receipt": run.tool,
+        "compiled_runtime": parse_json_object(
+            run.files["compiler_simulator_runtime"], "bound native runtime receipt"
+        ),
+        "checker_invocations": {
+            operation: parse_json_object(
+                run.files[f"fresh_checker_{operation}_execution_receipt"],
+                "fresh source checker execution receipt",
+            )
+            for operation in ("generate", "check")
+        },
+        "original_sources": {
+            name: {"sha256": hashlib.sha256(raw).hexdigest(), "byte_length": len(raw)}
+            for name, raw in run.sources.items()
+        },
+        "original_inputs": {
+            name: {"sha256": hashlib.sha256(raw).hexdigest(), "byte_length": len(raw)}
+            for name, raw in {"manifest": run.manifest_bytes, **run.files}.items()
+        },
+    }
+
+
+def _completion(run: BoundNeuralRun, verdict: dict[str, Any]) -> dict[str, Any]:
+    """Return the completion block with the declared and actual receipts.
+
+    Parameters
+    ----------
+    run
+        Entire byte-bound acquisition.
+    verdict
+        Completion pass flag and findings.
+
+    Returns
+    -------
+    dict[str, Any]
+        Verdict, epoch, declared completion, actual completion receipt and the
+        reset receipt when the acquisition holds one.
+    """
+    return {
+        **verdict,
+        "epoch": run.manifest["epoch"],
+        "declared": run.manifest["completion"],
+        "actual_receipt": parse_json_object(
+            run.files["actual_completion"], "bound actual completion receipt"
+        ),
+        "reset_receipt": (
+            parse_json_object(run.files["reset_epoch_receipt"], "bound actual reset receipt")
+            if "reset_epoch_receipt" in run.files
+            else None
+        ),
+    }
+
+
 def _analyse(run: BoundNeuralRun) -> dict[str, Any]:
     """Recompute all full source, capture, numerical, completion and clock verdicts.
 
@@ -89,47 +205,14 @@ def _analyse(run: BoundNeuralRun) -> dict[str, Any]:
     receipts = analyze_receipt_dimensions(run, traces)
     reset = analyze_actual_reset(run)
     checker = verify_source_checker(run)
-    dimensions = {
-        "source_binding": (*traces.source, *receipts.source, *checker.source),
-        "capture": (*run.capture.refusals, *traces.joins, *receipts.capture, *traces.service),
-        "numerical": (*traces.numerical, *checker.numerical),
-        "completion": (*receipts.completion, *receipts.publication, *reset, *checker.completion),
-        "clock": receipts.clock,
-    }
-    verdicts = {
-        name: {"pass": not findings, "findings": list(findings)}
-        for name, findings in dimensions.items()
-    }
+    verdicts = _verdicts(run, traces, receipts, reset, checker)
     capture = neural_capture_report(run.capture)
     return {
         "schema_id": NEURAL_REPORT_SCHEMA,
         "profile": run.manifest["profile"],
         "evidence_class": run.manifest["evidence_class"],
         "run_id": run.manifest["run_id"],
-        "source_binding": {
-            **verdicts["source_binding"],
-            "source_contract_ref": run.manifest["source_contract_ref"],
-            "admitted_source_identity": list(run.contract.key),
-            "tool_receipt": run.tool,
-            "compiled_runtime": parse_json_object(
-                run.files["compiler_simulator_runtime"], "bound native runtime receipt"
-            ),
-            "checker_invocations": {
-                operation: parse_json_object(
-                    run.files[f"fresh_checker_{operation}_execution_receipt"],
-                    "fresh source checker execution receipt",
-                )
-                for operation in ("generate", "check")
-            },
-            "original_sources": {
-                name: {"sha256": hashlib.sha256(raw).hexdigest(), "byte_length": len(raw)}
-                for name, raw in run.sources.items()
-            },
-            "original_inputs": {
-                name: {"sha256": hashlib.sha256(raw).hexdigest(), "byte_length": len(raw)}
-                for name, raw in {"manifest": run.manifest_bytes, **run.files}.items()
-            },
-        },
+        "source_binding": _source_binding(run, verdicts["source_binding"]),
         "capture": {**capture, **verdicts["capture"]},
         "numerical": {
             **verdicts["numerical"],
@@ -139,35 +222,18 @@ def _analyse(run: BoundNeuralRun) -> dict[str, Any]:
             "original_oracle_equal": not traces.numerical,
             "source_checker_executed": checker.executed,
         },
-        "completion": {
-            **verdicts["completion"],
-            "epoch": run.manifest["epoch"],
-            "declared": run.manifest["completion"],
-            "actual_receipt": parse_json_object(
-                run.files["actual_completion"], "bound actual completion receipt"
-            ),
-            "reset_receipt": (
-                parse_json_object(run.files["reset_epoch_receipt"], "bound actual reset receipt")
-                if "reset_epoch_receipt" in run.files
-                else None
-            ),
-        },
+        "completion": _completion(run, verdicts["completion"]),
         "clock": {
             **verdicts["clock"],
             "actual_schedule": parse_json_object(
                 run.files["clock_schedule_ref"], "bound original clock schedule"
             ),
         },
-        "verification": {**verdicts, "whole": not any(dimensions.values())},
-        "limits": [
-            "Capture ticks are simulator edges; physical timing and calibration are unavailable.",
-            "File integrity and correspondence do not authenticate a remote producer.",
-            (
-                "This verdict covers the selected single-neuron source cohort "
-                "and full original acquisition."
-            ),
-            "A passing run does not establish model-family, physical or whole-project acceptance.",
-        ],
+        "verification": {
+            **verdicts,
+            "whole": all(verdict["pass"] for verdict in verdicts.values()),
+        },
+        "limits": list(_LIMITS),
     }
 
 

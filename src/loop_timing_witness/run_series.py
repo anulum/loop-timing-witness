@@ -107,6 +107,43 @@ def count(value: str, field: str) -> int:
     return int(digits or "0")
 
 
+def _decimal_shift(exponent: str, whole: str, fraction: str, significant: int, field: str) -> int:
+    """Return the decimal exponent of a measurement after checking its range.
+
+    Parameters
+    ----------
+    exponent
+        Exponent text after ``e``, possibly empty or signed.
+    whole, fraction
+        Integer digits without leading zeros, and fraction digits.
+    significant
+        Count of significant digits.
+    field
+        Name used in a refusal message.
+
+    Returns
+    -------
+    int
+        The exponent's value.
+
+    Raises
+    ------
+    ValueError
+        If the exponent text is too long, there are too many significant digits,
+        or the magnitude lies outside 10**-99 to 10**100.
+    """
+    power = exponent.lstrip("+-").lstrip("0")
+    if len(power) > _EXPONENT_DIGITS:
+        message = f"{field} is outside the supported decimal range"
+        raise ValueError(message)
+    shift = -int(power or "0") if exponent.startswith("-") else int(power or "0")
+    leading = len(whole) - 1 if whole else len(fraction.lstrip("0")) - len(fraction) - 1
+    if significant > MEASUREMENT_DIGITS or abs(shift + leading) > MEASUREMENT_EXPONENT:
+        message = f"{field} is outside the supported decimal range"
+        raise ValueError(message)
+    return shift
+
+
 def measurement(value: str, field: str) -> Decimal:
     """Parse one finite decimal measurement within the supported range.
 
@@ -147,15 +184,7 @@ def measurement(value: str, field: str) -> Decimal:
     digits = (whole + fraction).lstrip("0").rstrip("0")
     if not digits:
         return Decimal("-0" if negative else "0")
-    power = exponent.lstrip("+-").lstrip("0")
-    if len(power) > _EXPONENT_DIGITS:
-        message = f"{field} is outside the supported decimal range"
-        raise ValueError(message)
-    shift = -int(power or "0") if exponent.startswith("-") else int(power or "0")
-    leading = len(whole) - 1 if whole else len(fraction.lstrip("0")) - len(fraction) - 1
-    if len(digits) > MEASUREMENT_DIGITS or abs(shift + leading) > MEASUREMENT_EXPONENT:
-        message = f"{field} is outside the supported decimal range"
-        raise ValueError(message)
+    shift = _decimal_shift(exponent, whole, fraction, len(digits), field)
     # Built from its digits, as Decimal(value) represents it, so that no implementation
     # of the decimal module converts a long run of leading zeros to an integer.
     coefficient = tuple(int(digit) for digit in (whole + fraction).lstrip("0"))
@@ -257,6 +286,139 @@ def _power_samples(content: bytes, rails: list[str]) -> dict[int, dict[str, Deci
     return dict(samples)
 
 
+def _cycle_ticks(events: tuple[Event, ...], profile_name: str, warmup_cycles: int) -> list[int]:
+    """Return the sorted anchor ticks of the analysed cycles.
+
+    Parameters
+    ----------
+    events
+        Validated fabric events.
+    profile_name
+        ``CONTROL`` cycles are anchored on ``SAMPLE_READY``, others on ``INPUT_WRITE``.
+    warmup_cycles
+        Initial cycles excluded from results.
+
+    Returns
+    -------
+    list[int]
+        Fabric ticks of every analysed cycle's anchor event, in order.
+    """
+    anchor = "SAMPLE_READY" if profile_name == "CONTROL" else "INPUT_WRITE"
+    return sorted(
+        event.ticks for event in events if event.name == anchor and event.cycle >= warmup_cycles
+    )
+
+
+def _window_cycles(start: int, end: int, cycle_ticks: list[int], warmup_cycles: int) -> int:
+    """Count the analysed cycles one sampler window holds.
+
+    Parameters
+    ----------
+    start, end
+        Window bounds in fabric ticks; the end is exclusive.
+    cycle_ticks
+        Sorted anchor ticks of the analysed cycles.
+    warmup_cycles
+        Initial cycles excluded from results.
+
+    Returns
+    -------
+    int
+        Number of analysed cycle anchors in the window.
+
+    Raises
+    ------
+    ValueError
+        If a window holding analysed cycles begins before the first of them
+        while a warm-up was discarded.
+    """
+    cycle_samples = sum(start <= tick < end for tick in cycle_ticks)
+    if cycle_samples and warmup_cycles and start < cycle_ticks[0]:
+        message = "power window overlaps discarded warm-up cycles"
+        raise ValueError(message)
+    return cycle_samples
+
+
+def _rail_deltas(
+    first: dict[str, Decimal], last: dict[str, Decimal], rails: list[str]
+) -> dict[str, Decimal]:
+    """Return each rail's cumulative-energy increase over one window.
+
+    Parameters
+    ----------
+    first, last
+        Cumulative joules by rail at the window's start and end.
+    rails
+        Exact board rail names, in declaration order.
+
+    Returns
+    -------
+    dict[str, Decimal]
+        Joules added on each rail.
+
+    Raises
+    ------
+    ValueError
+        If cumulative energy decreases on a rail.
+    """
+    deltas = {}
+    for rail in rails:
+        delta = last[rail] - first[rail]
+        if delta < 0:
+            message = f"cumulative energy decreases for {rail}"
+            raise ValueError(message)
+        deltas[rail] = delta
+    return deltas
+
+
+def _window_energy(
+    samples: dict[int, dict[str, Decimal]],
+    rails: list[str],
+    cycle_ticks: list[int],
+    warmup_cycles: int,
+) -> tuple[dict[str, Decimal], int, int]:
+    """Sum each rail's energy over the sampler windows that hold analysed cycles.
+
+    Parameters
+    ----------
+    samples
+        Cumulative joules by fabric tick and rail.
+    rails
+        Exact board rail names from the measurement-domain contract.
+    cycle_ticks
+        Sorted anchor ticks of the analysed cycles.
+    warmup_cycles
+        Initial cycles excluded from results.
+
+    Returns
+    -------
+    tuple[dict[str, Decimal], int, int]
+        Joules per rail over the contributing windows, the cycles they hold and
+        the number of contributing windows.
+
+    Raises
+    ------
+    ValueError
+        If a window overlaps the warm-up, cumulative energy decreases, or the
+        windows do not hold every analysed cycle.
+    """
+    energy = {rail: Decimal(0) for rail in rails}
+    covered_cycles = 0
+    windows = 0
+    for start, end in pairwise(sorted(samples)):
+        cycle_samples = _window_cycles(start, end, cycle_ticks, warmup_cycles)
+        deltas = _rail_deltas(samples[start], samples[end], rails)
+        if cycle_samples:
+            for rail in rails:
+                energy[rail] += deltas[rail]
+            covered_cycles += cycle_samples
+            windows += 1
+    if covered_cycles != len(cycle_ticks) or not covered_cycles:
+        message = "power windows do not cover every analysed cycle"
+        raise ValueError(message)
+    return energy, covered_cycles, windows
+
+
 def energy_per_cycle(
     content: bytes | None,
     events: tuple[Event, ...],
@@ -294,37 +456,13 @@ def energy_per_cycle(
     if content is None:
         return {"status": "unavailable", "reason": "power file not supplied"}
     samples = _power_samples(content, rails)
-    boundaries = sorted(samples)
-    anchor = "SAMPLE_READY" if profile_name == "CONTROL" else "INPUT_WRITE"
-    cycle_ticks = sorted(
-        event.ticks for event in events if event.name == anchor and event.cycle >= warmup_cycles
-    )
-    energy = {rail: Decimal(0) for rail in rails}
-    covered_cycles = 0
-    windows = 0
-    for start, end in pairwise(boundaries):
-        cycle_samples = sum(start <= tick < end for tick in cycle_ticks)
-        if cycle_samples and warmup_cycles and start < cycle_ticks[0]:
-            message = "power window overlaps discarded warm-up cycles"
-            raise ValueError(message)
-        for rail in rails:
-            delta = samples[end][rail] - samples[start][rail]
-            if delta < 0:
-                message = f"cumulative energy decreases for {rail}"
-                raise ValueError(message)
-            if cycle_samples:
-                energy[rail] += delta
-        if cycle_samples:
-            covered_cycles += cycle_samples
-            windows += 1
-    if covered_cycles != len(cycle_ticks) or not covered_cycles:
-        message = "power windows do not cover every analysed cycle"
-        raise ValueError(message)
-    per_rail = {rail: float(energy[rail] / covered_cycles) for rail in rails}
+    cycle_ticks = _cycle_ticks(events, profile_name, warmup_cycles)
+    energy, covered, windows = _window_energy(samples, rails, cycle_ticks, warmup_cycles)
+    per_rail = {rail: float(energy[rail] / covered) for rail in rails}
     return {
         "status": "available",
         "unit": "J/cycle",
-        "sample_count": covered_cycles,
+        "sample_count": covered,
         "window_count": windows,
         "per_rail": per_rail,
         "total": sum(per_rail.values()),

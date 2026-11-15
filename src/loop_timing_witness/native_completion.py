@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parent / "data"
 
 
-def _fault_schedule(fault: dict[str, Any]) -> list[dict[str, Any]]:
+def native_fault_schedule(fault: dict[str, Any]) -> list[dict[str, Any]]:
     """Return the native fault declaration in the run manifest's schedule form.
 
     Parameters
@@ -153,7 +153,7 @@ def completion_statistics(
     if locations:
         message = f"native metadata {locations[0]}: does not satisfy the native run schema"
         raise ValueError(message)
-    if _fault_schedule(native["fault"]) != manifest["fault_schedule"]:
+    if native_fault_schedule(native["fault"]) != manifest["fault_schedule"]:
         message = "native metadata fault schedule does not match the run declaration"
         raise ValueError(message)
     if not _configuration_matches(native, manifest, event_count):

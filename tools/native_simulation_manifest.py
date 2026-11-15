@@ -19,6 +19,7 @@ from host_load_receipt import validate_host_load
 from jsonschema import Draft202012Validator
 from native_tracking import decode_tracking
 
+from loop_timing_witness.native_completion import native_fault_schedule
 from manifest_io import canonical_json_bytes, load_json_object, sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -107,6 +108,97 @@ def convert_tracking(run: Path, metadata: dict[str, Any]) -> None:
         writer.writerows(converted)
 
 
+_FIXED_FIELDS: dict[str, object] = {
+    "schema": "loop-timing-witness.run-manifest.v1",
+    "profile": "CONTROL",
+    "placement": "linux_user_space",
+    "warmup_cycles": 0,
+    "tracking_sampling": "observed",
+    "hardware_artifacts": None,
+    "operator_notes": "Native controller over production RTL. "
+    "Host calculation does not advance "
+    "simulation time. Reference, fault duration and work/delay are in hash-bound "
+    "native_metadata.json. Only captured sample reads have tracking rows. "
+    "No physical CPU timing, power or board acceptance.",
+}
+_INSTRUMENT_FLAGS = {
+    "floor_ticks": None,
+    "known_period_pass": False,
+    "injected_delay_pass": False,
+    "overflow_pass": False,
+    "bus_offset_pass": False,
+}
+
+
+def _check_configuration(
+    metadata: dict[str, Any], references: list[dict[str, Any]], sources: list[Path]
+) -> None:
+    """Require the native configuration to be one of the captured source artefacts.
+
+    Parameters
+    ----------
+    metadata
+        Admitted native metadata.
+    references
+        Digest references of the captured artefacts.
+    sources
+        The captured artefacts, in the order of ``references``.
+
+    Raises
+    ------
+    ValueError
+        If no artefact has the configuration's digest and byte length.
+    """
+    configuration_receipt = metadata["artifacts"]["configuration"]
+    if not any(
+        reference["sha256"] == configuration_receipt["sha256"]
+        and path.stat().st_size == configuration_receipt["bytes"]
+        for reference, path in zip(references, sources, strict=True)
+    ):
+        message = "native configuration digest is absent from captured source artifacts"
+        raise ValueError(message)
+
+
+def _run_fields(run: Path, metadata: dict[str, Any]) -> dict[str, object]:
+    """Return the manifest fields describing the run's control, plant and files.
+
+    Parameters
+    ----------
+    run
+        Run directory holding the events and the converted tracking.
+    metadata
+        Admitted native metadata.
+
+    Returns
+    -------
+    dict[str, object]
+        Fixed fields, timing, load case, controller, plant, faults, files,
+        instrument and environment.
+    """
+    return {
+        **_FIXED_FIELDS,
+        "sample_period_ticks": metadata["period_ticks"],
+        "cycle_count": metadata["cycles"],
+        "load_case": "modeled_overload"
+        if metadata["overload"]["modeled_nanoseconds"]
+        else "native_simulation",
+        "controller": {"name": metadata["controller"], "coefficients": metadata["coefficients"]},
+        "plant": {
+            "name": "first_order_thermal" if metadata["thermal"] else "second_order_mechanical",
+            "fixed_point_format": "Q8.24",
+            "tracking_unit": "model_output",
+        },
+        "fault_schedule": native_fault_schedule(metadata["fault"]),
+        "files": {
+            "events": file_reference(run, run / "events.bin"),
+            "tracking": file_reference(run, run / "tracking.csv"),
+            "power": None,
+        },
+        "instrument": {"fifo_overflow_count": metadata["result"]["overflow"], **_INSTRUMENT_FLAGS},
+        "environment": {"room_temperature_c": None, "board_supply_only": False},
+    }
+
+
 def write_native_manifest(run: Path, started_utc: str, sources: list[Path], version: str) -> Path:
     """Write one hash-bound simulation manifest using native-produced configuration.
 
@@ -128,29 +220,9 @@ def write_native_manifest(run: Path, started_utc: str, sources: list[Path], vers
     """
     metadata = native_metadata(run)
     references = [file_reference(run, path) for path in sources]
-    configuration_receipt = metadata["artifacts"]["configuration"]
-    if not any(
-        reference["sha256"] == configuration_receipt["sha256"]
-        and path.stat().st_size == configuration_receipt["bytes"]
-        for reference, path in zip(references, sources, strict=True)
-    ):
-        message = "native configuration digest is absent from captured source artifacts"
-        raise ValueError(message)
+    _check_configuration(metadata, references, sources)
     convert_tracking(run, metadata)
-    fault = metadata["fault"]
-    schedule = (
-        []
-        if fault["kind"] == "none"
-        else [
-            {
-                "cycle": fault["cycle"],
-                "kind": fault["kind"],
-                "delay_periods": fault["duration_periods"] if fault["kind"] == "delay" else 0,
-            }
-        ]
-    )
     manifest = {
-        "schema": "loop-timing-witness.run-manifest.v1",
         "run_id": "native-" + started_utc.replace("-", "").replace(":", "").replace("+", "_"),
         "started_utc": started_utc,
         "source": {
@@ -161,42 +233,7 @@ def write_native_manifest(run: Path, started_utc: str, sources: list[Path], vers
         },
         "measurement_domain": file_reference(run, run / "measurement-domain.json"),
         "native_metadata": file_reference(run, run / "native_metadata.json"),
-        "profile": "CONTROL",
-        "placement": "linux_user_space",
-        "sample_period_ticks": metadata["period_ticks"],
-        "cycle_count": metadata["cycles"],
-        "warmup_cycles": 0,
-        "tracking_sampling": "observed",
-        "load_case": "modeled_overload"
-        if metadata["overload"]["modeled_nanoseconds"]
-        else "native_simulation",
-        "controller": {"name": metadata["controller"], "coefficients": metadata["coefficients"]},
-        "plant": {
-            "name": "first_order_thermal" if metadata["thermal"] else "second_order_mechanical",
-            "fixed_point_format": "Q8.24",
-            "tracking_unit": "model_output",
-        },
-        "fault_schedule": schedule,
-        "files": {
-            "events": file_reference(run, run / "events.bin"),
-            "tracking": file_reference(run, run / "tracking.csv"),
-            "power": None,
-        },
-        "hardware_artifacts": None,
-        "instrument": {
-            "fifo_overflow_count": metadata["result"]["overflow"],
-            "floor_ticks": None,
-            "known_period_pass": False,
-            "injected_delay_pass": False,
-            "overflow_pass": False,
-            "bus_offset_pass": False,
-        },
-        "environment": {"room_temperature_c": None, "board_supply_only": False},
-        "operator_notes": "Native controller over production RTL. "
-        "Host calculation does not advance "
-        "simulation time. Reference, fault duration and work/delay are in hash-bound "
-        "native_metadata.json. Only captured sample reads have tracking rows. "
-        "No physical CPU timing, power or board acceptance.",
+        **_run_fields(run, metadata),
     }
     load_path = run / "host_load.json"
     if load_path.exists():

@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -28,6 +28,60 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 __all__ = ["lifecycle_program"]
+
+
+def _validator() -> Draft202012Validator:
+    """Return a validator of the native run receipt schema.
+
+    Returns
+    -------
+    Draft202012Validator
+        Validator of ``native-run.schema.json``.
+    """
+    return Draft202012Validator(
+        json.loads((REPOSITORY_ROOT / "native-run.schema.json").read_text())
+    )
+
+
+def _check_receipt_values(receipt: dict[str, Any], scenario: str) -> None:
+    """Require the receipt of a completed two-cycle run without faults or misses.
+
+    Parameters
+    ----------
+    receipt
+        Schema-valid native run receipt.
+    scenario
+        ``amp`` for the dedicated-firmware source, otherwise an RTL simulation.
+    """
+    assert receipt["source_kind"] == (
+        "amp_uio_unqualified" if scenario == "amp" else "rtl_simulation"
+    )
+    assert receipt["cycles"] == 2
+    assert receipt["result"]["samples"] == 2
+    assert receipt["result"]["records"] == 8
+    assert receipt["result"]["misses"] == 0
+    assert receipt["fault"]["kind"] == "none"
+
+
+def _check_amp_schema_refusals(receipt: dict[str, Any]) -> None:
+    """Require the schema to refuse an AMP receipt changed in each bound field.
+
+    Parameters
+    ----------
+    receipt
+        Schema-valid AMP receipt.
+    """
+    validator = _validator()
+    missing = json.loads(json.dumps(receipt))
+    del missing["artifacts"]["amp_resources"]
+    assert not validator.is_valid(missing)
+    for kind in ("rtl_simulation", "uio_unqualified"):
+        incompatible = json.loads(json.dumps(receipt))
+        incompatible["source_kind"] = kind
+        assert not validator.is_valid(incompatible)
+    modeled = json.loads(json.dumps(receipt))
+    modeled["overload"]["modeled_nanoseconds"] = 1
+    assert not validator.is_valid(modeled)
 
 
 @pytest.mark.parametrize("scenario", ["zero", "fault", "amp"])
@@ -60,35 +114,14 @@ def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenari
     assert result.stdout == f"verified metadata_{scenario}\n"
     assert result.stderr == ""
     receipt = json.loads(tmp_path.joinpath("events.bin.metadata.json").read_text())
-    Draft202012Validator(
-        json.loads((REPOSITORY_ROOT / "native-run.schema.json").read_text())
-    ).validate(receipt)
-    assert receipt["source_kind"] == (
-        "amp_uio_unqualified" if scenario == "amp" else "rtl_simulation"
-    )
-    assert receipt["cycles"] == 2
-    assert receipt["result"]["samples"] == 2
-    assert receipt["result"]["records"] == 8
-    assert receipt["result"]["misses"] == 0
-    assert receipt["fault"]["kind"] == "none"
+    _validator().validate(receipt)
+    _check_receipt_values(receipt, scenario)
     assert events.stat().st_size == 8 * 16
     assert len(raw.read_text().splitlines()) == 3
     paths = {"configuration": config, "events": events, "tracking_raw": raw}
     if scenario == "amp":
         paths["amp_resources"] = resources
-        validator = Draft202012Validator(
-            json.loads((REPOSITORY_ROOT / "native-run.schema.json").read_text())
-        )
-        missing = json.loads(json.dumps(receipt))
-        del missing["artifacts"]["amp_resources"]
-        assert not validator.is_valid(missing)
-        for kind in ("rtl_simulation", "uio_unqualified"):
-            incompatible = json.loads(json.dumps(receipt))
-            incompatible["source_kind"] = kind
-            assert not validator.is_valid(incompatible)
-        modeled = json.loads(json.dumps(receipt))
-        modeled["overload"]["modeled_nanoseconds"] = 1
-        assert not validator.is_valid(modeled)
+        _check_amp_schema_refusals(receipt)
     for role, path in paths.items():
         data = path.read_bytes()
         assert receipt["artifacts"][role] == {

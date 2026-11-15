@@ -64,20 +64,9 @@ pub(crate) fn pure_path(path: &Path) -> String {
 /// resolved, a loop, is kept as written too.
 pub(crate) fn realpath(path: &Path) -> Result<PathBuf, String> {
     let bytes = path.as_os_str().as_bytes();
-    let mut rest: Vec<Option<Vec<u8>>> = bytes
-        .split(|&byte| byte == b'/')
-        .rev()
-        .map(|part| Some(part.to_vec()))
-        .collect();
+    let mut rest = reversed_parts(bytes);
     let mut count = rest.len();
-    let mut resolved: Vec<u8> = if bytes.starts_with(b"/") {
-        b"/".to_vec()
-    } else {
-        std::env::current_dir()
-            .map_err(|error| os_error_without_path(&error))?
-            .into_os_string()
-            .into_vec()
-    };
+    let mut resolved = start(bytes)?;
     let mut seen: HashMap<Vec<u8>, Option<Vec<u8>>> = HashMap::new();
     while count > 0 {
         let Some(name) = rest.pop().expect("a pending part") else {
@@ -102,40 +91,70 @@ pub(crate) fn realpath(path: &Path) -> Result<PathBuf, String> {
             next.push(b'/');
         }
         next.extend_from_slice(&name);
-        let candidate = Path::new(OsStr::from_bytes(&next));
-        let link = std::fs::symlink_metadata(candidate).is_ok_and(|status| status.is_symlink());
-        let target = if link {
-            match seen.get(&next) {
-                Some(Some(done)) => {
-                    resolved.clone_from(done);
-                    continue;
+        match classify(&next, &seen) {
+            Component::Known(done) => resolved = done,
+            Component::Plain => resolved = next,
+            Component::Link(target) => {
+                if target.starts_with(b"/") {
+                    resolved = b"/".to_vec();
                 }
-                Some(None) => None,
-                None => std::fs::read_link(candidate).ok(),
+                seen.insert(next.clone(), None);
+                rest.push(Some(next));
+                rest.push(None);
+                let parts = reversed_parts(&target);
+                count += parts.len();
+                rest.extend(parts);
             }
-        } else {
-            None
-        };
-        let Some(target) = target else {
-            resolved = next;
-            continue;
-        };
-        let target = target.into_os_string().into_vec();
-        if target.starts_with(b"/") {
-            resolved = b"/".to_vec();
         }
-        seen.insert(next.clone(), None);
-        rest.push(Some(next));
-        rest.push(None);
-        let parts: Vec<Option<Vec<u8>>> = target
-            .split(|&byte| byte == b'/')
-            .rev()
-            .map(|part| Some(part.to_vec()))
-            .collect();
-        count += parts.len();
-        rest.extend(parts);
     }
     Ok(PathBuf::from(OsString::from_vec(resolved)))
+}
+
+/// The root of an absolute path, or the current directory of a relative one.
+fn start(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    if bytes.starts_with(b"/") {
+        return Ok(b"/".to_vec());
+    }
+    Ok(std::env::current_dir()
+        .map_err(|error| os_error_without_path(&error))?
+        .into_os_string()
+        .into_vec())
+}
+
+/// The slash-separated parts of a path, last first, each still to be resolved.
+fn reversed_parts(bytes: &[u8]) -> Vec<Option<Vec<u8>>> {
+    bytes
+        .split(|&byte| byte == b'/')
+        .rev()
+        .map(|part| Some(part.to_vec()))
+        .collect()
+}
+
+/// What one joined path resolves to on this pass.
+enum Component {
+    /// A link already resolved to this path.
+    Known(Vec<u8>),
+    /// A link to expand with this target.
+    Link(Vec<u8>),
+    /// Not a link, a link being resolved, or a link that cannot be read.
+    Plain,
+}
+
+/// Classify one joined path as Python's `realpath` does in its non-strict mode.
+fn classify(next: &[u8], seen: &HashMap<Vec<u8>, Option<Vec<u8>>>) -> Component {
+    let candidate = Path::new(OsStr::from_bytes(next));
+    if !std::fs::symlink_metadata(candidate).is_ok_and(|status| status.is_symlink()) {
+        return Component::Plain;
+    }
+    match seen.get(next) {
+        Some(Some(done)) => Component::Known(done.clone()),
+        Some(None) => Component::Plain,
+        None => std::fs::read_link(candidate)
+            .ok()
+            .map_or(Component::Plain, |target| {
+                Component::Link(target.into_os_string().into_vec())
+            }),
+    }
 }
 
 /// Python's `(path.parent, path.name)` of a pure POSIX path.

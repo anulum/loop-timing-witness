@@ -46,6 +46,9 @@ const LIMITS: [&str; 4] = [
     "Spread is the range of each per-repeat statistic across valid repeats.",
 ];
 
+/// One repeat's campaign entry.
+type Entry = Map<String, Value>;
+
 /// The run report and interval rows of one analysed repeat.
 struct Analysed {
     report: Value,
@@ -150,50 +153,94 @@ fn pooled_jitter(changes: &[u64], expected: Num, duration: u64) -> Value {
 /// anchor event in each of at most 2**32 analysed cycles. The summed duration
 /// can exceed the range and is refused, as in Python.
 fn pooled(valid: &[&Analysed], names: &[String]) -> Result<Value, String> {
-    let mut latencies: Vec<Vec<u64>> = vec![Vec::new(); names.len()];
-    let mut changes: Vec<Vec<u64>> = vec![Vec::new(); names.len()];
-    let mut expected = Num::Int(0);
-    let mut cycles = Num::Int(0);
-    let mut duration: u128 = 0;
-    for analysed in valid {
-        let mut previous: Vec<Option<(u32, u64)>> = vec![None; names.len()];
-        for row in &analysed.rows {
-            let index = names
-                .iter()
-                .position(|name| *name == row.interval)
-                .expect("shared periodic interval");
-            latencies[index].push(row.ticks);
-            if let Some((cycle, ticks)) = previous[index]
-                && u64::from(row.cycle) == u64::from(cycle) + 1
-            {
-                changes[index].push(row.ticks.abs_diff(ticks));
-            }
-            previous[index] = Some((row.cycle, row.ticks));
-        }
-        let events = &analysed.report["events"];
-        let analysed_cycles = Num::of(&events["cycle_count"]);
-        expected = expected.add(analysed_cycles.sub(Num::Int(1)).at_least_zero());
-        cycles = cycles.add(analysed_cycles);
-        duration += u128::from(events["duration_ticks"].as_u64().expect("tick span"));
-    }
-    let duration = u64::try_from(duration)
+    let series = Series::of(valid, names);
+    let duration = u64::try_from(series.duration)
         .map_err(|_| "pooled duration exceeds the 64-bit tick range".to_owned())?;
     let mut intervals = Map::new();
     let mut jitter = Map::new();
     for (index, name) in names.iter().enumerate() {
-        let mut summary = distribution(&latencies[index]);
+        let mut summary = distribution(&series.latencies[index]);
         summary.insert("duration_ticks".to_owned(), json!(duration));
         intervals.insert(name.clone(), Value::Object(summary));
         jitter.insert(
             name.clone(),
-            pooled_jitter(&changes[index], expected, duration),
+            pooled_jitter(&series.changes[index], series.expected, duration),
         );
     }
+    let run_ids: Vec<Value> = valid
+        .iter()
+        .map(|analysed| analysed.report["run_id"].clone())
+        .collect();
+    Ok(json!({
+        "repeat_count": valid.len(),
+        "run_ids": run_ids,
+        "cycle_count": series.cycles.json(),
+        "duration_ticks": duration,
+        "intervals": intervals,
+        "jitter_method": JITTER_METHOD,
+        "jitter": jitter,
+        "control": pooled_control(valid),
+    }))
+}
+
+/// Interval samples and adjacent-cycle changes pooled over the valid repeats.
+struct Series {
+    /// Latencies by interval index.
+    latencies: Vec<Vec<u64>>,
+    /// Adjacent-cycle latency changes by interval index, never across repeats.
+    changes: Vec<Vec<u64>>,
+    /// Expected adjacent pairs.
+    expected: Num,
+    /// Analysed cycles.
+    cycles: Num,
+    /// Summed duration in ticks.
+    duration: u128,
+}
+
+impl Series {
+    /// Pool the rows and counts of every valid repeat.
+    fn of(valid: &[&Analysed], names: &[String]) -> Self {
+        let mut series = Self {
+            latencies: vec![Vec::new(); names.len()],
+            changes: vec![Vec::new(); names.len()],
+            expected: Num::Int(0),
+            cycles: Num::Int(0),
+            duration: 0,
+        };
+        for analysed in valid {
+            let mut previous: Vec<Option<(u32, u64)>> = vec![None; names.len()];
+            for row in &analysed.rows {
+                let index = names
+                    .iter()
+                    .position(|name| *name == row.interval)
+                    .expect("shared periodic interval");
+                series.latencies[index].push(row.ticks);
+                if let Some((cycle, ticks)) = previous[index]
+                    && u64::from(row.cycle) == u64::from(cycle) + 1
+                {
+                    series.changes[index].push(row.ticks.abs_diff(ticks));
+                }
+                previous[index] = Some((row.cycle, row.ticks));
+            }
+            let events = &analysed.report["events"];
+            let analysed_cycles = Num::of(&events["cycle_count"]);
+            series.expected = series
+                .expected
+                .add(analysed_cycles.sub(Num::Int(1)).at_least_zero());
+            series.cycles = series.cycles.add(analysed_cycles);
+            series.duration += u128::from(events["duration_ticks"].as_u64().expect("tick span"));
+        }
+        series
+    }
+}
+
+/// The pooled deadline counts of CONTROL repeats, or null.
+fn pooled_control(valid: &[&Analysed]) -> Value {
     let controls: Vec<&Value> = valid
         .iter()
         .map(|analysed| &analysed.report["events"]["control"])
         .collect();
-    let control = match controls.first() {
+    match controls.first() {
         Some(first) if !first.is_null() => {
             let total = |name: &str| -> u64 {
                 controls
@@ -212,21 +259,7 @@ fn pooled(valid: &[&Analysed], names: &[String]) -> Result<Value, String> {
             })
         }
         _ => Value::Null,
-    };
-    let run_ids: Vec<Value> = valid
-        .iter()
-        .map(|analysed| analysed.report["run_id"].clone())
-        .collect();
-    Ok(json!({
-        "repeat_count": valid.len(),
-        "run_ids": run_ids,
-        "cycle_count": cycles.json(),
-        "duration_ticks": duration,
-        "intervals": intervals,
-        "jitter_method": JITTER_METHOD,
-        "jitter": jitter,
-        "control": control,
-    }))
+    }
 }
 
 /// Python's `min` or `max` of non-negative numbers: the first value no other beats.
@@ -281,6 +314,38 @@ fn plan(campaign: &Campaign, entries: &[Map<String, Value>], domain: Option<&Val
     let planned_repeats = run_plan.map(|plan| &plan["repeats"]);
     let planned_cycles = run_plan.map(|plan| &plan["cycles_per_repeat"]);
     let declared = entries.len();
+    let mut nonconformities = repeat_nonconformities(campaign, entries, planned_repeats);
+    nonconformities.extend(cycle_nonconformity(entries, planned_cycles));
+    let count = |wanted: &str| {
+        entries
+            .iter()
+            .filter(|entry| status(entry) == wanted)
+            .count()
+    };
+    json!({
+        "planned_repeats": planned_repeats,
+        "planned_cycles_per_repeat": planned_cycles,
+        "declared_repeats": declared,
+        "valid_repeats": count("valid"),
+        "invalid_repeats": count("invalid"),
+        "refused_repeats": count("refused"),
+        "conforms": nonconformities.is_empty(),
+        "nonconformities": nonconformities,
+    })
+}
+
+/// A campaign entry's status.
+fn status(entry: &Map<String, Value>) -> String {
+    entry["status"].as_str().expect("status").to_owned()
+}
+
+/// The repeat count, reboot and status nonconformities, in report order.
+fn repeat_nonconformities(
+    campaign: &Campaign,
+    entries: &[Map<String, Value>],
+    planned_repeats: Option<&Value>,
+) -> Vec<String> {
+    let declared = entries.len();
     let mut nonconformities = Vec::new();
     match planned_repeats {
         None => {
@@ -307,7 +372,6 @@ fn plan(campaign: &Campaign, entries: &[Map<String, Value>], domain: Option<&Val
                 )
             }),
     );
-    let status = |entry: &Map<String, Value>| entry["status"].as_str().expect("status").to_owned();
     nonconformities.extend(
         entries
             .iter()
@@ -320,39 +384,31 @@ fn plan(campaign: &Campaign, entries: &[Map<String, Value>], domain: Option<&Val
                 )
             }),
     );
+    nonconformities
+}
+
+/// The nonconformity of the fewest analysed cycles against the planned cycles, if any.
+fn cycle_nonconformity(
+    entries: &[Map<String, Value>],
+    planned_cycles: Option<&Value>,
+) -> Option<String> {
     // Python takes the minimum of a set, which keeps the first of equal values.
     let analysed: Vec<&Value> = entries
         .iter()
         .map(|entry| &entry["analysed_cycles"])
         .filter(|cycles| !cycles.is_null())
         .collect();
-    if let Some(planned) = planned_cycles
-        && !analysed.is_empty()
-    {
-        let fewest = extreme(&analysed, Ordering::Less);
-        if Num::of(fewest).compare(Num::of(planned)) == Ordering::Less {
-            nonconformities.push(format!(
-                "{} analysed cycles per repeat; the run plan requires {}",
-                python_number(fewest),
-                python_number(planned)
-            ));
-        }
+    let planned = planned_cycles?;
+    if analysed.is_empty() {
+        return None;
     }
-    let count = |wanted: &str| {
-        entries
-            .iter()
-            .filter(|entry| status(entry) == wanted)
-            .count()
-    };
-    json!({
-        "planned_repeats": planned_repeats,
-        "planned_cycles_per_repeat": planned_cycles,
-        "declared_repeats": declared,
-        "valid_repeats": count("valid"),
-        "invalid_repeats": count("invalid"),
-        "refused_repeats": count("refused"),
-        "conforms": nonconformities.is_empty(),
-        "nonconformities": nonconformities,
+    let fewest = extreme(&analysed, Ordering::Less);
+    (Num::of(fewest).compare(Num::of(planned)) == Ordering::Less).then(|| {
+        format!(
+            "{} analysed cycles per repeat; the run plan requires {}",
+            python_number(fewest),
+            python_number(planned)
+        )
     })
 }
 
@@ -363,41 +419,17 @@ pub(crate) fn build_campaign_report(campaign: &Campaign) -> Result<Value, String
         .iter()
         .filter_map(|repeat| repeat.run.as_ref())
         .collect();
-    let mut entries = Vec::new();
-    let mut analysed = Vec::new();
-    for repeat in &campaign.repeats {
-        let (entry, result) = analyse_repeat(repeat)?;
-        let valid = entry["status"] == "valid";
-        entries.push(entry);
-        if let Some(result) = result {
-            analysed.push((valid, result));
-        }
-    }
+    let Repeats { entries, analysed } = analyse_repeats(campaign)?;
     let valid: Vec<&Analysed> = analysed
         .iter()
         .filter(|(valid, _)| *valid)
         .map(|(_, result)| result)
         .collect();
-    let names: Vec<String> = analysed.first().map_or_else(Vec::new, |(_, first)| {
-        first.report["events"]["jitter"]
-            .as_object()
-            .expect("jitter block")
-            .keys()
-            .cloned()
-            .collect()
-    });
+    let names = interval_names(&analysed);
     let first = loaded.first();
     let plan = plan(campaign, &entries, first.map(|run| &run.domain));
     let source_kind = first.map(|run| run.manifest["source"]["kind"].as_str().expect("kind"));
-    let evidence_status = match source_kind {
-        None => "unavailable",
-        Some("rtl_simulation") => "simulation_only",
-        Some(_) => "board_declaration_unverified",
-    };
-    let mut limits: Vec<&str> = LIMITS.to_vec();
-    if source_kind == Some("rtl_simulation") {
-        limits.push("RTL simulation repeats are not board measurements.");
-    }
+    let (evidence_status, limits) = evidence(source_kind);
     let configuration = first.map_or(Value::Null, |run| {
         Value::Object(
             configuration(run)
@@ -426,4 +458,55 @@ pub(crate) fn build_campaign_report(campaign: &Campaign) -> Result<Value, String
         },
         "limits": limits,
     }))
+}
+
+/// Every repeat's campaign entry, and the analysed repeats with whether each is valid.
+struct Repeats {
+    /// Campaign entries in repeat order.
+    entries: Vec<Entry>,
+    /// Analysed repeats and their validity.
+    analysed: Vec<(bool, Analysed)>,
+}
+
+/// Analyse every repeat of the campaign in order.
+fn analyse_repeats(campaign: &Campaign) -> Result<Repeats, String> {
+    let mut repeats = Repeats {
+        entries: Vec::new(),
+        analysed: Vec::new(),
+    };
+    for repeat in &campaign.repeats {
+        let (entry, result) = analyse_repeat(repeat)?;
+        let valid = entry["status"] == "valid";
+        repeats.entries.push(entry);
+        if let Some(result) = result {
+            repeats.analysed.push((valid, result));
+        }
+    }
+    Ok(repeats)
+}
+
+/// The jitter interval names of the first analysed repeat.
+fn interval_names(analysed: &[(bool, Analysed)]) -> Vec<String> {
+    analysed.first().map_or_else(Vec::new, |(_, first)| {
+        first.report["events"]["jitter"]
+            .as_object()
+            .expect("jitter block")
+            .keys()
+            .cloned()
+            .collect()
+    })
+}
+
+/// The evidence status of the first loaded repeat's source kind and the stated limits.
+fn evidence(source_kind: Option<&str>) -> (&'static str, Vec<&'static str>) {
+    let evidence_status = match source_kind {
+        None => "unavailable",
+        Some("rtl_simulation") => "simulation_only",
+        Some(_) => "board_declaration_unverified",
+    };
+    let mut limits: Vec<&str> = LIMITS.to_vec();
+    if source_kind == Some("rtl_simulation") {
+        limits.push("RTL simulation repeats are not board measurements.");
+    }
+    (evidence_status, limits)
 }

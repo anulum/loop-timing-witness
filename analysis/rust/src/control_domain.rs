@@ -120,6 +120,13 @@ fn width(kind: &Value) -> Num {
 fn record(contracts: &Value) -> Vec<String> {
     let record = &contracts["event_record"];
     let fields = items(&record["fields"]);
+    let mut findings = layout(record, fields);
+    findings.extend(field_widths(contracts, fields));
+    findings
+}
+
+/// Check unique and required field names, contiguous offsets and the record size.
+fn layout(record: &Value, fields: &[Value]) -> Vec<String> {
     let names: Vec<&str> = fields.iter().map(|item| text(&item["name"])).collect();
     let mut findings = Vec::new();
     if repeated(names.iter().copied()) {
@@ -150,6 +157,12 @@ fn record(contracts: &Value) -> Vec<String> {
             python_number(&record["record_size_bytes"])
         ));
     }
+    findings
+}
+
+/// Check that the cycle field holds the planned cycles and the tick field the counter.
+fn field_widths(contracts: &Value, fields: &[Value]) -> Vec<String> {
+    let mut findings = Vec::new();
     let widths: BTreeMap<&str, Num> = fields
         .iter()
         .map(|item| (text(&item["name"]), width(&item["type"])))
@@ -211,6 +224,20 @@ fn profiles(contracts: &Value) -> Vec<String> {
         .as_object()
         .expect("schema-checked object");
     let all: Vec<&str> = profiles.values().flat_map(profile_events).collect();
+    let mut findings = codes(contracts, &all);
+    findings.extend(duplicates(&all));
+    for (name, profile) in profiles {
+        findings.extend(intervals(name, profile));
+        findings.extend(rate(name, profile));
+    }
+    if profiles[PERIODIC_PROFILE]["sample_rate_hz"].is_null() {
+        findings.push(format!("event_profiles.{PERIODIC_PROFILE}.sample_rate_hz: a control loop needs sample-rate bounds"));
+    }
+    findings
+}
+
+/// Check that the event codes name exactly the profile events with unique numbers.
+fn codes(contracts: &Value, all: &[&str]) -> Vec<String> {
     let codes = contracts["event_codes"]
         .as_object()
         .expect("schema-checked object");
@@ -227,40 +254,41 @@ fn profiles(contracts: &Value) -> Vec<String> {
     {
         findings.push("event_codes: numeric codes must be unique".to_owned());
     }
+    findings
+}
+
+/// The finding listing event names that appear more than once across profiles.
+fn duplicates(all: &[&str]) -> Option<String> {
     let duplicated: BTreeSet<&str> = all
         .iter()
         .copied()
         .filter(|name| all.iter().filter(|other| *other == name).count() > 1)
         .collect();
-    if !duplicated.is_empty() {
-        let listed: Vec<String> = duplicated.iter().map(|name| quoted(name)).collect();
-        findings.push(format!(
-            "event_profiles: event names must be unique across profiles: [{}]",
-            listed.join(", ")
-        ));
+    if duplicated.is_empty() {
+        return None;
     }
-    for (name, profile) in profiles {
-        findings.extend(intervals(name, profile));
-        let rate = &profile["sample_rate_hz"];
-        if !rate.is_null() {
-            let (minimum, default, maximum) = (
-                Num::of(&rate["minimum"]),
-                Num::of(&rate["default"]),
-                Num::of(&rate["maximum"]),
-            );
-            if minimum.compare(default) == Ordering::Greater
-                || default.compare(maximum) == Ordering::Greater
-            {
-                findings.push(format!(
-                    "event_profiles.{name}.sample_rate_hz: requires minimum <= default <= maximum"
-                ));
-            }
-        }
+    let listed: Vec<String> = duplicated.iter().map(|name| quoted(name)).collect();
+    Some(format!(
+        "event_profiles: event names must be unique across profiles: [{}]",
+        listed.join(", ")
+    ))
+}
+
+/// The finding of a profile whose sample-rate bounds are out of order.
+fn rate(name: &str, profile: &Value) -> Option<String> {
+    let rate = &profile["sample_rate_hz"];
+    if rate.is_null() {
+        return None;
     }
-    if profiles[PERIODIC_PROFILE]["sample_rate_hz"].is_null() {
-        findings.push(format!("event_profiles.{PERIODIC_PROFILE}.sample_rate_hz: a control loop needs sample-rate bounds"));
-    }
-    findings
+    let (minimum, default, maximum) = (
+        Num::of(&rate["minimum"]),
+        Num::of(&rate["default"]),
+        Num::of(&rate["maximum"]),
+    );
+    (minimum.compare(default) == Ordering::Greater || default.compare(maximum) == Ordering::Greater)
+        .then(|| {
+            format!("event_profiles.{name}.sample_rate_hz: requires minimum <= default <= maximum")
+        })
 }
 
 /// Check that every interval of one profile joins two of its own events.

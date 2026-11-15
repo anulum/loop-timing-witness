@@ -162,40 +162,8 @@ impl Schema {
                     }
                 }
                 "$ref" => self.check(self.target(value), instance, path, errors),
-                "allOf" => {
-                    for item in list(value) {
-                        self.check(item, instance, path, errors);
-                    }
-                }
-                "anyOf" => {
-                    if !list(value).iter().any(|item| self.valid(item, instance)) {
-                        errors.push(path.clone());
-                    }
-                }
-                "oneOf" => {
-                    if list(value)
-                        .iter()
-                        .filter(|item| self.valid(item, instance))
-                        .count()
-                        != 1
-                    {
-                        errors.push(path.clone());
-                    }
-                }
-                "not" => {
-                    if self.valid(value, instance) {
-                        errors.push(path.clone());
-                    }
-                }
-                "if" => {
-                    let branch = if self.valid(value, instance) {
-                        "then"
-                    } else {
-                        "else"
-                    };
-                    if let Some(selected) = keywords.get(branch) {
-                        self.check(selected, instance, path, errors);
-                    }
+                "allOf" | "anyOf" | "oneOf" | "not" | "if" => {
+                    self.apply(keywords, keyword, value, instance, path, errors);
                 }
                 "then" | "else" => {}
                 _ if ANNOTATIONS.contains(&keyword.as_str()) => {}
@@ -203,6 +171,55 @@ impl Schema {
                     if !self.holds(keyword, value, instance) {
                         errors.push(path.clone());
                     }
+                }
+            }
+        }
+    }
+
+    /// Apply one combining or conditional keyword to the instance.
+    fn apply(
+        &self,
+        keywords: &Map<String, Value>,
+        keyword: &str,
+        value: &Value,
+        instance: &Value,
+        path: &mut Vec<String>,
+        errors: &mut Vec<Vec<String>>,
+    ) {
+        match keyword {
+            "allOf" => {
+                for item in list(value) {
+                    self.check(item, instance, path, errors);
+                }
+            }
+            "anyOf" => {
+                if !list(value).iter().any(|item| self.valid(item, instance)) {
+                    errors.push(path.clone());
+                }
+            }
+            "oneOf" => {
+                if list(value)
+                    .iter()
+                    .filter(|item| self.valid(item, instance))
+                    .count()
+                    != 1
+                {
+                    errors.push(path.clone());
+                }
+            }
+            "not" => {
+                if self.valid(value, instance) {
+                    errors.push(path.clone());
+                }
+            }
+            _ => {
+                let branch = if self.valid(value, instance) {
+                    "then"
+                } else {
+                    "else"
+                };
+                if let Some(selected) = keywords.get(branch) {
+                    self.check(selected, instance, path, errors);
                 }
             }
         }
@@ -312,25 +329,8 @@ impl Schema {
             "pattern" => instance
                 .as_str()
                 .is_none_or(|text| self.patterns[value.as_str().unwrap_or_default()].search(text)),
-            "minLength" => instance
-                .as_str()
-                .is_none_or(|text| !below(text.chars().count(), value)),
-            "minItems" => instance
-                .as_array()
-                .is_none_or(|items| !below(items.len(), value)),
-            "maxItems" => instance
-                .as_array()
-                .is_none_or(|items| !above(items.len(), value)),
-            "minProperties" => instance
-                .as_object()
-                .is_none_or(|object| !below(object.len(), value)),
-            "maxProperties" => instance
-                .as_object()
-                .is_none_or(|object| !above(object.len(), value)),
-            "minimum" => number(instance)
-                .is_none_or(|actual| compare(actual, numeric(value)) != Ordering::Less),
-            "maximum" => number(instance)
-                .is_none_or(|actual| compare(actual, numeric(value)) != Ordering::Greater),
+            "minLength" | "minItems" | "maxItems" | "minProperties" | "maxProperties"
+            | "minimum" | "maximum" => bounded(keyword, value, instance),
             "uniqueItems" => match instance {
                 Value::Array(items) if value == &Value::Bool(true) => {
                     items.iter().enumerate().all(|(index, item)| {
@@ -344,20 +344,51 @@ impl Schema {
                     .iter()
                     .all(|name| object.contains_key(name.as_str().unwrap_or_default()))
             }),
-            _ => instance.as_object().is_none_or(|object| {
-                value
-                    .as_object()
-                    .into_iter()
-                    .flatten()
-                    .all(|(name, needed)| {
-                        !object.contains_key(name)
-                            || list(needed).iter().all(|other| {
-                                object.contains_key(other.as_str().unwrap_or_default())
-                            })
-                    })
-            }),
+            _ => dependent(value, instance),
         }
     }
+}
+
+/// Tell whether one length, count or numeric bound holds for the instance.
+fn bounded(keyword: &str, value: &Value, instance: &Value) -> bool {
+    match keyword {
+        "minLength" => instance
+            .as_str()
+            .is_none_or(|text| !below(text.chars().count(), value)),
+        "minItems" => instance
+            .as_array()
+            .is_none_or(|items| !below(items.len(), value)),
+        "maxItems" => instance
+            .as_array()
+            .is_none_or(|items| !above(items.len(), value)),
+        "minProperties" => instance
+            .as_object()
+            .is_none_or(|object| !below(object.len(), value)),
+        "maxProperties" => instance
+            .as_object()
+            .is_none_or(|object| !above(object.len(), value)),
+        "minimum" => {
+            number(instance).is_none_or(|actual| compare(actual, numeric(value)) != Ordering::Less)
+        }
+        _ => number(instance)
+            .is_none_or(|actual| compare(actual, numeric(value)) != Ordering::Greater),
+    }
+}
+
+/// Tell whether every present member brings the members it requires.
+fn dependent(value: &Value, instance: &Value) -> bool {
+    instance.as_object().is_none_or(|object| {
+        value
+            .as_object()
+            .into_iter()
+            .flatten()
+            .all(|(name, needed)| {
+                !object.contains_key(name)
+                    || list(needed)
+                        .iter()
+                        .all(|other| object.contains_key(other.as_str().unwrap_or_default()))
+            })
+    })
 }
 
 /// Tell whether a count is below an integer bound.

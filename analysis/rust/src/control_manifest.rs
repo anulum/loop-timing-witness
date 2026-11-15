@@ -130,25 +130,35 @@ pub(crate) fn load_classified(path: &Path, root: Option<&[u8]>) -> Result<Contro
             verify_artifact(&directory, &document["hardware_artifacts"][name])?;
         }
     }
-    let mut files = BTreeMap::new();
-    for name in RECEIPTS {
-        if let Some(item) = document.get(name) {
-            files.insert(name.to_owned(), read_bound(&directory, item)?);
-        }
-    }
-    for name in declared_files(&orders) {
-        let item = &document["files"][name.as_str()];
-        if !item.is_null() {
-            let content = read_bound(&directory, item)?;
-            files.insert(name, content);
-        }
-    }
+    let files = bound_files(&document, &orders, &directory)?;
     Ok(ControlRun {
         manifest,
         domain,
         files,
         directory,
     })
+}
+
+/// Read every present receipt and declared file of the run, by role.
+fn bound_files(
+    document: &Value,
+    orders: &Orders,
+    directory: &Path,
+) -> Result<BTreeMap<String, Vec<u8>>, Failure> {
+    let mut files = BTreeMap::new();
+    for name in RECEIPTS {
+        if let Some(item) = document.get(name) {
+            files.insert(name.to_owned(), read_bound(directory, item)?);
+        }
+    }
+    for name in declared_files(orders) {
+        let item = &document["files"][name.as_str()];
+        if !item.is_null() {
+            let content = read_bound(directory, item)?;
+            files.insert(name, content);
+        }
+    }
+    Ok(files)
 }
 
 /// The members of the declared `files` object in document order.
@@ -187,12 +197,11 @@ fn items(value: &Value) -> &[Value] {
 /// instant from year 1 without a leap second.
 pub(crate) fn utc_timestamp(value: &str) -> bool {
     let bytes = value.as_bytes();
-    let digit = |index: usize| bytes.get(index).copied().filter(u8::is_ascii_digit);
-    let number = |start: usize, length: usize| -> Option<u32> {
-        (start..start + length).try_fold(0, |total, index| {
-            Some(total * 10 + u32::from(digit(index)? - b'0'))
-        })
-    };
+    utc_shape(bytes) && calendar_time(bytes)
+}
+
+/// Whether the text has the date, time, optional fraction and UTC zone layout.
+fn utc_shape(bytes: &[u8]) -> bool {
     let shape = bytes.len() >= 20
         && bytes[4] == b'-'
         && bytes[7] == b'-'
@@ -213,10 +222,17 @@ pub(crate) fn utc_timestamp(value: &str) -> bool {
         }
         end += 1 + fraction;
     }
-    let zone = &bytes[end..];
-    if !matches!(zone, b"Z" | b"z" | b"+00:00" | b"-00:00") {
-        return false;
-    }
+    matches!(&bytes[end..], b"Z" | b"z" | b"+00:00" | b"-00:00")
+}
+
+/// Whether the date and time fields are digits naming a real calendar instant.
+fn calendar_time(bytes: &[u8]) -> bool {
+    let digit = |index: usize| bytes.get(index).copied().filter(u8::is_ascii_digit);
+    let number = |start: usize, length: usize| -> Option<u32> {
+        (start..start + length).try_fold(0, |total, index| {
+            Some(total * 10 + u32::from(digit(index)? - b'0'))
+        })
+    };
     let fields = [
         number(0, 4),
         number(5, 2),

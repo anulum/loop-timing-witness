@@ -21,6 +21,8 @@ from loop_timing_witness.neural_timing import correlate_neural_steps
 if TYPE_CHECKING:
     from test_neural_event_stream import CaptureStreams
 
+    from loop_timing_witness.neural_event_stream import NeuralChannel
+
 pytest_plugins = ("test_neural_event_stream",)
 
 
@@ -76,6 +78,31 @@ def test_real_step_join_retains_loss_and_refuses_changed_phases(
         decode_neural_channel(second, "state", 4),
         decode_neural_channel(third, "service", 4),
     )
+    _check_missing_records(first, second, baseline)
+    _check_changed_phases(second, third, baseline)
+    result = correlate_neural_steps(baseline, 4, 34)
+    assert result.refusals == tuple(
+        f"{role}: end marker exceeds capture horizon" for role in ("input", "state", "service")
+    )
+    result = correlate_neural_steps(baseline, 3, 100)
+    assert result.refusals == (
+        "input: step population differs from requested identities",
+        "state: step population differs from requested identities",
+    )
+
+
+def _check_missing_records(
+    first: bytes, second: bytes, baseline: tuple[NeuralChannel, NeuralChannel, NeuralChannel]
+) -> None:
+    """Keep the gap of a removed input or state record, and refuse an absent input channel.
+
+    Parameters
+    ----------
+    first, second
+        Original input and state captures.
+    baseline
+        Decoded input, state and service channels.
+    """
     missing_input = decode_neural_channel(first[:32] + first[48:], "input", 4)
     result = correlate_neural_steps((missing_input, baseline[1], baseline[2]), 4, 100)
     assert [interval.identity for interval in result.intervals] == [0, 2, 3]
@@ -91,6 +118,20 @@ def test_real_step_join_retains_loss_and_refuses_changed_phases(
     result = correlate_neural_steps((absent_input, baseline[1], baseline[2]), 4, 100)
     assert result.intervals == ()
     assert "input: missing alignment marker" in result.refusals
+
+
+def _check_changed_phases(
+    second: bytes, third: bytes, baseline: tuple[NeuralChannel, NeuralChannel, NeuralChannel]
+) -> None:
+    """Refuse state observations shifted onto their sample edges and a moved service marker.
+
+    Parameters
+    ----------
+    second, third
+        Original state and service captures.
+    baseline
+        Decoded input, state and service channels.
+    """
     shifted = bytearray(second)
     for index in range(4):
         struct.pack_into("<Q", shifted, 16 * (index + 1) + 8, 20 + index)
@@ -105,15 +146,6 @@ def test_real_step_join_retains_loss_and_refuses_changed_phases(
     changed_service = decode_neural_channel(bytes(changed_marker), "service", 4)
     result = correlate_neural_steps((baseline[0], baseline[1], changed_service), 4, 100)
     assert result.refusals == ("channels: alignment marker ticks differ",)
-    result = correlate_neural_steps(baseline, 4, 34)
-    assert result.refusals == tuple(
-        f"{role}: end marker exceeds capture horizon" for role in ("input", "state", "service")
-    )
-    result = correlate_neural_steps(baseline, 3, 100)
-    assert result.refusals == (
-        "input: step population differs from requested identities",
-        "state: step population differs from requested identities",
-    )
 
 
 def test_real_neural_step_declarations_refuse_unbounded_or_mislabelled_runs(

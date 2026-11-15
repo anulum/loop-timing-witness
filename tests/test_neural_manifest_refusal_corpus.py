@@ -77,6 +77,16 @@ OVERSIZED: Final = "Neural manifest exceeds its byte allocation."
 UNREADABLE: Final = "Cannot read neural manifest as a regular file without symlinks."
 IRREGULAR: Final = "Neural manifest must be a regular file."
 NUL: Final = "Neural manifest path contains an invalid NUL character."
+# The first defect each crafted ordering case is refused for.
+FIRST_DEFECTS: Final = {
+    "every source before the repeated path": NOT_DIGEST,
+    "bad path before a later digest": NOT_PORTABLE,
+    "digest before path in one reference": NOT_DIGEST,
+    "first root reference first": NOT_PORTABLE,
+    "root references before channels": NOT_PORTABLE,
+    "sources before root references": NOT_PORTABLE,
+    "identity before references": NOT_EXACT,
+}
 
 
 def _base() -> dict[str, Any]:
@@ -306,22 +316,33 @@ def _documents(base: dict[str, Any]) -> list[dict[str, Any]]:
     Returns
     -------
     list[dict[str, Any]]
+        Descriptions from :func:`_document`: text, then member and number, then
+        refusal-order documents within the sources and across the root.
+    """
+    return [
+        *_text_documents(base),
+        *_value_documents(base),
+        *_source_order_documents(base),
+        *_root_order_documents(base),
+    ]
+
+
+def _text_documents(base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Describe documents that change the text around, or the encoding of, the base.
+
+    Parameters
+    ----------
+    base
+        Admitted declaration.
+
+    Returns
+    -------
+    list[dict[str, Any]]
         Descriptions from :func:`_document`.
     """
     run_id: str = base["run_id"]
     run = f'"run_id":"{run_id}"'
     epoch = f'"epoch":{base["epoch"]}'
-    source = base["source_files"][0]
-    # A marked source length is the one unique place to splice integer texts into.
-    marked = _member(base, "source_files", [{**source, "byte_length": 987654321}])
-
-    def length(literal: str) -> tuple[list[str], list[str]]:
-        return marked, ['"byte_length":987654321', f'"byte_length":{literal}']
-
-    # The schema anchors digests with $, so only a trailing newline reaches the exact check.
-    bad = {**source, "sha256": source["sha256"] + "\n"}
-    escaped = {**source, "path": "../escape"}
-    nested = "[" * 63 + "]" * 63
     first = f"\\u{ord(run_id[0]):04x}"
     allocation = NEURAL_MANIFEST_LIMIT - len(_text(base))
     return [
@@ -345,6 +366,32 @@ def _documents(base: dict[str, Any]) -> list[dict[str, Any]]:
         _document("paired surrogates", [run, '"run_id":"a\\ud83d\\ude00"']),
         _document("control character", [run, '"run_id":"a\tb"']),
         _document("single quotes", [run, "'run_id':'x'"]),
+    ]
+
+
+def _value_documents(base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Describe documents that repeat a member, nest deeply or write an integer differently.
+
+    Parameters
+    ----------
+    base
+        Admitted declaration.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Descriptions from :func:`_document`.
+    """
+    epoch = f'"epoch":{base["epoch"]}'
+    source = base["source_files"][0]
+    # A marked source length is the one unique place to splice integer texts into.
+    marked = _member(base, "source_files", [{**source, "byte_length": 987654321}])
+
+    def length(literal: str) -> tuple[list[str], list[str]]:
+        return marked, ['"byte_length":987654321', f'"byte_length":{literal}']
+
+    nested = "[" * 63 + "]" * 63
+    return [
         _document("repeated root member", [epoch, f"{epoch},{epoch}"]),
         _document(
             "repeated nested member", ['"pending_empty":', '"finalized":true,"pending_empty":']
@@ -366,6 +413,43 @@ def _documents(base: dict[str, Any]) -> list[dict[str, Any]]:
         _document("below signed 64 bits", *length("-9223372036854775809")),
         _document("long integer", *length("9" * 5000)),
         _document("exponent length", *length("1e0")),
+    ]
+
+
+def _defective_sources(base: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return the first source reference with an inexact digest, and with an escaping path.
+
+    Parameters
+    ----------
+    base
+        Admitted declaration.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any]]
+        Reference with a trailing newline on its digest, and one whose path leaves the run.
+    """
+    source = base["source_files"][0]
+    # The schema anchors digests with $, so only a trailing newline reaches the exact check.
+    return {**source, "sha256": source["sha256"] + "\n"}, {**source, "path": "../escape"}
+
+
+def _source_order_documents(base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Describe source lists with several defects, to fix which refusal comes first.
+
+    Parameters
+    ----------
+    base
+        Admitted declaration.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Descriptions from :func:`_document`.
+    """
+    source = base["source_files"][0]
+    bad, escaped = _defective_sources(base)
+    return [
         _document("repeated source", _member(base, "source_files", [source, source])),
         _document(
             "every source before the repeated path",
@@ -376,6 +460,26 @@ def _documents(base: dict[str, Any]) -> list[dict[str, Any]]:
             "digest before path in one reference",
             _member(base, "source_files", [{**escaped, "sha256": bad["sha256"]}]),
         ),
+    ]
+
+
+def _root_order_documents(base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Describe root declarations with defects in several parts, to fix which comes first.
+
+    Parameters
+    ----------
+    base
+        Admitted declaration.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Descriptions from :func:`_document`.
+    """
+    run_id: str = base["run_id"]
+    run = f'"run_id":"{run_id}"'
+    bad, escaped = _defective_sources(base)
+    return [
         _document(
             "first root reference first",
             _member(base, "tool_receipt", {**base["tool_receipt"], "path": "a//b"}),
@@ -528,26 +632,7 @@ def test_corpus_reaches_every_declaration_refusal() -> None:
         "fifo": IRREGULAR,
         "nul": NUL,
     }
-    assert {
-        name: crafted[name]
-        for name in (
-            "every source before the repeated path",
-            "bad path before a later digest",
-            "digest before path in one reference",
-            "first root reference first",
-            "root references before channels",
-            "sources before root references",
-            "identity before references",
-        )
-    } == {
-        "every source before the repeated path": NOT_DIGEST,
-        "bad path before a later digest": NOT_PORTABLE,
-        "digest before path in one reference": NOT_DIGEST,
-        "first root reference first": NOT_PORTABLE,
-        "root references before channels": NOT_PORTABLE,
-        "sources before root references": NOT_PORTABLE,
-        "identity before references": NOT_EXACT,
-    }
+    assert {name: crafted[name] for name in FIRST_DEFECTS} == FIRST_DEFECTS
     assert len(changed) > 1000
     locations = [triple[1] for group in data["groups"] for triple in group["changes"]]
     assert len({tuple(item) for item in locations if item}) > 100

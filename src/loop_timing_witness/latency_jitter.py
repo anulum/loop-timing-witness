@@ -88,22 +88,41 @@ def summarise_jitter(
     for pair in jitter_pairs(rows):
         changes[str(pair["interval"])].append(int(pair["absolute_delta_ticks"]))
     expected = max(0, analysed_cycles - 1)
-    result: dict[str, dict[str, int | float | str | None]] = {}
-    for name in names:
-        samples = latencies[name]
-        count = len(changes[name])
-        result[name] = {
-            **distribution(changes[name]),
-            "status": "unavailable"
-            if not count
-            else "available"
-            if count == expected
-            else "partial",
-            "latency_sample_count": len(samples),
-            "expected_pair_count": expected,
-            "missing_pair_count": expected - count,
-            "pair_coverage_fraction": count / expected if expected else None,
-            "duration_ticks": duration_ticks,
-            "peak_to_peak_ticks": max(samples) - min(samples) if len(samples) > 1 else None,
-        }
-    return result
+    return {
+        name: _jitter_block(changes[name], latencies[name], expected, duration_ticks)
+        for name in names
+    }
+
+
+def _jitter_block(
+    changes: list[int], samples: list[int], expected: int, duration_ticks: int
+) -> dict[str, int | float | str | None]:
+    """Return one interval's adjacent-change distribution, coverage and spread.
+
+    Parameters
+    ----------
+    changes
+        Absolute adjacent-cycle latency changes of the interval.
+    samples
+        Latency observations of the interval.
+    expected
+        Possible adjacent pairs: analysed cycles minus one, at least zero.
+    duration_ticks
+        Observation span shared with the event report.
+
+    Returns
+    -------
+    dict[str, int | float | str | None]
+        Type-7 distribution, status, pair coverage, duration and peak-to-peak.
+    """
+    count = len(changes)
+    return {
+        **distribution(changes),
+        "status": "unavailable" if not count else "available" if count == expected else "partial",
+        "latency_sample_count": len(samples),
+        "expected_pair_count": expected,
+        "missing_pair_count": expected - count,
+        "pair_coverage_fraction": count / expected if expected else None,
+        "duration_ticks": duration_ticks,
+        "peak_to_peak_ticks": max(samples) - min(samples) if len(samples) > 1 else None,
+    }

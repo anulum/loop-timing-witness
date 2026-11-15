@@ -19,6 +19,7 @@ import sys
 import time
 from contextlib import ExitStack
 from pathlib import Path
+from typing import Any, Final
 
 import pytest
 from linux_load_config import PROFILES
@@ -29,6 +30,187 @@ from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled, scaled_seconds
 
 __all__ = ["native_run"]
+LOADER: Final = str(REPOSITORY_ROOT / "tools/linux_load.py")
+COUNTS: Final = {
+    "cpu": "arithmetic_operations",
+    "memory": "memory_touches",
+    "network": "datagrams",
+    "storage": "fsyncs",
+    "idle": "idle_waits",
+}
+
+
+def _load_command(
+    profile: str,
+    directory: Path,
+    native: list[str],
+    *,
+    timeout: str | None = None,
+) -> list[str]:
+    """Return the production host-load command around one native invocation.
+
+    Parameters
+    ----------
+    profile
+        Load profile.
+    directory
+        Exclusive allocation holding ``load.json`` and the ``worker`` workspace.
+    native
+        Native executable and its arguments.
+    timeout
+        Native lifetime in seconds, or ``None`` for the loader's default.
+
+    Returns
+    -------
+    list[str]
+        Command pinning the load to the lowest CPU of this process's affinity.
+    """
+    lifetime = [] if timeout is None else ["--timeout", timeout]
+    return [
+        sys.executable,
+        LOADER,
+        "--profile",
+        profile,
+        "--cpu",
+        str(min(os.sched_getaffinity(0))),
+        "--journal",
+        str(directory / "load.json"),
+        "--workspace",
+        str(directory / "worker"),
+        *lifetime,
+        "--",
+        *native,
+    ]
+
+
+def _native_arguments(native_run: Path, config: Path, directory: Path) -> list[str]:
+    """Return the native run command writing its events and samples into one directory.
+
+    Parameters
+    ----------
+    native_run
+        Production native executable.
+    config
+        Run configuration.
+    directory
+        Exclusive allocation receiving ``events.bin`` and ``raw.csv``.
+
+    Returns
+    -------
+    list[str]
+        Executable and arguments.
+    """
+    events, samples = directory / "events.bin", directory / "raw.csv"
+    return [str(native_run.resolve()), str(config), str(events), str(samples)]
+
+
+def _check_lifecycle(receipt: dict[str, Any], profile: str, cpu: int) -> None:
+    """Require a completed receipt's profile, ordering, processes and policy.
+
+    Parameters
+    ----------
+    receipt
+        Completed load receipt.
+    profile
+        Load profile.
+    cpu
+        CPU the load was pinned to.
+    """
+    assert receipt["profile"] == profile
+    assert receipt["native_returncode"] == 0
+    assert (
+        receipt["started_ns"]
+        <= receipt["native_started_ns"]
+        <= receipt["native_finished_ns"]
+        <= receipt["finished_ns"]
+    )
+    assert receipt["worker_pid"] != receipt["native_pid"]
+    assert receipt["policy"]["affinity_cpus"] == [cpu]
+    assert receipt["policy"]["scheduler"] == os.SCHED_OTHER
+    assert receipt["policy"]["priority"] == 0
+
+
+def _check_counters(receipt: dict[str, Any], profile: str, workspace: Path) -> None:
+    """Require the receipt's work counters to match its profile.
+
+    Parameters
+    ----------
+    receipt
+        Completed load receipt.
+    profile
+        Load profile.
+    workspace
+        Worker workspace, holding the storage profile's owned file.
+    """
+    counters = receipt["counters"]
+    chunks = counters["chunks"]
+    assert chunks >= 1
+    assert counters[COUNTS[profile]] >= chunks
+    if profile == "network":
+        assert counters["bytes_sent"] == counters["bytes_received"] == chunks * 4096
+        assert receipt["network_scope"] == "loopback_udp"
+    if profile == "storage":
+        assert counters["bytes_written"] == counters["bytes_read"] == chunks * 4096
+        assert (workspace / "storage.bin").read_bytes() == bytes(range(256)) * 16
+        assert receipt["storage_scope"] == "owned_file_fsync"
+
+
+def _children(process: subprocess.Popen[str]) -> list[int]:
+    """Return the loader's current child process IDs.
+
+    Parameters
+    ----------
+    process
+        Running loader.
+
+    Returns
+    -------
+    list[int]
+        Child IDs as the kernel lists them.
+    """
+    return [
+        int(pid)
+        for pid in Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()
+    ]
+
+
+def _workers(children: list[int]) -> list[int]:
+    """Return the children that run the load worker.
+
+    Parameters
+    ----------
+    children
+        Loader child process IDs.
+
+    Returns
+    -------
+    list[int]
+        IDs whose command line names ``linux_load_worker.py``.
+    """
+    return [
+        pid
+        for pid in children
+        if b"linux_load_worker.py" in Path(f"/proc/{pid}/cmdline").read_bytes()
+    ]
+
+
+def _signal_worker(children: list[int], number: signal.Signals) -> None:
+    """Send one signal to the only load worker among the loader's children.
+
+    Parameters
+    ----------
+    children
+        Loader child process IDs.
+    number
+        Signal to send through a process descriptor.
+    """
+    workers = _workers(children)
+    assert len(workers) == 1
+    descriptor = os.pidfd_open(workers[0])
+    try:
+        signal.pidfd_send_signal(descriptor, number)
+    finally:
+        os.close(descriptor)
 
 
 @pytest.mark.parametrize("profile", PROFILES)
@@ -53,23 +235,7 @@ def test_actual_profiles(native_run: Path, tmp_path: Path, profile: str) -> None
     journal = tmp_path / "load.json"
     workspace = tmp_path / "worker"
     result = subprocess.run(
-        [
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/linux_load.py"),
-            "--profile",
-            profile,
-            "--cpu",
-            str(cpu),
-            "--journal",
-            str(journal),
-            "--workspace",
-            str(workspace),
-            "--",
-            str(native_run.resolve()),
-            str(config),
-            str(tmp_path / "events.bin"),
-            str(tmp_path / "raw.csv"),
-        ],
+        _load_command(profile, tmp_path, _native_arguments(native_run, config, tmp_path)),
         capture_output=True,
         text=True,
         check=False,
@@ -78,36 +244,8 @@ def test_actual_profiles(native_run: Path, tmp_path: Path, profile: str) -> None
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.startswith("simulation_only ")
     receipt = json.loads(journal.read_bytes())
-    assert receipt["profile"] == profile
-    assert receipt["native_returncode"] == 0
-    assert (
-        receipt["started_ns"]
-        <= receipt["native_started_ns"]
-        <= receipt["native_finished_ns"]
-        <= receipt["finished_ns"]
-    )
-    assert receipt["worker_pid"] != receipt["native_pid"]
-    assert receipt["policy"]["affinity_cpus"] == [cpu]
-    assert receipt["policy"]["scheduler"] == os.SCHED_OTHER
-    assert receipt["policy"]["priority"] == 0
-    counters = receipt["counters"]
-    chunks = counters["chunks"]
-    assert chunks >= 1
-    count_key = {
-        "cpu": "arithmetic_operations",
-        "memory": "memory_touches",
-        "network": "datagrams",
-        "storage": "fsyncs",
-        "idle": "idle_waits",
-    }[profile]
-    assert counters[count_key] >= chunks
-    if profile == "network":
-        assert counters["bytes_sent"] == counters["bytes_received"] == chunks * 4096
-        assert receipt["network_scope"] == "loopback_udp"
-    if profile == "storage":
-        assert counters["bytes_written"] == counters["bytes_read"] == chunks * 4096
-        assert (workspace / "storage.bin").read_bytes() == bytes(range(256)) * 16
-        assert receipt["storage_scope"] == "owned_file_fsync"
+    _check_lifecycle(receipt, profile, cpu)
+    _check_counters(receipt, profile, workspace)
     with (tmp_path / "raw.csv").open(newline="") as stream:
         assert len(list(csv.DictReader(stream))) == 32
     assert (tmp_path / "events.bin").stat().st_size > 0
@@ -131,20 +269,7 @@ def test_native_failure_retained(native_run: Path, tmp_path: Path) -> None:
     """
     journal = tmp_path / "load.json"
     result = subprocess.run(
-        [
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/linux_load.py"),
-            "--profile",
-            "cpu",
-            "--cpu",
-            str(min(os.sched_getaffinity(0))),
-            "--journal",
-            str(journal),
-            "--workspace",
-            str(tmp_path / "worker"),
-            "--",
-            str(native_run.resolve()),
-        ],
+        _load_command("cpu", tmp_path, [str(native_run.resolve())]),
         capture_output=True,
         text=True,
         check=False,
@@ -172,25 +297,12 @@ def test_actual_owned_failure(native_run: Path, tmp_path: Path, failure: str) ->
     config.write_text(
         configuration("pid", "none").replace("pid 32", "pid 100000"), encoding="utf-8"
     )
-    command = [
-        sys.executable,
-        str(REPOSITORY_ROOT / "tools/linux_load.py"),
-        "--profile",
+    command = _load_command(
         "cpu",
-        "--cpu",
-        str(min(os.sched_getaffinity(0))),
-        "--journal",
-        str(tmp_path / "load.json"),
-        "--workspace",
-        str(tmp_path / "worker"),
-        "--timeout",
-        "1" if failure != "worker_exit" else str(scaled_seconds(10)),
-        "--",
-        str(native_run.resolve()),
-        str(config),
-        str(tmp_path / "events.bin"),
-        str(tmp_path / "raw.csv"),
-    ]
+        tmp_path,
+        _native_arguments(native_run, config, tmp_path),
+        timeout="1" if failure != "worker_exit" else str(scaled_seconds(10)),
+    )
     with subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     ) as process:
@@ -199,29 +311,12 @@ def test_actual_owned_failure(native_run: Path, tmp_path: Path, failure: str) ->
         deadline = time.monotonic() + scaled(30)
         children: list[int] = []
         while len(children) < 2 and process.poll() is None and time.monotonic() < deadline:
-            children = [
-                int(pid)
-                for pid in Path(f"/proc/{process.pid}/task/{process.pid}/children")
-                .read_text()
-                .split()
-            ]
+            children = _children(process)
             if len(children) < 2:
                 time.sleep(0.01)
         assert len(children) == 2
         if failure != "timeout":
-            workers = [
-                pid
-                for pid in children
-                if b"linux_load_worker.py" in Path(f"/proc/{pid}/cmdline").read_bytes()
-            ]
-            assert len(workers) == 1
-            descriptor = os.pidfd_open(workers[0])
-            try:
-                signal.pidfd_send_signal(
-                    descriptor, signal.SIGTERM if failure == "worker_exit" else signal.SIGSTOP
-                )
-            finally:
-                os.close(descriptor)
+            _signal_worker(children, signal.SIGTERM if failure == "worker_exit" else signal.SIGSTOP)
         stdout, stderr = process.communicate(timeout=scaled(15))
         assert process.returncode == 1, stdout + stderr
         assert ("worker exited" if failure == "worker_exit" else "timed out") in stderr
@@ -245,20 +340,7 @@ def test_actual_readiness_failure(native_run: Path, tmp_path: Path, failure: str
     failure
         Missing readiness due to SIGSTOP or altered pipe identity from an external writer.
     """
-    command = [
-        sys.executable,
-        str(REPOSITORY_ROOT / "tools/linux_load.py"),
-        "--profile",
-        "cpu",
-        "--cpu",
-        str(min(os.sched_getaffinity(0))),
-        "--journal",
-        str(tmp_path / "load.json"),
-        "--workspace",
-        str(tmp_path / "worker"),
-        "--",
-        str(native_run.resolve()),
-    ]
+    command = _load_command("cpu", tmp_path, [str(native_run.resolve())])
     with (
         subprocess.Popen(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -271,12 +353,7 @@ def test_actual_readiness_failure(native_run: Path, tmp_path: Path, failure: str
         deadline = time.monotonic() + scaled(30)
         workers: list[int] = []
         while not workers and process.poll() is None and time.monotonic() < deadline:
-            children = Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()
-            workers = [
-                int(pid)
-                for pid in children
-                if b"linux_load_worker.py" in Path(f"/proc/{pid}/cmdline").read_bytes()
-            ]
+            workers = _workers(_children(process))
             if not workers:
                 time.sleep(0.001)
         assert len(workers) == 1

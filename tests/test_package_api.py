@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -71,25 +71,8 @@ print(json.dumps(value, sort_keys=True))
     assert json.loads(result.stdout) == manifest
 
 
-@pytest.mark.parametrize("first_export", ["RunInputs", "load_run", "build_report"])
-def test_public_exports_analyse_actual_rtl_and_refuse_changed_events(
-    make_rtl_run: MakeRtlRun, first_export: str
-) -> None:
-    """Preserve analysis, wildcard imports and digest refusal for every first export.
-
-    Parameters
-    ----------
-    make_rtl_run
-        Actual fabric records and validated simulation metadata.
-    first_export
-        Public class or function requested before the other exports.
-    """
-    run, _ = make_rtl_run()
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            """
+# Run in a fresh interpreter, so that the first export is the first package access.
+FIRST_EXPORT_PROGRAM: Final = """
 import json, sys
 from pathlib import Path
 import loop_timing_witness as package
@@ -137,7 +120,28 @@ except ValueError as error:
 else:
     raise AssertionError("changed captured event bytes were accepted")
 print(json.dumps({"first_export": first_name, "evidence_status": report["evidence_status"]}))
-""",
+"""
+
+
+@pytest.mark.parametrize("first_export", ["RunInputs", "load_run", "build_report"])
+def test_public_exports_analyse_actual_rtl_and_refuse_changed_events(
+    make_rtl_run: MakeRtlRun, first_export: str
+) -> None:
+    """Preserve analysis, wildcard imports and digest refusal for every first export.
+
+    Parameters
+    ----------
+    make_rtl_run
+        Actual fabric records and validated simulation metadata.
+    first_export
+        Public class or function requested before the other exports.
+    """
+    run, _ = make_rtl_run()
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            FIRST_EXPORT_PROGRAM,
             str(run / "manifest.json"),
             first_export,
         ],

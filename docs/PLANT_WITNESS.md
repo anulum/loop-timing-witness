@@ -282,9 +282,11 @@ value through the stream. Within a group, old-cycle events precede new-cycle eve
 cycles sort by code. Groups retain capture order. `ACT_LATE` is optional in the domain snapshot;
 archived snapshots and record format v1 remain unchanged.
 
-The default queue holds 64 groups. Each head emits one record per capture edge. Queue-full
-rejects the newest complete group and counts its set bits; a full downstream FIFO drops and
-counts each serialized record. Both contribute once to a saturating 32-bit `overflow_count`.
+The default queue holds 64 groups. Each head emits one record per capture edge: a three-level
+comparison tree picks the earliest pending cycle tag, lower code first on equal tags, and the
+group leaves the queue with its last pending event, which the remaining-event mask shows without
+waiting for that choice. Queue-full rejects the newest complete group and counts its set bits; a
+full downstream FIFO drops and counts each serialized record. Both contribute once to a saturating 32-bit `overflow_count`.
 Any loss invalidates the host run. No source is stalled and no dropped event is recreated.
 The FIFO uses the existing common-reset CDC contract. Neither group serialization nor RAM
 inference establishes a 100 MHz board timing result.

@@ -87,7 +87,7 @@ and GitHub releases
 [v0.2.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.2.0))
 are published with verified hashes and explicit software-only evidence scope.
 
-The original-width RTL source-flow obligation is complete: 826 of 834 raw identities executed,
+The original-width RTL source-flow obligation is complete: 822 of 830 raw identities executed,
 with eight checked source invariants and no unresolved or excluded points. C++ lifecycle evidence
 is tracked separately in [the coverage guide](docs/CONTROLLER_COVERAGE.md). Physical UIO/PAC1934
 operation, privileged scheduling and board timing require their actual resources.

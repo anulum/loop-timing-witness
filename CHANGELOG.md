@@ -64,6 +64,13 @@ Loop Timing Witness — changelog
   has generated. The derivation edits only the reference script and FIC0's interconnect and
   keeps the reference's design-rule settings. The reference CCC has no free output, and a
   SmartDesign input left for later is refused when the base design generates.
+- The capture group queue picks each record with a three-level comparison tree and pops a group
+  from its remaining-event mask. Before, an eight-step scan chose the record, and its result also
+  gated the pop, the queue-full rejection, the loss sum and the saturation of `overflow_count` in
+  the same capture cycle, the longest path of the capture clock domain in Libero's timing analysis.
+  Every output is unchanged in every cycle: a SAT proof of the selection and pop logic over all
+  inputs, and co-simulation of both versions. The RTL source-flow union now has 822 of 830 points
+  executed: each of the file's two elaborations lost the scan's two branch points.
 
 ## [0.2.0] - 2026-11-14
 

@@ -28,27 +28,43 @@ module control_event_capture #(
     logic [GROUP_ADDRESS_BITS:0] count;
     logic [7:0] remaining_mask;
     logic [7:0] head_mask, after_mask;
-    logic [327:0] current;
-    integer chosen;
+    logic [319:0] current;
+    logic [2:0] chosen;
     logic [31:0] chosen_cycle;
+    // Selection candidates {pending, code index, cycle}, 36 bits each, reduced pairwise.
+    logic [287:0] candidates;
+    logic [143:0] pairs;
+    logic [71:0] quads;
+    logic [35:0] earliest;
     logic pop_group, push_group, reject_group;
     logic [3:0] group_losses;
     logic [32:0] loss_total;
     if (GROUP_ADDRESS_BITS < 1 || GROUP_ADDRESS_BITS > 8) begin : invalid_capacity
         initial $fatal(1, "GROUP_ADDRESS_BITS must be in [1,8]");
     end
-    assign current = groups[head];
+    assign current = groups[head][319:0];
     assign next_head = head + 1'b1;
+    // The pending candidate with the earlier cycle wins; on equal cycles the lower code index,
+    // passed as low, wins. The serialization order equals a scan that keeps the last minimum
+    // from index 7 down to 0, in three comparator levels instead of eight.
+    function automatic logic [35:0] earlier(input logic [35:0] low, input logic [35:0] high);
+        earlier = high[35] && (!low[35] || high[31:0] < low[31:0]) ? high : low;
+    endfunction
+    for (genvar slot = 0; slot < 8; slot = slot + 1) begin : candidate
+        localparam logic [2:0] CODE_INDEX = slot;
+        assign candidates[36*slot +: 36] = {remaining_mask[slot], CODE_INDEX, current[64+32*slot +: 32]};
+    end
+    for (genvar slot = 0; slot < 4; slot = slot + 1) begin : pair
+        assign pairs[36*slot +: 36] = earlier(candidates[72*slot +: 36], candidates[72*slot+36 +: 36]);
+    end
+    for (genvar slot = 0; slot < 2; slot = slot + 1) begin : quad
+        assign quads[36*slot +: 36] = earlier(pairs[72*slot +: 36], pairs[72*slot+36 +: 36]);
+    end
+    assign earliest = earlier(quads[35:0], quads[71:36]);
+    assign chosen = earliest[35] ? earliest[34:32] : 3'd0;
+    assign chosen_cycle = earliest[35] ? earliest[31:0] : 32'hffffffff;
     always_comb begin
         head_mask = remaining_mask;
-        chosen = 0;
-        chosen_cycle = 32'hffffffff;
-        for (integer index = 7; index >= 0; index = index - 1) begin
-            if (head_mask[index] && current[64+32*index +: 32] <= chosen_cycle) begin
-                chosen = index;
-                chosen_cycle = current[64+32*index +: 32];
-            end
-        end
         after_mask = head_mask;
         after_mask[chosen] = 1'b0;
         group_losses = '0;
@@ -57,9 +73,11 @@ module control_event_capture #(
     end
     assign record_valid = count != 0;
     assign record = {current[63:0], chosen_cycle, 24'd0,
-        (chosen == 7 ? 8'd13 : 8'(chosen+1))};
-    // Rejected serialized records are counted and consumed, never retimed.
-    assign pop_group = record_valid && after_mask == 0;
+        (chosen == 3'd7 ? 8'd13 : {5'd0, chosen} + 8'd1)};
+    // Rejected serialized records are counted and consumed, never retimed. The group pops with its
+    // last pending event: after_mask is zero exactly when at most one remaining bit is set, which
+    // the mask register gives without waiting for the selection.
+    assign pop_group = record_valid && (remaining_mask & (remaining_mask - 8'd1)) == 8'd0;
     assign reject_group = event_mask != 0 && count == (GROUP_ADDRESS_BITS+1)'(DEPTH)
         && !pop_group;
     assign push_group = reset_n && event_mask != 0 && !reject_group;

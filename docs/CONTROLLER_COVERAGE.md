@@ -395,11 +395,20 @@ identity, omitting only instance hierarchy when taking the union. It covers all
 contain continuous assignments and module wiring, and `event_codes_pkg.sv`
 contains constants. Those four files have no procedural counter in this scope.
 
-The completed union has **826 of 834 points executed**, with **8 remaining
+The completed union has **822 of 830 points executed**, with **8 remaining
 raw zero counters accepted as source invariants**. No point is excluded and no
 unexplained zero remains. The eight proofs do not count as runtime hits. The
 union combines actual public-port testbench, native lifecycle and AXI process
 profiles; it does not assert independent completeness for each plant.
+
+The union was measured with 826 of 834 points before `control_event_capture.sv`
+replaced its eight-step record scan with a comparison tree. The file appears in
+two elaborations, the default and `GROUP_ADDRESS_BITS=4`. Each lost the scan's
+two branch points and exchanged the scan's block point for the tree function's.
+Every output of the module is unchanged in every cycle, so every remaining point
+executes under the same stimulus. A re-measurement of the lifecycle,
+configuration and AXI corpora with the previous and the current file gives
+identical counts for every shared statement.
 
 `tests/test_retained_interrupt.py` reads the real `0xa8` IRQ status register
 across three bus/capture clock ratios. It checks an older snapshot acknowledgement

@@ -159,7 +159,29 @@ def _auxiliary_files(
         files[name] = read_neural_bound_file(
             directory, tool[name], SOURCE_LIMIT if name == "existing_trial_analysis" else JSON_LIMIT
         )
-    checker = tool["checker_receipts"]
+    _bind_checker_receipts(directory, tool["checker_receipts"], files)
+    if resets:
+        _bind_reset(directory, tool, files)
+    return files, tool
+
+
+def _bind_checker_receipts(directory: Path, checker: object, files: dict[str, bytes]) -> None:
+    """Bind the generation and check invocation receipts named by the tool receipt.
+
+    Parameters
+    ----------
+    directory
+        Source-admitted acquisition.
+    checker
+        Tool receipt's ``checker_receipts`` member.
+    files
+        Bound files, receiving both receipts.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If both invocations are not named, or a receipt cannot be bound.
+    """
     if not isinstance(checker, dict) or set(checker) != {"generation", "check"}:
         message = "Public neural tool receipt requires both actual checker invocations."
         raise NeuralCaptureRefusalError(message)
@@ -167,24 +189,39 @@ def _auxiliary_files(
         files[f"checker_{operation}_receipt"] = read_neural_bound_file(
             directory, reference, JSON_LIMIT
         )
-    if resets:
-        files["reset_epoch_receipt"] = read_neural_bound_file(
-            directory, tool["reset_epoch_receipt"], JSON_LIMIT
-        )
-        prefixes = tool["abandoned_prefix_traces"]
-        if not isinstance(prefixes, dict) or set(prefixes) != {
-            "input",
-            "numerical",
-            "raw_spike",
-            "service",
-        }:
-            message = "Public neural reset requires all four original abandoned-prefix traces."
-            raise NeuralCaptureRefusalError(message)
-        for name, reference in prefixes.items():
-            files[f"abandoned_{name}_trace"] = read_neural_bound_file(
-                directory, reference, JSON_LIMIT
-            )
-    return files, tool
+
+
+def _bind_reset(directory: Path, tool: dict[str, Any], files: dict[str, bytes]) -> None:
+    """Bind the actual reset receipt and the four abandoned-prefix traces.
+
+    Parameters
+    ----------
+    directory
+        Source-admitted acquisition.
+    tool
+        Closed tool receipt of a fresh-epoch run.
+    files
+        Bound files, receiving the reset receipt and the prefix traces.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If a prefix trace role is missing or extra, or a file cannot be bound.
+    """
+    files["reset_epoch_receipt"] = read_neural_bound_file(
+        directory, tool["reset_epoch_receipt"], JSON_LIMIT
+    )
+    prefixes = tool["abandoned_prefix_traces"]
+    if not isinstance(prefixes, dict) or set(prefixes) != {
+        "input",
+        "numerical",
+        "raw_spike",
+        "service",
+    }:
+        message = "Public neural reset requires all four original abandoned-prefix traces."
+        raise NeuralCaptureRefusalError(message)
+    for name, reference in prefixes.items():
+        files[f"abandoned_{name}_trace"] = read_neural_bound_file(directory, reference, JSON_LIMIT)
 
 
 def bind_public_neural_run(

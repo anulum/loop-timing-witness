@@ -49,6 +49,10 @@ Loop Timing Witness — changelog
   the chosen tag in the predicate. The workflow auditor requires the choice options to equal the
   registry. Release 0.2.0 is registered with its byte-exact provenance record and the exact
   public digest lines the secret scanner recognises in it.
+- The native run command writes `cycle_intervals.csv` and `cycle_jitter.csv` row by row as the
+  rows are formed, instead of building both tables in memory first. On a 2·10⁵-cycle benchmark
+  repeat its peak memory falls from about 2.1 times Python's to about 0.31 times, with
+  byte-identical reports. The local control-run timing is re-measured on ML350.
 
 ## [0.2.0] - 2026-11-14
 

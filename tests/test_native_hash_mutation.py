@@ -63,6 +63,45 @@ def stop_reader(process: subprocess.Popen[str], config: Path) -> int:
     return position
 
 
+def _write_padded_configuration(config: Path) -> None:
+    """Write a valid configuration followed by 128 MiB of spaces, so hashing it takes time.
+
+    Parameters
+    ----------
+    config
+        Configuration file.
+    """
+    with config.open("wb") as stream:
+        stream.write(configuration("pid", "none").encode())
+        padding = b" " * (1024 * 1024)
+        for _ in range(128):
+            stream.write(padding)
+
+
+def _change(config: Path, mutation: str) -> None:
+    """Grow, truncate, replace or unlink the configuration while its reader is stopped.
+
+    Parameters
+    ----------
+    config
+        Configuration being hashed; a replacement is written beside it.
+    mutation
+        ``append``, ``truncate``, ``replace`` or ``unlink``.
+    """
+    if mutation == "append":
+        with config.open("ab") as stream:
+            stream.write(b" ")
+    elif mutation == "truncate":
+        with config.open("r+b") as stream:
+            stream.truncate(0)
+    elif mutation == "replace":
+        replacement = config.with_name("replacement.conf")
+        replacement.write_text(configuration("pid", "none"), encoding="utf-8")
+        replacement.replace(config)
+    else:
+        config.unlink()
+
+
 @pytest.mark.parametrize("mutation", ["append", "truncate", "replace", "unlink"])
 def test_actual_configuration_changed_during_hash(
     native_run: Path, tmp_path: Path, mutation: str
@@ -79,11 +118,7 @@ def test_actual_configuration_changed_during_hash(
         Real append, truncation, path replacement or unlink while the child is stopped.
     """
     config = tmp_path / "run.conf"
-    with config.open("wb") as stream:
-        stream.write(configuration("pid", "none").encode())
-        padding = b" " * (1024 * 1024)
-        for _ in range(128):
-            stream.write(padding)
+    _write_padded_configuration(config)
     original_size = config.stat().st_size
     events, raw, metadata = (tmp_path / name for name in ("events.bin", "raw.csv", "metadata.json"))
     process = subprocess.Popen(
@@ -96,18 +131,7 @@ def test_actual_configuration_changed_during_hash(
         position = stop_reader(process, config)
         assert 0 < position < original_size
         assert not events.exists()
-        if mutation == "append":
-            with config.open("ab") as stream:
-                stream.write(b" ")
-        elif mutation == "truncate":
-            with config.open("r+b") as stream:
-                stream.truncate(0)
-        elif mutation == "replace":
-            replacement = tmp_path / "replacement.conf"
-            replacement.write_text(configuration("pid", "none"), encoding="utf-8")
-            replacement.replace(config)
-        else:
-            config.unlink()
+        _change(config, mutation)
         os.kill(process.pid, signal.SIGCONT)
         stdout, stderr = process.communicate(timeout=scaled(10))
         assert process.returncode == 1

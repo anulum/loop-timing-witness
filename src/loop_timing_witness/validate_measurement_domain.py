@@ -567,6 +567,82 @@ def _registry_inputs(registry_path: Path) -> tuple[list[dict[str, Any]], list[di
         raise RegistryInputRefusalError(message) from exc
 
 
+def _group_findings(manifest: dict[str, Any], groups: list[dict[str, Any]]) -> list[str]:
+    """Check the manifest's group against its registry entry.
+
+    Parameters
+    ----------
+    manifest
+        Structurally valid manifest.
+    groups
+        Registry group entries.
+
+    Returns
+    -------
+    list[str]
+        Findings for an unregistered or inactive group, or a repository path
+        that does not give the manifest's canonical path.
+    """
+    group = next((item for item in groups if item.get("group_id") == manifest["group"]), None)
+    if group is None:
+        return [f"registry: group {manifest['group']!r} is not registered"]
+    findings = []
+    if group.get("lifecycle_state") != "active":
+        findings.append(f"registry: group {manifest['group']!r} is not active")
+    expected = f"{group.get('repositories_path')}/{manifest['project']}"
+    if expected != manifest["canonical_path"]:
+        findings.append(
+            f"registry: group repositories path gives {expected!r}, manifest "
+            f"declares {manifest['canonical_path']!r}"
+        )
+    return findings
+
+
+def _project_findings(
+    manifest: dict[str, Any], projects: list[dict[str, Any]], entry: dict[str, Any] | None
+) -> list[str]:
+    """Check the manifest's project entry, or that no other project claims its path.
+
+    Parameters
+    ----------
+    manifest
+        Structurally valid manifest.
+    projects
+        Registry project entries.
+    entry
+        The manifest project's own entry, if registered.
+
+    Returns
+    -------
+    list[str]
+        Field mismatches of the own entry, or claims of the canonical path by
+        another project's path or alias.
+    """
+    canonical_path = manifest["canonical_path"]
+    if entry is not None:
+        expected_fields = {
+            "canonical_path": canonical_path,
+            "owning_group_id": manifest["group"],
+            "target_kind": "git-repository",
+        }
+        return [
+            f"registry: {name} is {entry.get(name)!r}, expected {value!r}"
+            for name, value in expected_fields.items()
+            if entry.get(name) != value
+        ]
+    findings = []
+    for item in projects:
+        paths = [item.get("canonical_path")]
+        aliases = item.get("aliases")
+        if isinstance(aliases, list):
+            paths.extend(alias.get("path") for alias in aliases if isinstance(alias, dict))
+        if canonical_path in paths:
+            findings.append(
+                f"registry: canonical path already claimed by {item.get('project_id')!r}"
+            )
+    return findings
+
+
 def registry_cross_check(manifest: dict[str, Any], registry_path: Path) -> RegistryResult:
     """Cross-check the manifest identity against the canonical project registry.
 
@@ -587,45 +663,11 @@ def registry_cross_check(manifest: dict[str, Any], registry_path: Path) -> Regis
         groups, projects = _registry_inputs(registry_path)
     except RegistryInputRefusalError as exc:
         return RegistryResult("invalid", (str(exc),))
-    findings: list[str] = []
-    canonical_path = manifest["canonical_path"]
-    group = next((item for item in groups if item.get("group_id") == manifest["group"]), None)
-    if group is None:
-        findings.append(f"registry: group {manifest['group']!r} is not registered")
-    else:
-        if group.get("lifecycle_state") != "active":
-            findings.append(f"registry: group {manifest['group']!r} is not active")
-        expected = f"{group.get('repositories_path')}/{manifest['project']}"
-        if expected != canonical_path:
-            findings.append(
-                f"registry: group repositories path gives {expected!r}, manifest "
-                f"declares {canonical_path!r}"
-            )
     entry = next(
         (item for item in projects if item.get("project_id") == manifest["project"]),
         None,
     )
-    if entry is not None:
-        expected_fields = {
-            "canonical_path": canonical_path,
-            "owning_group_id": manifest["group"],
-            "target_kind": "git-repository",
-        }
-        findings.extend(
-            f"registry: {name} is {entry.get(name)!r}, expected {value!r}"
-            for name, value in expected_fields.items()
-            if entry.get(name) != value
-        )
-    else:
-        for item in projects:
-            paths = [item.get("canonical_path")]
-            aliases = item.get("aliases")
-            if isinstance(aliases, list):
-                paths.extend(alias.get("path") for alias in aliases if isinstance(alias, dict))
-            if canonical_path in paths:
-                findings.append(
-                    f"registry: canonical path already claimed by {item.get('project_id')!r}"
-                )
+    findings = [*_group_findings(manifest, groups), *_project_findings(manifest, projects, entry)]
     if findings:
         return RegistryResult("invalid", tuple(findings))
     return RegistryResult("registered" if entry is not None else "pending_registration")

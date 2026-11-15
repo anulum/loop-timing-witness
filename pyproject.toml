@@ -90,10 +90,6 @@ ignore = [
 # The checker launcher executes only hash-bound consumer registry tools and fixed
 # worker argv; acquisition command/receipt strings are never executable selectors.
 "src/loop_timing_witness/neural_checker_execution.py" = ["S603"]
-# The image executor runs only the hash-bound launcher command of the consumer
-# binding, with whole-value placeholders for the verified image, owned directory
-# and fixed operation; acquisition data never selects an argument.
-"src/loop_timing_witness/neural_checker_image.py" = ["S603"]
 # assert is the pytest contract surface; tests run the repository's own
 # command-line tools and Git with fixed argument vectors and no shell; the
 # literal numbers in assertions (exit statuses, counts) are the specification

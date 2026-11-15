@@ -24,11 +24,13 @@ from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_json_shapes import REFERENCE_FIELDS, records, texts, typed
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from .neural_checker_installation import NeuralCheckerInstallation
 
 _FILE_LIMIT = 1048576
-_TRACE_LIMIT = 8 * 1048576
 _TRACE_LIMIT = 8 * _FILE_LIMIT
+_TRACE_NAME = "checker-open.log"
 _WALL_SECONDS = 45
 _LIMIT_BOOTSTRAP = (
     "import os,resource,sys; "
@@ -41,6 +43,19 @@ _LIMIT_BOOTSTRAP = (
 _BOOTSTRAP = (
     "import runpy,sys; sys.path.insert(0,sys.argv.pop(1)); "
     "runpy.run_module('loop_timing_witness.neural_checker_worker',run_name='__main__')"
+)
+_ISOLATED = ("-I", "-B", "-S", "-c")
+_TRACER_OPTIONS = (
+    "--kill-on-exit",
+    "-f",
+    "-qq",
+    "-xx",
+    "-yy",
+    "-s",
+    "8192",
+    "-e",
+    "trace=openat,openat2,execve",
+    "-o",
 )
 
 
@@ -235,6 +250,167 @@ def checker_environment(directory: Path) -> dict[str, str]:
     }
 
 
+@dataclass(frozen=True, slots=True)
+class GroupRun:
+    """Measured native completion of one owned process group.
+
+    Attributes
+    ----------
+    returncode, started_ns, completed_ns, elapsed_ns
+        Native status, wall-clock start and completion, and monotonic duration.
+    interrupted
+        Whether the deadline required stopping and reaping the entire owned group.
+    """
+
+    returncode: int
+    started_ns: int
+    completed_ns: int
+    elapsed_ns: int
+    interrupted: bool
+
+
+def _wait_or_reap(process: subprocess.Popen[bytes], deadline_seconds: float) -> bool:
+    """Wait for the child, killing and reaping its whole group if it must stop.
+
+    Parameters
+    ----------
+    process
+        Child started as the leader of its own session.
+    deadline_seconds
+        Wall-clock limit of the wait.
+
+    Returns
+    -------
+    bool
+        Whether the deadline stopped the group.
+
+    Raises
+    ------
+    BaseException
+        Whatever interrupted the waiting parent, re-raised after the group is reaped.
+    """
+    try:
+        process.wait(timeout=deadline_seconds)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        return True
+    except BaseException:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        raise
+    return False
+
+
+def run_owned_group(
+    command: Sequence[str],
+    directory: Path,
+    environment: dict[str, str],
+    outputs: tuple[Path, Path],
+    deadline_seconds: float,
+) -> GroupRun:
+    """Run one command as its own session and reap the whole group when it must stop.
+
+    Parameters
+    ----------
+    command
+        Complete argument vector; no shell interprets it.
+    directory
+        Owned working directory of the child.
+    environment
+        Complete closed child environment; nothing is inherited.
+    outputs
+        Files receiving the child's standard output and standard error.
+    deadline_seconds
+        Wall-clock limit after which the whole group is killed and reaped.
+
+    Returns
+    -------
+    GroupRun
+        Native status and measured times. A deadline is a known interruption and
+        never restarts the child or fabricates success.
+    """
+    started = time.time_ns()
+    monotonic = time.monotonic_ns()
+    with outputs[0].open("wb") as stdout, outputs[1].open("wb") as stderr:
+        process = subprocess.Popen(
+            command,
+            cwd=directory,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
+            close_fds=True,
+            start_new_session=True,
+        )
+        interrupted = _wait_or_reap(process, deadline_seconds)
+    completed = time.time_ns()
+    elapsed = time.monotonic_ns() - monotonic
+    return GroupRun(process.returncode, started, completed, elapsed, interrupted)
+
+
+def _isolated_python(
+    installation: NeuralCheckerInstallation, directory: Path, bootstrap: str
+) -> tuple[str, ...]:
+    """Return the isolated interpreter prefix that runs one fixed bootstrap text.
+
+    Parameters
+    ----------
+    installation
+        Verified runtime whose interpreter runs the bootstrap.
+    directory
+        Owned invocation directory holding the bytecode cache.
+    bootstrap
+        Fixed program text passed with ``-c``.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Interpreter, cache prefix, isolation flags and the bootstrap.
+    """
+    return (
+        exact_text(installation.interpreter.path),
+        "-X",
+        f"pycache_prefix={exact_text(directory / 'bytecode')}",
+        *_ISOLATED,
+        bootstrap,
+    )
+
+
+def checker_command(
+    installation: NeuralCheckerInstallation, script: Path, operation: str, directory: Path
+) -> tuple[str, ...]:
+    """Return the fixed traced command of one source-checker operation.
+
+    Parameters
+    ----------
+    installation
+        Consumer registry runtime already verified against its full contract.
+    script
+        Within-job copy of the exact byte-bound source-owned entry point.
+    operation
+        Fixed ``generate`` or ``check`` operation selected by the full verifier.
+    directory
+        Owned invocation directory, never a receipt-supplied working directory.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Resource-limited tracer launch of the isolated worker bootstrap.
+    """
+    return (
+        *_isolated_python(installation, directory, _LIMIT_BOOTSTRAP),
+        exact_text(installation.tracer.path),
+        *_TRACER_OPTIONS,
+        exact_text(directory / _TRACE_NAME),
+        *_isolated_python(installation, directory, _BOOTSTRAP),
+        exact_text(Path(__file__).resolve().parents[1]),
+        exact_text(script),
+        operation,
+        *(exact_text(path) for path in installation.import_roots),
+    )
+
+
 def invoke_source_checker(
     installation: NeuralCheckerInstallation,
     script: Path,
@@ -264,80 +440,22 @@ def invoke_source_checker(
         Complete original logs and measured native status. A timeout is a known
         interrupted execution and never restarts the producer or fabricates success.
     """
-    trace_path = directory / "checker-open.log"
-    command = (
-        exact_text(installation.interpreter.path),
-        "-X",
-        f"pycache_prefix={exact_text(directory / 'bytecode')}",
-        "-I",
-        "-B",
-        "-S",
-        "-c",
-        _LIMIT_BOOTSTRAP,
-        exact_text(installation.tracer.path),
-        "--kill-on-exit",
-        "-f",
-        "-qq",
-        "-xx",
-        "-yy",
-        "-s",
-        "8192",
-        "-e",
-        "trace=openat,openat2,execve",
-        "-o",
-        exact_text(trace_path),
-        exact_text(installation.interpreter.path),
-        "-X",
-        f"pycache_prefix={exact_text(directory / 'bytecode')}",
-        "-I",
-        "-B",
-        "-S",
-        "-c",
-        _BOOTSTRAP,
-        exact_text(Path(__file__).resolve().parents[1]),
-        exact_text(script),
-        operation,
-        *(exact_text(path) for path in installation.import_roots),
+    command = checker_command(installation, script, operation, directory)
+    outputs = (directory / "checker.stdout", directory / "checker.stderr")
+    run = run_owned_group(
+        command, directory, checker_environment(directory), outputs, deadline_seconds
     )
-    started = time.time_ns()
-    monotonic = time.monotonic_ns()
-    interrupted = False
-    with (
-        (directory / "checker.stdout").open("wb") as stdout,
-        (directory / "checker.stderr").open("wb") as stderr,
-    ):
-        process = subprocess.Popen(
-            command,
-            cwd=directory,
-            env=checker_environment(directory),
-            stdin=subprocess.DEVNULL,
-            stdout=stdout,
-            stderr=stderr,
-            close_fds=True,
-            start_new_session=True,
-        )
-        try:
-            process.wait(timeout=deadline_seconds)
-        except subprocess.TimeoutExpired:
-            interrupted = True
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
-        except BaseException:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
-            raise
-    completed = time.time_ns()
-    elapsed = time.monotonic_ns() - monotonic
     observation = read_observation(directory / "checker-observation.json")
+    trace_path = directory / _TRACE_NAME
     return CheckerInvocation(
         command,
-        process.returncode,
-        started,
-        completed,
-        elapsed,
-        bounded_output(directory / "checker.stdout", _FILE_LIMIT),
-        bounded_output(directory / "checker.stderr", _FILE_LIMIT),
+        run.returncode,
+        run.started_ns,
+        run.completed_ns,
+        run.elapsed_ns,
+        bounded_output(outputs[0], _FILE_LIMIT),
+        bounded_output(outputs[1], _FILE_LIMIT),
         bounded_output(trace_path, _TRACE_LIMIT) if trace_path.exists() else b"",
         observation,
-        interrupted,
+        run.interrupted,
     )

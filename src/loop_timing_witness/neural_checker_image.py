@@ -21,10 +21,7 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
-import signal
 import stat
-import subprocess
-import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -35,6 +32,7 @@ from .neural_checker_execution import (
     bounded_output,
     exact_text,
     read_observation,
+    run_owned_group,
 )
 from .neural_checker_installation import CheckerInstalledFile
 from .neural_event_stream import NeuralCaptureRefusalError
@@ -383,6 +381,44 @@ class ImageCheckerExecutor:
             message = "Unsupported fixed source-checker operation."
             raise _refuse(message)
         self.verify()
+        command, environment = self._launch(operation, directory)
+        outputs = (
+            directory.parent / f"{directory.name}.stdout",
+            directory.parent / f"{directory.name}.stderr",
+        )
+        deadline = self._binding["deadline_seconds"]
+        run = run_owned_group(command, directory, environment, outputs, deadline)
+        self.verify()
+        observation = read_observation(directory / "checker-observation.json")
+        return CheckerInvocation(
+            command,
+            run.returncode,
+            run.started_ns,
+            run.completed_ns,
+            run.elapsed_ns,
+            bounded_output(outputs[0], _FILE_LIMIT),
+            bounded_output(outputs[1], _FILE_LIMIT),
+            self._boundary(environment),
+            observation,
+            run.interrupted,
+        )
+
+    def _launch(self, operation: str, directory: Path) -> tuple[tuple[str, ...], dict[str, str]]:
+        """Substitute the whole-value placeholders of the bound launcher.
+
+        Parameters
+        ----------
+        operation
+            Fixed operation already checked by the caller.
+        directory
+            Owned private working directory bound as the payload's ``/work``.
+
+        Returns
+        -------
+        tuple[tuple[str, ...], dict[str, str]]
+            Launcher command and bootstrap environment with only the image root,
+            the owned directory and the operation substituted.
+        """
         values = {
             "{image_root}": exact_text(self.image_root),
             "{work_directory}": exact_text(directory),
@@ -393,55 +429,29 @@ class ImageCheckerExecutor:
             key: values.get(value, value)
             for key, value in self._binding["bootstrap_environment"].items()
         }
-        stdout_path = directory.parent / f"{directory.name}.stdout"
-        stderr_path = directory.parent / f"{directory.name}.stderr"
-        started = time.time_ns()
-        monotonic = time.monotonic_ns()
-        interrupted = False
-        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
-            process = subprocess.Popen(
-                command,
-                cwd=directory,
-                env=environment,
-                stdin=subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-                close_fds=True,
-                start_new_session=True,
-            )
-            try:
-                process.wait(timeout=self._binding["deadline_seconds"])
-            except subprocess.TimeoutExpired:
-                interrupted = True
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-            except BaseException:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-                raise
-        completed = time.time_ns()
-        elapsed = time.monotonic_ns() - monotonic
-        self.verify()
-        observation = read_observation(directory / "checker-observation.json")
-        boundary = canonical_json_bytes(
+        return command, environment
+
+    def _boundary(self, environment: dict[str, str]) -> bytes:
+        """Return the boundary record kept in place of a process trace.
+
+        Parameters
+        ----------
+        environment
+            Substituted bootstrap environment of the launcher.
+
+        Returns
+        -------
+        bytes
+            Canonical record of the binding digest, the before-and-after
+            verification and the environment.
+        """
+        return canonical_json_bytes(
             {
                 "schema_id": _BOUNDARY_SCHEMA,
                 "executor_binding_sha256": hashlib.sha256(self.binding_bytes).hexdigest(),
                 "image_and_host_boundary": "verified-before-and-after",
                 "environment": environment,
             }
-        )
-        return CheckerInvocation(
-            command,
-            process.returncode,
-            started,
-            completed,
-            elapsed,
-            bounded_output(stdout_path, _FILE_LIMIT),
-            bounded_output(stderr_path, _FILE_LIMIT),
-            boundary,
-            observation,
-            interrupted,
         )
 
     def closure_findings(
@@ -470,21 +480,7 @@ class ImageCheckerExecutor:
         failures = []
         if sorted(files[path]["sha256"] for path in sources) != sorted(source_digests):
             failures.append("Checker image source closure differs from the admitted sources.")
-        observed: set[str] = set()
-        outside = False
-        for path, digest, length in records:
-            pure = PurePosixPath(path)
-            if pure.parent == _WORK and pure.name in _WORK_DATA:
-                continue
-            relative = path.removeprefix("/")
-            item = files.get(relative)
-            if (
-                not pure.is_absolute()
-                or item is None
-                or (item["sha256"], item["byte_length"]) != (digest, length)
-            ):
-                outside = True
-            observed.add(relative)
+        observed, outside = _opened_closure(records, files)
         if not sources.issubset(observed):
             failures.append(
                 "Actual source checker did not open its complete admitted source closure."
@@ -493,18 +489,72 @@ class ImageCheckerExecutor:
             failures.append(
                 "Actual source checker opened a file outside its complete runtime binding."
             )
-        modules = observation.get("modules")
-        if not isinstance(modules, list) or any(
-            not isinstance(item, dict)
-            or not isinstance(item.get("name"), str)
-            or (
-                item["name"].startswith("sc_neurocore")
-                and str(item.get("path", "")).removeprefix("/") not in sources
-            )
-            for item in modules
-        ):
+        if _unbound_module(observation.get("modules"), sources):
             failures.append("Actual source checker imported a live or unbound SC source fallback.")
         return tuple(failures)
+
+
+def _opened_closure(
+    records: list[tuple[str, str, int]], files: dict[str, dict[str, Any]]
+) -> tuple[set[str], bool]:
+    """Collect the image paths the worker opened, apart from its own work data.
+
+    Parameters
+    ----------
+    records
+        Path, digest and length of every observed open.
+    files
+        Bound image files keyed by their root-relative path.
+
+    Returns
+    -------
+    tuple[set[str], bool]
+        Root-relative opened paths, and whether any open was relative, unbound
+        or of other bytes than its binding.
+    """
+    observed: set[str] = set()
+    outside = False
+    for path, digest, length in records:
+        pure = PurePosixPath(path)
+        if pure.parent == _WORK and pure.name in _WORK_DATA:
+            continue
+        relative = path.removeprefix("/")
+        item = files.get(relative)
+        if (
+            not pure.is_absolute()
+            or item is None
+            or (item["sha256"], item["byte_length"]) != (digest, length)
+        ):
+            outside = True
+        observed.add(relative)
+    return observed, outside
+
+
+def _unbound_module(modules: object, sources: set[str]) -> bool:
+    """Tell whether the observed modules are malformed or include an unbound SC module.
+
+    Parameters
+    ----------
+    modules
+        Observed ``modules`` member of the worker observation.
+    sources
+        Root-relative paths of the admitted source closure.
+
+    Returns
+    -------
+    bool
+        Whether the list is malformed, or an ``sc_neurocore`` module was loaded
+        from a path outside the admitted sources.
+    """
+    return not isinstance(modules, list) or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("name"), str)
+        or (
+            item["name"].startswith("sc_neurocore")
+            and str(item.get("path", "")).removeprefix("/") not in sources
+        )
+        for item in modules
+    )
 
 
 def _observed_records(

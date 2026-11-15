@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_run_clock import FLAG, UNSIGNED, decode_actual_receipt
@@ -27,6 +27,26 @@ RESET_FLAGS = (
     "all_three_fifos_empty_after_reset",
     "model_and_encoder_quiescent_after_reset",
 )
+_COUNTS = (
+    "abandoned_epoch",
+    "next_epoch",
+    "prefix_inputs",
+    "prefix_states",
+    "prefix_raw_rows",
+    "prefix_raw_spikes",
+    "prefix_services",
+    "counter_before_reset",
+    "uncommitted_input_records_before_reset",
+    "reset_counter",
+    "reset_service_ordinal",
+)
+_ARRAYS = ("prefix_attempts", "prefix_accepted", "reset_attempts", "reset_accepted")
+_TRIPLE = {"type": "array", "minItems": 3, "maxItems": 3, "items": UNSIGNED}
+_RECEIPT_FIELDS = {
+    **dict.fromkeys(_COUNTS, UNSIGNED),
+    **dict.fromkeys(_ARRAYS, _TRIPLE),
+    **dict.fromkeys(RESET_FLAGS, FLAG),
+}
 
 
 def _prefix_rows(run: BoundNeuralRun) -> dict[str, list[tuple[int, ...]]]:
@@ -96,6 +116,70 @@ def _prefix_findings(
     return tuple(failures)
 
 
+def _expected_receipt(
+    run: BoundNeuralRun, rows: dict[str, list[tuple[int, ...]]]
+) -> dict[str, object]:
+    """Return every reset-receipt value the original prefix and run determine.
+
+    Parameters
+    ----------
+    run
+        Complete source-bound original run.
+    rows
+        Admitted original abandoned source sequences.
+
+    Returns
+    -------
+    dict[str, object]
+        Expected value of each receipt field.
+    """
+    inputs = len(rows["input"])
+    states = len(rows["numerical"])
+    return {
+        "abandoned_epoch": 0,
+        "next_epoch": run.manifest["epoch"],
+        "prefix_inputs": inputs,
+        "prefix_states": states,
+        "prefix_raw_rows": len(rows["raw_spike"]),
+        "prefix_raw_spikes": sum(row[2] for row in rows["raw_spike"]),
+        "prefix_services": len(rows["service"]),
+        "counter_before_reset": 20 + inputs,
+        "uncommitted_input_records_before_reset": 1,
+        "prefix_attempts": [inputs, states, 1],
+        "prefix_accepted": [inputs, states, 1],
+        "reset_counter": 0,
+        "reset_attempts": [0, 0, 0],
+        "reset_accepted": [0, 0, 0],
+        "reset_service_ordinal": 0,
+        **dict.fromkeys(RESET_FLAGS, True),
+    }
+
+
+def _prefix_established(rows: dict[str, list[tuple[int, ...]]], receipt: dict[str, Any]) -> bool:
+    """Tell whether the prefix held the selected queued, inflight and pending state.
+
+    Parameters
+    ----------
+    rows
+        Admitted original abandoned source sequences.
+    receipt
+        Admitted actual reset receipt.
+
+    Returns
+    -------
+    bool
+        Whether at least two inputs were accepted, one state and raw row fewer were
+        produced, exactly one raw spike was pending and nothing was serviced.
+    """
+    inputs = len(rows["input"])
+    return (
+        inputs >= MIN_PREFIX_INPUTS
+        and len(rows["numerical"]) == len(rows["raw_spike"]) == inputs - 1
+        and receipt["prefix_raw_spikes"] == 1
+        and not rows["service"]
+    )
+
+
 def analyze_actual_reset(run: BoundNeuralRun) -> tuple[str, ...]:
     """Reconcile real queued/inflight/pending reset evidence with fresh original run.
 
@@ -118,63 +202,16 @@ def analyze_actual_reset(run: BoundNeuralRun) -> tuple[str, ...]:
     """
     if "reset_epoch_receipt" not in run.files:
         return ()
-    counts = (
-        "abandoned_epoch",
-        "next_epoch",
-        "prefix_inputs",
-        "prefix_states",
-        "prefix_raw_rows",
-        "prefix_raw_spikes",
-        "prefix_services",
-        "counter_before_reset",
-        "uncommitted_input_records_before_reset",
-        "reset_counter",
-        "reset_service_ordinal",
-    )
-    arrays = ("prefix_attempts", "prefix_accepted", "reset_attempts", "reset_accepted")
-    triple = {"type": "array", "minItems": 3, "maxItems": 3, "items": UNSIGNED}
     receipt = decode_actual_receipt(
-        run.files["reset_epoch_receipt"],
-        "actual joint reset",
-        {
-            **dict.fromkeys(counts, UNSIGNED),
-            **dict.fromkeys(arrays, triple),
-            **dict.fromkeys(RESET_FLAGS, FLAG),
-        },
+        run.files["reset_epoch_receipt"], "actual joint reset", _RECEIPT_FIELDS
     )
     rows = _prefix_rows(run)
-    inputs = len(rows["input"])
-    states = len(rows["numerical"])
-    raw = len(rows["raw_spike"])
-    actual = {
-        "abandoned_epoch": 0,
-        "next_epoch": run.manifest["epoch"],
-        "prefix_inputs": inputs,
-        "prefix_states": states,
-        "prefix_raw_rows": raw,
-        "prefix_raw_spikes": sum(row[2] for row in rows["raw_spike"]),
-        "prefix_services": len(rows["service"]),
-        "counter_before_reset": 20 + inputs,
-        "uncommitted_input_records_before_reset": 1,
-        "prefix_attempts": [inputs, states, 1],
-        "prefix_accepted": [inputs, states, 1],
-        "reset_counter": 0,
-        "reset_attempts": [0, 0, 0],
-        "reset_accepted": [0, 0, 0],
-        "reset_service_ordinal": 0,
-        **dict.fromkeys(RESET_FLAGS, True),
-    }
     failures = [
         f"Actual joint reset predicate differs: {name}."
-        for name, value in actual.items()
+        for name, value in _expected_receipt(run, rows).items()
         if receipt[name] != value
     ]
-    if not (
-        inputs >= MIN_PREFIX_INPUTS
-        and states == raw == inputs - 1
-        and receipt["prefix_raw_spikes"] == 1
-        and not rows["service"]
-    ):
+    if not _prefix_established(rows, receipt):
         failures.append(
             "Actual prefix did not establish the selected queued/inflight/pending reset."
         )

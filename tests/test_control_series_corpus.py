@@ -748,11 +748,14 @@ def test_series_corpus_is_the_same_without_the_c_decimal_module() -> None:
     C decimal module and imports the pure-Python one, which converts long
     digit strings to integers and so meets the interpreter's integer-string
     limit. A child interpreter that cannot import the C module rebuilds the
-    corpus and requires the committed text.
+    corpus and requires the committed text. It first drops any decimal module
+    imported at start-up, as subprocess coverage measurement does, so that its
+    own import selects the pure-Python one.
     """
     code = (
         "import sys\n"
         "sys.modules['_decimal'] = None\n"
+        "sys.modules.pop('decimal', None)\n"
         "import decimal, _pydecimal\n"
         "assert decimal.Decimal is _pydecimal.Decimal\n"
         "import test_control_series_corpus as corpus\n"

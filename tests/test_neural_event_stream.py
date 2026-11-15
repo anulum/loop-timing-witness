@@ -38,56 +38,77 @@ def capture_streams(tmp_path: Path) -> CaptureStreams:
     CaptureStreams
         Runner selecting a genuine empty service channel or isolated FIFO loss.
     """
-    repository = Path(__file__).resolve().parents[1]
 
     def run(
         empty_service: int, overflow: int, phase: int, count: int, counter_bits: int
     ) -> tuple[bytes, bytes, bytes]:
         directory = tmp_path / f"capture-{empty_service}-{overflow}-{phase}-{count}-{counter_bits}"
         directory.mkdir()
-        binary = directory / "shared-capture.vvp"
-        subprocess.run(
-            [
-                "iverilog",
-                "-g2012",
-                "-s",
-                "shared_event_witness_tb",
-                "-o",
-                str(binary),
-                "-Pshared_event_witness_tb.NEURAL_FORMAT=1",
-                f"-Pshared_event_witness_tb.NEURAL_PHASE={phase}",
-                f"-Pshared_event_witness_tb.NORMAL_COUNT={count}",
-                f"-Pshared_event_witness_tb.ADDRESS_BITS={10 if count == 1000 else 3}",
-                f"-Pshared_event_witness_tb.EMPTY_SERVICE={int(empty_service)}",
-                f"-Pshared_event_witness_tb.OVERFLOW_RUN={int(overflow)}",
-                f"-Pshared_event_witness_tb.OVERFLOW_COUNTER_BITS={counter_bits}",
-                "-Pshared_event_witness_tb.DRAIN_HALF_PERIOD=3",
-                str(repository / "rtl/clock_reset_release.sv"),
-                str(repository / "rtl/event_record_fifo.sv"),
-                str(repository / "rtl/shared_event_witness.sv"),
-                str(repository / "tests/rtl/shared_event_witness_tb.sv"),
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=scaled(30),
-        )
-        result = subprocess.run(
-            ["vvp", str(binary), f"+EVENT_DIRECTORY={directory}"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=scaled(30),
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert "SHARED_CAPTURE_PASS reset_pass=1" in result.stdout
-        return (
-            (directory / "channel-0.bin").read_bytes(),
-            (directory / "channel-1.bin").read_bytes(),
-            (directory / "channel-2.bin").read_bytes(),
-        )
+        parameters = {
+            "NEURAL_FORMAT": 1,
+            "NEURAL_PHASE": phase,
+            "NORMAL_COUNT": count,
+            "ADDRESS_BITS": 10 if count == 1000 else 3,
+            "EMPTY_SERVICE": int(empty_service),
+            "OVERFLOW_RUN": int(overflow),
+            "OVERFLOW_COUNTER_BITS": counter_bits,
+            "DRAIN_HALF_PERIOD": 3,
+        }
+        return _neural_capture(directory, parameters)
 
     return run
+
+
+def _neural_capture(directory: Path, parameters: dict[str, int]) -> tuple[bytes, bytes, bytes]:
+    """Compile and run the shared witness testbench and read its three channel files.
+
+    Parameters
+    ----------
+    directory
+        Exclusive compiler and raw-export allocation.
+    parameters
+        Testbench parameter overrides, in command order.
+
+    Returns
+    -------
+    tuple[bytes, bytes, bytes]
+        Input, state and service channel captures.
+    """
+    repository = Path(__file__).resolve().parents[1]
+    binary = directory / "shared-capture.vvp"
+    subprocess.run(
+        [
+            "iverilog",
+            "-g2012",
+            "-s",
+            "shared_event_witness_tb",
+            "-o",
+            str(binary),
+            *(f"-Pshared_event_witness_tb.{name}={value}" for name, value in parameters.items()),
+            str(repository / "rtl/clock_reset_release.sv"),
+            str(repository / "rtl/event_record_fifo.sv"),
+            str(repository / "rtl/shared_event_witness.sv"),
+            str(repository / "tests/rtl/shared_event_witness_tb.sv"),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=scaled(30),
+    )
+    result = subprocess.run(
+        ["vvp", str(binary), f"+EVENT_DIRECTORY={directory}"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(30),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "SHARED_CAPTURE_PASS reset_pass=1" in result.stdout
+    return (
+        (directory / "channel-0.bin").read_bytes(),
+        (directory / "channel-1.bin").read_bytes(),
+        (directory / "channel-2.bin").read_bytes(),
+    )
 
 
 @pytest.mark.parametrize("empty_service", [0, 1])

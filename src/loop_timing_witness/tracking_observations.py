@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import csv
 import io
-from decimal import Decimal
-from math import sqrt
 from typing import TYPE_CHECKING, Any
 
-from .run_series import count, measurement
+from .run_series import count, error_statistics, measurement
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from .event_stream import Event
 
 
@@ -95,8 +95,7 @@ def observed_tracking_error(
         If observations differ from captured reads or CSV values are invalid.
     """
     observations = _observations(content, cycle_count)
-    captured = {event.cycle for event in events if event.name == "SAMPLE_READ"}
-    if set(observations) != captured:
+    if set(observations) != {event.cycle for event in events if event.name == "SAMPLE_READ"}:
         message = "observed tracking cycles do not match captured SAMPLE_READ events"
         raise ValueError(message)
     needed = set(range(int(warmup_cycles), int(cycle_count)))
@@ -114,9 +113,5 @@ def observed_tracking_error(
     if not selected:
         result.update(status="unavailable", reason="no observed post-warmup samples")
         return result
-    errors = [observations[cycle] for cycle in selected]
-    mean_square = sum((error * error for error in errors), Decimal(0)) / len(errors)
-    result.update(
-        rms=sqrt(float(mean_square)), peak_absolute=float(max(abs(error) for error in errors))
-    )
+    result.update(error_statistics([observations[cycle] for cycle in selected]))
     return result

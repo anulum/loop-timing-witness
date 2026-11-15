@@ -233,11 +233,29 @@ def tracking_error(
         message = "tracking file lacks an analysed cycle"
         raise ValueError(message)
     errors = [observations[cycle] for cycle in sorted(needed)]
-    mean_square = sum((error * error for error in errors), Decimal(0)) / len(errors)
     return {
         "status": "available",
         "unit": unit,
         "sample_count": len(errors),
+        **error_statistics(errors),
+    }
+
+
+def error_statistics(errors: list[Decimal]) -> dict[str, float]:
+    """Return the RMS and peak absolute value of nonempty exact tracking errors.
+
+    Parameters
+    ----------
+    errors
+        Reference minus output for each analysed cycle, at least one.
+
+    Returns
+    -------
+    dict[str, float]
+        ``rms`` from the exact decimal mean square and ``peak_absolute``.
+    """
+    mean_square = sum((error * error for error in errors), Decimal(0)) / len(errors)
+    return {
         "rms": sqrt(float(mean_square)),
         "peak_absolute": float(max(abs(error) for error in errors)),
     }

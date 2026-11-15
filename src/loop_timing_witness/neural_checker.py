@@ -23,7 +23,10 @@ from .neural_checker_receipts import checker_receipt_findings
 from .neural_checker_trace import checker_trace_findings
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from .neural_checker_execution import CheckerInvocation
+    from .neural_checker_installation import NeuralCheckerInstallation
     from .neural_run_binding import BoundNeuralRun
 
 _OUTPUT_LIMIT = 65536
@@ -45,6 +48,95 @@ class NeuralCheckerFindings:
     numerical: tuple[str, ...]
     completion: tuple[str, ...]
     executed: bool
+
+
+def _copy_closure(run: BoundNeuralRun, policy: dict[str, Any], root: Path) -> frozenset[Path]:
+    """Write every admitted source file of the checker closure under one root.
+
+    Parameters
+    ----------
+    run
+        Source-admitted acquisition holding the original source bytes.
+    policy
+        Complete static reviewed checker policy.
+    root
+        Owned directory receiving the closure.
+
+    Returns
+    -------
+    frozenset[Path]
+        Paths of the written closure files.
+    """
+    copied = set()
+    for reference in policy["source_files"]:
+        path = root / reference["path"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(run.sources[reference["path"]])
+        copied.add(path)
+    return frozenset(copied)
+
+
+def _invoke(
+    installation: NeuralCheckerInstallation | ImageCheckerExecutor,
+    operation: str,
+    directory: Path,
+    script: Path,
+    closure: tuple[frozenset[Path], tuple[str, ...]],
+) -> tuple[CheckerInvocation, tuple[str, ...]]:
+    """Run one operation on the selected executor and check what it opened.
+
+    Parameters
+    ----------
+    installation
+        Verified executor image or traced host installation.
+    operation
+        Fixed ``generate`` or ``check`` operation.
+    directory
+        Owned invocation directory.
+    script
+        Entry point inside the copied closure, for the host installation.
+    closure
+        Copied closure paths and the admitted source digests.
+
+    Returns
+    -------
+    tuple[CheckerInvocation, tuple[str, ...]]
+        The invocation and its opened-file closure findings.
+    """
+    copied, digests = closure
+    if isinstance(installation, ImageCheckerExecutor):
+        actual = installation.invoke(operation, directory)
+        return actual, installation.closure_findings(actual, digests)
+    actual = invoke_source_checker(installation, script, operation, directory)
+    return actual, checker_trace_findings(actual, directory, copied, installation)
+
+
+def _record_invocation(run: BoundNeuralRun, operation: str, actual: CheckerInvocation) -> None:
+    """Keep the fresh invocation receipt, both logs and the opened-file record in the run.
+
+    Parameters
+    ----------
+    run
+        Acquisition receiving the fresh records.
+    operation
+        Fixed ``generate`` or ``check`` operation.
+    actual
+        Completed invocation.
+    """
+    run.files[f"fresh_checker_{operation}_execution_receipt"] = canonical_json_bytes(
+        {
+            "command": list(actual.command),
+            "native_returncode": actual.returncode,
+            "started_ns": actual.started_ns,
+            "completed_ns": actual.completed_ns,
+            "elapsed_ns": actual.elapsed_ns,
+            "interrupted": actual.interrupted,
+            "worker_observation": actual.observation,
+        }
+    )
+    run.files[f"fresh_checker_{operation}_stdout"] = actual.stdout
+    run.files[f"fresh_checker_{operation}_stderr"] = actual.stderr
+    run.files[f"fresh_checker_{operation}_opened_files"] = actual.trace
 
 
 def verify_source_checker(run: BoundNeuralRun) -> NeuralCheckerFindings:
@@ -70,52 +162,24 @@ def verify_source_checker(run: BoundNeuralRun) -> NeuralCheckerFindings:
     executed = True
     with tempfile.TemporaryDirectory(prefix="neural-checker-") as name:
         root = Path(name)
-        source_root = root / "source-closure"
-        copied = set()
-        for reference in policy["source_files"]:
-            path = source_root / reference["path"]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(run.sources[reference["path"]])
-            copied.add(path)
-        script = source_root / policy["entry_point"]["path"]
+        closure = (_copy_closure(run, policy, root / "source-closure"), digests)
+        script = root / "source-closure" / policy["entry_point"]["path"]
         for operation in ("generate", "check"):
             directory = root / operation
             directory.mkdir()
             if operation == "check":
                 (directory / "results_verilog.txt").write_bytes(run.files["numerical_projection"])
-            if isinstance(installation, ImageCheckerExecutor):
-                actual = installation.invoke(operation, directory)
-                source.extend(installation.closure_findings(actual, digests))
-            else:
-                actual = invoke_source_checker(installation, script, operation, directory)
-                source.extend(
-                    checker_trace_findings(actual, directory, frozenset(copied), installation)
-                )
-            executed = (
-                executed
-                and actual.observation is not None
-                and actual.observation.get("phase") == "source"
-            )
+            actual, opened = _invoke(installation, operation, directory, script, closure)
+            source.extend(opened)
+            observed = actual.observation
+            executed = executed and observed is not None and observed.get("phase") == "source"
             actual_findings = _invocation_findings(actual)
             source.extend(actual_findings.source)
             numerical.extend(actual_findings.numerical)
             completion.extend(actual_findings.completion)
             if operation == "generate" and actual.returncode == 0:
                 source.extend(_generation_findings(run, directory))
-            run.files[f"fresh_checker_{operation}_execution_receipt"] = canonical_json_bytes(
-                {
-                    "command": list(actual.command),
-                    "native_returncode": actual.returncode,
-                    "started_ns": actual.started_ns,
-                    "completed_ns": actual.completed_ns,
-                    "elapsed_ns": actual.elapsed_ns,
-                    "interrupted": actual.interrupted,
-                    "worker_observation": actual.observation,
-                }
-            )
-            run.files[f"fresh_checker_{operation}_stdout"] = actual.stdout
-            run.files[f"fresh_checker_{operation}_stderr"] = actual.stderr
-            run.files[f"fresh_checker_{operation}_opened_files"] = actual.trace
+            _record_invocation(run, operation, actual)
     installation.verify()
     return NeuralCheckerFindings(tuple(source), tuple(numerical), tuple(completion), executed)
 

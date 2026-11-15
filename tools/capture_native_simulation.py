@@ -23,7 +23,7 @@ from linux_load import LoadExecution, execute_with_load
 from linux_load_config import PROFILES, LoadConfiguration
 from native_simulation_manifest import native_metadata, write_native_manifest
 from native_source_snapshot import snapshot_native_sources
-from producer_source_context import snapshot_producer_context
+from producer_source_context import ProducerSourceContext, snapshot_producer_context
 from report_outputs import write_report
 from run_manifest import load_run
 
@@ -48,6 +48,279 @@ class CaptureOptions:
 
     fifo_address_bits: int = 8
     host_load: LoadConfiguration | None = None
+
+
+_RECORDED_OUTPUTS = (
+    "configuration.txt",
+    "build_versions.json",
+    "build_parameters.json",
+    "build.log",
+    "native.log",
+    "native_metadata.json",
+    "tracking_raw.csv",
+)
+
+
+def _check_options(thermal: int, options: CaptureOptions) -> None:
+    """Refuse an invalid host load, plant mode or FIFO capacity before any output.
+
+    Parameters
+    ----------
+    thermal
+        Compile-time plant mode.
+    options
+        FIFO build capacity and optional host workload.
+
+    Raises
+    ------
+    ValueError
+        If the host load is invalid, the mode is not zero or one, or the FIFO
+        address width is outside one to fourteen.
+    """
+    if options.host_load is not None:
+        options.host_load.validate()
+    if thermal not in (0, 1):
+        message = "thermal must be zero or one"
+        raise ValueError(message)
+    if not 1 <= options.fifo_address_bits <= MAX_FIFO_ADDRESS_BITS:
+        message = "FIFO address bits must be in [1,14]"
+        raise ValueError(message)
+
+
+def _prepare_build(
+    configuration: Path, output: Path, thermal: int, options: CaptureOptions
+) -> tuple[Path, ProducerSourceContext, list[Path], dict[str, str]]:
+    """Check the options, freeze the sources, write the build inputs and build.
+
+    Parameters
+    ----------
+    configuration
+        Complete native run configuration.
+    output
+        New run directory, created here.
+    thermal
+        Compile-time plant mode.
+    options
+        FIFO build capacity and optional host workload.
+
+    Returns
+    -------
+    tuple[Path, ProducerSourceContext, list[Path], dict[str, str]]
+        Frozen source directory, producer context, recorded artefacts and tool versions.
+
+    Raises
+    ------
+    ValueError
+        If the host load, plant mode or FIFO capacity is invalid.
+    OSError
+        If the configuration cannot be read or the output exists.
+    subprocess.CalledProcessError
+        If a build tool fails.
+    """
+    _check_options(thermal, options)
+    config_bytes = configuration.read_bytes()
+    output.mkdir()
+    source = output / "source"
+    snapshots = snapshot_native_sources(ROOT, output, host_load=options.host_load is not None)
+    producer_context = snapshot_producer_context(ROOT, output, snapshots)
+    snapshots = producer_context.artifacts()
+    _write_build_inputs(output, config_bytes, thermal, options.fifo_address_bits)
+    versions = _tool_versions(output)
+    _build(source, output, thermal, options.fifo_address_bits)
+    return source, producer_context, snapshots, versions
+
+
+def _check_native(native_result: subprocess.CompletedProcess[bytes], output: Path) -> None:
+    """Accept a clean native run, or exit status one only for a FIFO overflow.
+
+    Parameters
+    ----------
+    native_result
+        The native run's status.
+    output
+        Run directory holding the native metadata.
+
+    Raises
+    ------
+    subprocess.CalledProcessError
+        If the native run failed for any other reason.
+    """
+    if native_result.returncode:
+        native = native_metadata(output)
+        if native_result.returncode != 1 or not native["result"]["overflow"]:
+            native_result.check_returncode()
+
+
+def _publish(output: Path, manifest: Path, producer_context: ProducerSourceContext) -> None:
+    """Analyse the captured run and publish its report after re-verifying the producer.
+
+    Parameters
+    ----------
+    output
+        Run directory receiving ``reports``.
+    manifest
+        The run's hash-bound manifest.
+    producer_context
+        Producer sources and identity, verified again before publication.
+    """
+    report, rows = build_report(load_run(manifest))
+    producer_context.verify()
+    write_report(output / "reports", report, rows)
+
+
+def _write_build_inputs(output: Path, config_bytes: bytes, thermal: int, fifo_bits: int) -> None:
+    """Write the run configuration, the build parameters and the measurement domain.
+
+    Parameters
+    ----------
+    output
+        Run directory.
+    config_bytes
+        Original run configuration.
+    thermal
+        Compile-time plant mode.
+    fifo_bits
+        Compiled FIFO address width.
+    """
+    (output / "configuration.txt").write_bytes(config_bytes)
+    (output / "build_parameters.json").write_bytes(
+        canonical_json_bytes(
+            {
+                "fifo_address_bits": fifo_bits,
+                "group_address_bits": 4,
+                "period_ticks": 32768,
+                "thermal": thermal,
+            }
+        )
+    )
+    shutil.copyfile(ROOT / "measurement-domain.json", output / "measurement-domain.json")
+
+
+def _tool_versions(output: Path) -> dict[str, str]:
+    """Record the first version line of each build tool.
+
+    Parameters
+    ----------
+    output
+        Run directory receiving ``build_versions.json``.
+
+    Returns
+    -------
+    dict[str, str]
+        Version line of Verilator, gcc, g++ and make.
+    """
+    versions = {}
+    for tool in ["verilator", "gcc", "g++", "make"]:
+        versions[tool] = subprocess.run(
+            [tool, "--version"], check=True, text=True, capture_output=True, timeout=scaled(10)
+        ).stdout.splitlines()[0]
+    (output / "build_versions.json").write_bytes(canonical_json_bytes(versions))
+    return versions
+
+
+def _build(source: Path, output: Path, thermal: int, fifo_bits: int) -> None:
+    """Build the native simulation from the frozen source, logging to ``build.log``.
+
+    Parameters
+    ----------
+    source
+        Frozen source snapshot.
+    output
+        Run directory.
+    thermal
+        Compile-time plant mode.
+    fifo_bits
+        Compiled FIFO address width.
+    """
+    with (output / "build.log").open("wb") as log:
+        subprocess.run(
+            [
+                "make",
+                "run-simulation",
+                f"SIMULATION_THERMAL={thermal}",
+                f"SIMULATION_FIFO_ADDRESS_BITS={fifo_bits}",
+            ],
+            cwd=source,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=True,
+            timeout=scaled(90),
+        )
+
+
+def _native_command(output: Path, binary: Path, native_arguments: list[str] | None) -> list[str]:
+    """Return the native run's command vector with absolute output paths.
+
+    Parameters
+    ----------
+    output
+        Run directory.
+    binary
+        Built native simulation.
+    native_arguments
+        Explicit native CPU and scheduler options.
+
+    Returns
+    -------
+    list[str]
+        Binary, configuration, events, tracking and metadata paths and the options.
+    """
+    return [
+        str(binary.resolve()),
+        str((output / "configuration.txt").resolve()),
+        str((output / "events.bin").resolve()),
+        str((output / "tracking_raw.csv").resolve()),
+        "--metadata",
+        str((output / "native_metadata.json").resolve()),
+        *(native_arguments or []),
+    ]
+
+
+def _run_native(
+    command: list[str],
+    output: Path,
+    source: Path,
+    options: CaptureOptions,
+    snapshots: list[Path],
+) -> tuple[str, subprocess.CompletedProcess[bytes]]:
+    """Run the native simulation, alone or under the requested host load.
+
+    Parameters
+    ----------
+    command
+        Native command vector.
+    output
+        Run directory receiving ``native.log``.
+    source
+        Frozen source snapshot holding the load worker.
+    options
+        Optional host workload.
+    snapshots
+        Recorded artefacts, extended with the host-load receipt and workspace.
+
+    Returns
+    -------
+    tuple[str, subprocess.CompletedProcess[bytes]]
+        UTC start time in ISO 8601 form and the native run's status.
+    """
+    started = datetime.now(UTC).isoformat()
+    with (output / "native.log").open("wb") as log:
+        if options.host_load is None:
+            return started, subprocess.run(
+                command, stdout=log, stderr=subprocess.STDOUT, check=False, timeout=scaled(120)
+            )
+        result = execute_with_load(
+            command,
+            options.host_load,
+            LoadExecution(
+                output / "host_load.json",
+                output / "host_load_workspace",
+                worker_path=source / "tools/linux_load_worker.py",
+            ),
+            log,
+        )
+        snapshots.extend([output / "host_load.json", *(output / "host_load_workspace").glob("*")])
+        return started, result
 
 
 def capture_simulation(
@@ -87,113 +360,18 @@ def capture_simulation(
         If a real compiler or native run fails.
     """
     options = options or CaptureOptions()
-    fifo_address_bits = options.fifo_address_bits
-    if options.host_load is not None:
-        options.host_load.validate()
-    if thermal not in (0, 1):
-        message = "thermal must be zero or one"
-        raise ValueError(message)
-    if not 1 <= fifo_address_bits <= MAX_FIFO_ADDRESS_BITS:
-        message = "FIFO address bits must be in [1,14]"
-        raise ValueError(message)
-    config_bytes = configuration.read_bytes()
-    output.mkdir()
-    source = output / "source"
-    snapshots = snapshot_native_sources(ROOT, output, host_load=options.host_load is not None)
-    producer_context = snapshot_producer_context(ROOT, output, snapshots)
-    snapshots = producer_context.artifacts()
-    (output / "configuration.txt").write_bytes(config_bytes)
-    (output / "build_parameters.json").write_bytes(
-        canonical_json_bytes(
-            {
-                "fifo_address_bits": fifo_address_bits,
-                "group_address_bits": 4,
-                "period_ticks": 32768,
-                "thermal": thermal,
-            }
-        )
+    source, producer_context, snapshots, versions = _prepare_build(
+        configuration, output, thermal, options
     )
-    shutil.copyfile(ROOT / "measurement-domain.json", output / "measurement-domain.json")
-    versions = {}
-    for tool in ["verilator", "gcc", "g++", "make"]:
-        versions[tool] = subprocess.run(
-            [tool, "--version"], check=True, text=True, capture_output=True, timeout=scaled(10)
-        ).stdout.splitlines()[0]
-    (output / "build_versions.json").write_bytes(canonical_json_bytes(versions))
-    with (output / "build.log").open("wb") as log:
-        subprocess.run(
-            [
-                "make",
-                "run-simulation",
-                f"SIMULATION_THERMAL={thermal}",
-                f"SIMULATION_FIFO_ADDRESS_BITS={fifo_address_bits}",
-            ],
-            cwd=source,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            check=True,
-            timeout=scaled(90),
-        )
     binary = source / f"build/run_simulation_{thermal}/run_simulation"
-    started = datetime.now(UTC).isoformat()
-    with (output / "native.log").open("wb") as log:
-        command = [
-            str(binary.resolve()),
-            str((output / "configuration.txt").resolve()),
-            str((output / "events.bin").resolve()),
-            str((output / "tracking_raw.csv").resolve()),
-            "--metadata",
-            str((output / "native_metadata.json").resolve()),
-            *(native_arguments or []),
-        ]
-        if options.host_load is None:
-            native_result = subprocess.run(
-                command, stdout=log, stderr=subprocess.STDOUT, check=False, timeout=scaled(120)
-            )
-        else:
-            native_result = execute_with_load(
-                command,
-                options.host_load,
-                LoadExecution(
-                    output / "host_load.json",
-                    output / "host_load_workspace",
-                    worker_path=source / "tools/linux_load_worker.py",
-                ),
-                log,
-            )
-            snapshots.extend(
-                [output / "host_load.json", *(output / "host_load_workspace").glob("*")]
-            )
-    if native_result.returncode:
-        native = native_metadata(output)
-        if native_result.returncode != 1 or not native["result"]["overflow"]:
-            native_result.check_returncode()
-    producer_context.verify()
-    manifest = write_native_manifest(
-        output,
-        started,
-        [
-            *snapshots,
-            binary,
-            *(
-                output / name
-                for name in [
-                    "configuration.txt",
-                    "build_versions.json",
-                    "build_parameters.json",
-                    "build.log",
-                    "native.log",
-                    "native_metadata.json",
-                    "tracking_raw.csv",
-                ]
-            ),
-        ],
-        versions["verilator"],
+    started, native_result = _run_native(
+        _native_command(output, binary, native_arguments), output, source, options, snapshots
     )
-    inputs = load_run(manifest)
-    report, rows = build_report(inputs)
+    _check_native(native_result, output)
     producer_context.verify()
-    write_report(output / "reports", report, rows)
+    files = [*snapshots, binary, *(output / name for name in _RECORDED_OUTPUTS)]
+    manifest = write_native_manifest(output, started, files, versions["verilator"])
+    _publish(output, manifest, producer_context)
     return manifest
 
 

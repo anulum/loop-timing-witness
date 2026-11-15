@@ -184,17 +184,16 @@ def _run_reports(path: Path, document: dict[str, Any], indexes: list[int]) -> li
     ]
 
 
-def test_identical_repeats_pool_raw_samples(make_repeat_campaign: MakeRepeatCampaign) -> None:
-    """Concatenate raw latencies and within-run jitter pairs of five repeats.
+def _check_repeats(report: dict[str, Any], runs: list[Any]) -> None:
+    """Require the campaign identity and each repeat to equal its direct run analysis.
 
     Parameters
     ----------
-    make_repeat_campaign
-        Campaign of copied real RTL captures.
+    report
+        Campaign report of five identical repeats.
+    runs
+        Each repeat's direct report and raw interval rows.
     """
-    path, document = make_repeat_campaign()
-    report = build_campaign_report(load_campaign(path))
-    runs = _run_reports(path, document, [1, 2, 3, 4, 5])
     assert report["schema"] == "loop-timing-witness.repeat-campaign-report.v1"
     assert report["campaign_id"] == "rtl-repeat-campaign"
     assert report["evidence_status"] == "simulation_only"
@@ -208,7 +207,18 @@ def test_identical_repeats_pool_raw_samples(make_repeat_campaign: MakeRepeatCamp
         assert entry["jitter"] == run["events"]["jitter"]
         assert entry["control"] == run["events"]["control"]
         assert entry["analysed_cycles"] == 3
-    pooled = report["pooled"]
+
+
+def _check_pooled_compute(pooled: dict[str, Any], runs: list[Any]) -> None:
+    """Require the pooled counts, compute latencies and compute latency changes.
+
+    Parameters
+    ----------
+    pooled
+        Pooled statistics of five identical repeats.
+    runs
+        Each repeat's direct report and raw interval rows.
+    """
     assert pooled["repeat_count"] == 5
     assert pooled["cycle_count"] == 15
     assert pooled["duration_ticks"] == 5 * runs[0][0]["events"]["duration_ticks"]
@@ -227,6 +237,19 @@ def test_identical_repeats_pool_raw_samples(make_repeat_campaign: MakeRepeatCamp
     assert jitter["status"] == "available"
     assert jitter["median_ticks"] == 2495
     assert jitter["p95_ticks"] == 4990
+
+
+def _check_pooled_intervals(report: dict[str, Any], runs: list[Any]) -> None:
+    """Require each control interval's pool to be the concatenated raw samples.
+
+    Parameters
+    ----------
+    report
+        Campaign report of five identical repeats.
+    runs
+        Each repeat's direct report and raw interval rows.
+    """
+    pooled = report["pooled"]
     for name in CONTROL_INTERVALS:
         latencies = [
             int(row["ticks"]) for _, rows in runs for row in rows if row["interval"] == name
@@ -246,6 +269,23 @@ def test_identical_repeats_pool_raw_samples(make_repeat_campaign: MakeRepeatCamp
         )
         for statistic in report["spread"]["intervals"][name].values():
             assert statistic["range"] == 0
+
+
+def test_identical_repeats_pool_raw_samples(make_repeat_campaign: MakeRepeatCampaign) -> None:
+    """Concatenate raw latencies and within-run jitter pairs of five repeats.
+
+    Parameters
+    ----------
+    make_repeat_campaign
+        Campaign of copied real RTL captures.
+    """
+    path, document = make_repeat_campaign()
+    report = build_campaign_report(load_campaign(path))
+    runs = _run_reports(path, document, [1, 2, 3, 4, 5])
+    _check_repeats(report, runs)
+    pooled = report["pooled"]
+    _check_pooled_compute(pooled, runs)
+    _check_pooled_intervals(report, runs)
     control = pooled["control"]
     assert (
         control["observed_deadlines"] == 5 * runs[0][0]["events"]["control"]["observed_deadlines"]

@@ -134,9 +134,33 @@ def _validate_configuration(configuration: NeuralCaptureConfiguration) -> None:
             raise NeuralCaptureRefusalError(message)
 
 
+@dataclass(frozen=True, slots=True)
+class _ChannelLoad:
+    """One bound original channel with its projections, accounting and failures.
+
+    Attributes
+    ----------
+    raw, payload, markers
+        Original capture, payload and marker file bytes.
+    channel
+        Decoded original records and projections.
+    accounting
+        Reconciliation of the channel with its counter fields.
+    refusals
+        Accounting, projection and attempt failures of this channel.
+    """
+
+    raw: bytes
+    payload: bytes
+    markers: bytes
+    channel: NeuralChannel
+    accounting: NeuralCaptureAccounting
+    refusals: tuple[str, ...]
+
+
 def _load_channel(
     directory: Path, files: NeuralChannelFiles, counts: NeuralCaptureCounts, population: int
-) -> tuple[bytes, bytes, bytes, NeuralChannel, NeuralCaptureAccounting, list[str]]:
+) -> _ChannelLoad:
     """Bind one original stream, check exact projections and reconcile its counts.
 
     Parameters
@@ -152,7 +176,7 @@ def _load_channel(
 
     Returns
     -------
-    tuple[bytes, bytes, bytes, NeuralChannel, NeuralCaptureAccounting, list[str]]
+    _ChannelLoad
         Original capture/payload/marker bytes, observations, accounting and failures.
     """
     raw = read_neural_bound_file(
@@ -171,7 +195,86 @@ def _load_channel(
         refusals.append(f"{files.role}: marker file differs from original capture projection")
     if counts.attempts != population + ALIGNMENT_MARKER_COUNT:
         refusals.append(f"{files.role}: attempts differ from requested data and alignment markers")
-    return raw, payload, markers, channel, accounting, refusals
+    return _ChannelLoad(raw, payload, markers, channel, accounting, tuple(refusals))
+
+
+def _load_channels(
+    directory: Path,
+    files: tuple[NeuralChannelFiles, NeuralChannelFiles, NeuralChannelFiles],
+    counts: tuple[NeuralCaptureCounts, NeuralCaptureCounts, NeuralCaptureCounts],
+    configuration: NeuralCaptureConfiguration,
+) -> list[_ChannelLoad]:
+    """Load the input, state and service channels with their requested populations.
+
+    Parameters
+    ----------
+    directory
+        Immutable source-custodied run directory.
+    files, counts
+        References and counter fields of the three channels, in that order.
+    configuration
+        Requested step and service-ordinal populations.
+
+    Returns
+    -------
+    list[_ChannelLoad]
+        The three loaded channels, in the order of ``files``.
+    """
+    return [
+        _load_channel(
+            directory,
+            item,
+            counts[index],
+            configuration.service_packets if item.role == "service" else configuration.step_count,
+        )
+        for index, item in enumerate(files)
+    ]
+
+
+def _assemble(
+    configuration: NeuralCaptureConfiguration,
+    counter_receipt: bytes,
+    counts: tuple[NeuralCaptureCounts, NeuralCaptureCounts, NeuralCaptureCounts],
+    loads: list[_ChannelLoad],
+) -> NeuralCaptureBundle:
+    """Correlate the three loaded channels and gather every capture failure.
+
+    Parameters
+    ----------
+    configuration
+        Requested full populations and finite no-wrap horizon.
+    counter_receipt, counts
+        Bound original counter receipt and its decoded per-channel fields.
+    loads
+        Input, state and service channels, in that order.
+
+    Returns
+    -------
+    NeuralCaptureBundle
+        Bound bytes, observations, counts, step timing and located failures.
+    """
+    first, second, third = loads
+    channels = (first.channel, second.channel, third.channel)
+    steps = correlate_neural_steps(
+        channels, configuration.step_count, configuration.capture_horizon_edges
+    )
+    refusals = [*first.refusals, *second.refusals, *third.refusals, *steps.refusals]
+    if tuple(event.identity for event in third.channel.events) != tuple(
+        range(configuration.service_packets)
+    ):
+        refusals.append("service: packet population differs from requested identities")
+    return NeuralCaptureBundle(
+        configuration,
+        (first.raw, second.raw, third.raw),
+        (first.payload, second.payload, third.payload),
+        (first.markers, second.markers, third.markers),
+        counter_receipt,
+        channels,
+        counts,
+        (first.accounting, second.accounting, third.accounting),
+        steps,
+        tuple(refusals),
+    )
 
 
 def load_neural_capture(
@@ -215,43 +318,5 @@ def load_neural_capture(
         directory, counter_reference, COUNTER_RECEIPT_MAX_BYTES
     )
     counts = decode_neural_capture_counts(counter_receipt)
-    captures = []
-    payloads = []
-    markers = []
-    channels = []
-    reports = []
-    refusals = []
-    for index, item in enumerate(files):
-        population = (
-            configuration.service_packets if item.role == "service" else configuration.step_count
-        )
-        raw, payload, marker, channel, accounting, failures = _load_channel(
-            directory, item, counts[index], population
-        )
-        captures.append(raw)
-        payloads.append(payload)
-        markers.append(marker)
-        channels.append(channel)
-        reports.append(accounting)
-        refusals.extend(failures)
-    ordered_channels = (channels[0], channels[1], channels[2])
-    steps = correlate_neural_steps(
-        ordered_channels, configuration.step_count, configuration.capture_horizon_edges
-    )
-    refusals.extend(steps.refusals)
-    if tuple(event.identity for event in channels[2].events) != tuple(
-        range(configuration.service_packets)
-    ):
-        refusals.append("service: packet population differs from requested identities")
-    return NeuralCaptureBundle(
-        configuration,
-        (captures[0], captures[1], captures[2]),
-        (payloads[0], payloads[1], payloads[2]),
-        (markers[0], markers[1], markers[2]),
-        counter_receipt,
-        ordered_channels,
-        counts,
-        (reports[0], reports[1], reports[2]),
-        steps,
-        tuple(refusals),
-    )
+    loads = _load_channels(directory, files, counts, configuration)
+    return _assemble(configuration, counter_receipt, counts, loads)

@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from amp_rust_toolchain import TARGET, rust_toolchain
@@ -24,6 +25,12 @@ from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
+_PREPARE = (
+    "import sys; from pathlib import Path; "
+    "sys.path.insert(0, sys.argv[1]); "
+    "from amp_rust_build import prepare_rust_sources; "
+    "prepare_rust_sources(Path(sys.argv[2]), Path(sys.argv[3]), 'rustc')"
+)
 
 
 @pytest.fixture(scope="module")
@@ -99,19 +106,7 @@ def _prepare_with_drift(
     assert original.resolve().is_relative_to(output.parent.resolve())
     output.mkdir()
     marker = output.parent / f"{output.name}.mutated"
-    command = [
-        sys.executable,
-        "-c",
-        (
-            "import sys; from pathlib import Path; "
-            "sys.path.insert(0, sys.argv[1]); "
-            "from amp_rust_build import prepare_rust_sources; "
-            "prepare_rust_sources(Path(sys.argv[2]), Path(sys.argv[3]), 'rustc')"
-        ),
-        str(ROOT / "tools"),
-        str(source_root),
-        str(output),
-    ]
+    command = [sys.executable, "-c", _PREPARE, str(ROOT / "tools"), str(source_root), str(output)]
     selected = {
         **os.environ,
         **env,
@@ -175,6 +170,39 @@ def test_original_target_archive_changed_between_hash_and_copy_refused(
         Real-syscall byte mutation at the second file open.
     """
     selected = rust_toolchain("rustc")
+    env, target = _linked_toolchain_copy(selected, tmp_path)
+    archive = next(target.glob("liballoc-*.rlib"))
+    before = archive.read_bytes()
+    diagnostic = _prepare_with_drift(
+        ROOT,
+        tmp_path / "archive-snapshot",
+        archive,
+        drift_interposer,
+        env,
+    )
+    assert b"Rust original target library changed during snapshot" in diagnostic
+    assert archive.read_bytes() != before
+    original = next(
+        Path(name) for name in selected["target_libraries"] if name.endswith(archive.name)
+    )
+    assert sha256_of_file(original) == selected["target_libraries"][str(original)]
+
+
+def _linked_toolchain_copy(selected: dict[str, Any], tmp_path: Path) -> tuple[dict[str, str], Path]:
+    """Copy the selected Rust toolchain and link the copy under a private rustup home.
+
+    Parameters
+    ----------
+    selected
+        Rust toolchain identity with the compiler path and target libraries.
+    tmp_path
+        Owned directory for the copy and the rustup home.
+
+    Returns
+    -------
+    tuple[dict[str, str], Path]
+        Environment selecting the linked copy, and its target library directory.
+    """
     sysroot = Path(selected["compiler"]["path"]).parent.parent
     owned = tmp_path / "toolchain"
     (owned / "bin").mkdir(parents=True)
@@ -202,18 +230,4 @@ def test_original_target_archive_changed_between_hash_and_copy_refused(
     )
     assert linked.returncode == 0, linked.stderr.decode(errors="replace")
     env["RUSTUP_TOOLCHAIN"] = "witness-snapshot-drift"
-    archive = next(target.glob("liballoc-*.rlib"))
-    before = archive.read_bytes()
-    diagnostic = _prepare_with_drift(
-        ROOT,
-        tmp_path / "archive-snapshot",
-        archive,
-        drift_interposer,
-        env,
-    )
-    assert b"Rust original target library changed during snapshot" in diagnostic
-    assert archive.read_bytes() != before
-    original = next(
-        Path(name) for name in selected["target_libraries"] if name.endswith(archive.name)
-    )
-    assert sha256_of_file(original) == selected["target_libraries"][str(original)]
+    return env, target

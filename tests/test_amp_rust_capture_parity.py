@@ -96,9 +96,30 @@ def parity_assets(tmp_path_factory: pytest.TempPathFactory) -> ParityAssets:
     """
     directory = tmp_path_factory.mktemp("public-c-rust-parity")
     c_image = Path(os.environ["WITNESS_AMP_IMAGE"])
-    compiler = os.environ["WITNESS_RV64_CC"]
-    source = os.environ["WITNESS_SPIKE_SOURCE"]
-    sdk = os.environ["WITNESS_SPIKE_BUILD"]
+    rust_image = _built_rust_image(directory, c_image)
+    c_preparation = json.loads((c_image / "preparation.json").read_bytes())
+    rust_preparation = json.loads((rust_image / "preparation.json").read_bytes())
+    assert "kernel_backend" not in c_preparation
+    assert rust_preparation["kernel_backend"] == "rust"
+    plugins = _built_plugins(directory)
+    return ParityAssets(directory, c_image, rust_image, plugins)
+
+
+def _built_rust_image(directory: Path, c_image: Path) -> Path:
+    """Prepare and build the Rust-backend image of the original C image selection.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the image and logs.
+    c_image
+        Original C image.
+
+    Returns
+    -------
+    Path
+        Built Rust image.
+    """
     rust_image = directory / "rust-image"
     _run(
         [
@@ -108,7 +129,7 @@ def parity_assets(tmp_path_factory: pytest.TempPathFactory) -> ParityAssets:
             "--output",
             str(rust_image),
             "--compiler",
-            compiler,
+            os.environ["WITNESS_RV64_CC"],
             "--isa",
             "--rust-compiler",
             "rustc",
@@ -117,10 +138,24 @@ def parity_assets(tmp_path_factory: pytest.TempPathFactory) -> ParityAssets:
         120,
     )
     _run(["make", "-C", str(rust_image), f"-j{build_jobs()}"], directory / "rust-build.log", 180)
-    c_preparation = json.loads((c_image / "preparation.json").read_bytes())
-    rust_preparation = json.loads((rust_image / "preparation.json").read_bytes())
-    assert "kernel_backend" not in c_preparation
-    assert rust_preparation["kernel_backend"] == "rust"
+    return rust_image
+
+
+def _built_plugins(directory: Path) -> tuple[Path, Path]:
+    """Build the mechanical and thermal production plugins through public Make.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the plugins and logs.
+
+    Returns
+    -------
+    tuple[Path, Path]
+        Mechanical and thermal plugin directories.
+    """
+    source = os.environ["WITNESS_SPIKE_SOURCE"]
+    sdk = os.environ["WITNESS_SPIKE_BUILD"]
     plugins = (directory / "mechanical-plugin", directory / "thermal-plugin")
     for thermal, plugin in enumerate(plugins):
         _run(
@@ -135,7 +170,46 @@ def parity_assets(tmp_path_factory: pytest.TempPathFactory) -> ParityAssets:
             directory / f"plugin-{thermal}.log",
             180,
         )
-    return ParityAssets(directory, c_image, rust_image, plugins)
+    return plugins
+
+
+def _capture(image: Path, plugin: Path, output: Path, log: Path) -> None:
+    """Capture one public simulation of the image with a production plugin.
+
+    Parameters
+    ----------
+    image
+        Built image.
+    plugin
+        Production plugin library.
+    output
+        New capture directory.
+    log
+        File for the command output.
+    """
+    _run(
+        [
+            sys.executable,
+            "tools/capture_amp_simulation.py",
+            *_selection(image),
+            "--image",
+            str(image),
+            "--output",
+            str(output),
+            "--spike",
+            os.environ["WITNESS_SPIKE"],
+            "--plugin",
+            str(plugin),
+            "--rtc-nanoseconds",
+            "100",
+            "--time-limit",
+            "100000000",
+            "--timeout",
+            str(scaled_seconds(60)),
+        ],
+        log,
+        90,
+    )
 
 
 def _report_rows(path: Path) -> list[dict[str, str]]:
@@ -177,29 +251,8 @@ def test_public_c_rust_capture_parity(
     captures = []
     for backend, image in [("c", parity_assets.c_image), ("rust", parity_assets.rust_image)]:
         output = parity_assets.directory / f"{backend}-{plant}-capture"
-        _run(
-            [
-                sys.executable,
-                "tools/capture_amp_simulation.py",
-                *_selection(image),
-                "--image",
-                str(image),
-                "--output",
-                str(output),
-                "--spike",
-                os.environ["WITNESS_SPIKE"],
-                "--plugin",
-                str(plugin),
-                "--rtc-nanoseconds",
-                "100",
-                "--time-limit",
-                "100000000",
-                "--timeout",
-                str(scaled_seconds(60)),
-            ],
-            parity_assets.directory / f"{backend}-{plant}.log",
-            90,
-        )
+        log = parity_assets.directory / f"{backend}-{plant}.log"
+        _capture(image, plugin, output, log)
         receipt = json.loads((output / "capture.json").read_bytes())
         assert receipt["completion"] == {
             "samples": 10,

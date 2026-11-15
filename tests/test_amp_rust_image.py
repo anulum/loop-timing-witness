@@ -46,16 +46,7 @@ def rust_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
         Actual compiled RV64 Rust image with complete original receipt and captured inputs.
     """
     tmp_path = tmp_path_factory.mktemp("public-rust-image")
-    dtc = shutil.which("dtc")
-    assert dtc is not None, "actual original device-tree compiler is required"
-    source = tmp_path / "platform.dts"
-    source.write_text(SOURCE, encoding="ascii")
-    subprocess.run(
-        [dtc, "-I", "dts", "-O", "dtb", "-o", str(tmp_path / "platform.dtb"), str(source)],
-        capture_output=True,
-        check=True,
-        timeout=scaled(10),
-    )
+    _compile_device_tree(tmp_path)
     configuration = tmp_path / "configuration.txt"
     configuration.write_bytes(CONFIGURATION)
     compiler = os.environ.get("WITNESS_RV64_CC") or shutil.which("riscv64-linux-gnu-gcc")
@@ -64,21 +55,8 @@ def rust_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
     arguments = verification_arguments(REQUEST)
     arguments[arguments.index("platform.dtb")] = str(tmp_path / "platform.dtb")
     arguments[arguments.index("configuration.txt")] = str(configuration)
-    assert (
-        prepare_main(
-            [
-                *arguments,
-                "--output",
-                str(output),
-                "--compiler",
-                compiler,
-                "--isa",
-                "--rust-compiler",
-                "rustc",
-            ]
-        )
-        == 0
-    )
+    rust = ["--output", str(output), "--compiler", compiler, "--isa", "--rust-compiler", "rustc"]
+    assert prepare_main([*arguments, *rust]) == 0
     with (tmp_path / "make.log").open("wb") as log:
         subprocess.run(
             ["make", "-C", str(output), f"-j{build_jobs()}"],
@@ -88,6 +66,26 @@ def rust_image(tmp_path_factory: pytest.TempPathFactory) -> Path:
             timeout=scaled(90),
         )
     return output
+
+
+def _compile_device_tree(directory: Path) -> None:
+    """Compile the original platform source into ``platform.dtb`` with the real compiler.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the source and the blob.
+    """
+    dtc = shutil.which("dtc")
+    assert dtc is not None, "actual original device-tree compiler is required"
+    source = directory / "platform.dts"
+    source.write_text(SOURCE, encoding="ascii")
+    subprocess.run(
+        [dtc, "-I", "dts", "-O", "dtb", "-o", str(directory / "platform.dtb"), str(source)],
+        capture_output=True,
+        check=True,
+        timeout=scaled(10),
+    )
 
 
 def test_public_rust_image_build(rust_image: Path) -> None:

@@ -63,6 +63,21 @@ def rust_kernel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """
     directory = tmp_path_factory.mktemp("rust-amp-kernel")
     target = directory / "target"
+    _check_and_build(directory, target)
+    _link_programs(directory, target / "release/libwitness_amp_rust_kernel.a")
+    return directory
+
+
+def _check_and_build(directory: Path, target: Path) -> None:
+    """Check formatting and lints, then build the kernel for the host and the RV64 target.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the command logs.
+    target
+        Cargo target directory.
+    """
     common = [
         "--offline",
         "--locked",
@@ -93,7 +108,18 @@ def rust_kernel(tmp_path_factory: pytest.TempPathFactory) -> Path:
         directory,
         "build-rv64",
     )
-    archive = target / "release/libwitness_amp_rust_kernel.a"
+
+
+def _link_programs(directory: Path, archive: Path) -> None:
+    """Link the C API test and the controller CLI against the Rust and C kernels.
+
+    Parameters
+    ----------
+    directory
+        Owned directory for the programs and the command logs.
+    archive
+        Host build of the Rust kernel static library.
+    """
     gcc = ["gcc", "-std=gnu11", "-O2", *WARNINGS, "-Icontrollers/c"]
     panic = str(ROOT / "tests/native/amp_rust_host_panic.c")
     run_command(
@@ -133,7 +159,6 @@ def rust_kernel(tmp_path_factory: pytest.TempPathFactory) -> Path:
         directory,
         "link-c-cli",
     )
-    return directory
 
 
 def test_original_c_api_accepts_rust_kernel(rust_kernel: Path) -> None:

@@ -15,7 +15,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from amp_plugin_receipt import admit_plugin
@@ -105,13 +105,7 @@ def test_actual_build_drift_refused(admitted_build: Path, fault: str) -> None:
             stream.write(b"changed original")
         finding = "library differs"
     elif fault == "source":
-        source = next(
-            Path(name)
-            for name in data["dependencies"]
-            if Path(name).is_relative_to(admitted_build.parent)
-        )
-        with source.open("ab") as stream:
-            stream.write(b"changed original")
+        _append_to_build_source(admitted_build, data)
         finding = "input or tool changed"
     elif fault == "tool":
         data["verilator"]["sha256"] = "0" * 64
@@ -121,39 +115,10 @@ def test_actual_build_drift_refused(admitted_build: Path, fault: str) -> None:
         data["dependencies"][source] = "0" * 64
         finding = "conflicting original"
     elif fault == "omitted":
-        header = admitted_build.parent / "additional_controller.h"
-        root = Path(data["working_directory"])
-        shutil.copyfile(root / "controllers/c/witness_controller.h", header)
-        record = admitted_build.parent / "controller.d"
-        result = subprocess.run(
-            [
-                data["compilers"]["c"]["driver"]["path"],
-                "-O2",
-                "-fPIC",
-                "-M",
-                "-include",
-                str(header),
-                "-MF",
-                str(record),
-                "controllers/c/witness_controller.c",
-            ],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=scaled(30),
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr
-        data["dependency_records"][str(record)] = sha256_of_file(record)
+        _record_omitted_header(admitted_build, data)
         finding = "compiler-recorded dependencies"
     elif fault == "roles":
-        removed = next(
-            name for name in data["dependency_records"] if Path(name).name == "controller.d"
-        )
-        digest = data["dependency_records"].pop(removed)
-        renamed = admitted_build.parent / "renamed-record.d"
-        shutil.copyfile(removed, renamed)
-        data["dependency_records"][str(renamed)] = digest
+        _rename_controller_record(admitted_build, data)
         finding = "build roles"
     else:
         path.unlink()
@@ -204,3 +169,75 @@ def test_preparation_path_without_a_name_refused() -> None:
     refusal = r"^AMP plugin receipt omits or contradicts original preparation identities$"
     with pytest.raises(ValueError, match=refusal):
         decode_plugin_receipt(canonical_json_bytes(data))
+
+
+def _append_to_build_source(admitted_build: Path, data: dict[str, Any]) -> None:
+    """Change the first recorded dependency inside the build directory.
+
+    Parameters
+    ----------
+    admitted_build
+        Admitted plugin library.
+    data
+        Its build receipt.
+    """
+    source = next(
+        Path(name)
+        for name in data["dependencies"]
+        if Path(name).is_relative_to(admitted_build.parent)
+    )
+    with source.open("ab") as stream:
+        stream.write(b"changed original")
+
+
+def _record_omitted_header(admitted_build: Path, data: dict[str, Any]) -> None:
+    """Record a real controller dependency file that includes a header the receipt omits.
+
+    Parameters
+    ----------
+    admitted_build
+        Admitted plugin library.
+    data
+        Its build receipt, given the new record's digest.
+    """
+    header = admitted_build.parent / "additional_controller.h"
+    root = Path(data["working_directory"])
+    shutil.copyfile(root / "controllers/c/witness_controller.h", header)
+    record = admitted_build.parent / "controller.d"
+    result = subprocess.run(
+        [
+            data["compilers"]["c"]["driver"]["path"],
+            "-O2",
+            "-fPIC",
+            "-M",
+            "-include",
+            str(header),
+            "-MF",
+            str(record),
+            "controllers/c/witness_controller.c",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=scaled(30),
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    data["dependency_records"][str(record)] = sha256_of_file(record)
+
+
+def _rename_controller_record(admitted_build: Path, data: dict[str, Any]) -> None:
+    """Move the controller dependency record's digest to a copy under another name.
+
+    Parameters
+    ----------
+    admitted_build
+        Admitted plugin library.
+    data
+        Its build receipt.
+    """
+    removed = next(name for name in data["dependency_records"] if Path(name).name == "controller.d")
+    digest = data["dependency_records"].pop(removed)
+    renamed = admitted_build.parent / "renamed-record.d"
+    shutil.copyfile(removed, renamed)
+    data["dependency_records"][str(renamed)] = digest

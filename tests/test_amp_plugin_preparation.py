@@ -49,22 +49,7 @@ def prepared_plugin(original_plugin: PluginBuild, tmp_path: Path) -> PluginBuild
         Original public Make preparation with complete actual preprocessor closure.
     """
     directory = tmp_path / "prepared"
-    result = subprocess.run(
-        [
-            "make",
-            "amp-spike-plugin-prepare",
-            "AMP_SPIKE_SOURCE=" + str(original_plugin.source),
-            "AMP_SPIKE_BUILD=" + str(original_plugin.sdk),
-            "AMP_PLUGIN_DIRECTORY=" + str(directory),
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=scaled(60),
-        check=False,
-    )
-    (tmp_path / "preparation.log").write_text(result.stdout + result.stderr, encoding="utf-8")
-    assert result.returncode == 0, result.stdout + result.stderr
+    _make_prepare(original_plugin, directory, tmp_path / "preparation.log")
     return replace(original_plugin, directory=directory)
 
 
@@ -222,29 +207,7 @@ def test_public_late_preparation_refused(original_plugin: PluginBuild) -> None:
     original_plugin
         Actual native build to preserve unchanged.
     """
-    assert (
-        main(
-            [
-                "--stage",
-                "generation",
-                "--directory",
-                str(original_plugin.directory),
-                "--source",
-                str(original_plugin.source),
-                "--sdk",
-                str(original_plugin.sdk),
-                "--cc",
-                "gcc",
-                "--cxx",
-                "g++",
-                "--thermal",
-                "0",
-                "--fifo-address-bits",
-                "8",
-            ]
-        )
-        == 1
-    )
+    assert main(_stage_arguments("generation", original_plugin.directory, original_plugin)) == 1
 
 
 @pytest.mark.parametrize("fault", ["record", "hidden", "nested", "symlink", "runtime"])
@@ -263,21 +226,8 @@ def test_public_make_preserves_existing_inputs(
         Existing record, hidden file, nested data, directory alias or foreign runtime.
     """
     output = tmp_path / "output"
-    actual = tmp_path / "actual" if fault == "symlink" else output
-    actual.mkdir()
-    if fault == "symlink":
-        output.symlink_to(actual, target_is_directory=True)
-    if fault != "runtime":
-        marker = actual / (".original.d" if fault == "hidden" else "controller.d")
-        if fault == "nested":
-            (actual / "prior").mkdir()
-            marker = actual / "prior/controller.d"
-        shutil.copyfile(original_plugin.directory / "controller.d", marker)
-    before = {
-        path.relative_to(actual).as_posix(): sha256_of_file(path)
-        for path in actual.rglob("*")
-        if path.is_file()
-    }
+    actual = _existing_output(original_plugin, tmp_path, output, fault)
+    before = _file_digests(actual)
     command = [
         "make",
         "amp-spike-plugin",
@@ -297,11 +247,7 @@ def test_public_make_preserves_existing_inputs(
         else ("symbolic link" if fault == "symlink" else "empty output directory")
     )
     assert finding in result.stderr
-    assert before == {
-        path.relative_to(actual).as_posix(): sha256_of_file(path)
-        for path in actual.rglob("*")
-        if path.is_file()
-    }
+    assert before == _file_digests(actual)
     assert not (actual / "generation.json").exists()
     assert not (actual / "rtl").exists()
 
@@ -320,21 +266,31 @@ def test_real_loaded_library_drift(
     monkeypatch
         Select only the owned real library through the actual loader environment.
     """
-    frontend = Path(compiler_identity("gcc", "cc1")["programs"]["cc1"]["path"])
-    listing = subprocess.check_output(
-        [str(elf_interpreter(frontend)), "--list", str(frontend)], text=True, timeout=scaled(10)
-    )
-    record = next(line for line in listing.splitlines() if "=>" in line)
-    name, target = record.split("=>", 1)
-    source = Path(target.strip().rsplit(" (", 1)[0])
-    libraries = tmp_path / "libraries"
-    libraries.mkdir()
-    selected = libraries / name.strip()
-    shutil.copyfile(source, selected)
-    monkeypatch.setenv(
-        "LD_LIBRARY_PATH", str(libraries) + ":" + os.environ.get("LD_LIBRARY_PATH", "")
-    )
+    selected = _owned_frontend_library(tmp_path / "libraries", monkeypatch)
     directory = tmp_path / "prepared"
+    _make_prepare(original_plugin, directory, tmp_path / "library-preparation.log")
+    original = json.loads((directory / "compilation.json").read_bytes())
+    assert original["identity"]["runtime_libraries"][str(selected)] == sha256_of_file(selected)
+    before = sha256_of_file(directory / "compilation.json")
+    with selected.open("ab") as stream:
+        stream.write(b"changed owned original library\n")
+    assert main(_stage_arguments("compilation", directory, original_plugin)) == 1
+    assert sha256_of_file(directory / "compilation.json") == before
+    assert not tuple(directory.rglob("*.o"))
+
+
+def _make_prepare(original_plugin: PluginBuild, directory: Path, log: Path) -> None:
+    """Run the public Make preparation target into a new plugin directory.
+
+    Parameters
+    ----------
+    original_plugin
+        Actual original SDK selection.
+    directory
+        New preparation output directory.
+    log
+        File for the combined Make output.
+    """
     result = subprocess.run(
         [
             "make",
@@ -349,37 +305,127 @@ def test_real_loaded_library_drift(
         timeout=scaled(60),
         check=False,
     )
-    (tmp_path / "library-preparation.log").write_text(
-        result.stdout + result.stderr, encoding="utf-8"
-    )
+    log.write_text(result.stdout + result.stderr, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
-    original = json.loads((directory / "compilation.json").read_bytes())
-    assert original["identity"]["runtime_libraries"][str(selected)] == sha256_of_file(selected)
-    before = sha256_of_file(directory / "compilation.json")
-    with selected.open("ab") as stream:
-        stream.write(b"changed owned original library\n")
-    assert (
-        main(
-            [
-                "--stage",
-                "compilation",
-                "--directory",
-                str(directory),
-                "--source",
-                str(original_plugin.source),
-                "--sdk",
-                str(original_plugin.sdk),
-                "--cc",
-                "gcc",
-                "--cxx",
-                "g++",
-                "--thermal",
-                "0",
-                "--fifo-address-bits",
-                "8",
-            ]
-        )
-        == 1
+
+
+def _stage_arguments(stage: str, directory: Path, original_plugin: PluginBuild) -> list[str]:
+    """Return the public preparation CLI arguments of one stage.
+
+    Parameters
+    ----------
+    stage
+        Preparation stage.
+    directory
+        Plugin output directory.
+    original_plugin
+        Actual original SDK selection.
+
+    Returns
+    -------
+    list[str]
+        Arguments with the mechanical model and an 8-bit FIFO address.
+    """
+    return [
+        "--stage",
+        stage,
+        "--directory",
+        str(directory),
+        "--source",
+        str(original_plugin.source),
+        "--sdk",
+        str(original_plugin.sdk),
+        "--cc",
+        "gcc",
+        "--cxx",
+        "g++",
+        "--thermal",
+        "0",
+        "--fifo-address-bits",
+        "8",
+    ]
+
+
+def _file_digests(directory: Path) -> dict[str, str]:
+    """Return the SHA-256 of every regular file below a directory.
+
+    Parameters
+    ----------
+    directory
+        Directory to read.
+
+    Returns
+    -------
+    dict[str, str]
+        Digest by POSIX path relative to the directory.
+    """
+    return {
+        path.relative_to(directory).as_posix(): sha256_of_file(path)
+        for path in directory.rglob("*")
+        if path.is_file()
+    }
+
+
+def _existing_output(
+    original_plugin: PluginBuild, tmp_path: Path, output: Path, fault: str
+) -> Path:
+    """Create the plugin output with the earlier content one fault leaves in it.
+
+    Parameters
+    ----------
+    original_plugin
+        Actual original build whose dependency record is copied.
+    tmp_path
+        Owned directory for a symbolic link target.
+    output
+        Plugin output path given to Make.
+    fault
+        Earlier content: a record, a hidden or nested record, a symbolic link or nothing.
+
+    Returns
+    -------
+    Path
+        Real directory behind the output path.
+    """
+    actual = tmp_path / "actual" if fault == "symlink" else output
+    actual.mkdir()
+    if fault == "symlink":
+        output.symlink_to(actual, target_is_directory=True)
+    if fault != "runtime":
+        marker = actual / (".original.d" if fault == "hidden" else "controller.d")
+        if fault == "nested":
+            (actual / "prior").mkdir()
+            marker = actual / "prior/controller.d"
+        shutil.copyfile(original_plugin.directory / "controller.d", marker)
+    return actual
+
+
+def _owned_frontend_library(libraries: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Copy one runtime library of the C compiler frontend and load it from the copy.
+
+    Parameters
+    ----------
+    libraries
+        New directory placed first on ``LD_LIBRARY_PATH``.
+    monkeypatch
+        Restores the library path after the test.
+
+    Returns
+    -------
+    Path
+        Owned copy of the first library the frontend's loader lists.
+    """
+    frontend = Path(compiler_identity("gcc", "cc1")["programs"]["cc1"]["path"])
+    listing = subprocess.check_output(
+        [str(elf_interpreter(frontend)), "--list", str(frontend)], text=True, timeout=scaled(10)
     )
-    assert sha256_of_file(directory / "compilation.json") == before
-    assert not tuple(directory.rglob("*.o"))
+    record = next(line for line in listing.splitlines() if "=>" in line)
+    name, target = record.split("=>", 1)
+    source = Path(target.strip().rsplit(" (", 1)[0])
+    libraries.mkdir()
+    selected = libraries / name.strip()
+    shutil.copyfile(source, selected)
+    monkeypatch.setenv(
+        "LD_LIBRARY_PATH", str(libraries) + ":" + os.environ.get("LD_LIBRARY_PATH", "")
+    )
+    return selected

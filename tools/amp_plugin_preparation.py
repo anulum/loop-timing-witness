@@ -23,6 +23,127 @@ from jsonschema import Draft202012Validator
 from manifest_io import canonical_json_bytes, load_json_object, sha256_of_file
 
 
+def _check_stage(build: PluginBuild, stage: str) -> None:
+    """Refuse an unknown stage, compiled outputs, a linked directory or a used one.
+
+    Parameters
+    ----------
+    build
+        Requested plugin build.
+    stage
+        ``generation`` or ``compilation``.
+
+    Raises
+    ------
+    ValueError
+        If the stage is unknown, objects already exist, the directory is a link,
+        or generation finds a non-empty directory.
+    FileExistsError
+        If generation finds an existing generation receipt.
+    """
+    if stage not in ("generation", "compilation"):
+        message = "AMP plugin preparation stage must be generation or compilation"
+        raise ValueError(message)
+    if any(path.suffix in (".o", ".a", ".so") for path in build.directory.rglob("*")):
+        message = "AMP plugin preparation must precede compilation"
+        raise ValueError(message)
+    if build.directory.is_symlink():
+        message = "AMP plugin output directory cannot be a symbolic link"
+        raise ValueError(message)
+    if stage == "generation":
+        if (build.directory / "generation.json").exists():
+            message = "AMP plugin original generation receipt already exists"
+            raise FileExistsError(message)
+        if any(build.directory.iterdir()):
+            message = "AMP plugin generation requires an empty output directory"
+            raise ValueError(message)
+
+
+def _compilation_fields(directory: Path, data: dict[str, Any]) -> dict[str, Any]:
+    """Return the compilation receipt's generation, dependency and build-file fields.
+
+    Parameters
+    ----------
+    directory
+        Resolved plugin build directory.
+    data
+        Compilation receipt so far, compared with the generation receipt.
+
+    Returns
+    -------
+    dict[str, Any]
+        Generation digest, dependency digests and records, and generated build files.
+
+    Raises
+    ------
+    ValueError
+        If the generation receipt no longer matches the original inputs.
+    """
+    generation = directory / "generation.json"
+    original = load_json_object(generation)
+    if original != {**data, "stage": "generation"}:
+        message = "AMP plugin original generation inputs changed"
+        raise ValueError(message)
+    records = tuple(directory / "precompile" / (name + ".d") for name in (*NATIVE_OBJECTS, "model"))
+    return {
+        "generation_sha256": sha256_of_file(generation),
+        "dependencies": dependency_hashes(records, ROOT),
+        "dependency_records": {str(path): sha256_of_file(path) for path in records},
+        "build_files": {
+            str(path): sha256_of_file(path)
+            for path in sorted((directory / "rtl").iterdir())
+            if path.suffix in (".cpp", ".h", ".mk", ".dat")
+        },
+    }
+
+
+def _check_schema(data: dict[str, Any]) -> None:
+    """Validate the compilation receipt against the preparation schema.
+
+    Parameters
+    ----------
+    data
+        Decoded compilation receipt.
+
+    Raises
+    ------
+    ValueError
+        Naming the first schema violation.
+    """
+    schema = load_json_object(ROOT / "amp-plugin-build.schema.json")
+    errors = list(
+        Draft202012Validator({"$defs": schema["$defs"], "$ref": "#/$defs/preparation"}).iter_errors(
+            data
+        )
+    )
+    if errors:
+        message = "AMP plugin preparation invalid: " + errors[0].message
+        raise ValueError(message)
+
+
+def _check_recorded_files(data: dict[str, Any]) -> None:
+    """Require every recorded dependency record and build file to be unchanged.
+
+    Parameters
+    ----------
+    data
+        Compilation receipt.
+
+    Raises
+    ------
+    ValueError
+        If a dependency record or a generated build file changed.
+    """
+    for name, digest in data["dependency_records"].items():
+        if sha256_of_file(Path(name)) != digest:
+            message = "AMP plugin pre-compilation dependency record changed"
+            raise ValueError(message)
+    for name, digest in data["build_files"].items():
+        if sha256_of_file(Path(name)) != digest:
+            message = "AMP plugin generated build input changed during compilation"
+            raise ValueError(message)
+
+
 def freeze_plugin(build: PluginBuild, stage: str) -> Path:
     """Create an exclusive original generation or pre-compilation receipt.
 
@@ -43,22 +164,7 @@ def freeze_plugin(build: PluginBuild, stage: str) -> Path:
     ValueError
         If the original generation inputs changed or the requested stage is unknown.
     """
-    if stage not in ("generation", "compilation"):
-        message = "AMP plugin preparation stage must be generation or compilation"
-        raise ValueError(message)
-    if any(path.suffix in (".o", ".a", ".so") for path in build.directory.rglob("*")):
-        message = "AMP plugin preparation must precede compilation"
-        raise ValueError(message)
-    if build.directory.is_symlink():
-        message = "AMP plugin output directory cannot be a symbolic link"
-        raise ValueError(message)
-    if stage == "generation":
-        if (build.directory / "generation.json").exists():
-            message = "AMP plugin original generation receipt already exists"
-            raise FileExistsError(message)
-        if any(build.directory.iterdir()):
-            message = "AMP plugin generation requires an empty output directory"
-            raise ValueError(message)
+    _check_stage(build, stage)
     identity = original_identity(build)
     data: dict[str, Any] = {
         "schema": "loop-timing-witness.amp-plugin-preparation.v1",
@@ -67,26 +173,7 @@ def freeze_plugin(build: PluginBuild, stage: str) -> Path:
     }
     directory = build.directory.resolve()
     if stage == "compilation":
-        generation = directory / "generation.json"
-        original = load_json_object(generation)
-        if original != {**data, "stage": "generation"}:
-            message = "AMP plugin original generation inputs changed"
-            raise ValueError(message)
-        records = tuple(
-            directory / "precompile" / (name + ".d") for name in (*NATIVE_OBJECTS, "model")
-        )
-        data.update(
-            {
-                "generation_sha256": sha256_of_file(generation),
-                "dependencies": dependency_hashes(records, ROOT),
-                "dependency_records": {str(path): sha256_of_file(path) for path in records},
-                "build_files": {
-                    str(path): sha256_of_file(path)
-                    for path in sorted((directory / "rtl").iterdir())
-                    if path.suffix in (".cpp", ".h", ".mk", ".dat")
-                },
-            }
-        )
+        data.update(_compilation_fields(directory, data))
     path = directory / (stage + ".json")
     with path.open("xb") as stream:
         stream.write(canonical_json_bytes(data))
@@ -115,15 +202,7 @@ def verified_preparation(build: PluginBuild, dependencies: dict[str, str]) -> di
     """
     directory = build.directory.resolve()
     data = load_json_object(directory / "compilation.json")
-    schema = load_json_object(ROOT / "amp-plugin-build.schema.json")
-    errors = list(
-        Draft202012Validator({"$defs": schema["$defs"], "$ref": "#/$defs/preparation"}).iter_errors(
-            data
-        )
-    )
-    if errors:
-        message = "AMP plugin preparation invalid: " + errors[0].message
-        raise ValueError(message)
+    _check_schema(data)
     generation = load_json_object(directory / "generation.json")
     if (
         data.get("schema") != "loop-timing-witness.amp-plugin-preparation.v1"
@@ -135,14 +214,7 @@ def verified_preparation(build: PluginBuild, dependencies: dict[str, str]) -> di
     ):
         message = "AMP plugin preparation or original build inputs changed"
         raise ValueError(message)
-    for name, digest in data["dependency_records"].items():
-        if sha256_of_file(Path(name)) != digest:
-            message = "AMP plugin pre-compilation dependency record changed"
-            raise ValueError(message)
-    for name, digest in data["build_files"].items():
-        if sha256_of_file(Path(name)) != digest:
-            message = "AMP plugin generated build input changed during compilation"
-            raise ValueError(message)
+    _check_recorded_files(data)
     original = dependency_hashes(tuple(Path(name) for name in data["dependency_records"]), ROOT)
     if original != data["dependencies"] or dependencies != original:
         message = "AMP plugin source/header dependency changed during compilation"

@@ -106,6 +106,73 @@ def _geometry(content: bytes, reservation: Region) -> tuple[int, int]:
     return phoff, phcount
 
 
+def _admit_load(header: tuple[int, ...], reservation: Region) -> LoadSegment:
+    """Admit one loadable program header as a segment inside the reservation.
+
+    Parameters
+    ----------
+    header
+        Unpacked program header of a ``PT_LOAD`` entry.
+    reservation
+        Entire admitted firmware and stack reservation.
+
+    Returns
+    -------
+    LoadSegment
+        The segment's file offset, address, sizes and permissions.
+
+    Raises
+    ------
+    ValueError
+        If permissions, sizes, identity mapping, alignment or placement are invalid.
+    """
+    _, permissions, offset, virtual, physical, file_bytes, memory_bytes, alignment = header
+    if (
+        permissions not in (READ_EXECUTE, READ_WRITE)
+        or not memory_bytes
+        or file_bytes > memory_bytes
+        or virtual != physical
+        or alignment < PAGE_BYTES
+        or alignment & (alignment - 1)
+        or offset % alignment != physical % alignment
+        or physical + memory_bytes > ADDRESS_LIMIT
+        or physical < reservation.address
+        or physical + memory_bytes > reservation.address + reservation.size
+    ):
+        message = "firmware ELF load segment violates permissions, geometry or reserved RAM"
+        raise ValueError(message)
+    return LoadSegment(offset, physical, file_bytes, memory_bytes, permissions)
+
+
+def _check_overlap(segment: LoadSegment, segments: list[LoadSegment]) -> None:
+    """Refuse a segment that overlaps an earlier one in memory or in the file.
+
+    Parameters
+    ----------
+    segment
+        Newly admitted segment.
+    segments
+        Segments admitted before it.
+
+    Raises
+    ------
+    ValueError
+        If the memory ranges, or two nonempty file ranges, overlap.
+    """
+    for prior in segments:
+        if (
+            segment.address < prior.address + prior.memory_bytes
+            and prior.address < segment.address + segment.memory_bytes
+        ) or (
+            segment.file_bytes
+            and prior.file_bytes
+            and segment.offset < prior.offset + prior.file_bytes
+            and prior.offset < segment.offset + segment.file_bytes
+        ):
+            message = "firmware ELF load segments overlap in memory or file"
+            raise ValueError(message)
+
+
 def admit_elf(content: bytes, reservation: Region) -> tuple[LoadSegment, ...]:
     """Admit original static little-endian soft-float RV64 segments inside reserved RAM.
 
@@ -130,9 +197,8 @@ def admit_elf(content: bytes, reservation: Region) -> tuple[LoadSegment, ...]:
     entry = reservation.address
     segments: list[LoadSegment] = []
     for index in range(phcount):
-        kind, permissions, offset, virtual, physical, file_bytes, memory_bytes, alignment = (
-            PROGRAM_HEADER.unpack_from(content, phoff + index * PROGRAM_HEADER.size)
-        )
+        header = PROGRAM_HEADER.unpack_from(content, phoff + index * PROGRAM_HEADER.size)
+        kind, offset, file_bytes = header[0], header[2], header[5]
         if kind in FORBIDDEN_TYPES:
             message = "firmware ELF cannot require a dynamic loader or interpreter"
             raise ValueError(message)
@@ -141,33 +207,8 @@ def admit_elf(content: bytes, reservation: Region) -> tuple[LoadSegment, ...]:
             raise ValueError(message)
         if kind != LOAD_TYPE:
             continue
-        if (
-            permissions not in (READ_EXECUTE, READ_WRITE)
-            or not memory_bytes
-            or file_bytes > memory_bytes
-            or virtual != physical
-            or alignment < PAGE_BYTES
-            or alignment & (alignment - 1)
-            or offset % alignment != physical % alignment
-            or physical + memory_bytes > ADDRESS_LIMIT
-            or physical < reservation.address
-            or physical + memory_bytes > reservation.address + reservation.size
-        ):
-            message = "firmware ELF load segment violates permissions, geometry or reserved RAM"
-            raise ValueError(message)
-        segment = LoadSegment(offset, physical, file_bytes, memory_bytes, permissions)
-        for prior in segments:
-            if (
-                physical < prior.address + prior.memory_bytes
-                and prior.address < physical + memory_bytes
-            ) or (
-                file_bytes
-                and prior.file_bytes
-                and offset < prior.offset + prior.file_bytes
-                and prior.offset < offset + file_bytes
-            ):
-                message = "firmware ELF load segments overlap in memory or file"
-                raise ValueError(message)
+        segment = _admit_load(header, reservation)
+        _check_overlap(segment, segments)
         segments.append(segment)
     if not any(
         segment.flags == READ_EXECUTE

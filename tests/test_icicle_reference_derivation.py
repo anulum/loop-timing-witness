@@ -957,10 +957,10 @@ def test_public_shell_entrypoint_refuses_actual_other_filesystem(
     arguments: tuple[str, ...]
     if command == DERIVE:
         arguments = (str(official_reference), str(other_disk / output.name))
-        expected = "destination must be on the canonical Samsung working disk"
+        expected = "destination must be on the repository's filesystem"
     else:
         arguments = (str(other_disk), str(output), "MPFS250T")
-        expected = "derived project must run on the canonical Samsung working disk"
+        expected = "derived project must run on the repository's filesystem"
     result = invoke(str(command), *arguments)
     assert result.returncode == 2
     assert expected in result.stderr

@@ -27,7 +27,7 @@ fi
 derived_device=$(stat -c %d -- "${derived_dir}")
 repository_device=$(stat -c %d -- "${repository_root}")
 if [[ "${derived_device}" != "${repository_device}" ]]; then
-    printf 'derived project must run on the canonical Samsung working disk\n' >&2
+    printf "derived project must run on the repository's filesystem\n" >&2
     exit 2
 fi
 source_commit=$(git -C "${derived_dir}" rev-parse HEAD)

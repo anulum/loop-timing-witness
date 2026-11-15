@@ -16,23 +16,23 @@ The reference source is fetched separately and is never committed here. Use an o
 checkout to be clean and verifies the five vendor source files it changes by SHA-256.
 It also verifies a path-and-content digest of every reference source file outside Git
 metadata, including the timing constraints and MSS configuration. It writes a new output
-tree on the Samsung working disk and refuses an existing path.
+tree on the repository's filesystem and refuses an existing path.
 The requested output path must not be a symlink, including a dangling one;
 derivation never follows an output alias to create a tree elsewhere.
 
 ```bash
-hardware/icicle/derive_reference.sh /path/to/clean/icicle-kit-reference-design /path/to/new/samsung-workspace/icicle-witness-derived
+hardware/icicle/derive_reference.sh /path/to/clean/icicle-kit-reference-design /path/to/new/icicle-witness-derived
 ```
 
 The source-derivation integration test uses this public command, checks the produced
 manifest and RTL snapshot, and exercises the pre-Libero refusal paths. It fetches the
 exact reference commit when `WITNESS_ICICLE_REFERENCE` is unset. To reuse an existing
-clean checkout and keep test output on the Samsung disk, run:
+clean checkout and keep test output on the repository's filesystem, run:
 
 ```bash
 WITNESS_ICICLE_REFERENCE=/path/to/clean/icicle-kit-reference-design \
   .venv/bin/pytest -q tests/test_icicle_reference_derivation.py \
-  --basetemp=/path/to/new/samsung-workspace/icicle-derivation-pytest
+  --basetemp=/path/to/new/icicle-derivation-pytest
 ```
 
 The integration test also changes test-owned staging bytes at the actual filesystem
@@ -58,15 +58,13 @@ integration have not been qualified with this witness.
 
 Microchip's [software downloads](https://www.microchip.com/en-us/products/fpgas-and-plds/fpga-and-soc-design-tools/fpga-software-downloads)
 offer Linux web and full installers for Libero 2026.1, with SHA-256 checksums. Verify the
-completed installer against the checksum listed for the exact Linux package. Keep the
-download archive on SAS if needed, but use the Samsung working disk for installer temporary
-files, the installed suite and generated projects. Microchip's
+completed installer against the checksum listed for the exact Linux package. Microchip's
 [Linux installation guide](https://www.microchip.com/content/dam/mchp/documents/FPGA/swdocs/libero/Libero_SoC_Design_Suite_Software_Installation_Guide_2025_1.pdf)
 states that the installer defaults its cache to `/tmp`. Before launching the extracted
-installer, create separate cache and temporary directories on the Samsung disk, set
-`TMPDIR` to the temporary directory, and pass `--cache-path` with the existing cache
-directory. Select a Samsung installation destination in the installer; its unattended
-form names that destination with `--root`. These options are documented for the 2025.1
+installer, create separate cache and temporary directories on a disk with room for the suite
+and its generated projects, set `TMPDIR` to the temporary directory, and pass `--cache-path`
+with the existing cache directory. Select an installation destination on that disk; the
+installer's unattended form names it with `--root`. These options are documented for the 2025.1
 installer; inspect the selected 2026.1 package's own help before reusing their spelling.
 
 After confirming the board's silicon marking and installing a compatible Libero release,
@@ -74,7 +72,7 @@ use the verified runner. It refuses any stale manifest or source snapshot and an
 generated project. A confirmed production-device invocation has this form:
 
 ```bash
-hardware/icicle/run_reference.sh /path/to/new/samsung-workspace/icicle-witness-derived /path/to/libero MPFS250T
+hardware/icicle/run_reference.sh /path/to/new/icicle-witness-derived /path/to/libero MPFS250T
 ```
 
 Select `MPFS250T_ES` only for a confirmed engineering-silicon device; the runner omits

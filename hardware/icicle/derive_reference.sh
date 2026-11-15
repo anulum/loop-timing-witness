@@ -10,7 +10,7 @@
 set -euo pipefail
 
 if (($# != 2)); then
-    printf 'usage: %s OFFICIAL_SOURCE NEW_SAMSUNG_OUTPUT\n' "$0" >&2
+    printf 'usage: %s OFFICIAL_SOURCE NEW_OUTPUT\n' "$0" >&2
     exit 2
 fi
 
@@ -36,7 +36,7 @@ fi
 destination_device=$(stat -c %d -- "${destination_parent}")
 repository_device=$(stat -c %d -- "${repository_root}")
 if [[ "${destination_device}" != "${repository_device}" ]]; then
-    printf 'destination must be on the canonical Samsung working disk\n' >&2
+    printf "destination must be on the repository's filesystem\n" >&2
     exit 2
 fi
 source_commit=$(git -C "${source_dir}" rev-parse HEAD)

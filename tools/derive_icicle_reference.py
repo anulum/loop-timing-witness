@@ -484,7 +484,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="check an existing derived tree")
     parser.add_argument("source", type=Path, help="clean reference checkout or derived tree")
-    parser.add_argument("destination", nargs="?", type=Path, help="new Samsung output directory")
+    parser.add_argument(
+        "destination",
+        nargs="?",
+        type=Path,
+        help="new output directory on the repository's filesystem",
+    )
     arguments = parser.parse_args()
     try:
         if arguments.verify:

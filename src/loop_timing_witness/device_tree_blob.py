@@ -88,6 +88,55 @@ def _reservations(data: bytes, offset: int, limit: int) -> tuple[tuple[tuple[int
     raise ValueError(message)
 
 
+def _checked_blocks(words: list[int], length: int) -> list[tuple[int, int]]:
+    """Check the header identity and return the structure and strings block extents.
+
+    Parameters
+    ----------
+    words
+        The ten big-endian header words.
+    length
+        Byte length of the whole blob.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        Start and end of the structure block, then of the strings block.
+
+    Raises
+    ------
+    ValueError
+        If the magic, total size or versions are invalid, or the blocks are
+        misaligned, out of bounds, overlapping or overlap the reservation map.
+    """
+    magic, total, structure, strings, reserved, version, compatible = words[:7]
+    string_size, structure_size = words[8:]
+    if (
+        magic != MAGIC
+        or total != length
+        or version < VERSION
+        or compatible > VERSION
+        or compatible > version
+    ):
+        message = "invalid device-tree magic, total size or compatible version"
+        raise ValueError(message)
+    blocks = [(structure, structure + structure_size), (strings, strings + string_size)]
+    if (
+        structure % WORD_BYTES
+        or structure_size % WORD_BYTES
+        or not structure_size
+        or reserved % RESERVATION_ALIGNMENT
+        or reserved < HEADER_SIZE
+        or reserved >= total
+        or any(start < HEADER_SIZE or end > total for start, end in blocks)
+        or (blocks[0][0] < blocks[1][1] and blocks[1][0] < blocks[0][1])
+        or any(start <= reserved < end for start, end in blocks)
+    ):
+        message = "invalid device-tree block alignment, bounds or overlap"
+        raise ValueError(message)
+    return blocks
+
+
 def decode_device_tree(content: bytes) -> DeviceTree:
     """Validate actual DTB headers, block extents, reservations and token structure.
 
@@ -113,41 +162,8 @@ def decode_device_tree(content: bytes) -> DeviceTree:
         int.from_bytes(content[offset : offset + WORD_BYTES], "big")
         for offset in range(0, HEADER_SIZE, WORD_BYTES)
     ]
-    (
-        magic,
-        total,
-        structure,
-        strings,
-        reserved,
-        version,
-        compatible,
-        boot_cpu,
-        string_size,
-        structure_size,
-    ) = words
-    if (
-        magic != MAGIC
-        or total != len(content)
-        or version < VERSION
-        or compatible > VERSION
-        or compatible > version
-    ):
-        message = "invalid device-tree magic, total size or compatible version"
-        raise ValueError(message)
-    blocks = [(structure, structure + structure_size), (strings, strings + string_size)]
-    if (
-        structure % WORD_BYTES
-        or structure_size % WORD_BYTES
-        or not structure_size
-        or reserved % RESERVATION_ALIGNMENT
-        or reserved < HEADER_SIZE
-        or reserved >= total
-        or any(start < HEADER_SIZE or end > total for start, end in blocks)
-        or (blocks[0][0] < blocks[1][1] and blocks[1][0] < blocks[0][1])
-        or any(start <= reserved < end for start, end in blocks)
-    ):
-        message = "invalid device-tree block alignment, bounds or overlap"
-        raise ValueError(message)
+    _, total, structure, strings, reserved, _, _, boot_cpu, string_size, structure_size = words
+    blocks = _checked_blocks(words, len(content))
     limit = min([total, *(start for start, _ in blocks if start > reserved)])
     reservations, _ = _reservations(content, reserved, limit)
     nodes = decode_structure(

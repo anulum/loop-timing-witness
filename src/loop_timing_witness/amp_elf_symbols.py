@@ -88,6 +88,73 @@ def _sections(content: bytes) -> list[tuple[int, ...]]:
     return sections
 
 
+def _symbol_table(sections: list[tuple[int, ...]]) -> tuple[int, ...]:
+    """Return the one symbol table after checking its geometry and string link.
+
+    Parameters
+    ----------
+    sections
+        Original section headers.
+
+    Returns
+    -------
+    tuple[int, ...]
+        The symbol table's section header.
+
+    Raises
+    ------
+    ValueError
+        If there is not exactly one symbol table, or its entry size, extent or
+        string-table link is invalid.
+    """
+    tables = [section for section in sections if section[1] == SYMBOL_TABLE]
+    if len(tables) != 1:
+        message = "firmware requires one original symbol table"
+        raise ValueError(message)
+    table = tables[0]
+    if (
+        table[9] != SYMBOL.size
+        or not table[5]
+        or table[5] % SYMBOL.size
+        or table[6] >= len(sections)
+        or sections[table[6]][1] != STRING_TABLE
+    ):
+        message = "firmware original symbol table geometry or string link is invalid"
+        raise ValueError(message)
+    return table
+
+
+def _symbol_name(names: bytes, name: int) -> str:
+    """Return the ASCII symbol name starting at one string-table offset.
+
+    Parameters
+    ----------
+    names
+        Original string table bytes.
+    name
+        Offset of the name in the table.
+
+    Returns
+    -------
+    str
+        The terminated name, possibly empty.
+
+    Raises
+    ------
+    ValueError
+        If the name lies outside the table, is unterminated or is not ASCII.
+    """
+    end = names.find(b"\0", name)
+    if name >= len(names) or end < 0:
+        message = "firmware symbol name is outside the original string table"
+        raise ValueError(message)
+    try:
+        return names[name:end].decode("ascii")
+    except UnicodeDecodeError as error:
+        message = "firmware original symbol name is not ASCII"
+        raise ValueError(message) from error
+
+
 def read_symbols(content: bytes) -> dict[str, ElfSymbol]:
     """Require one original symbol table and unique defined global/weak symbol names.
 
@@ -107,20 +174,7 @@ def read_symbols(content: bytes) -> dict[str, ElfSymbol]:
         If tables, strings, symbol geometry, definitions or global identities are invalid.
     """
     sections = _sections(content)
-    tables = [section for section in sections if section[1] == SYMBOL_TABLE]
-    if len(tables) != 1:
-        message = "firmware requires one original symbol table"
-        raise ValueError(message)
-    table = tables[0]
-    if (
-        table[9] != SYMBOL.size
-        or not table[5]
-        or table[5] % SYMBOL.size
-        or table[6] >= len(sections)
-        or sections[table[6]][1] != STRING_TABLE
-    ):
-        message = "firmware original symbol table geometry or string link is invalid"
-        raise ValueError(message)
+    table = _symbol_table(sections)
     strings = sections[table[6]]
     names = content[strings[4] : strings[4] + strings[5]]
     result = {}
@@ -128,15 +182,7 @@ def read_symbols(content: bytes) -> dict[str, ElfSymbol]:
         name, info, _, section, address, size = SYMBOL.unpack_from(content, offset)
         if info >> 4 not in (GLOBAL_BINDING, WEAK_BINDING):
             continue
-        end = names.find(b"\0", name)
-        if name >= len(names) or end < 0:
-            message = "firmware symbol name is outside the original string table"
-            raise ValueError(message)
-        try:
-            identifier = names[name:end].decode("ascii")
-        except UnicodeDecodeError as error:
-            message = "firmware original symbol name is not ASCII"
-            raise ValueError(message) from error
+        identifier = _symbol_name(names, name)
         if (
             not identifier
             or not section

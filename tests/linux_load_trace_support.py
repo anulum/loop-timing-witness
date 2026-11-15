@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import select
 import shutil
@@ -24,6 +25,37 @@ from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+
+def open_child(pid: int) -> int | None:
+    """Open a pidfd for a listed child, or return ``None`` when the pid names no child left.
+
+    Parameters
+    ----------
+    pid
+        Process ID read from a parent's ``children`` file.
+
+    Returns
+    -------
+    int | None
+        Open pidfd, or ``None`` when the child exited (``ProcessLookupError``) or its
+        pid was reused by a thread of another process. ``pidfd_open`` opens only
+        thread-group leaders and refuses a thread with EINVAL on Linux 6.8 and with
+        ENOENT on Linux 7.0.
+
+    Raises
+    ------
+    OSError
+        Any other ``pidfd_open`` failure.
+    """
+    try:
+        return os.pidfd_open(pid)
+    except ProcessLookupError:
+        return None
+    except OSError as error:
+        if error.errno not in {errno.EINVAL, errno.ENOENT}:
+            raise
+        return None
 
 
 @dataclass
@@ -64,8 +96,10 @@ class OwnedTrace:
                 for child in map(int, children):
                     if child in self.descriptors:
                         continue
-                    with suppress(ProcessLookupError), ExitStack() as candidate:
-                        child_descriptor = os.pidfd_open(child)
+                    child_descriptor = open_child(child)
+                    if child_descriptor is None:
+                        continue
+                    with ExitStack() as candidate:
                         candidate.callback(os.close, child_descriptor)
                         with suppress(FileNotFoundError, ProcessLookupError):
                             status = Path(f"/proc/{child}/status").read_text()
@@ -83,7 +117,12 @@ class OwnedTrace:
                             pending.append(child)
 
     def close(self) -> None:
-        """Kill only retained owned identities and reap the tracer before closing pidfds."""
+        """Kill only retained owned identities and reap the tracer before closing pidfds.
+
+        A tracer still running after an observation error or a reaping timeout is
+        killed and reaped too, so no ``strace`` outlives its test; the error
+        propagates.
+        """
         try:
             self.observe()
             for descriptor in reversed(list(self.descriptors.values())):
@@ -91,6 +130,9 @@ class OwnedTrace:
                     signal.pidfd_send_signal(descriptor, signal.SIGKILL)
             self.process.communicate(timeout=scaled(5))
         finally:
+            if self.process.poll() is None:
+                self.process.kill()
+                self.process.communicate()
             for descriptor in self.descriptors.values():
                 os.close(descriptor)
 

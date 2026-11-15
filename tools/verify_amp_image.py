@@ -15,18 +15,24 @@ import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from amp_exit_channel import admit_exit_channel
 from amp_image_contract import admit_image_contract
 from amp_image_dependencies import image_dependency_hashes
 from amp_image_options import ImageRequest, add_image_arguments, image_request
 from amp_platform import bind_platform
-from amp_prepared_inputs import admit_preparation
+from amp_prepared_inputs import PreparedInputs, admit_preparation
 from amp_run_input import read_amp_run
 from amp_rust_admission import admit_rust_archive
 from device_tree_blob import decode_device_tree
 
 from manifest_io import canonical_json_bytes, sha256_of_file
+
+if TYPE_CHECKING:
+    from amp_contract import AmpRun
+    from amp_elf import LoadSegment
+    from amp_platform import AmpPlatform
 
 DEPENDENCY_RECORD_COUNT = 5
 
@@ -63,6 +69,140 @@ def _dependencies(directory: Path, *, rust: bool) -> dict[str, str]:
     return image_dependency_hashes(tuple(records), directory)
 
 
+def _admit_firmware(
+    directory: Path,
+    dtb: Path,
+    configuration: Path,
+    request: ImageRequest,
+    prepared: PreparedInputs,
+) -> tuple[AmpPlatform, AmpRun, tuple[LoadSegment, ...]]:
+    """Bind the topology and admit the firmware's contract and exit channel.
+
+    Parameters
+    ----------
+    directory
+        Image build directory holding ``firmware.elf``.
+    dtb, configuration
+        Verified topology and run configuration.
+    request
+        Explicit original resource and stack selection.
+    prepared
+        Admitted preparation with the target mode.
+
+    Returns
+    -------
+    tuple[AmpPlatform, AmpRun, tuple[LoadSegment, ...]]
+        Bound platform, decoded run and admitted load segments.
+    """
+    platform = bind_platform(
+        decode_device_tree(dtb.read_bytes()), request.memory, request.device_path, request.plic
+    )
+    run = read_amp_run(configuration.read_bytes())
+    image = directory / "firmware.elf"
+    segments = admit_image_contract(image.read_bytes(), platform, run, request.memory.stack_bytes)
+    admit_exit_channel(image.read_bytes(), segments, isa=prepared.isa)
+    return platform, run, segments
+
+
+def _check_inputs(hashes: dict[str, str], dtb: Path, configuration: Path) -> None:
+    """Require the verification inputs to be the prepared topology and configuration.
+
+    Parameters
+    ----------
+    hashes
+        Prepared input digests.
+    dtb, configuration
+        Verification inputs.
+
+    Raises
+    ------
+    ValueError
+        If either digest differs.
+    """
+    if (
+        sha256_of_file(dtb) != hashes["platform.dtb"]
+        or sha256_of_file(configuration) != hashes["configuration.txt"]
+    ):
+        message = "AMP verification inputs differ from the original preparation"
+        raise ValueError(message)
+
+
+def _mode_fields(directory: Path, prepared: PreparedInputs) -> dict[str, object]:
+    """Return the manifest's schema, kernel and execution-mode fields.
+
+    Parameters
+    ----------
+    directory
+        Image build directory, holding the Rust archive when built.
+    prepared
+        Admitted preparation.
+
+    Returns
+    -------
+    dict[str, object]
+        Schema, the admitted Rust kernel when built, simulation-only and
+        physical-verification flags and the exit mode.
+    """
+    return {
+        "schema": "loop-timing-witness.amp-image.v1",
+        **(
+            {"kernel_backend": "rust", "rust_kernel": admit_rust_archive(directory)}
+            if prepared.rust is not None
+            else {}
+        ),
+        "simulation_only": True,
+        "physical_verified": False,
+        "exit_mode": "isa_htif" if prepared.isa else "parked",
+    }
+
+
+def _digests(directory: Path, dtb: Path, configuration: Path) -> dict[str, str]:
+    """Return the digests of the firmware, topology, configuration and preparation.
+
+    Parameters
+    ----------
+    directory
+        Image build directory.
+    dtb, configuration
+        Verified topology and run configuration.
+
+    Returns
+    -------
+    dict[str, str]
+        The four manifest digest fields.
+    """
+    return {
+        "firmware_sha256": sha256_of_file(directory / "firmware.elf"),
+        "dtb_sha256": sha256_of_file(dtb),
+        "configuration_sha256": sha256_of_file(configuration),
+        "preparation_sha256": sha256_of_file(directory / "preparation.json"),
+    }
+
+
+def _write_manifest(manifest: Path, encoded: bytes) -> None:
+    """Write the image manifest, or accept an existing one with identical bytes.
+
+    Parameters
+    ----------
+    manifest
+        ``image.json`` path.
+    encoded
+        Canonical manifest bytes.
+
+    Raises
+    ------
+    ValueError
+        If a manifest with other bytes already exists.
+    """
+    if manifest.exists():
+        if manifest.read_bytes() != encoded:
+            message = "AMP verified image manifest already exists with different bytes"
+            raise ValueError(message)
+    else:
+        with manifest.open("xb") as output:
+            output.write(encoded)
+
+
 def verify_image(directory: Path, dtb: Path, configuration: Path, request: ImageRequest) -> Path:
     """Admit actual original ELF bytes and write the immutable successful image manifest.
 
@@ -90,56 +230,27 @@ def verify_image(directory: Path, dtb: Path, configuration: Path, request: Image
         If preparation drift, topology or compiled firmware contradicts admission.
     """
     prepared = admit_preparation(directory)
-    inputs = prepared.hashes
-    if (
-        sha256_of_file(dtb) != inputs["platform.dtb"]
-        or sha256_of_file(configuration) != inputs["configuration.txt"]
-    ):
-        message = "AMP verification inputs differ from the original preparation"
-        raise ValueError(message)
-    platform = bind_platform(
-        decode_device_tree(dtb.read_bytes()), request.memory, request.device_path, request.plic
-    )
-    run = read_amp_run(configuration.read_bytes())
-    image = directory / "firmware.elf"
-    segments = admit_image_contract(image.read_bytes(), platform, run, request.memory.stack_bytes)
-    admit_exit_channel(image.read_bytes(), segments, isa=prepared.isa)
+    _check_inputs(prepared.hashes, dtb, configuration)
+    platform, run, segments = _admit_firmware(directory, dtb, configuration, request, prepared)
     dependencies = _dependencies(directory, rust=prepared.rust is not None)
     if dependencies != prepared.dependencies:
         message = "AMP compiled firmware dependencies differ from original preprocessing"
         raise ValueError(message)
     encoded = canonical_json_bytes(
         {
-            "schema": "loop-timing-witness.amp-image.v1",
-            **(
-                {"kernel_backend": "rust", "rust_kernel": admit_rust_archive(directory)}
-                if prepared.rust is not None
-                else {}
-            ),
-            "simulation_only": True,
-            "physical_verified": False,
-            "exit_mode": "isa_htif" if prepared.isa else "parked",
-            "firmware_sha256": sha256_of_file(image),
-            "dtb_sha256": sha256_of_file(dtb),
-            "configuration_sha256": sha256_of_file(configuration),
-            "preparation_sha256": sha256_of_file(directory / "preparation.json"),
+            **_mode_fields(directory, prepared),
+            **_digests(directory, dtb, configuration),
             "platform": asdict(platform),
             "run": asdict(run),
             "stack_bytes": request.memory.stack_bytes,
             "segments": [asdict(segment) for segment in segments],
-            "inputs": inputs,
+            "inputs": prepared.hashes,
             "compiler_dependencies": dependencies,
             "toolchain": prepared.toolchain,
         }
     )
     manifest = directory / "image.json"
-    if manifest.exists():
-        if manifest.read_bytes() != encoded:
-            message = "AMP verified image manifest already exists with different bytes"
-            raise ValueError(message)
-    else:
-        with manifest.open("xb") as output:
-            output.write(encoded)
+    _write_manifest(manifest, encoded)
     return manifest
 
 

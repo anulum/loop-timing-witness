@@ -312,6 +312,48 @@ def write_bound_json(path: Path, value: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _repeat_entry(
+    directory: Path,
+    index: int,
+    capture: tuple[Path, dict[str, Any]],
+    run_plan: dict[str, int] | None,
+) -> dict[str, Any]:
+    """Copy one capture as a numbered repeat and return its campaign entry.
+
+    Parameters
+    ----------
+    directory
+        Repeat directory to create.
+    index
+        One-based repeat index, also the suffix of the repeat's run ID.
+    capture
+        Original run directory and its manifest.
+    run_plan
+        Optional run plan written into the repeat's measurement-domain copy,
+        which the repeat manifest then binds.
+
+    Returns
+    -------
+    dict[str, Any]
+        Repeat index, bound repeat manifest and the reboot declaration.
+    """
+    run, manifest = capture
+    shutil.copytree(run, directory)
+    value = {**manifest, "run_id": f"rtl-repeat-{index}"}
+    if run_plan is not None:
+        domain = json.loads((directory / "measurement-domain.json").read_bytes())
+        domain["design_contracts"]["run_plan"] = run_plan
+        value["measurement_domain"] = {
+            "path": "measurement-domain.json",
+            "sha256": write_bound_json(directory / "measurement-domain.json", domain)["sha256"],
+        }
+    return {
+        "repeat_index": index,
+        "run_manifest": write_bound_json(directory / "manifest.json", value),
+        "rebooted_before_run": True,
+    }
+
+
 @pytest.fixture
 def make_repeat_campaign(tmp_path: Path, make_rtl_run: MakeRtlRun) -> MakeRepeatCampaign:
     """Order copies of one real RTL capture as the repeats of a campaign.
@@ -341,27 +383,10 @@ def make_repeat_campaign(tmp_path: Path, make_rtl_run: MakeRtlRun) -> MakeRepeat
         run, manifest = make_rtl_run(profile)
         campaign = tmp_path / "campaign"
         campaign.mkdir()
-        entries = []
-        for index in range(1, repeats + 1):
-            directory = campaign / f"repeat-{index}"
-            shutil.copytree(run, directory)
-            value = {**manifest, "run_id": f"rtl-repeat-{index}"}
-            if run_plan is not None:
-                domain = json.loads((directory / "measurement-domain.json").read_bytes())
-                domain["design_contracts"]["run_plan"] = run_plan
-                value["measurement_domain"] = {
-                    "path": "measurement-domain.json",
-                    "sha256": write_bound_json(directory / "measurement-domain.json", domain)[
-                        "sha256"
-                    ],
-                }
-            entries.append(
-                {
-                    "repeat_index": index,
-                    "run_manifest": write_bound_json(directory / "manifest.json", value),
-                    "rebooted_before_run": True,
-                }
-            )
+        entries = [
+            _repeat_entry(campaign / f"repeat-{index}", index, (run, manifest), run_plan)
+            for index in range(1, repeats + 1)
+        ]
         document: dict[str, Any] = {
             "schema": "loop-timing-witness.repeat-campaign.v1",
             "campaign_id": "rtl-repeat-campaign",
@@ -376,6 +401,35 @@ def make_repeat_campaign(tmp_path: Path, make_rtl_run: MakeRtlRun) -> MakeRepeat
 
 
 RunRtl = Callable[[str, dict[str, int], list[str]], subprocess.CompletedProcess[str]]
+
+
+# Public-port RTL sources, in compilation order, compiled ahead of each testbench.
+_PUBLIC_PORT_SOURCES = (
+    "rtl/event_codes_pkg.sv",
+    "rtl/clock_reset_release.sv",
+    "rtl/clock_request_bridge.sv",
+    "rtl/axi_lite_clock_bridge.sv",
+    "rtl/event_record_window.sv",
+    "rtl/control_io_registers.sv",
+    "rtl/run_configuration_registers.sv",
+    "rtl/axi_control_witness.sv",
+    "rtl/icicle_witness.sv",
+    "rtl/run_reset_control.sv",
+    "rtl/retained_interrupt.sv",
+    "rtl/event_record_capture.sv",
+    "rtl/event_record_fifo.sv",
+    "rtl/event_witness.sv",
+    "rtl/fixed_point_math.sv",
+    "rtl/fixed_point_controller.sv",
+    "rtl/sampled_plant.sv",
+    "rtl/reference_generator.sv",
+    "rtl/deadline_monitor.sv",
+    "rtl/fault_injector.sv",
+    "rtl/control_event_capture.sv",
+    "rtl/control_cycle.sv",
+    "rtl/control_plant_witness.sv",
+    "rtl/fabric_control_witness.sv",
+)
 
 
 @pytest.fixture
@@ -399,33 +453,7 @@ def run_rtl(tmp_path: Path) -> RunRtl:
         top: str, parameters: dict[str, int], arguments: list[str]
     ) -> subprocess.CompletedProcess[str]:
         simulation = tmp_path / f"{top}.vvp"
-        sources = [
-            "rtl/event_codes_pkg.sv",
-            "rtl/clock_reset_release.sv",
-            "rtl/clock_request_bridge.sv",
-            "rtl/axi_lite_clock_bridge.sv",
-            "rtl/event_record_window.sv",
-            "rtl/control_io_registers.sv",
-            "rtl/run_configuration_registers.sv",
-            "rtl/axi_control_witness.sv",
-            "rtl/icicle_witness.sv",
-            "rtl/run_reset_control.sv",
-            "rtl/retained_interrupt.sv",
-            "rtl/event_record_capture.sv",
-            "rtl/event_record_fifo.sv",
-            "rtl/event_witness.sv",
-            "rtl/fixed_point_math.sv",
-            "rtl/fixed_point_controller.sv",
-            "rtl/sampled_plant.sv",
-            "rtl/reference_generator.sv",
-            "rtl/deadline_monitor.sv",
-            "rtl/fault_injector.sv",
-            "rtl/control_event_capture.sv",
-            "rtl/control_cycle.sv",
-            "rtl/control_plant_witness.sv",
-            "rtl/fabric_control_witness.sv",
-            f"tests/rtl/{top}.sv",
-        ]
+        sources = [*_PUBLIC_PORT_SOURCES, f"tests/rtl/{top}.sv"]
         subprocess.run(
             [
                 "iverilog",

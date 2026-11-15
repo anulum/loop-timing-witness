@@ -766,6 +766,27 @@ def _bind_receipts(
     """
     manifest["controller"] = {"name": "pid", "coefficients": dict(NATIVE["coefficients"])}
     manifest["instrument"]["fifo_overflow_count"] = overflow
+    _receipt(run, manifest, "native_metadata", _native_receipt(manifest, overflow, run))
+    _receipt(run, manifest, "host_load", _host_receipt(profile, overflow, exit_status))
+
+
+def _native_receipt(manifest: dict[str, Any], overflow: int, run: Path) -> dict[str, Any]:
+    """Return native metadata whose counters are the Python analysis of the captured events.
+
+    Parameters
+    ----------
+    manifest
+        Declaration of the real capture, written to the run first.
+    overflow
+        Declared and reported FIFO overflow count.
+    run
+        Real Icarus CONTROL capture.
+
+    Returns
+    -------
+    dict[str, Any]
+        Native metadata agreeing with the capture.
+    """
     inputs = load_run(_write(run, manifest))
     contracts = inputs.domain["design_contracts"]
     events = decode_events(inputs.files["events"], contracts, "CONTROL", manifest["cycle_count"])
@@ -798,7 +819,26 @@ def _bind_receipts(
         "bytes": len(inputs.files["events"]),
     }
     native["artifacts"]["configuration"]["sha256"] = manifest["source"]["files"][0]["sha256"]
-    _receipt(run, manifest, "native_metadata", native)
+    return native
+
+
+def _host_receipt(profile: str, overflow: int, exit_status: int | None) -> dict[str, Any]:
+    """Return a host load receipt of one profile whose run brackets the native run.
+
+    Parameters
+    ----------
+    profile
+        Host load profile of the receipt.
+    overflow
+        Declared FIFO overflow count, which implies a failing native exit by default.
+    exit_status
+        Native exit status, or ``None`` for the one the overflow implies.
+
+    Returns
+    -------
+    dict[str, Any]
+        Host load receipt.
+    """
     host = copy.deepcopy(HOST_LOAD)
     host.update(
         profile=profile,
@@ -811,7 +851,7 @@ def _bind_receipts(
     )
     host["counters"]["idle_waits"] = 1 if profile == "idle" else 0
     host["counters"]["arithmetic_operations"] = 4096 if profile == "cpu" else 0
-    _receipt(run, manifest, "host_load", host)
+    return host
 
 
 @pytest.mark.parametrize(

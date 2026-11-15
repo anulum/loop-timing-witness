@@ -21,6 +21,89 @@ from test_native_run import configuration
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled
 
+# Native C++ sources of the lifecycle API test, after the RTL.
+NATIVE_SOURCES = (
+    "tests/native/run_lifecycle_test.cpp",
+    "runtime/run_configuration.cpp",
+    "runtime/linux/file_digest.cpp",
+)
+
+
+def _kernel_command(kernel: Path) -> list[str]:
+    """Return the strict compiler command of the production C controller kernel.
+
+    Parameters
+    ----------
+    kernel
+        Object file to write.
+
+    Returns
+    -------
+    list[str]
+        Compiler command.
+    """
+    return [
+        "gcc",
+        "-std=gnu11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wconversion",
+        "-Wshadow",
+        "-Wstrict-prototypes",
+        "-Wmissing-prototypes",
+        "-c",
+        "controllers/c/witness_controller.c",
+        "-o",
+        str(kernel),
+    ]
+
+
+def _verilator_command(
+    directory: Path, kernel: Path, thermal: int, *, rtl_coverage: bool
+) -> list[str]:
+    """Return the Verilator build of the API test against the production RTL and kernel.
+
+    Parameters
+    ----------
+    directory
+        Build directory.
+    kernel
+        Compiled controller kernel.
+    thermal
+        Mechanical (0) or thermal (1) production plant.
+    rtl_coverage
+        Whether to add RTL line coverage.
+
+    Returns
+    -------
+    list[str]
+        Build command.
+    """
+    compiler_flags = (
+        "-std=c++17 -Wall -Wextra -Werror --coverage -O2 -fdump-tree-cfg-lineno "
+        '-fprofile-exclude-files="Vaxi_control_witness|/share/verilator/"'
+        + (" -DWITNESS_RTL_COVERAGE" if rtl_coverage else "")
+    )
+    rtl = [
+        str(p.relative_to(REPOSITORY_ROOT))
+        for p in sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
+        if p.name != "event_codes_pkg.sv"
+    ]
+    return [
+        *("verilator", "--cc", "--exe", "--build", "--Wall"),
+        *(["--coverage-line"] if rtl_coverage else []),
+        *("--top-module", "axi_control_witness", "-j", "2"),
+        *("-GPERIOD_TICKS=32768", "-GADDRESS_BITS=5", "-GGROUP_ADDRESS_BITS=4"),
+        f"-GTHERMAL=1'b{thermal}",
+        *("--Mdir", str(directory), "-CFLAGS", compiler_flags),
+        *("-LDFLAGS", f"{kernel} --coverage -lcrypto"),
+        *("rtl/event_codes_pkg.sv", *rtl),
+        *(str(REPOSITORY_ROOT / name) for name in NATIVE_SOURCES),
+        *("-o", "run_lifecycle_test"),
+    ]
+
 
 @pytest.fixture(scope="module", params=[0, 1])
 def lifecycle_program(
@@ -47,57 +130,8 @@ def lifecycle_program(
     kernel = directory / "kernel.o"
     rtl_coverage = os.environ.get("WITNESS_RTL_COVERAGE") == "1"
     commands = [
-        [
-            "gcc",
-            "-std=gnu11",
-            "-O2",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wconversion",
-            "-Wshadow",
-            "-Wstrict-prototypes",
-            "-Wmissing-prototypes",
-            "-c",
-            "controllers/c/witness_controller.c",
-            "-o",
-            str(kernel),
-        ],
-        [
-            "verilator",
-            "--cc",
-            "--exe",
-            "--build",
-            "--Wall",
-            *(["--coverage-line"] if rtl_coverage else []),
-            "--top-module",
-            "axi_control_witness",
-            "-j",
-            "2",
-            "-GPERIOD_TICKS=32768",
-            "-GADDRESS_BITS=5",
-            "-GGROUP_ADDRESS_BITS=4",
-            f"-GTHERMAL=1'b{int(request.param)}",
-            "--Mdir",
-            str(directory),
-            "-CFLAGS",
-            "-std=c++17 -Wall -Wextra -Werror --coverage -O2 -fdump-tree-cfg-lineno "
-            '-fprofile-exclude-files="Vaxi_control_witness|/share/verilator/"'
-            + (" -DWITNESS_RTL_COVERAGE" if rtl_coverage else ""),
-            "-LDFLAGS",
-            f"{kernel} --coverage -lcrypto",
-            "rtl/event_codes_pkg.sv",
-            *[
-                str(p.relative_to(REPOSITORY_ROOT))
-                for p in sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
-                if p.name != "event_codes_pkg.sv"
-            ],
-            str(REPOSITORY_ROOT / "tests/native/run_lifecycle_test.cpp"),
-            str(REPOSITORY_ROOT / "runtime/run_configuration.cpp"),
-            str(REPOSITORY_ROOT / "runtime/linux/file_digest.cpp"),
-            "-o",
-            "run_lifecycle_test",
-        ],
+        _kernel_command(kernel),
+        _verilator_command(directory, kernel, int(request.param), rtl_coverage=rtl_coverage),
     ]
     for command in commands:
         result = subprocess.run(
@@ -218,19 +252,8 @@ def assert_retained_outputs(scenario: str, events: Path, raw: Path) -> None:
     elif scenario == "recover":
         assert events.stat().st_size > 0
         assert len(raw.read_text().splitlines()) == 1
-    elif scenario in {
-        "unstarted",
-        "duplicate",
-        "out_of_range",
-        "invalid_pid",
-        "invalid_lqr",
-        "run_timeout",
-    }:
-        assert events.read_bytes() == b""
-        assert len(raw.read_text().splitlines()) == (2 if scenario == "duplicate" else 1)
-        if scenario == "unstarted":
-            assert Path(str(events) + ".recovery").stat().st_size > 0
-            assert len(Path(str(raw) + ".recovery").read_text().splitlines()) == 3
+    elif scenario in EMPTY_CAPTURES:
+        _assert_empty_capture(scenario, events, raw)
     elif scenario == "header_limit":
         assert events.read_bytes() == b""
         assert raw.stat().st_size == 32
@@ -243,3 +266,33 @@ def assert_retained_outputs(scenario: str, events: Path, raw: Path) -> None:
     else:
         assert not events.exists()
         assert not raw.exists()
+
+
+# Scenarios that keep no FIFO bytes but keep the trace header and any rows.
+EMPTY_CAPTURES = {
+    "unstarted",
+    "duplicate",
+    "out_of_range",
+    "invalid_pid",
+    "invalid_lqr",
+    "run_timeout",
+}
+
+
+def _assert_empty_capture(scenario: str, events: Path, raw: Path) -> None:
+    """Check a scenario that keeps no FIFO bytes, and the unstarted run's recovery copies.
+
+    Parameters
+    ----------
+    scenario
+        One of the empty-capture lifecycle scenarios.
+    events
+        Actual binary FIFO output allocation.
+    raw
+        Actual controller trace allocation.
+    """
+    assert events.read_bytes() == b""
+    assert len(raw.read_text().splitlines()) == (2 if scenario == "duplicate" else 1)
+    if scenario == "unstarted":
+        assert Path(str(events) + ".recovery").stat().st_size > 0
+        assert len(Path(str(raw) + ".recovery").read_text().splitlines()) == 3

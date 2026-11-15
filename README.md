@@ -13,7 +13,7 @@ Loop Timing Witness — README
 [![Sponsor](https://img.shields.io/badge/Sponsor-anulum-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/anulum)
 [![PyPI](https://img.shields.io/pypi/v/loop-timing-witness.svg)](https://pypi.org/project/loop-timing-witness/)
 [![crates.io](https://img.shields.io/crates/v/witness-controller.svg)](https://crates.io/crates/witness-controller)
-[![DOI](https://zenodo.org/badge/doi/10.5281%2Fzenodo.24222960.svg)](https://doi.org/10.5281/zenodo.24222960)
+[![DOI](https://zenodo.org/badge/doi/10.5281%2Fzenodo.24263979.svg)](https://doi.org/10.5281/zenodo.24263979)
 [![CI](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml)
 [![Docs](https://github.com/anulum/loop-timing-witness/actions/workflows/docs.yml/badge.svg?branch=main)](https://anulum.github.io/loop-timing-witness/)
 [![CodeQL](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml)
@@ -184,7 +184,9 @@ The IRQ-free Linux AMP logger, mailbox startup and board qualification requireme
 
 ## Python package and native interfaces
 
-The software package version is `0.2.0`. It installs the typed
+The source tree's version is `0.3.0`. The published analysis package stays at `0.2.0`: its
+code changed only by behaviour-identical refactoring since then, so 0.3.0 is a source release.
+The package installs the typed
 `loop_timing_witness` API, packaged JSON schemas and the
 `loop-timing-witness-analyze` command. The package analyses existing hash-bound
 run records; native simulation, firmware preparation and hardware access remain
@@ -198,8 +200,8 @@ loop-timing-witness-analyze path/to/manifest.json --output-dir report
 ```
 
 The standalone `no_std` Rust controller is published as
-[`witness-controller`](https://crates.io/crates/witness-controller); its code is unchanged in
-0.2.0, so the registry keeps version 0.1.0:
+[`witness-controller`](https://crates.io/crates/witness-controller); its library is unchanged since
+0.1.0, so the registry keeps version 0.1.0:
 
 ```toml
 [dependencies]
@@ -288,6 +290,11 @@ The [0.2.0 source archive](https://doi.org/10.5281/zenodo.24222960) is a new ver
 same Zenodo record and binds the tagged 0.2.0 release commit; the
 [0.2.0 GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.2.0)
 includes its source ZIP and provenance manifest.
+The [0.3.0 source archive](https://doi.org/10.5281/zenodo.24263979) is the next version of that
+record and binds the tagged 0.3.0 release commit; the
+[0.3.0 GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.3.0)
+includes its source ZIP and provenance manifest. The registries keep the 0.2.0 analysis package
+and the 0.1.0 controller crate.
 Cite the software version and the commit you inspected. Software version numbers
 do not establish physical board qualification or measured platform performance.
 

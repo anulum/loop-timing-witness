@@ -12,6 +12,8 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Added
 
 - Closed-loop benchmark data: `make closed-loop-harness` builds a Verilator harness over the

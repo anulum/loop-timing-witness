@@ -20,9 +20,9 @@
   "license": "AGPL-3.0-or-later",
   "title": "Loop Timing Witness",
   "upload_type": "software",
-  "version": "0.2.0",
-  "publication_date": "2026-11-14",
-  "doi": "10.5281/zenodo.24222960",
+  "version": "0.3.0",
+  "publication_date": "2026-11-15",
+  "doi": "10.5281/zenodo.24263979",
   "related_identifiers": [
     {
       "identifier": "https://github.com/anulum/loop-timing-witness",

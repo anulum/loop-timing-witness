@@ -15,6 +15,7 @@ Loop Timing Witness — security policy
 | State | Supported |
 |---|---|
 | `main` at its current commit | yes — current development |
+| `0.3.0` | yes — source release; the analysis package stays 0.2.0 on PyPI |
 | `0.2.0` | yes — published analysis package |
 | `0.1.0` | yes — standalone controller crate and the earlier analysis package |
 

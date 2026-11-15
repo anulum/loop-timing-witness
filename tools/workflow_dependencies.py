@@ -60,6 +60,50 @@ def lock_commands(names: list[str]) -> tuple[list[str], list[str]]:
     return commands, unsupported
 
 
+def _step_findings(steps: list[Any], commands: list[str]) -> list[str]:
+    """Check the audit job's audit block and its pinned cargo-audit installation.
+
+    Parameters
+    ----------
+    steps
+        The audit job's steps.
+    commands
+        Expected audit commands, one per maintained lock.
+
+    Returns
+    -------
+    list[str]
+        A finding if the commands are not exactly one unconditional block, and
+        one if the installation block is not exactly the pinned one.
+    """
+    findings = []
+    audit_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and str(step.get("run", "")).splitlines() == commands
+    ]
+    if len(audit_steps) != 1 or set(audit_steps[0]) != {"name", "run"}:
+        findings.append("dependency audits: every lock needs one exact unconditional audit block")
+    installation_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict) and CARGO_AUDIT_INSTALL in str(step.get("run", "")).splitlines()
+    ]
+    if (
+        len(installation_steps) != 1
+        or set(installation_steps[0]) != {"name", "run"}
+        or str(installation_steps[0]["run"]).splitlines()
+        != [
+            RUST_TOOLCHAIN_INSTALL,
+            "rustup default 1.100.0",
+            CARGO_AUDIT_INSTALL,
+            'test "$(cargo-audit --version)" = "cargo-audit 0.23.0"',
+        ]
+    ):
+        findings.append("dependency audits: cargo-audit installation must keep its exact pin")
+    return findings
+
+
 def dependency_audit_findings(root: Path, workflows: dict[str, dict[str, Any]]) -> list[str]:
     """Check the real workflow graph and complete publishable lock surface.
 
@@ -97,31 +141,7 @@ def dependency_audit_findings(root: Path, workflows: dict[str, dict[str, Any]]) 
         "strategy",
     } & job.keys():
         findings.append("dependency audits: audit workflow/job must have no skipping or overrides")
-    steps = job.get("steps", [])
-    audit_steps = [
-        step
-        for step in steps
-        if isinstance(step, dict) and str(step.get("run", "")).splitlines() == commands
-    ]
-    if len(audit_steps) != 1 or set(audit_steps[0]) != {"name", "run"}:
-        findings.append("dependency audits: every lock needs one exact unconditional audit block")
-    installation_steps = [
-        step
-        for step in steps
-        if isinstance(step, dict) and CARGO_AUDIT_INSTALL in str(step.get("run", "")).splitlines()
-    ]
-    if (
-        len(installation_steps) != 1
-        or set(installation_steps[0]) != {"name", "run"}
-        or str(installation_steps[0]["run"]).splitlines()
-        != [
-            RUST_TOOLCHAIN_INSTALL,
-            "rustup default 1.100.0",
-            CARGO_AUDIT_INSTALL,
-            'test "$(cargo-audit --version)" = "cargo-audit 0.23.0"',
-        ]
-    ):
-        findings.append("dependency audits: cargo-audit installation must keep its exact pin")
+    findings.extend(_step_findings(job.get("steps", []), commands))
     if (root / ".cargo/audit.toml").exists():
         findings.append("dependency audits: advisory suppressions need an explicit reviewed policy")
     findings.extend(audit_call_findings(workflows))

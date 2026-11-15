@@ -14,21 +14,20 @@ import json
 import os
 import shutil
 import struct
-import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from amp_elf import admit_elf
 from amp_elf_symbols import read_symbols
-from amp_platform import bind_platform
 from amp_run_input import read_amp_run
-from amp_spike_command import SpikePaths, SpikeTools, spike_command
-from device_tree_blob import decode_device_tree
+from amp_target import spike_run, symbol_offset, target_platform
 from event_stream import decode_events
-from test_amp_spike_command import REQUEST
 
-from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
+
+if TYPE_CHECKING:
+    import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORM = struct.Struct("<II6Q")
@@ -55,17 +54,11 @@ def execute_damaged_contract(
     contract, field, value, cause, trap_value = case
     image = tmp_path / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
     firmware = image / "firmware.elf"
     original = firmware.read_bytes()
     symbol = read_symbols(original)[f"witness_amp_{contract}"]
-    segment = next(
-        segment
-        for segment in admit_elf(original, platform.memory.firmware)
-        if segment.address <= symbol.address < segment.address + segment.file_bytes
-    )
-    offset = segment.offset + symbol.address - segment.address
+    segments = admit_elf(original, target_platform(image)[1].memory.firmware)
+    offset = symbol_offset(segments, symbol.address)
     layout = PLATFORM if contract == "platform" else RUN
     fields = list(layout.unpack_from(original, offset))
     fields[field] = value
@@ -74,16 +67,6 @@ def execute_damaged_contract(
     firmware.write_bytes(altered)
     output = tmp_path / "execution"
     output.mkdir()
-    tools = SpikeTools(
-        Path(os.environ["WITNESS_SPIKE"]),
-        Path(os.environ["WITNESS_SPIKE_PLUGIN"]),
-        100,
-        10000000,
-    )
-    argv = spike_command(
-        tools, tree, platform, plic_path=REQUEST.plic.path, paths=SpikePaths(image, output)
-    )
-    (output / "command.json").write_text(json.dumps(argv), encoding="ascii")
     (output / "damaged-contract.json").write_text(
         json.dumps(
             {
@@ -97,10 +80,7 @@ def execute_damaged_contract(
         ),
         encoding="ascii",
     )
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr, encoding="ascii")
+    result = spike_run(image, Path(os.environ["WITNESS_SPIKE_PLUGIN"]), output)
     return result, output
 
 

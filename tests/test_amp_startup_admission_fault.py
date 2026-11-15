@@ -10,21 +10,13 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
-from amp_platform import bind_platform
-from amp_spike_command import SpikePaths, SpikeTools, spike_command
 from amp_startup_admission_fault_plugin import startup_admission_fault_plugin
-from device_tree_blob import decode_device_tree
-from test_amp_logger import FLAGS
-from test_amp_spike_command import REQUEST
-
-from loop_timing_witness.host_profile import scaled
+from amp_target import build_firmware, compile_command, link_command, spike_run
 
 ROOT = Path(__file__).resolve().parents[1]
 __all__ = ["startup_admission_fault_plugin"]
@@ -60,32 +52,9 @@ def test_actual_firmware_startup_admission_short_circuit(
     """
     image = tmp_path / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
     output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]), startup_admission_fault_plugin, 100, 10000000
-        ),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    environment = os.environ.copy()
-    environment["WITNESS_STARTUP_ADMISSION_FAULT"] = fault
-    result = subprocess.run(
-        argv,
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=scaled(30),
-        check=False,
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    environment = {**os.environ, "WITNESS_STARTUP_ADMISSION_FAULT": fault}
+    result = spike_run(image, startup_admission_fault_plugin, output, environment=environment)
     if fault == "submit-blocked":
         assert result.returncode == 0, result.stdout + result.stderr
         assert 'WITNESS_AMP_COMPLETION {"samples":3,"events":24,"misses":10' in result.stdout
@@ -125,26 +94,8 @@ def test_actual_zero_iteration_overload_skips_target_loop(
     tokens = configuration.read_text().split()
     tokens[19:24] = ["overload", "2", "1", "0", "0"]
     configuration.write_text(" ".join(tokens) + "\n")
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
     output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]),
-            Path(os.environ[plugin_environment]),
-            100,
-            10000000,
-        ),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    result = spike_run(image, Path(os.environ[plugin_environment]), output)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'WITNESS_AMP_COMPLETION {"samples":10,"events":41' in result.stdout
     rows = (output / "tracking_raw.csv").read_text().splitlines()
@@ -169,67 +120,14 @@ def test_actual_main_refuses_hart_changed_after_entry(
     image = tmp_path / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
     shutil.copy2(ROOT / "tests/native/amp_invalid_hart_main.c", image / "invalid_hart_main.c")
-    compiler = os.environ["WITNESS_RV64_CC"]
     commands = [
-        [
-            compiler,
-            *FLAGS,
-            "-Isource",
-            "-c",
-            "invalid_hart_main.c",
-            "-o",
-            "objects/invalid_hart_main.o",
-        ],
-        [
-            compiler,
-            *FLAGS,
-            "-nostdlib",
-            "-nostartfiles",
-            "-static",
-            "-no-pie",
-            "-Wl,--build-id=none",
-            "-Wl,--defsym=__witness_ram_origin=2147483648",
-            "-Wl,--defsym=__witness_ram_length=524288",
-            "-Wl,--defsym=__witness_stack_size=16384",
-            "-T",
-            "source/runtime/bare_metal/firmware.ld",
-            *["objects/input_" + str(index) + ".o" for index in range(5)],
-            "objects/invalid_hart_main.o",
-            "-Wl,--wrap=witness_amp_main",
-            "-o",
-            "firmware.elf",
-        ],
+        compile_command("invalid_hart_main", "-Isource"),
+        link_command(["objects/invalid_hart_main.o"], ["witness_amp_main"]),
     ]
-    (image / "invalid_hart_build.argv.json").write_text(json.dumps(commands, indent=2))
-    for index, command in enumerate(commands):
-        built = subprocess.run(command, cwd=image, capture_output=True, text=True, check=False)
-        (image / f"invalid_hart_build_{index}.log").write_text(built.stdout + built.stderr)
-        assert built.returncode == 0, built.stdout + built.stderr
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
+    build_firmware(image, commands, "invalid_hart_build")
     output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]), startup_admission_fault_plugin, 100, 10000000
-        ),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    environment = os.environ.copy()
-    environment["WITNESS_STARTUP_ADMISSION_FAULT"] = "hart-range"
-    result = subprocess.run(
-        argv,
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=scaled(30),
-        check=False,
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    environment = {**os.environ, "WITNESS_STARTUP_ADMISSION_FAULT": "hart-range"}
+    result = spike_run(image, startup_admission_fault_plugin, output, environment=environment)
     assert result.returncode != 0
     assert "AMP firmware refused or telemetry overflowed: cause=261 value=0" in result.stderr
     assert not (output / "events.bin").read_bytes()

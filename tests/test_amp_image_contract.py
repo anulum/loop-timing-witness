@@ -21,6 +21,7 @@ from amp_contract import render_contract
 from amp_elf_symbols import read_symbols
 from amp_image_contract import admit_image_contract
 from amp_platform import bind_platform
+from amp_target import FLAGS, STATIC_LINK
 from test_amp_contract import RUN
 from test_amp_device import PATH
 from test_amp_device import SELECTION as PLIC_SELECTION
@@ -63,26 +64,8 @@ def native_image(compile_tree: CompileTree, tmp_path: Path) -> tuple[bytes, AmpP
     subprocess.run(
         [
             compiler,
-            "-std=gnu11",
-            "-O2",
-            "-ffreestanding",
-            "-fno-builtin",
-            "-fno-pie",
-            "-march=rv64imac_zicsr_zifencei",
-            "-mabi=lp64",
-            "-mcmodel=medany",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wconversion",
-            "-Wshadow",
-            "-Wstrict-prototypes",
-            "-Wmissing-prototypes",
-            "-nostdlib",
-            "-nostartfiles",
-            "-static",
-            "-no-pie",
-            "-Wl,--build-id=none",
+            *FLAGS,
+            *STATIC_LINK,
             "-I.",
             "-Wl,--defsym=__witness_ram_origin=0x80000000",
             "-Wl,--defsym=__witness_ram_length=0x80000",

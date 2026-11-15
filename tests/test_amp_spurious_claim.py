@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 from amp_platform import bind_platform
 from amp_spike_command import SpikePaths, SpikeTools, spike_command
+from amp_target import build_firmware, compile_command, link_command
 from device_tree_blob import decode_device_tree
-from test_amp_logger import FLAGS
 from test_amp_spike_command import REQUEST
 
 from loop_timing_witness.host_profile import scaled
@@ -36,45 +36,11 @@ def spurious_claim_image(
     image = tmp_path_factory.mktemp("amp-spurious-claim-target") / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
     shutil.copy2(ROOT / "tests/native/amp_spurious_claim.c", image / "spurious_claim.c")
-    compiler = os.environ["WITNESS_RV64_CC"]
     commands = [
-        [
-            compiler,
-            *FLAGS,
-            "-Isource",
-            "-MD",
-            "-MF",
-            "objects/spurious_claim.o.d",
-            "-c",
-            "spurious_claim.c",
-            "-o",
-            "objects/spurious_claim.o",
-        ],
-        [
-            compiler,
-            *FLAGS,
-            "-nostdlib",
-            "-nostartfiles",
-            "-static",
-            "-no-pie",
-            "-Wl,--build-id=none",
-            "-Wl,--defsym=__witness_ram_origin=2147483648",
-            "-Wl,--defsym=__witness_ram_length=524288",
-            "-Wl,--defsym=__witness_stack_size=16384",
-            "-T",
-            "source/runtime/bare_metal/firmware.ld",
-            *["objects/input_" + str(index) + ".o" for index in range(5)],
-            "objects/spurious_claim.o",
-            "-Wl,--wrap=witness_amp_main",
-            "-o",
-            "firmware.elf",
-        ],
+        compile_command("spurious_claim", "-Isource", "-MD", "-MF", "objects/spurious_claim.o.d"),
+        link_command(["objects/spurious_claim.o"], ["witness_amp_main"]),
     ]
-    (image / "spurious_claim_build.argv.json").write_text(json.dumps(commands, indent=2))
-    for index, command in enumerate(commands):
-        result = subprocess.run(command, cwd=image, capture_output=True, text=True, check=False)
-        (image / f"spurious_claim_build_{index}.log").write_text(result.stdout + result.stderr)
-        assert result.returncode == 0, result.stdout + result.stderr
+    build_firmware(image, commands, "spurious_claim_build")
     return image, Path(os.environ[request.param])
 
 

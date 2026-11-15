@@ -14,16 +14,21 @@ import csv
 import json
 import os
 import shutil
-import struct
 import subprocess
 from io import StringIO
 from pathlib import Path
 
 import pytest
-from amp_elf import admit_elf
-from amp_elf_symbols import read_symbols
 from amp_platform import bind_platform
 from amp_spike_command import SpikePaths, SpikeTools, spike_command
+from amp_target import (
+    build_firmware,
+    compile_command,
+    link_command,
+    set_run_cycles,
+    spike_run,
+    write_symbol_words,
+)
 from device_tree_blob import decode_device_tree
 from event_stream import decode_events
 from test_amp_spike_command import REQUEST
@@ -33,23 +38,6 @@ from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
-FLAGS = [
-    "-std=gnu11",
-    "-O2",
-    "-ffreestanding",
-    "-fno-builtin",
-    "-fno-pie",
-    "-march=rv64imac_zicsr_zifencei",
-    "-mabi=lp64",
-    "-mcmodel=medany",
-    "-Wall",
-    "-Wextra",
-    "-Werror",
-    "-Wconversion",
-    "-Wshadow",
-    "-Wstrict-prototypes",
-    "-Wmissing-prototypes",
-]
 
 
 @pytest.fixture(scope="module", params=[False, True])
@@ -73,46 +61,11 @@ def logger_image(
     image = tmp_path_factory.mktemp("amp-logger-target") / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
     shutil.copy2(ROOT / "tests/native/amp_mailbox_fault.c", image / "mailbox_fault.c")
-    compiler = os.environ["WITNESS_RV64_CC"]
-    objects = ["objects/input_" + str(index) + ".o" for index in range(5)]
     commands = [
-        [
-            compiler,
-            *FLAGS,
-            "-Isource",
-            "-MD",
-            "-MF",
-            "objects/mailbox_fault.o.d",
-            "-c",
-            "mailbox_fault.c",
-            "-o",
-            "objects/mailbox_fault.o",
-        ],
-        [
-            compiler,
-            *FLAGS,
-            "-nostdlib",
-            "-nostartfiles",
-            "-static",
-            "-no-pie",
-            "-Wl,--build-id=none",
-            "-Wl,--defsym=__witness_ram_origin=2147483648",
-            "-Wl,--defsym=__witness_ram_length=524288",
-            "-Wl,--defsym=__witness_stack_size=16384",
-            "-T",
-            "source/runtime/bare_metal/firmware.ld",
-            *objects,
-            "objects/mailbox_fault.o",
-            "-Wl,--wrap=witness_amp_trap",
-            "-o",
-            "firmware.elf",
-        ],
+        compile_command("mailbox_fault", "-Isource", "-MD", "-MF", "objects/mailbox_fault.o.d"),
+        link_command(["objects/mailbox_fault.o"], ["witness_amp_trap"]),
     ]
-    (image / "fault_build.argv.json").write_text(json.dumps(commands, indent=2), encoding="ascii")
-    for index, argv in enumerate(commands):
-        result = subprocess.run(argv, cwd=image, capture_output=True, text=True, check=False)
-        (image / f"fault_build_{index}.log").write_text(result.stdout + result.stderr)
-        assert result.returncode == 0, result.stdout + result.stderr
+    build_firmware(image, commands, "fault_build")
     plugin = os.environ["WITNESS_SPIKE_THERMAL_PLUGIN" if request.param else "WITNESS_SPIKE_PLUGIN"]
     return image, Path(plugin)
 
@@ -167,70 +120,52 @@ def test_actual_target_mailbox_admission(
     original, plugin = logger_image
     image = tmp_path / "image"
     shutil.copytree(original, image)
-    firmware = image / "firmware.elf"
-    data = firmware.read_bytes()
-    symbols = read_symbols(data)
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
-    segments = admit_elf(data, platform.memory.firmware)
-    altered = bytearray(data)
-    for name, value in (("witness_amp_test_fault", fault), ("witness_amp_run", cycles)):
-        symbol = symbols[name]
-        segment = next(
-            part
-            for part in segments
-            if part.address <= symbol.address < part.address + part.file_bytes
-        )
-        struct.pack_into("<I", altered, segment.offset + symbol.address - segment.address, value)
-    firmware.write_bytes(altered)
-    configuration = image / "configuration.txt"
-    tokens = configuration.read_text().split()
-    tokens[1] = str(cycles)
-    configuration.write_text(" ".join(tokens) + "\n", encoding="ascii")
+    values = {"witness_amp_test_fault": fault, "witness_amp_run": cycles}
+    firmware = write_symbol_words(image, values)
+    words = set_run_cycles(image, cycles)
     output = tmp_path / "execution"
     output.mkdir()
     (output / "target-mutation.json").write_text(
         json.dumps({"fault": fault, "cycles": cycles, "elf_sha256": sha256_of_file(firmware)}),
         encoding="ascii",
     )
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]),
-            plugin,
-            100,
-            max(10000000, cycles * int(tokens[2]) * 10 + 1000000),
-        ),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    (output / "command.json").write_text(json.dumps(argv, indent=2), encoding="ascii")
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr, encoding="ascii")
+    limit = max(10000000, cycles * int(words[2]) * 10 + 1000000)
+    result = spike_run(image, plugin, output, limit)
     if finding:
         assert result.returncode != 0
         assert finding in result.stderr
         assert "WITNESS_AMP_COMPLETION" not in result.stdout
     else:
         assert result.returncode == 0, result.stdout + result.stderr
-        assert (
-            f'"samples":{cycles},"events":{cycles * 4},"misses":0,"overflow":0,"safe":false'
-            in result.stdout
-        )
-        assert (output / "events.bin").stat().st_size == cycles * 4 * 16
-        rows = list(csv.DictReader(StringIO((output / "tracking_raw.csv").read_text())))
-        assert [int(row["cycle"]) for row in rows] == list(range(cycles))
-        assert [int(row["irq_generation"]) for row in rows] == list(range(1, cycles + 1))
-        contracts = json.loads((ROOT / "measurement-domain.json").read_bytes())["design_contracts"]
-        events = decode_events((output / "events.bin").read_bytes(), contracts, "CONTROL", cycles)
-        samples = [event for event in events if event.name == "SAMPLE_READ"]
-        assert [event.cycle for event in samples] == list(range(cycles))
-        assert [event.ticks for event in samples] == [int(row["sample_ticks"]) for row in rows]
+        _check_complete_run(output, result.stdout, cycles)
     assert not (output / "capture.json").exists()
     assert not (output / "manifest.json").exists()
+
+
+def _check_complete_run(output: Path, stdout: str, cycles: int) -> None:
+    """Require every sample, event and tracking row of a complete target run.
+
+    Parameters
+    ----------
+    output
+        Raw execution outputs.
+    stdout
+        Spike standard output with the completion receipt.
+    cycles
+        Target cycle count.
+    """
+    assert (
+        f'"samples":{cycles},"events":{cycles * 4},"misses":0,"overflow":0,"safe":false' in stdout
+    )
+    assert (output / "events.bin").stat().st_size == cycles * 4 * 16
+    rows = list(csv.DictReader(StringIO((output / "tracking_raw.csv").read_text())))
+    assert [int(row["cycle"]) for row in rows] == list(range(cycles))
+    assert [int(row["irq_generation"]) for row in rows] == list(range(1, cycles + 1))
+    contracts = json.loads((ROOT / "measurement-domain.json").read_bytes())["design_contracts"]
+    events = decode_events((output / "events.bin").read_bytes(), contracts, "CONTROL", cycles)
+    samples = [event for event in events if event.name == "SAMPLE_READ"]
+    assert [event.cycle for event in samples] == list(range(cycles))
+    assert [event.ticks for event in samples] == [int(row["sample_ticks"]) for row in rows]
 
 
 @pytest.mark.parametrize(

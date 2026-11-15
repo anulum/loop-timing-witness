@@ -10,23 +10,14 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import struct
-import subprocess
 from itertools import pairwise
 from pathlib import Path
 
-from amp_elf import admit_elf
-from amp_elf_symbols import read_symbols
-from amp_platform import bind_platform
-from amp_spike_command import SpikePaths, SpikeTools, spike_command
 from amp_stall_plugin import stall_plugin
-from device_tree_blob import decode_device_tree
-from test_amp_spike_command import REQUEST
-
-from loop_timing_witness.host_profile import scaled
+from amp_target import set_run_cycles, spike_run, write_symbol_words
 
 ROOT = Path(__file__).resolve().parents[1]
 __all__ = ["stall_plugin"]
@@ -47,37 +38,10 @@ def test_actual_producer_refuses_stalled_consumer(tmp_path: Path, stall_plugin: 
     """
     image = tmp_path / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
-    firmware = image / "firmware.elf"
-    content = firmware.read_bytes()
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
-    symbol = read_symbols(content)["witness_amp_run"]
-    segment = next(
-        part
-        for part in admit_elf(content, platform.memory.firmware)
-        if part.address <= symbol.address < part.address + part.file_bytes
-    )
-    altered = bytearray(content)
-    struct.pack_into("<I", altered, segment.offset + symbol.address - segment.address, 300)
-    firmware.write_bytes(altered)
-    configuration = image / "configuration.txt"
-    tokens = configuration.read_text().split()
-    tokens[1] = "300"
-    configuration.write_text(" ".join(tokens) + "\n")
+    write_symbol_words(image, {"witness_amp_run": 300})
+    set_run_cycles(image, 300)
     output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(Path(os.environ["WITNESS_SPIKE"]), stall_plugin, 100, 100000000),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    result = spike_run(image, stall_plugin, output, 100000000)
     assert result.returncode != 0
     assert "AMP firmware refused or telemetry overflowed: cause=256 value=257" in result.stderr
     assert "WITNESS_AMP_COMPLETION" not in result.stdout

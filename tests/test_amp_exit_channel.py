@@ -17,6 +17,7 @@ import pytest
 from amp_elf import admit_elf
 from amp_elf_symbols import read_symbols
 from amp_exit_channel import admit_exit_channel
+from amp_target import symbol_offset
 from test_amp_image_contract import native_image
 from test_device_tree_resources import compile_tree
 
@@ -64,53 +65,82 @@ def test_original_completion_refusals(
     symbols = read_symbols(content)
     altered = bytearray(content)
     if corruption == "preloaded":
-        symbol = symbols["tohost"]
-        owner = next(
-            segment
-            for segment in segments
-            if segment.address <= symbol.address < segment.address + segment.file_bytes
-        )
-        altered[owner.offset + symbol.address - owner.address] = 1
+        altered[symbol_offset(segments, symbols["tohost"].address)] = 1
         finding = "cannot be preloaded"
     else:
-        header = HEADER.unpack_from(content)
-        sections = [
-            SECTION.unpack_from(content, int(header[6]) + i * SECTION.size)
-            for i in range(int(header[12]))
-        ]
-        table = next(section for section in sections if section[1] == 2)
-        strings = sections[table[6]]
-        names = content[strings[4] : strings[4] + strings[5]]
         assert "tohost" in symbols, "original compiler did not emit HTIF symbol"
-        records = {
-            offset: SYMBOL.unpack_from(content, offset)
-            for offset in range(table[4], table[4] + table[5], SYMBOL.size)
-        }
-        globals_by_name = {
-            names[fields[0] : names.find(b"\0", fields[0])].decode("ascii"): offset
-            for offset, fields in records.items()
-            if fields[1] >> 4 in (1, 2)
-        }
-        offset = globals_by_name["tohost"]
-        fields = list(records[offset])
-        if corruption == "missing":
-            fields[1] = 1
-            finding = "requires both"
-        elif corruption == "kind":
-            fields[1] = 18
-            finding = "aligned writable"
-        elif corruption == "size":
-            fields[5] = 16
-            finding = "aligned writable"
-        elif corruption == "alignment":
-            fields[4] += 1
-            finding = "aligned writable"
-        elif corruption == "outside":
-            fields[4] = 0x80040000
-            finding = "aligned writable"
-        else:
-            fields[4] = symbols["fromhost"].address
-            finding = "distinct original"
+        offset, fields = _global_symbol_record(content, "tohost")
+        finding = _damage_symbol_record(fields, corruption, symbols["fromhost"].address)
         SYMBOL.pack_into(altered, offset, *fields)
     with pytest.raises(ValueError, match=finding):
         admit_exit_channel(bytes(altered), segments, isa=True)
+
+
+def _global_symbol_record(content: bytes, name: str) -> tuple[int, list[int]]:
+    """Return the file offset and fields of one global or weak ELF symbol record.
+
+    Parameters
+    ----------
+    content
+        Original ELF image.
+    name
+        Symbol name.
+
+    Returns
+    -------
+    tuple[int, list[int]]
+        Record offset in the file and its fields in ``SYMBOL`` order.
+    """
+    header = HEADER.unpack_from(content)
+    sections = [
+        SECTION.unpack_from(content, int(header[6]) + i * SECTION.size)
+        for i in range(int(header[12]))
+    ]
+    table = next(section for section in sections if section[1] == 2)
+    strings = sections[table[6]]
+    names = content[strings[4] : strings[4] + strings[5]]
+    records = {
+        offset: SYMBOL.unpack_from(content, offset)
+        for offset in range(table[4], table[4] + table[5], SYMBOL.size)
+    }
+    globals_by_name = {
+        names[fields[0] : names.find(b"\0", fields[0])].decode("ascii"): offset
+        for offset, fields in records.items()
+        if fields[1] >> 4 in (1, 2)
+    }
+    offset = globals_by_name[name]
+    return offset, list(records[offset])
+
+
+def _damage_symbol_record(fields: list[int], corruption: str, fromhost: int) -> str:
+    """Damage the HTIF completion symbol record in place.
+
+    Parameters
+    ----------
+    fields
+        ``tohost`` record fields, changed in place.
+    corruption
+        Exact record corruption.
+    fromhost
+        Address of the original ``fromhost`` symbol.
+
+    Returns
+    -------
+    str
+        Required refusal text.
+    """
+    if corruption == "missing":
+        fields[1] = 1
+        return "requires both"
+    if corruption == "kind":
+        fields[1] = 18
+    elif corruption == "size":
+        fields[5] = 16
+    elif corruption == "alignment":
+        fields[4] += 1
+    elif corruption == "outside":
+        fields[4] = 0x80040000
+    else:
+        fields[4] = fromhost
+        return "distinct original"
+    return "aligned writable"

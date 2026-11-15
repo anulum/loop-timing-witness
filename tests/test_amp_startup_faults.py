@@ -13,23 +13,58 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 from amp_elf import admit_elf
 from amp_elf_symbols import read_symbols
-from amp_platform import bind_platform
-from amp_spike_command import SpikePaths, SpikeTools, spike_command
-from device_tree_blob import decode_device_tree
-from test_amp_logger import FLAGS, logger_image
-from test_amp_spike_command import REQUEST
+from amp_target import (
+    build_firmware,
+    compile_command,
+    link_command,
+    spike_run,
+    symbol_offset,
+    target_platform,
+)
+from test_amp_logger import logger_image
 
-from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
 
 ROOT = Path(__file__).resolve().parents[1]
 __all__ = ["logger_image"]
+
+
+def _replace_main_instructions(image: Path, original: str, damaged: str) -> tuple[Path, int]:
+    """Replace one original instruction sequence inside the target main function.
+
+    Parameters
+    ----------
+    image
+        Image directory with ``firmware.elf`` and ``platform.dtb``.
+    original
+        Hexadecimal instruction bytes that must occur exactly once in main.
+    damaged
+        Hexadecimal replacement of the same length.
+
+    Returns
+    -------
+    tuple[Path, int]
+        Changed firmware file and the file offset of the replaced bytes.
+    """
+    firmware = image / "firmware.elf"
+    content = firmware.read_bytes()
+    symbol = read_symbols(content)["witness_amp_main"]
+    segments = admit_elf(content, target_platform(image)[1].memory.firmware)
+    start = symbol_offset(segments, symbol.address)
+    body = content[start : start + symbol.size]
+    before, after = bytes.fromhex(original), bytes.fromhex(damaged)
+    assert len(before) == len(after)
+    assert body.count(before) == 1, "original compiler startup store sequence changed"
+    offset = start + body.index(before)
+    altered = bytearray(content)
+    altered[offset : offset + len(before)] = after
+    firmware.write_bytes(altered)
+    return firmware, offset
 
 
 @pytest.mark.parametrize("thermal", [0, 1])
@@ -77,25 +112,7 @@ def test_actual_startup_publication_fault(
     name, original, damaged, finding = case
     image = tmp_path / "image"
     shutil.copytree(os.environ["WITNESS_AMP_IMAGE"], image)
-    firmware = image / "firmware.elf"
-    content = firmware.read_bytes()
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
-    symbol = read_symbols(content)["witness_amp_main"]
-    segment = next(
-        part
-        for part in admit_elf(content, platform.memory.firmware)
-        if part.address <= symbol.address < part.address + part.file_bytes
-    )
-    start = segment.offset + symbol.address - segment.address
-    body = content[start : start + symbol.size]
-    before, after = bytes.fromhex(original), bytes.fromhex(damaged)
-    assert len(before) == len(after)
-    assert body.count(before) == 1, "original compiler startup store sequence changed"
-    offset = start + body.index(before)
-    altered = bytearray(content)
-    altered[offset : offset + len(before)] = after
-    firmware.write_bytes(altered)
+    firmware, offset = _replace_main_instructions(image, original, damaged)
     output = tmp_path / "execution"
     output.mkdir()
     (output / "target-mutation.json").write_text(
@@ -109,20 +126,8 @@ def test_actual_startup_publication_fault(
             }
         )
     )
-    tools = SpikeTools(
-        Path(os.environ["WITNESS_SPIKE"]),
-        Path(os.environ["WITNESS_SPIKE_THERMAL_PLUGIN" if thermal else "WITNESS_SPIKE_PLUGIN"]),
-        100,
-        10000000,
-    )
-    argv = spike_command(
-        tools, tree, platform, plic_path=REQUEST.plic.path, paths=SpikePaths(image, output)
-    )
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    plugin = os.environ["WITNESS_SPIKE_THERMAL_PLUGIN" if thermal else "WITNESS_SPIKE_PLUGIN"]
+    result = spike_run(image, Path(plugin), output)
     assert result.returncode != 0
     assert finding in result.stderr
     assert "WITNESS_AMP_COMPLETION" not in result.stdout
@@ -148,52 +153,16 @@ def test_actual_delayed_firmware_initialization(
     image = tmp_path / "image"
     shutil.copytree(original, image)
     shutil.copy2(ROOT / "tests/native/amp_boot_delay.c", image / "boot_delay.c")
-    compiler = os.environ["WITNESS_RV64_CC"]
     commands = [
-        [compiler, *FLAGS, "-c", "boot_delay.c", "-o", "objects/boot_delay.o"],
-        [
-            compiler,
-            *FLAGS,
-            "-nostdlib",
-            "-nostartfiles",
-            "-static",
-            "-no-pie",
-            "-Wl,--build-id=none",
-            "-Wl,--defsym=__witness_ram_origin=2147483648",
-            "-Wl,--defsym=__witness_ram_length=524288",
-            "-Wl,--defsym=__witness_stack_size=16384",
-            "-T",
-            "source/runtime/bare_metal/firmware.ld",
-            *["objects/input_" + str(index) + ".o" for index in range(5)],
-            "objects/mailbox_fault.o",
-            "objects/boot_delay.o",
-            "-Wl,--wrap=witness_amp_trap",
-            "-Wl,--wrap=witness_amp_main",
-            "-o",
-            "firmware.elf",
-        ],
+        compile_command("boot_delay"),
+        link_command(
+            ["objects/mailbox_fault.o", "objects/boot_delay.o"],
+            ["witness_amp_trap", "witness_amp_main"],
+        ),
     ]
-    (image / "delay_build.argv.json").write_text(json.dumps(commands, indent=2))
-    for index, command in enumerate(commands):
-        built = subprocess.run(command, cwd=image, capture_output=True, text=True, check=False)
-        (image / f"delay_build_{index}.log").write_text(built.stdout + built.stderr)
-        assert built.returncode == 0, built.stdout + built.stderr
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
+    build_firmware(image, commands, "delay_build")
     output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(Path(os.environ["WITNESS_SPIKE"]), plugin, 100, 10000000),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    result = spike_run(image, plugin, output)
     assert result.returncode == 0, result.stdout + result.stderr
     assert '"samples":10,"events":40,"misses":0,"overflow":0,"safe":false' in result.stdout
     assert (output / "events.bin").stat().st_size == 640

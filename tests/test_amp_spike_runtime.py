@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 from amp_platform import bind_platform
 from amp_spike_command import SpikePaths, SpikeTools, spike_command
+from amp_target import run_argv, spike_argv, spike_run
 from device_tree_blob import decode_device_tree
 from prepare_amp_image import BuildInputs, prepare_image
 from test_amp_spike_command import REQUEST, SOURCE
@@ -88,38 +89,10 @@ def test_native_plugin_refusal(
         Required native refusal before a completed capture can be claimed.
     """
     image = Path(os.environ["WITNESS_AMP_IMAGE"])
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
     output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]), Path(os.environ[plugin_environment]), 100, 1000000000
-        ),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    index = next(i for i, text in enumerate(argv) if text.startswith("--device=witness_axi,"))
-    fields = argv[index].split(",")[1:]
-    assert len(fields) == 8
-    if field == -1:
-        fields.append(value)
-    elif field == -2:
-        fields.pop()
-    else:
-        if value.endswith(("ram", "ram-end")):
-            memory = next(text for text in argv if text.startswith("-m"))
-            start, size = map(int, memory[2:].split(":"))
-            value = str(start + size + {"ram-end": 0, "beyond-ram": 8, "near-ram-end": -8}[value])
-        fields[field] = value
-    argv[index] = "--device=witness_axi," + ",".join(fields)
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    plugin = Path(os.environ[plugin_environment])
+    argv = _changed_device_argument(spike_argv(image, plugin, output, 1000000000), field, value)
+    result = run_argv(argv, output)
     assert result.returncode != 0
     assert finding in result.stderr
     assert "WITNESS_AMP_COMPLETION" not in result.stdout
@@ -318,8 +291,6 @@ def test_actual_native_topology_refusal(
         Required native admission refusal before target execution.
     """
     image = Path(os.environ["WITNESS_AMP_IMAGE"])
-    original = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(original, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
     assert SOURCE.count(old) == 1
     source = tmp_path / "native-topology.dts"
     source.write_text(SOURCE.replace(old, new))
@@ -334,21 +305,9 @@ def test_actual_native_topology_refusal(
     )
     (tmp_path / "dtc.log").write_text(compiled.stdout + compiled.stderr)
     assert compiled.returncode == 0, compiled.stderr
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]), Path(os.environ[plugin_environment]), 100, 10000000
-        ),
-        original,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, tmp_path),
-    )
+    argv = spike_argv(image, Path(os.environ[plugin_environment]), tmp_path)
     argv = ["--dtb=" + str(dtb) if text.startswith("--dtb=") else text for text in argv]
-    (tmp_path / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (tmp_path / "spike.log").write_text(result.stdout + result.stderr)
+    result = run_argv(argv, tmp_path)
     assert result.returncode != 0
     assert finding in result.stderr
     assert "WITNESS_AMP_COMPLETION" not in result.stdout
@@ -414,7 +373,76 @@ def test_actual_native_safe_completion(tmp_path: Path, plugin_environment: str) 
     plugin_environment
         Mechanical or thermal actual production RTL selection.
     """
-    original = Path(os.environ["WITNESS_AMP_IMAGE"])
+    image = _built_freeze_image(Path(os.environ["WITNESS_AMP_IMAGE"]), tmp_path)
+    output = tmp_path / "execution"
+    result = spike_run(image, Path(os.environ[plugin_environment]), output)
+    assert result.returncode == 0, result.stdout + result.stderr
+    completion = json.loads(
+        next(
+            line.removeprefix("WITNESS_AMP_COMPLETION ")
+            for line in result.stdout.splitlines()
+            if line.startswith("WITNESS_AMP_COMPLETION ")
+        )
+    )
+    assert completion["safe"] is True
+    assert completion["samples"] == 6
+    assert completion["events"] == 32
+    assert completion["misses"] == 7
+    assert completion["overflow"] == 0
+    assert not (output / "capture.json").exists()
+    assert not (output / "manifest.json").exists()
+
+
+def _changed_device_argument(argv: list[str], field: int, value: str) -> list[str]:
+    """Return the Spike command with one witness device argument added, removed or replaced.
+
+    Parameters
+    ----------
+    argv
+        Original Spike command.
+    field
+        Argument index; ``-1`` appends ``value`` and ``-2`` removes the last argument.
+    value
+        Replacement; ``ram-end``, ``beyond-ram`` and ``near-ram-end`` name addresses
+        relative to the end of the selected RAM.
+
+    Returns
+    -------
+    list[str]
+        Changed command.
+    """
+    index = next(i for i, text in enumerate(argv) if text.startswith("--device=witness_axi,"))
+    fields = argv[index].split(",")[1:]
+    assert len(fields) == 8
+    if field == -1:
+        fields.append(value)
+    elif field == -2:
+        fields.pop()
+    else:
+        if value.endswith(("ram", "ram-end")):
+            memory = next(text for text in argv if text.startswith("-m"))
+            start, size = map(int, memory[2:].split(":"))
+            value = str(start + size + {"ram-end": 0, "beyond-ram": 8, "near-ram-end": -8}[value])
+        fields[field] = value
+    argv[index] = "--device=witness_axi," + ",".join(fields)
+    return argv
+
+
+def _built_freeze_image(original: Path, tmp_path: Path) -> Path:
+    """Prepare and build an image whose plant freezes for four periods from cycle three.
+
+    Parameters
+    ----------
+    original
+        Original image with its configuration and device tree.
+    tmp_path
+        Owned directory for the configuration, the image and the build log.
+
+    Returns
+    -------
+    Path
+        Built image directory.
+    """
     words = (original / "configuration.txt").read_text().split()
     words[19:24] = ["freeze", "3", "4", "0", "0"]
     configuration = tmp_path / "configuration.txt"
@@ -440,36 +468,4 @@ def test_actual_native_safe_completion(tmp_path: Path, plugin_environment: str) 
     )
     (tmp_path / "build.log").write_text(build.stdout + build.stderr)
     assert build.returncode == 0, build.stdout + build.stderr
-    output = tmp_path / "execution"
-    output.mkdir()
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
-    argv = spike_command(
-        SpikeTools(
-            Path(os.environ["WITNESS_SPIKE"]), Path(os.environ[plugin_environment]), 100, 10000000
-        ),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    result = subprocess.run(
-        argv, cwd=ROOT, capture_output=True, text=True, timeout=scaled(30), check=False
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
-    assert result.returncode == 0, result.stdout + result.stderr
-    completion = json.loads(
-        next(
-            line.removeprefix("WITNESS_AMP_COMPLETION ")
-            for line in result.stdout.splitlines()
-            if line.startswith("WITNESS_AMP_COMPLETION ")
-        )
-    )
-    assert completion["safe"] is True
-    assert completion["samples"] == 6
-    assert completion["events"] == 32
-    assert completion["misses"] == 7
-    assert completion["overflow"] == 0
-    assert not (output / "capture.json").exists()
-    assert not (output / "manifest.json").exists()
+    return image

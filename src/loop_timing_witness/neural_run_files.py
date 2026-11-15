@@ -51,16 +51,62 @@ def _read(directory: Path, name: str, limit: int, *, portable: bool = True) -> b
     NeuralCaptureRefusalError
         If placement, file kind, readability or allocation cannot be established.
     """
-    if portable and (
-        not name
-        or len(name) > _PATH_LIMIT
-        or any(
-            part in {"", ".", ".."} or re.fullmatch(r"[A-Za-z0-9_.-]+", part) is None
-            for part in name.split("/")
-        )
-    ):
+    if portable and not _portable(name):
         message = f"Invalid within-run original path: {name}."
         raise NeuralCaptureRefusalError(message)
+    raw = _read_without_links(directory, name, limit)
+    if len(raw) > limit:
+        message = f"Original file exceeds allocation: {name}."
+        raise NeuralCaptureRefusalError(message)
+    return raw
+
+
+def _portable(name: str) -> bool:
+    """Tell whether a within-run name is a canonical portable relative path.
+
+    Parameters
+    ----------
+    name
+        Referenced within-root name.
+
+    Returns
+    -------
+    bool
+        Whether the name is non-empty, at most 4,096 characters, and every
+        component is a non-dot run of letters, digits, ``_``, ``.`` and ``-``.
+    """
+    return (
+        bool(name)
+        and len(name) <= _PATH_LIMIT
+        and all(
+            part not in {"", ".", ".."} and re.fullmatch(r"[A-Za-z0-9_.-]+", part) is not None
+            for part in name.split("/")
+        )
+    )
+
+
+def _read_without_links(directory: Path, name: str, limit: int) -> bytes:
+    """Read at most one byte past the limit through no-follow directory descriptors.
+
+    Parameters
+    ----------
+    directory
+        Selected immutable acquisition root.
+    name
+        Within-root name whose components are opened one by one.
+    limit
+        Allocation; one extra byte is read to detect an excess.
+
+    Returns
+    -------
+    bytes
+        File data, possibly one byte longer than the limit.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        Naming the step that failed, or if the file is not regular.
+    """
     # Each failure names the step it interrupted, as the native reader does.
     stage = "Run directory descriptor unavailable."
     try:
@@ -86,10 +132,58 @@ def _read(directory: Path, name: str, limit: int, *, portable: bool = True) -> b
                 raw = stream.read(limit + 1)
     except OSError as exc:
         raise NeuralCaptureRefusalError(stage) from exc
-    if len(raw) > limit:
-        message = f"Original file exceeds allocation: {name}."
-        raise NeuralCaptureRefusalError(message)
     return raw
+
+
+def _reference_valid(reference: dict[object, object], maximum_bytes: int) -> bool:
+    """Tell whether a file reference and its allocation have the closed typed form.
+
+    Parameters
+    ----------
+    reference
+        Decoded file reference object.
+    maximum_bytes
+        Caller-owned allocation, at most 8 MiB.
+
+    Returns
+    -------
+    bool
+        Whether the allocation is a supported integer and the reference holds
+        exactly a text path, a lowercase SHA-256 and a length within it.
+    """
+    path, digest, length = (reference.get(key) for key in ("path", "sha256", "byte_length"))
+    return (
+        type(maximum_bytes) is int
+        and 0 <= maximum_bytes <= 8 * 1024 * 1024
+        and set(reference) == {"path", "sha256", "byte_length"}
+        and type(path) is str
+        and type(digest) is str
+        and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+        and type(length) is int
+        and 0 <= length <= maximum_bytes
+    )
+
+
+def _reference_refusal(reference: object) -> NeuralCaptureRefusalError:
+    """Return the refusal of an invalid file reference, naming its path when it has one.
+
+    Parameters
+    ----------
+    reference
+        Refused file reference.
+
+    Returns
+    -------
+    NeuralCaptureRefusalError
+        Refusal naming the reference's text ``path``, or a generic refusal.
+    """
+    name = reference.get("path") if isinstance(reference, dict) else None
+    message = (
+        f"Invalid original file reference: {name}."
+        if type(name) is str
+        else "Invalid original file reference."
+    )
+    return NeuralCaptureRefusalError(message)
 
 
 def read_neural_run_file(
@@ -126,24 +220,8 @@ def read_neural_run_file(
     NeuralCaptureRefusalError
         If fields, types, allocation, file placement or complete identity fail.
     """
-    if (
-        type(maximum_bytes) is not int
-        or not 0 <= maximum_bytes <= 8 * 1024 * 1024
-        or not isinstance(reference, dict)
-        or set(reference) != {"path", "sha256", "byte_length"}
-        or type(reference["path"]) is not str
-        or type(reference["sha256"]) is not str
-        or re.fullmatch(r"[0-9a-f]{64}", reference["sha256"]) is None
-        or type(reference["byte_length"]) is not int
-        or not 0 <= reference["byte_length"] <= maximum_bytes
-    ):
-        name = reference.get("path") if isinstance(reference, dict) else None
-        message = (
-            f"Invalid original file reference: {name}."
-            if type(name) is str
-            else "Invalid original file reference."
-        )
-        raise NeuralCaptureRefusalError(message)
+    if not isinstance(reference, dict) or not _reference_valid(reference, maximum_bytes):
+        raise _reference_refusal(reference)
     raw = _read(directory, reference["path"], reference["byte_length"])
     if expected_bytes is not None and raw != expected_bytes:
         raise NeuralCaptureRefusalError(mismatch_message)

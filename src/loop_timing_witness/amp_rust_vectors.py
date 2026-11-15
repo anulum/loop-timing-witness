@@ -16,6 +16,26 @@ CORE = "controllers/rust"
 ADAPTER = "runtime/bare_metal/rust_kernel"
 
 
+_RELEASE_FLAGS = (
+    "-C",
+    "panic=abort",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "overflow-checks=yes",
+    "-C",
+    "codegen-units=1",
+    "-D",
+    "warnings",
+    "-D",
+    "missing_docs",
+    "-D",
+    "improper_ctypes",
+    "-D",
+    "improper_ctypes_definitions",
+)
+
+
 def rust_vectors(compiler: str, *, metadata: bool) -> list[list[str]]:
     """Construct complete literal Rust compiler vectors without ambient Cargo configuration.
 
@@ -38,28 +58,33 @@ def rust_vectors(compiler: str, *, metadata: bool) -> list[list[str]]:
         TARGET,
         "--sysroot",
         str(Path(compiler).parent.parent),
-        "-C",
-        "panic=abort",
-        "-C",
-        "opt-level=3",
-        "-C",
-        "overflow-checks=yes",
-        "-C",
-        "codegen-units=1",
-        "-D",
-        "warnings",
-        "-D",
-        "missing_docs",
-        "-D",
-        "improper_ctypes",
-        "-D",
-        "improper_ctypes_definitions",
+        *_RELEASE_FLAGS,
     ]
     output = "rust_metadata" if metadata else "objects/rust"
-    suffix = "rmeta" if metadata else "rlib"
-    core = f"{output}/libwitness_controller.{suffix}"
+    core = f"{output}/libwitness_controller.{'rmeta' if metadata else 'rlib'}"
     emit = "metadata" if metadata else "link"
-    first = [
+    return [
+        _core_vector(prefix, output, emit, core),
+        _adapter_vector(prefix, output, emit, core, metadata=metadata),
+    ]
+
+
+def _core_vector(prefix: list[str], output: str, emit: str, core: str) -> list[str]:
+    """Return the vector compiling the safe controller core library.
+
+    Parameters
+    ----------
+    prefix
+        Compiler, edition, target, sysroot and release flags.
+    output, emit, core
+        Output directory, emitted kind and the core library path.
+
+    Returns
+    -------
+    list[str]
+        Core-library vector refusing unsafe code.
+    """
+    return [
         *prefix,
         "--crate-name",
         "witness_controller",
@@ -73,7 +98,28 @@ def rust_vectors(compiler: str, *, metadata: bool) -> list[list[str]]:
         "-o",
         core,
     ]
-    second = [
+
+
+def _adapter_vector(
+    prefix: list[str], output: str, emit: str, core: str, *, metadata: bool
+) -> list[str]:
+    """Return the vector compiling the bare-metal adapter static library.
+
+    Parameters
+    ----------
+    prefix
+        Compiler, edition, target, sysroot and release flags.
+    output, emit, core
+        Output directory, emitted kind and the core library it links.
+    metadata
+        Whether only metadata is emitted.
+
+    Returns
+    -------
+    list[str]
+        Adapter vector linking the core library.
+    """
+    return [
         *prefix,
         "--crate-name",
         "witness_amp_rust_kernel",
@@ -89,4 +135,3 @@ def rust_vectors(compiler: str, *, metadata: bool) -> list[list[str]]:
         "-o",
         f"{output}/libwitness_amp_rust_kernel.{'rmeta' if metadata else 'a'}",
     ]
-    return [first, second]

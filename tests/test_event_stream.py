@@ -23,6 +23,41 @@ MakeRtlRun = Callable[[], tuple[Path, dict[str, Any]]]
 RunTool = Callable[..., subprocess.CompletedProcess[str]]
 
 
+def _corrupt(raw: bytearray, variant: str) -> None:
+    """Apply one corruption to a real CONTROL event stream.
+
+    Parameters
+    ----------
+    raw
+        Event stream, changed in place.
+    variant
+        Corruption: an empty or partial stream, a set reserved bit or word, an
+        unknown or foreign event code, a cycle outside the run, regressing ticks
+        or cycle, or a repeated event.
+    """
+    if variant == "empty":
+        raw.clear()
+    elif variant == "partial":
+        raw.pop()
+    elif variant == "reserved":
+        raw[1] = 1
+    elif variant == "reserved_word":
+        raw[2:4] = (1).to_bytes(2, "little")
+    elif variant == "unknown_code":
+        raw[0] = 255
+    elif variant == "foreign_profile":
+        raw[0] = 8
+    elif variant == "cycle_outside":
+        raw[4:8] = (3).to_bytes(4, "little")
+    elif variant == "ticks_regress":
+        raw[16 + 8 : 16 + 16] = (5).to_bytes(8, "little")
+    elif variant == "cycle_regress":
+        raw[5 * 16 + 4 : 5 * 16 + 8] = (0).to_bytes(4, "little")
+    else:
+        assert variant == "duplicate_event"
+        raw[16] = 1
+
+
 @pytest.mark.parametrize(
     ("variant", "finding"),
     [
@@ -62,27 +97,7 @@ def test_corrupt_rtl_event_record_is_refused(
     """
     run, manifest = make_rtl_run()
     raw = bytearray((run / "events.bin").read_bytes())
-    if variant == "empty":
-        raw.clear()
-    elif variant == "partial":
-        raw.pop()
-    elif variant == "reserved":
-        raw[1] = 1
-    elif variant == "reserved_word":
-        raw[2:4] = (1).to_bytes(2, "little")
-    elif variant == "unknown_code":
-        raw[0] = 255
-    elif variant == "foreign_profile":
-        raw[0] = 8
-    elif variant == "cycle_outside":
-        raw[4:8] = (3).to_bytes(4, "little")
-    elif variant == "ticks_regress":
-        raw[16 + 8 : 16 + 16] = (5).to_bytes(8, "little")
-    elif variant == "cycle_regress":
-        raw[5 * 16 + 4 : 5 * 16 + 8] = (0).to_bytes(4, "little")
-    else:
-        assert variant == "duplicate_event"
-        raw[16] = 1
+    _corrupt(raw, variant)
     (run / "events.bin").write_bytes(raw)
     manifest["files"]["events"]["sha256"] = hashlib.sha256(raw).hexdigest()
     (run / "manifest.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")

@@ -205,6 +205,45 @@ def _reject_other_ram_alias(tree: DeviceTree, memory: ReservedMemory, selected_p
                 raise ValueError(message)
 
 
+def _check_ram(tree: DeviceTree, memory: ReservedMemory, ram_path: str) -> None:
+    """Require each reservation to lie in exactly one bank of the enabled backing RAM.
+
+    Parameters
+    ----------
+    tree
+        Original verified binary device-tree topology.
+    memory
+        Firmware and telemetry reservations.
+    ram_path
+        Selected backing RAM node path.
+
+    Raises
+    ------
+    ValueError
+        If the node is not an enabled memory node, or a reservation is not covered
+        by exactly one of its banks.
+    """
+    ram = tree.nodes.get(ram_path)
+    if (
+        ram is None
+        or ram.properties.get("device_type") != b"memory\0"
+        or ram.properties.get("status", b"okay\0") not in (b"okay\0", b"ok\0")
+    ):
+        message = "AMP backing RAM must be an enabled original memory node"
+        raise ValueError(message)
+    banks = register_regions(tree, ram_path)
+    for owner in (memory.firmware, memory.shared):
+        covering = [
+            bank
+            for bank in banks
+            if bank.address <= owner.address
+            and owner.address + owner.size <= bank.address + bank.size
+        ]
+        if len(covering) != 1:
+            message = "AMP reservation lacks one complete unambiguous original RAM bank"
+            raise ValueError(message)
+
+
 def bind_memory(tree: DeviceTree, selection: MemorySelection) -> ReservedMemory:
     """Validate entire image/shared reservations and explicit requested ABI and stack bounds.
 
@@ -248,25 +287,7 @@ def bind_memory(tree: DeviceTree, selection: MemorySelection) -> ReservedMemory:
     if selection.mailbox_bytes > memory.shared.size or selection.stack_bytes > memory.firmware.size:
         message = "requested telemetry ABI or stack exceeds its original reservation"
         raise ValueError(message)
-    ram = tree.nodes.get(selection.ram_path)
-    if (
-        ram is None
-        or ram.properties.get("device_type") != b"memory\0"
-        or ram.properties.get("status", b"okay\0") not in (b"okay\0", b"ok\0")
-    ):
-        message = "AMP backing RAM must be an enabled original memory node"
-        raise ValueError(message)
-    banks = register_regions(tree, selection.ram_path)
-    for owner in (memory.firmware, memory.shared):
-        covering = [
-            bank
-            for bank in banks
-            if bank.address <= owner.address
-            and owner.address + owner.size <= bank.address + bank.size
-        ]
-        if len(covering) != 1:
-            message = "AMP reservation lacks one complete unambiguous original RAM bank"
-            raise ValueError(message)
+    _check_ram(tree, memory, selection.ram_path)
     _reject_other_ram_alias(tree, memory, selection.ram_path)
     _collisions(tree, memory, (selection.firmware_path, selection.shared_path))
     return memory

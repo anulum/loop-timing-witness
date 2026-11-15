@@ -135,6 +135,85 @@ def _parent_sources(output: Path) -> dict[Path, Path]:
     return parents
 
 
+def _frozen_sources(
+    root: Path, output: Path, native_snapshots: list[Path]
+) -> list[FrozenProducerSource]:
+    """Copy the parent producer sources and verify every snapshot against its origin.
+
+    Parameters
+    ----------
+    root
+        Root of the native and worker origins.
+    output
+        Existing exclusive capture directory.
+    native_snapshots
+        Native and worker members already copied beneath ``source``.
+
+    Returns
+    -------
+    list[FrozenProducerSource]
+        Every snapshot with its origin and digest, in destination order.
+
+    Raises
+    ------
+    OSError
+        If a source cannot be read or a parent copy cannot be written exclusively.
+    ValueError
+        If a snapshot differs from its origin.
+    """
+    parents = _parent_sources(output)
+    origins = {path: root / path.relative_to(output / "source") for path in native_snapshots}
+    parent_origins = {destination: origin for origin, destination in parents.items()}
+    sources = []
+    for destination, origin in sorted((origins | parent_origins).items()):
+        raw = origin.read_bytes()
+        if destination in parent_origins:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("xb") as stream:
+                stream.write(raw)
+        source = FrozenProducerSource(
+            origin, origin.resolve(strict=True), destination, hashlib.sha256(raw).hexdigest()
+        )
+        source.verify()
+        sources.append(source)
+    return sources
+
+
+def _runtime_identity() -> dict[str, object]:
+    """Return the interpreter, platform and dependency identity of this producer.
+
+    Returns
+    -------
+    dict[str, object]
+        Python executable, prefix, version and implementation; operating system,
+        release and machine; and the versions of the schema dependencies.
+    """
+    return {
+        "python": {
+            "executable": str(Path(sys.executable).resolve()),
+            "prefix": sys.prefix,
+            "version": sys.version,
+            "implementation": sys.implementation.name,
+            "cache_tag": sys.implementation.cache_tag,
+        },
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+        },
+        "dependencies": {
+            name: version(name)
+            for name in (
+                "jsonschema",
+                "attrs",
+                "referencing",
+                "jsonschema-specifications",
+                "rpds-py",
+            )
+        },
+    }
+
+
 def snapshot_producer_context(
     root: Path, output: Path, native_snapshots: list[Path]
 ) -> ProducerSourceContext:
@@ -161,45 +240,10 @@ def snapshot_producer_context(
     ValueError
         If the prior source copy already differs from its origin.
     """
-    parents = _parent_sources(output)
-    origins = {path: root / path.relative_to(output / "source") for path in native_snapshots}
-    parent_origins = {destination: origin for origin, destination in parents.items()}
-    sources = []
-    for destination, origin in sorted((origins | parent_origins).items()):
-        raw = origin.read_bytes()
-        if destination in parent_origins:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            with destination.open("xb") as stream:
-                stream.write(raw)
-        source = FrozenProducerSource(
-            origin, origin.resolve(strict=True), destination, hashlib.sha256(raw).hexdigest()
-        )
-        source.verify()
-        sources.append(source)
+    sources = _frozen_sources(root, output, native_snapshots)
     context: dict[str, object] = {
         "native_source_root": str(root.resolve()),
-        "python": {
-            "executable": str(Path(sys.executable).resolve()),
-            "prefix": sys.prefix,
-            "version": sys.version,
-            "implementation": sys.implementation.name,
-            "cache_tag": sys.implementation.cache_tag,
-        },
-        "platform": {
-            "system": platform.system(),
-            "release": platform.release(),
-            "machine": platform.machine(),
-        },
-        "dependencies": {
-            name: version(name)
-            for name in (
-                "jsonschema",
-                "attrs",
-                "referencing",
-                "jsonschema-specifications",
-                "rpds-py",
-            )
-        },
+        **_runtime_identity(),
         "sources": {
             source.snapshot.relative_to(output).as_posix(): {
                 "origin": str(source.origin.absolute()),

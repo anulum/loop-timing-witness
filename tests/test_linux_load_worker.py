@@ -18,6 +18,7 @@ import sys
 import time
 from contextlib import ExitStack
 from pathlib import Path
+from typing import Any
 
 import pytest
 from linux_load_config import PROFILES
@@ -25,6 +26,15 @@ from process_lifetime_support import finish_process, retain_process
 
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled
+
+# Work counter of each profile.
+COUNTS = {
+    "cpu": "arithmetic_operations",
+    "memory": "memory_touches",
+    "network": "datagrams",
+    "storage": "fsyncs",
+    "idle": "idle_waits",
+}
 
 
 @pytest.mark.parametrize("profile", PROFILES)
@@ -45,14 +55,7 @@ def test_actual_eof_chunk(tmp_path: Path, profile: str, size: int) -> None:
     scheduler = os.sched_getscheduler(0)
     cpu = min(affinity)
     result = subprocess.run(
-        [
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/linux_load_worker.py"),
-            profile,
-            str(cpu),
-            str(size),
-            str(tmp_path),
-        ],
+        _worker_command(profile, cpu, size, tmp_path),
         input=b"",
         capture_output=True,
         check=False,
@@ -68,23 +71,7 @@ def test_actual_eof_chunk(tmp_path: Path, profile: str, size: int) -> None:
     assert receipt["policy"]["scheduler"] == os.SCHED_OTHER
     assert receipt["policy"]["priority"] == 0
     assert receipt["finished_ns"] > receipt["started_ns"]
-    counters = receipt["counters"]
-    assert counters["chunks"] == 1
-    expected_key = {
-        "cpu": "arithmetic_operations",
-        "memory": "memory_touches",
-        "network": "datagrams",
-        "storage": "fsyncs",
-        "idle": "idle_waits",
-    }[profile]
-    expected = 4096 if profile == "cpu" else (size + 63) // 64 if profile == "memory" else 1
-    assert counters[expected_key] == expected
-    if profile == "network":
-        assert counters["bytes_sent"] == counters["bytes_received"] == size
-    if profile == "storage":
-        assert counters["bytes_written"] == counters["bytes_read"] == size
-        assert (tmp_path / "storage.bin").stat().st_size == size
-        assert receipt["checksum"] == sum((tmp_path / "storage.bin").read_bytes())
+    _check_one_chunk(receipt, profile, size, tmp_path)
     with pytest.raises(ProcessLookupError):
         os.kill(receipt["worker_pid"], 0)
     assert os.sched_getaffinity(0) == affinity
@@ -180,14 +167,7 @@ def test_actual_transfer_corruption(tmp_path: Path, profile: str) -> None:
     profile
         Actual transfer boundary to perturb after the worker reports readiness.
     """
-    command = [
-        sys.executable,
-        str(REPOSITORY_ROOT / "tools/linux_load_worker.py"),
-        profile,
-        str(min(os.sched_getaffinity(0))),
-        "4096",
-        str(tmp_path),
-    ]
+    command = _worker_command(profile, min(os.sched_getaffinity(0)), 4096, tmp_path)
     with (
         subprocess.Popen(
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -200,20 +180,7 @@ def test_actual_transfer_corruption(tmp_path: Path, profile: str) -> None:
         ready = json.loads(process.stdout.readline())
         assert ready == {"ready": True, "pid": process.pid}
         if profile == "network":
-            inodes = {
-                target[8:-1]
-                for fd in Path(f"/proc/{process.pid}/fd").iterdir()
-                if (target := str(fd.readlink())).startswith("socket:[")
-            }
-            ports = {
-                int(fields[1].split(":")[1], 16)
-                for line in Path(f"/proc/{process.pid}/net/udp").read_text().splitlines()[1:]
-                if len(fields := line.split()) > 9 and fields[9] in inodes
-            }
-            assert len(inodes) == len(ports) == 2
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
-                for port in ports:
-                    sender.sendto(b"unexpected peer data", ("127.0.0.1", port))
+            _send_foreign_datagrams(process.pid)
         deadline = time.monotonic() + scaled(5)
         while process.poll() is None and time.monotonic() < deadline:
             if profile == "storage":
@@ -224,3 +191,82 @@ def test_actual_transfer_corruption(tmp_path: Path, profile: str) -> None:
         _, stderr = process.communicate(timeout=scaled(5))
         assert (b"datagram differs" if profile == "network" else b"readback differs") in stderr
     assert not (tmp_path / "worker.json").exists()
+
+
+def _worker_command(profile: str, cpu: int, size: int, workspace: Path) -> list[str]:
+    """Return the production load worker command.
+
+    Parameters
+    ----------
+    profile
+        Load profile.
+    cpu
+        Worker CPU.
+    size
+        Working-set size in bytes.
+    workspace
+        Worker workspace.
+
+    Returns
+    -------
+    list[str]
+        Worker command.
+    """
+    return [
+        sys.executable,
+        str(REPOSITORY_ROOT / "tools/linux_load_worker.py"),
+        profile,
+        str(cpu),
+        str(size),
+        str(workspace),
+    ]
+
+
+def _check_one_chunk(receipt: dict[str, Any], profile: str, size: int, workspace: Path) -> None:
+    """Require the counters of exactly one completed work chunk of the profile.
+
+    Parameters
+    ----------
+    receipt
+        Completed worker receipt.
+    profile
+        Load profile.
+    size
+        Working-set size in bytes.
+    workspace
+        Worker workspace, holding the storage profile's file.
+    """
+    counters = receipt["counters"]
+    assert counters["chunks"] == 1
+    expected = 4096 if profile == "cpu" else (size + 63) // 64 if profile == "memory" else 1
+    assert counters[COUNTS[profile]] == expected
+    if profile == "network":
+        assert counters["bytes_sent"] == counters["bytes_received"] == size
+    if profile == "storage":
+        assert counters["bytes_written"] == counters["bytes_read"] == size
+        assert (workspace / "storage.bin").stat().st_size == size
+        assert receipt["checksum"] == sum((workspace / "storage.bin").read_bytes())
+
+
+def _send_foreign_datagrams(pid: int) -> None:
+    """Send one foreign datagram to each of the worker's two loopback UDP ports.
+
+    Parameters
+    ----------
+    pid
+        Ready worker process.
+    """
+    inodes = {
+        target[8:-1]
+        for fd in Path(f"/proc/{pid}/fd").iterdir()
+        if (target := str(fd.readlink())).startswith("socket:[")
+    }
+    ports = {
+        int(fields[1].split(":")[1], 16)
+        for line in Path(f"/proc/{pid}/net/udp").read_text().splitlines()[1:]
+        if len(fields := line.split()) > 9 and fields[9] in inodes
+    }
+    assert len(inodes) == len(ports) == 2
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+        for port in ports:
+            sender.sendto(b"unexpected peer data", ("127.0.0.1", port))

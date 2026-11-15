@@ -315,6 +315,19 @@ END_NODE: Final = struct.pack(">I", 2)
 NOP: Final = struct.pack(">I", 4)
 END: Final = struct.pack(">I", 9)
 ROOT: Final = BEGIN + bytes(4)
+# Strings block of the hand-built blobs: two property names.
+NAMES: Final = b"reg\0compatible\0"
+DESCRIPTION: Final = (
+    "Python device-tree readers' outcomes. A case's blob is a named chunk, a chunk "
+    "cut to length, or the concatenation of [hex, repeat] and [{chunk, start?, end?}, "
+    "repeat] segments. Each sweep row is one [offset, hex] change of the reservations "
+    "chunk and its outcome. A refusal is an index into texts. "
+    "tree_sha256 hashes the tree's binary form: boot CPU and reservation count as "
+    "big-endian 32-bit words, each reservation as two 64-bit words, the node count, "
+    "then per node its path and property count and per property its name and value, "
+    "each path, name and value preceded by its 32-bit length. readers_change holds "
+    "the outcomes that differ from the named case's readers."
+)
 
 
 def _platform() -> str:
@@ -414,6 +427,53 @@ def _blob(
     bytes
         Blob with a consistent header.
     """
+    structure_offset, strings_offset, reserved, body = _layout(
+        structure,
+        strings,
+        reservations,
+        reservations_last=reservations_last,
+        strings_first=strings_first,
+    )
+    header = struct.pack(
+        ">10I",
+        0xD00DFEED,
+        40 + len(body),
+        structure_offset,
+        strings_offset,
+        reserved,
+        17,
+        16,
+        0,
+        len(strings),
+        len(structure),
+    )
+    return header + body
+
+
+def _layout(
+    structure: bytes,
+    strings: bytes,
+    reservations: bytes,
+    *,
+    reservations_last: bool,
+    strings_first: bool,
+) -> tuple[int, int, int, bytes]:
+    """Place the three blocks after the header in one of the three supported orders.
+
+    Parameters
+    ----------
+    structure, strings, reservations
+        Complete blocks.
+    reservations_last
+        Whether the map follows the structure and strings blocks, aligned to eight bytes.
+    strings_first
+        Whether the strings block, padded to a word, precedes the structure block.
+
+    Returns
+    -------
+    tuple[int, int, int, bytes]
+        Structure, strings and reservation map offsets, and the blocks as laid out.
+    """
     if reservations_last:
         structure_offset = 40
         strings_offset = structure_offset + len(structure)
@@ -430,20 +490,7 @@ def _blob(
         structure_offset = reserved + len(reservations)
         strings_offset = structure_offset + len(structure)
         body = reservations + structure + strings
-    header = struct.pack(
-        ">10I",
-        0xD00DFEED,
-        40 + len(body),
-        structure_offset,
-        strings_offset,
-        reserved,
-        17,
-        16,
-        0,
-        len(strings),
-        len(structure),
-    )
-    return header + body
+    return structure_offset, strings_offset, reserved, body
 
 
 def _node(name: bytes, body: bytes = b"") -> bytes:
@@ -491,16 +538,25 @@ def _structures() -> dict[str, bytes]:
     Returns
     -------
     dict[str, bytes]
+        Blob by case name: node, property, token and then block layout rules.
+    """
+    return {
+        **_node_structures(),
+        **_property_structures(),
+        **_token_structures(),
+        **_layout_structures(),
+    }
+
+
+def _node_structures() -> dict[str, bytes]:
+    """Return hand-built blobs that reach each node and node name rule.
+
+    Returns
+    -------
+    dict[str, bytes]
         Blob by case name.
     """
-    names = b"reg\0compatible\0"
-    # A whole number of words: the next block can start exactly where this one ends.
-    words = names + b"\0"
-    at_map = bytearray(_blob(ROOT + END_NODE + END))
-    at_map[12:16] = struct.pack(">I", 40)
     child = _node(b"a")
-    entry = struct.pack(">QQ", 0x80000000, 0x1000)
-    value = struct.pack(">III", 3, 1, 0) + b"\x01\x01\0\0"
     return {
         "smallest tree": _blob(ROOT + END_NODE + END),
         "nops around the tree": _blob(NOP + ROOT + NOP + END_NODE + NOP + END),
@@ -515,29 +571,55 @@ def _structures() -> dict[str, bytes]:
         ),
         "unterminated child name": _blob(ROOT + BEGIN + b"abcd"),
         "child name at the block end": _blob(ROOT + BEGIN),
-        "property before the root": _blob(_property(0) + ROOT + END_NODE + END, names),
-        "property after the root": _blob(ROOT + END_NODE + _property(0) + END, names),
-        "property after a child": _blob(ROOT + child + _property(0) + END_NODE + END, names),
+    }
+
+
+def _property_structures() -> dict[str, bytes]:
+    """Return hand-built blobs that reach each property, property name and value rule.
+
+    Returns
+    -------
+    dict[str, bytes]
+        Blob by case name.
+    """
+    child = _node(b"a")
+    value = struct.pack(">III", 3, 1, 0) + b"\x01\x01\0\0"
+    return {
+        "property before the root": _blob(_property(0) + ROOT + END_NODE + END, NAMES),
+        "property after the root": _blob(ROOT + END_NODE + _property(0) + END, NAMES),
+        "property after a child": _blob(ROOT + child + _property(0) + END_NODE + END, NAMES),
         "property in a child": _blob(
-            ROOT + _node(b"a", _property(4, b"x\0")) + END_NODE + END, names
+            ROOT + _node(b"a", _property(4, b"x\0")) + END_NODE + END, NAMES
         ),
-        "empty property name": _blob(ROOT + _property(3) + END_NODE + END, names),
+        "empty property name": _blob(ROOT + _property(3) + END_NODE + END, NAMES),
         "slash in property name": _blob(ROOT + _property(0) + END_NODE + END, b"a/b\0"),
         "property name not ASCII": _blob(ROOT + _property(0) + END_NODE + END, b"\x80\0"),
         "unterminated property name": _blob(ROOT + _property(0) + END_NODE + END, b"reg"),
         "property name offset at the block end": _blob(
-            ROOT + _property(len(names)) + END_NODE + END, names
+            ROOT + _property(len(NAMES)) + END_NODE + END, NAMES
         ),
-        "duplicate property": _blob(ROOT + _property(0) + _property(0) + END_NODE + END, names),
-        "property value padding not zero": _blob(ROOT + value + END_NODE + END, names),
+        "duplicate property": _blob(ROOT + _property(0) + _property(0) + END_NODE + END, NAMES),
+        "property value padding not zero": _blob(ROOT + value + END_NODE + END, NAMES),
         "property value fills the block": _blob(
-            ROOT + struct.pack(">III", 3, 4, 0) + b"abcd", names
+            ROOT + struct.pack(">III", 3, 4, 0) + b"abcd", NAMES
         ),
         "property value past the block": _blob(
-            ROOT + struct.pack(">III", 3, 5, 0) + b"abcd", names
+            ROOT + struct.pack(">III", 3, 5, 0) + b"abcd", NAMES
         ),
-        "property header fills the block": _blob(ROOT + struct.pack(">III", 3, 0, 0), names),
-        "truncated property header": _blob(ROOT + struct.pack(">II", 3, 0), names),
+        "property header fills the block": _blob(ROOT + struct.pack(">III", 3, 0, 0), NAMES),
+        "truncated property header": _blob(ROOT + struct.pack(">II", 3, 0), NAMES),
+    }
+
+
+def _token_structures() -> dict[str, bytes]:
+    """Return hand-built blobs that reach each end, nop and unknown token rule.
+
+    Returns
+    -------
+    dict[str, bytes]
+        Blob by case name.
+    """
+    return {
         "unmatched end": _blob(END_NODE + END),
         "end inside a node": _blob(ROOT + END),
         "end before any node": _blob(END),
@@ -545,6 +627,23 @@ def _structures() -> dict[str, bytes]:
         "data after the end": _blob(ROOT + END_NODE + END + NOP),
         "unknown token": _blob(ROOT + struct.pack(">I", 5) + END_NODE + END),
         "no end token": _blob(ROOT + END_NODE),
+    }
+
+
+def _layout_structures() -> dict[str, bytes]:
+    """Return hand-built blobs that reach each block order and reservation-map rule.
+
+    Returns
+    -------
+    dict[str, bytes]
+        Blob by case name.
+    """
+    # A whole number of words: the next block can start exactly where this one ends.
+    words = NAMES + b"\0"
+    at_map = bytearray(_blob(ROOT + END_NODE + END))
+    at_map[12:16] = struct.pack(">I", 40)
+    entry = struct.pack(">QQ", 0x80000000, 0x1000)
+    return {
         "reservations last": _blob(
             ROOT + END_NODE + END, words, reservations=entry + bytes(16), reservations_last=True
         ),
@@ -553,7 +652,7 @@ def _structures() -> dict[str, bytes]:
         ),
         "empty strings block at the reservation map": bytes(at_map),
         "reservations last without terminator": _blob(
-            ROOT + END_NODE + END, names, reservations=entry, reservations_last=True
+            ROOT + END_NODE + END, NAMES, reservations=entry, reservations_last=True
         ),
     }
 
@@ -1099,6 +1198,115 @@ def _indexed(value: object, texts: dict[str, int]) -> object:
     return value
 
 
+def _primary_cases(
+    primary: dict[str, bytes],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Return each compiled reference tree whole, with every reader outcome.
+
+    Parameters
+    ----------
+    primary
+        Compiled reference blobs by chunk name.
+
+    Returns
+    -------
+    tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]
+        One case per reference, and its reader outcomes by chunk name.
+    """
+    cases = []
+    readers = {}
+    for name, blob in primary.items():
+        outcome, tree = _outcome(blob, full_tree=True)
+        assert tree is not None
+        readers[name] = _readers(tree)
+        cases.append({"name": name, "blob": {"chunk": name}, **outcome, "readers": readers[name]})
+    return cases, readers
+
+
+def _reservation_change_cases(base: bytes, directory: Path) -> list[dict[str, Any]]:
+    """Return the small tree recompiled with each changed pair of reservations.
+
+    Parameters
+    ----------
+    base
+        Compiled small reservation tree.
+    directory
+        Owned directory for the compiler runs.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases stored as deltas of the small tree, with the whole decode outcome
+        and, for a decoded tree, every reader outcome.
+    """
+    cases = []
+    for name, line in RESERVATION_CHANGES.items():
+        source = _changed(RESERVATION_SOURCE, (("/memreserve/ 0x80010000 0x10000;", line),), name)
+        blob = _compile(source, directory, force=False)
+        outcome, tree = _outcome(blob, full_tree=True)
+        segments = _delta(RESERVATIONS, base, blob, 0)
+        case = {"name": name, "blob": {"segments": segments}, **outcome}
+        if tree is not None:
+            case["readers"] = _readers(tree)
+        cases.append(case)
+    return cases
+
+
+def _platform_change_cases(
+    platform: str, base: bytes, readers: dict[str, Any], directory: Path
+) -> list[dict[str, Any]]:
+    """Return the platform recompiled with each named change.
+
+    Parameters
+    ----------
+    platform
+        Reference platform source.
+    base
+        Compiled reference platform.
+    readers
+        Reference platform's reader outcomes.
+    directory
+        Owned directory for the compiler runs.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases stored as deltas of the platform, with the tree digest and the
+        reader outcomes that differ from the platform's.
+    """
+    cases = []
+    for name, changes in PLATFORM_CHANGES.items():
+        blob = _compile(_changed(platform, changes, name), directory, force=name in FORCED)
+        outcome, tree = _outcome(blob, full_tree=False)
+        assert tree is not None, name
+        segments = _delta(PLATFORM, base, blob, RUNS.get(name, 0))
+        changed = {"from": PLATFORM, **_changes(readers, _readers(tree))}
+        cases.append(
+            {"name": name, "blob": {"segments": segments}, **outcome, "readers_change": changed}
+        )
+    return cases
+
+
+def _small_sweep(small: bytes) -> list[list[Any]]:
+    """Return each one-edit change of the small tree with its decode outcome.
+
+    Parameters
+    ----------
+    small
+        Compiled small reservation tree.
+
+    Returns
+    -------
+    list[list[Any]]
+        ``[offset, hex, outcome]`` rows.
+    """
+    sweep = []
+    for edits in _small_changes(small).values():
+        outcome, _ = _outcome(_apply(small, edits), full_tree=False)
+        sweep.append([*edits[0], outcome])
+    return sweep
+
+
 def corpus(directory: Path) -> dict[str, Any]:
     """Build the complete corpus from real ``dtc`` output and Python's readers.
 
@@ -1120,39 +1328,14 @@ def corpus(directory: Path) -> dict[str, Any]:
     }
     limit_chunks, limits = _limits()
     chunks = {**primary, **limit_chunks}
-    cases: list[dict[str, Any]] = []
-    readers: dict[str, dict[str, Any]] = {}
-    for name, blob in primary.items():
-        outcome, tree = _outcome(blob, full_tree=True)
-        assert tree is not None
-        readers[name] = _readers(tree)
-        cases.append({"name": name, "blob": {"chunk": name}, **outcome, "readers": readers[name]})
-    for name, line in RESERVATION_CHANGES.items():
-        source = _changed(RESERVATION_SOURCE, (("/memreserve/ 0x80010000 0x10000;", line),), name)
-        blob = _compile(source, directory, force=False)
-        outcome, tree = _outcome(blob, full_tree=True)
-        segments = _delta(RESERVATIONS, primary[RESERVATIONS], blob, 0)
-        case = {"name": name, "blob": {"segments": segments}, **outcome}
-        if tree is not None:
-            case["readers"] = _readers(tree)
-        cases.append(case)
-    for name, changes in PLATFORM_CHANGES.items():
-        blob = _compile(_changed(platform, changes, name), directory, force=name in FORCED)
-        outcome, tree = _outcome(blob, full_tree=False)
-        assert tree is not None, name
-        segments = _delta(PLATFORM, primary[PLATFORM], blob, RUNS.get(name, 0))
-        changed = {"from": PLATFORM, **_changes(readers[PLATFORM], _readers(tree))}
-        cases.append(
-            {"name": name, "blob": {"segments": segments}, **outcome, "readers_change": changed}
-        )
+    cases, readers = _primary_cases(primary)
+    cases += _reservation_change_cases(primary[RESERVATIONS], directory)
+    cases += _platform_change_cases(platform, primary[PLATFORM], readers[PLATFORM], directory)
     for name, blob in _structures().items():
         outcome, _ = _outcome(blob, full_tree=True)
         cases.append({"name": name, "blob": {"segments": [[blob.hex(), 1]]}, **outcome})
     small = primary[RESERVATIONS]
-    sweep = []
-    for edits in _small_changes(small).values():
-        outcome, _ = _outcome(_apply(small, edits), full_tree=False)
-        sweep.append([*edits[0], outcome])
+    sweep = _small_sweep(small)
     for length in (0, 39, 40, len(small) - 1):
         outcome, _ = _outcome(small[:length], full_tree=False)
         blob_spec = {"chunk": RESERVATIONS, "length": length}
@@ -1165,17 +1348,7 @@ def corpus(directory: Path) -> dict[str, Any]:
     index = {text: number for number, text in enumerate(texts)}
     return {
         "schema": "loop-timing-witness.device-tree-cases.v1",
-        "description": (
-            "Python device-tree readers' outcomes. A case's blob is a named chunk, a chunk "
-            "cut to length, or the concatenation of [hex, repeat] and [{chunk, start?, end?}, "
-            "repeat] segments. Each sweep row is one [offset, hex] change of the reservations "
-            "chunk and its outcome. A refusal is an index into texts. "
-            "tree_sha256 hashes the tree's binary form: boot CPU and reservation count as "
-            "big-endian 32-bit words, each reservation as two 64-bit words, the node count, "
-            "then per node its path and property count and per property its name and value, "
-            "each path, name and value preceded by its 32-bit length. readers_change holds "
-            "the outcomes that differ from the named case's readers."
-        ),
+        "description": DESCRIPTION,
         "texts": texts,
         "chunks": {name: blob.hex() for name, blob in chunks.items()},
         "cases": _indexed(cases, index),

@@ -44,6 +44,48 @@ def wait_for_events(process: subprocess.Popen[str], events: Path) -> None:
         time.sleep(0.001)
 
 
+def _stop(process: subprocess.Popen[str]) -> None:
+    """Stop the running native process and require the kernel to report it stopped.
+
+    Parameters
+    ----------
+    process
+        Running native run.
+    """
+    os.kill(process.pid, signal.SIGSTOP)
+    observed, status = os.waitpid(process.pid, os.WUNTRACED)
+    assert observed == process.pid
+    assert os.WIFSTOPPED(status)
+    assert os.WSTOPSIG(status) == signal.SIGSTOP
+
+
+def _change(config: Path, original: str, mutation: str) -> None:
+    """Change the configuration file in place, by replacement, by append or by a symlink.
+
+    Parameters
+    ----------
+    config
+        Configuration the stopped run reads; its siblings hold the replacement and the original.
+    original
+        Original configuration text.
+    mutation
+        ``overwrite``, ``replace``, ``append`` or ``symlink``.
+    """
+    if mutation == "overwrite":
+        config.write_text(original.replace("pid", "lqr", 1), encoding="utf-8")
+    elif mutation == "replace":
+        replacement = config.with_name("replacement.conf")
+        replacement.write_text(original.replace("pid", "lqr", 1), encoding="utf-8")
+        replacement.replace(config)
+    elif mutation == "append":
+        with config.open("a", encoding="utf-8") as stream:
+            stream.write(" ")
+    else:
+        saved = config.with_name("original.conf")
+        config.rename(saved)
+        config.symlink_to(saved)
+
+
 @pytest.mark.parametrize("mutation", ["overwrite", "replace", "append", "symlink"])
 def test_configuration_changed_during_run(native_run: Path, tmp_path: Path, mutation: str) -> None:
     """Refuse changed configuration while retaining the actual completed run data.
@@ -69,25 +111,9 @@ def test_configuration_changed_during_run(native_run: Path, tmp_path: Path, muta
     )
     try:
         wait_for_events(process, events)
-        os.kill(process.pid, signal.SIGSTOP)
-        observed, status = os.waitpid(process.pid, os.WUNTRACED)
-        assert observed == process.pid
-        assert os.WIFSTOPPED(status)
-        assert os.WSTOPSIG(status) == signal.SIGSTOP
+        _stop(process)
         assert events.exists()
-        if mutation == "overwrite":
-            config.write_text(original.replace("pid", "lqr", 1), encoding="utf-8")
-        elif mutation == "replace":
-            replacement = tmp_path / "replacement.conf"
-            replacement.write_text(original.replace("pid", "lqr", 1), encoding="utf-8")
-            replacement.replace(config)
-        elif mutation == "append":
-            with config.open("a", encoding="utf-8") as stream:
-                stream.write(" ")
-        else:
-            saved = tmp_path / "original.conf"
-            config.rename(saved)
-            config.symlink_to(saved)
+        _change(config, original, mutation)
         os.kill(process.pid, signal.SIGCONT)
         stdout, stderr = process.communicate(timeout=scaled(10))
         assert process.returncode == 1

@@ -154,6 +154,19 @@ SYMBOL_FIELDS: Final = (
     ("value", 8, 8),
     ("size", 16, 8),
 )
+DESCRIPTION: Final = (
+    "Python firmware ELF readers' outcomes. images holds each real image as hexadecimal "
+    "bytes, with its SHA-256 and how it was built; the sweep numbers them linked 0, "
+    "firmware 1. admit is admit_elf's outcome for the reservation [address, size] (by "
+    "default the firmware RAM), symbols is read_symbols' outcome; a "
+    "refusal is an index into texts. symbols_sha256 hashes each symbol in table order: "
+    "its name's length as a little-endian 32-bit word, the ASCII name, value and size as "
+    "64-bit words, type as a byte and section as a 16-bit word. A named case changes an "
+    "image by [offset, hex] edits, cuts it to length, pads it with zeros to pad bytes or "
+    "changes the reservation. Each "
+    "sweep row is [image index, offset, hex, admit, symbols], with null where an outcome "
+    "equals the unchanged image's."
+)
 
 
 def _admission(content: bytes, reservation: Region) -> dict[str, Any]:
@@ -382,53 +395,101 @@ def _program_rows(index: int, content: bytes) -> list[list[Any]]:
     list[list[Any]]
         Rows without outcomes.
     """
-    length, end = len(content), RAM.address + RAM.size
     programs = _tables(content)[0]
     records = [PROGRAM.unpack_from(content, offset) for offset in programs]
-    offsets = {record[2] for record in records}
-    addresses = {record[4] for record in records}
     rows: list[list[Any]] = []
     for start, record in zip(programs, records, strict=True):
-        offset, physical, file_bytes, memory_bytes, alignment = (record[2], *record[4:])
-        extras: dict[str, set[int]] = {
-            "type": {2, 3, 4, 6, 0x6474E551, 0x70000003},
-            "flags": {4, 5, 6, 7},
-            "offset": {
-                *offsets,
-                length - file_bytes,
-                length - file_bytes + 1,
-                offset + alignment,
-                1 << 63,
-            },
-            "virtual": {physical},
-            "physical": set(),
-            "file size": {memory_bytes, memory_bytes + 1, length - offset, length - offset + 1},
-            "memory size": {
-                file_bytes,
-                file_bytes - 1,
-                end - physical,
-                end - physical + 1,
-                *(other[4] - physical for other in records if other[4] > physical),
-            },
-            "alignment": {2, 3, 4095, 4096, 4097, 8192, 3 * 4096, 1 << 63},
-        }
+        extras = _program_extras(record, records, len(content))
         for name, place, width in PROGRAM_FIELDS:
             original = int.from_bytes(content[start + place : start + place + width], "little")
             rows += _rows(index, start + place, width, _values(width, original, extras[name]))
-        both = {
-            *addresses,
-            RAM.address - 1,
-            RAM.address + 1,
-            RAM.address + RAM.size // 2,
-            end - memory_bytes,
-            end - memory_bytes + 1,
-            (1 << 64) - memory_bytes,
-            (1 << 64) - memory_bytes + 1,
-        }
-        for value in sorted(both - {physical}):
-            if 0 <= value < 1 << 64:
-                rows.append([index, start + 16, (value.to_bytes(8, "little") * 2).hex()])
+        rows += _address_rows(index, start, record, records)
     return rows
+
+
+def _program_extras(
+    record: tuple[int, ...], records: list[tuple[int, ...]], length: int
+) -> dict[str, set[int]]:
+    """Return the field-specific bounds of one program header.
+
+    Parameters
+    ----------
+    record
+        The program header's fields.
+    records
+        Every program header of the image.
+    length
+        Image length in bytes.
+
+    Returns
+    -------
+    dict[str, set[int]]
+        Bounds by field name.
+    """
+    offset, physical, file_bytes, memory_bytes, alignment = (record[2], *record[4:])
+    end = RAM.address + RAM.size
+    return {
+        "type": {2, 3, 4, 6, 0x6474E551, 0x70000003},
+        "flags": {4, 5, 6, 7},
+        "offset": {
+            *(other[2] for other in records),
+            length - file_bytes,
+            length - file_bytes + 1,
+            offset + alignment,
+            1 << 63,
+        },
+        "virtual": {physical},
+        "physical": set(),
+        "file size": {memory_bytes, memory_bytes + 1, length - offset, length - offset + 1},
+        "memory size": {
+            file_bytes,
+            file_bytes - 1,
+            end - physical,
+            end - physical + 1,
+            *(other[4] - physical for other in records if other[4] > physical),
+        },
+        "alignment": {2, 3, 4095, 4096, 4097, 8192, 3 * 4096, 1 << 63},
+    }
+
+
+def _address_rows(
+    index: int, start: int, record: tuple[int, ...], records: list[tuple[int, ...]]
+) -> list[list[Any]]:
+    """Return sweep rows that write one address into both addresses of a program header.
+
+    Parameters
+    ----------
+    index
+        Image index in the corpus.
+    start
+        The program header's offset in the image.
+    record
+        The program header's fields.
+    records
+        Every program header of the image.
+
+    Returns
+    -------
+    list[list[Any]]
+        Rows without outcomes, in ascending address order.
+    """
+    physical, memory_bytes = record[4], record[6]
+    end = RAM.address + RAM.size
+    both = {
+        *(other[4] for other in records),
+        RAM.address - 1,
+        RAM.address + 1,
+        RAM.address + RAM.size // 2,
+        end - memory_bytes,
+        end - memory_bytes + 1,
+        (1 << 64) - memory_bytes,
+        (1 << 64) - memory_bytes + 1,
+    }
+    return [
+        [index, start + 16, (value.to_bytes(8, "little") * 2).hex()]
+        for value in sorted(both - {physical})
+        if 0 <= value < 1 << 64
+    ]
 
 
 def _section_rows(index: int, content: bytes) -> list[list[Any]]:
@@ -503,11 +564,7 @@ def _symbol_rows(index: int, content: bytes) -> list[list[Any]]:
     """
     _, sections, symbols, _, names = _tables(content)
     count = len(sections)
-    globals_ = [
-        offset
-        for offset in symbols
-        if SYMBOL.unpack_from(content, offset)[1] >> 4 in (GLOBAL_BINDING, WEAK_BINDING)
-    ]
+    globals_ = _globals(content, symbols)
     shared = SYMBOL.unpack_from(content, globals_[0])[0]
     rows: list[list[Any]] = []
     for start in symbols:
@@ -547,62 +604,148 @@ def _named(images: dict[str, bytes]) -> list[dict[str, Any]]:
     """
     cases: list[dict[str, Any]] = []
     for name, content in images.items():
-        header = HEADER.unpack_from(content)
-        _, _, symbols, table, names = _tables(content)
-        table_end = header[5] + header[10] * PROGRAM.size
-        cases.extend(
-            {"name": f"{name} cut to {length}", "image": name, "length": length}
-            for length in (0, 63, 64, table_end - 1, table_end, len(content) - 1)
-        )
-        cases.extend(
-            {"name": f"{name} padded to {length}", "image": name, "pad": length}
-            for length in (MAX_IMAGE_BYTES, MAX_IMAGE_BYTES + 1)
-        )
-        writable = _load(content, READ_WRITE)
-        end = writable[4] + writable[6]
-        cases += _placements(name, content)
-        for label, reservation in {
-            "exact reservation": (RAM.address, end - RAM.address),
-            "reservation one byte short": (RAM.address, end - RAM.address - 1),
-            "reservation after the entry": (RAM.address + 4096, RAM.size),
-            "reservation at the top": ((1 << 64) - RAM.size, RAM.size),
-        }.items():
-            cases.append(
-                {"name": f"{name} {label}", "image": name, "reservation": list(reservation)}
-            )
-        globals_ = [
-            offset
-            for offset in symbols
-            if SYMBOL.unpack_from(content, offset)[1] >> 4 in (GLOBAL_BINDING, WEAK_BINDING)
-        ]
-        first = SYMBOL.unpack_from(content, globals_[0])[0]
-        cases.append(
-            {
-                "name": f"{name} global name not ASCII",
-                "image": name,
-                "edits": [[table + first, "80"]],
-            }
-        )
-        cases.append(
-            {
-                "name": f"{name} global name runs past its table",
-                "image": name,
-                "edits": [
-                    [table + len(names) - 1, "41"],
-                    [globals_[0], struct.pack("<I", len(names) - 1).hex()],
-                ],
-            }
-        )
+        cases += _length_cases(name, content)
+        cases += _meeting_cases(name, content)
+        cases += _top_cases(name, content)
+        cases += _reservation_cases(name, content)
+        cases += _symbol_name_cases(name, content)
     return cases
 
 
-def _placements(name: str, content: bytes) -> list[dict[str, Any]]:
-    """Return load segments moved to meet each other or the end of the address space.
+def _globals(content: bytes, symbols: list[int]) -> list[int]:
+    """Return the offsets of the global and weak symbol records, in table order.
+
+    Parameters
+    ----------
+    content
+        Whole original image.
+    symbols
+        Offsets of every symbol record.
+
+    Returns
+    -------
+    list[int]
+        Offsets of the records the reader reads.
+    """
+    return [
+        offset
+        for offset in symbols
+        if SYMBOL.unpack_from(content, offset)[1] >> 4 in (GLOBAL_BINDING, WEAK_BINDING)
+    ]
+
+
+def _length_cases(name: str, content: bytes) -> list[dict[str, Any]]:
+    """Return the image cut around its program table and padded around the size limit.
+
+    Parameters
+    ----------
+    name
+        Image name.
+    content
+        Whole original image.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cut cases, then padded cases, without outcomes yet.
+    """
+    header = HEADER.unpack_from(content)
+    table_end = header[5] + header[10] * PROGRAM.size
+    return [
+        *(
+            {"name": f"{name} cut to {length}", "image": name, "length": length}
+            for length in (0, 63, 64, table_end - 1, table_end, len(content) - 1)
+        ),
+        *(
+            {"name": f"{name} padded to {length}", "image": name, "pad": length}
+            for length in (MAX_IMAGE_BYTES, MAX_IMAGE_BYTES + 1)
+        ),
+    ]
+
+
+def _segments(content: bytes) -> tuple[int, int, tuple[int, ...], tuple[int, ...]]:
+    """Return where the executable and writable load headers are, and their fields.
+
+    Parameters
+    ----------
+    content
+        Whole original image.
+
+    Returns
+    -------
+    tuple[int, int, tuple[int, ...], tuple[int, ...]]
+        Executable and writable header offsets, then their fields.
+    """
+    programs = _tables(content)[0]
+    starts = {PROGRAM.unpack_from(content, offset)[1]: offset for offset in programs}
+    executable, writable = _load(content, READ_EXECUTE), _load(content, READ_WRITE)
+    return starts[READ_EXECUTE], starts[READ_WRITE], executable, writable
+
+
+def _word(value: int) -> str:
+    """Return a 64-bit little-endian word as hexadecimal.
+
+    Parameters
+    ----------
+    value
+        Unsigned 64-bit value.
+
+    Returns
+    -------
+    str
+        Sixteen hexadecimal digits.
+    """
+    return value.to_bytes(8, "little").hex()
+
+
+def _meeting_cases(name: str, content: bytes) -> list[dict[str, Any]]:
+    """Return load segments moved to meet each other in memory or in the file.
 
     Two segments that meet in memory or in the file do not overlap, in
-    either order. A reservation at the top of the address space, with the
-    entry and both segments moved into it, admits a segment that ends exactly
-    at the end of the address space and refuses one a byte longer.
+    either order.
+
+    Parameters
+    ----------
+    name
+        Image name.
+    content
+        Whole original image.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases with their edits, without outcomes yet.
+    """
+    first, second, executable, writable = _segments(content)
+    middle = RAM.address + RAM.size // 2
+    return [
+        {
+            "name": f"{name} later segment ends where the earlier begins",
+            "image": name,
+            "edits": [[first + 16, _word(middle) * 2], [second + 40, _word(middle - writable[4])]],
+        },
+        {
+            "name": f"{name} load segments meet in memory and in the file",
+            "image": name,
+            "edits": [
+                [first + 32, _word(writable[2] - executable[2])],
+                [first + 40, _word(writable[2] - executable[2])],
+            ],
+        },
+        {
+            "name": f"{name} later segment's file ends where the earlier's begins",
+            "image": name,
+            "edits": [[second + 8, _word(0)], [second + 32, _word(executable[2])]],
+        },
+    ]
+
+
+def _top_cases(name: str, content: bytes) -> list[dict[str, Any]]:
+    """Return the image moved into a reservation at the top of the address space.
+
+    With the entry and both segments moved into it, a segment that ends
+    exactly at the end of the address space is admitted and one a byte
+    longer is refused.
 
     Parameters
     ----------
@@ -616,38 +759,12 @@ def _placements(name: str, content: bytes) -> list[dict[str, Any]]:
     list[dict[str, Any]]
         Cases with their edits and reservation, without outcomes yet.
     """
-    programs = _tables(content)[0]
-    starts = {PROGRAM.unpack_from(content, offset)[1]: offset for offset in programs}
-    executable, writable = _load(content, READ_EXECUTE), _load(content, READ_WRITE)
-    first, second = starts[READ_EXECUTE], starts[READ_WRITE]
-    middle = RAM.address + RAM.size // 2
+    first, second, executable, writable = _segments(content)
     top = (1 << 64) - RAM.size
     gap = writable[4] - executable[4]
-
-    def word(value: int) -> str:
-        return value.to_bytes(8, "little").hex()
-
-    at_top = [[24, word(top)], [first + 16, word(top) * 2], [second + 16, word(top + gap) * 2]]
+    at_top = [[24, _word(top)], [first + 16, _word(top) * 2], [second + 16, _word(top + gap) * 2]]
     reservation = [top, RAM.size]
     return [
-        {
-            "name": f"{name} later segment ends where the earlier begins",
-            "image": name,
-            "edits": [[first + 16, word(middle) * 2], [second + 40, word(middle - writable[4])]],
-        },
-        {
-            "name": f"{name} load segments meet in memory and in the file",
-            "image": name,
-            "edits": [
-                [first + 32, word(writable[2] - executable[2])],
-                [first + 40, word(writable[2] - executable[2])],
-            ],
-        },
-        {
-            "name": f"{name} later segment's file ends where the earlier's begins",
-            "image": name,
-            "edits": [[second + 8, word(0)], [second + 32, word(executable[2])]],
-        },
         {
             "name": f"{name} at the top of the address space",
             "image": name,
@@ -657,14 +774,77 @@ def _placements(name: str, content: bytes) -> list[dict[str, Any]]:
         {
             "name": f"{name} segment ends at the end of the address space",
             "image": name,
-            "edits": [*at_top, [second + 40, word((1 << 64) - top - gap)]],
+            "edits": [*at_top, [second + 40, _word((1 << 64) - top - gap)]],
             "reservation": reservation,
         },
         {
             "name": f"{name} segment passes the end of the address space",
             "image": name,
-            "edits": [*at_top, [second + 40, word((1 << 64) - top - gap + 1)]],
+            "edits": [*at_top, [second + 40, _word((1 << 64) - top - gap + 1)]],
             "reservation": reservation,
+        },
+    ]
+
+
+def _reservation_cases(name: str, content: bytes) -> list[dict[str, Any]]:
+    """Return the unchanged image against reservations around its extent.
+
+    Parameters
+    ----------
+    name
+        Image name.
+    content
+        Whole original image.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases with their reservation, without outcomes yet.
+    """
+    writable = _load(content, READ_WRITE)
+    end = writable[4] + writable[6]
+    return [
+        {"name": f"{name} {label}", "image": name, "reservation": list(reservation)}
+        for label, reservation in {
+            "exact reservation": (RAM.address, end - RAM.address),
+            "reservation one byte short": (RAM.address, end - RAM.address - 1),
+            "reservation after the entry": (RAM.address + 4096, RAM.size),
+            "reservation at the top": ((1 << 64) - RAM.size, RAM.size),
+        }.items()
+    ]
+
+
+def _symbol_name_cases(name: str, content: bytes) -> list[dict[str, Any]]:
+    """Return the first global symbol's name made non-ASCII or run past its table.
+
+    Parameters
+    ----------
+    name
+        Image name.
+    content
+        Whole original image.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Cases with their edits, without outcomes yet.
+    """
+    _, _, symbols, table, names = _tables(content)
+    globals_ = _globals(content, symbols)
+    first = SYMBOL.unpack_from(content, globals_[0])[0]
+    return [
+        {
+            "name": f"{name} global name not ASCII",
+            "image": name,
+            "edits": [[table + first, "80"]],
+        },
+        {
+            "name": f"{name} global name runs past its table",
+            "image": name,
+            "edits": [
+                [table + len(names) - 1, "41"],
+                [globals_[0], struct.pack("<I", len(names) - 1).hex()],
+            ],
         },
     ]
 
@@ -737,24 +917,19 @@ def _indexed(value: object, texts: dict[str, int]) -> object:
     return value
 
 
-def corpus(images: dict[str, bytes]) -> dict[str, Any]:
-    """Build the complete corpus from the two images and Python's readers.
+def _case_outcomes(images: dict[str, bytes]) -> list[dict[str, Any]]:
+    """Return every named case with what both readers return for it.
 
     Parameters
     ----------
     images
-        The linked and firmware images, by name; they are taken in the order of ``DIGESTS``.
+        Original images by name.
 
     Returns
     -------
-    dict[str, Any]
-        Images with their provenance, base outcomes, named cases and the sweep.
+    list[dict[str, Any]]
+        Named cases with their admission and symbol digest outcomes.
     """
-    images = {name: images[name] for name in DIGESTS}
-    bases = {
-        name: {"admit": _admission(content, RAM), "symbols": _symbols(content, whole=True)}
-        for name, content in images.items()
-    }
     cases = []
     for case in _named(images):
         content = images[case["image"]]
@@ -763,6 +938,23 @@ def corpus(images: dict[str, bytes]) -> dict[str, Any]:
         reservation = Region(*case.get("reservation", (RAM.address, RAM.size)))
         whole = _admission(content, reservation), _symbols(content, whole=False)
         cases.append({**case, "admit": whole[0], "symbols": whole[1]})
+    return cases
+
+
+def _sweep(images: dict[str, bytes]) -> list[list[Any]]:
+    """Return every distinct one-field change of each image with both readers' outcomes.
+
+    Parameters
+    ----------
+    images
+        Original images, numbered in their order.
+
+    Returns
+    -------
+    list[list[Any]]
+        ``[image, offset, hex, admit, symbols]`` rows, with ``None`` where an
+        outcome equals the unchanged image's.
+    """
     sweep: list[list[Any]] = []
     seen: set[tuple[int, int, str]] = set()
     for index, content in enumerate(images.values()):
@@ -787,23 +979,34 @@ def corpus(images: dict[str, bytes]) -> dict[str, Any]:
                     None if symbols == own[1] else symbols,
                 ]
             )
+    return sweep
+
+
+def corpus(images: dict[str, bytes]) -> dict[str, Any]:
+    """Build the complete corpus from the two images and Python's readers.
+
+    Parameters
+    ----------
+    images
+        The linked and firmware images, by name; they are taken in the order of ``DIGESTS``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Images with their provenance, base outcomes, named cases and the sweep.
+    """
+    images = {name: images[name] for name in DIGESTS}
+    bases = {
+        name: {"admit": _admission(content, RAM), "symbols": _symbols(content, whole=True)}
+        for name, content in images.items()
+    }
+    cases = _case_outcomes(images)
+    sweep = _sweep(images)
     texts = sorted(_refusals([bases, cases, sweep]))
     numbers = {text: number for number, text in enumerate(texts)}
     return {
         "schema": "loop-timing-witness.amp-elf-cases.v1",
-        "description": (
-            "Python firmware ELF readers' outcomes. images holds each real image as hexadecimal "
-            "bytes, with its SHA-256 and how it was built; the sweep numbers them linked 0, "
-            "firmware 1. admit is admit_elf's outcome for the reservation [address, size] (by "
-            "default the firmware RAM), symbols is read_symbols' outcome; a "
-            "refusal is an index into texts. symbols_sha256 hashes each symbol in table order: "
-            "its name's length as a little-endian 32-bit word, the ASCII name, value and size as "
-            "64-bit words, type as a byte and section as a 16-bit word. A named case changes an "
-            "image by [offset, hex] edits, cuts it to length, pads it with zeros to pad bytes or "
-            "changes the reservation. Each "
-            "sweep row is [image index, offset, hex, admit, symbols], with null where an outcome "
-            "equals the unchanged image's."
-        ),
+        "description": DESCRIPTION,
         "reservation": [RAM.address, RAM.size],
         "images": {
             name: {

@@ -113,8 +113,30 @@ def test_actual_capture_reference_and_full_digest_refuse_damage(
     for changes in variants:
         with pytest.raises(NeuralCaptureRefusalError):
             read_neural_bound_file(directory, baseline | changes, 16384)
+    _check_allocation_refusals(directory, baseline, len(first))
+    with pytest.raises(NeuralCaptureRefusalError, match="reference fields"):
+        read_neural_bound_file(directory, json.loads("[]"), 16384)
+    changed = bytearray(first)
+    changed[8] ^= 1
+    (directory / "damaged-capture.bin").write_bytes(changed)
+    with pytest.raises(NeuralCaptureRefusalError, match="SHA-256 mismatch"):
+        read_neural_bound_file(directory, baseline | {"path": "damaged-capture.bin"}, 16384)
+
+
+def _check_allocation_refusals(directory: Path, baseline: dict[str, object], size: int) -> None:
+    """Refuse a short, unrepresentable or invalid allocation for an actual capture file.
+
+    Parameters
+    ----------
+    directory
+        Capture directory holding the referenced file.
+    baseline
+        Valid reference to the file.
+    size
+        The file's length in bytes.
+    """
     with pytest.raises(NeuralCaptureRefusalError, match="allocation"):
-        read_neural_bound_file(directory, baseline, len(first) - 1)
+        read_neural_bound_file(directory, baseline, size - 1)
     for unrepresentable in (sys.maxsize, (1 << 64) - 1):
         with pytest.raises(NeuralCaptureRefusalError, match="allocation"):
             read_neural_bound_file(
@@ -123,13 +145,6 @@ def test_actual_capture_reference_and_full_digest_refuse_damage(
     for limit in [-1, True]:
         with pytest.raises(NeuralCaptureRefusalError, match="allocation"):
             read_neural_bound_file(directory, baseline, limit)
-    with pytest.raises(NeuralCaptureRefusalError, match="reference fields"):
-        read_neural_bound_file(directory, json.loads("[]"), 16384)
-    changed = bytearray(first)
-    changed[8] ^= 1
-    (directory / "damaged-capture.bin").write_bytes(changed)
-    with pytest.raises(NeuralCaptureRefusalError, match="SHA-256 mismatch"):
-        read_neural_bound_file(directory, baseline | {"path": "damaged-capture.bin"}, 16384)
 
 
 def test_actual_file_placement_and_missing_exports_are_refused(

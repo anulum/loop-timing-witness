@@ -120,6 +120,55 @@ def link_targets(text: str) -> list[tuple[int, str]]:
     return targets
 
 
+def _within_repository(source: str, path_part: str) -> str | None:
+    """Resolve a relative link path from its source document inside the repository.
+
+    Parameters
+    ----------
+    source
+        Repository path of the linking document.
+    path_part
+        Unquoted relative path of the link target.
+
+    Returns
+    -------
+    str | None
+        Repository path of the target, or ``None`` if ``..`` leaves the repository.
+    """
+    # PurePosixPath already drops "." segments; only ".." needs resolving.
+    joined = PurePosixPath(source).parent / path_part
+    parts: list[str] = []
+    for part in joined.parts:
+        if part != "..":
+            parts.append(part)
+        elif parts:
+            parts.pop()
+        else:
+            return None
+    return "/".join(parts)
+
+
+def _fragment_missing(fragment: str, resolved: str, documents: dict[str, str]) -> bool:
+    """Tell whether a fragment names no heading of a checked document.
+
+    Parameters
+    ----------
+    fragment
+        Unquoted link fragment.
+    resolved
+        Repository path of the target.
+    documents
+        Checked Markdown documents by path.
+
+    Returns
+    -------
+    bool
+        Whether the target is a checked document without a heading anchor equal
+        to the lower-cased fragment.
+    """
+    return resolved in documents and fragment.lower() not in heading_anchors(documents[resolved])
+
+
 def _target_finding(
     source: str,
     number: int,
@@ -154,29 +203,14 @@ def _target_finding(
     path_part = unquote(path_part)
     if path_part.startswith("/"):
         return f"{location}: absolute link {target!r} does not resolve on every host"
-    if path_part:
-        # PurePosixPath already drops "." segments; only ".." needs resolving.
-        joined = PurePosixPath(source).parent / path_part
-        parts: list[str] = []
-        for part in joined.parts:
-            if part != "..":
-                parts.append(part)
-            elif parts:
-                parts.pop()
-            else:
-                return f"{location}: link {target!r} leaves the repository"
-        resolved = "/".join(parts)
-    else:
-        resolved = source
+    resolved = _within_repository(source, path_part) if path_part else source
+    if resolved is None:
+        return f"{location}: link {target!r} leaves the repository"
     is_file = resolved in publishable
     is_directory = any(name.startswith(f"{resolved}/") for name in publishable)
     if not (is_file or is_directory):
         return f"{location}: link {target!r} does not reach a publishable path"
-    if (
-        fragment
-        and resolved in documents
-        and unquote(fragment).lower() not in heading_anchors(documents[resolved])
-    ):
+    if fragment and _fragment_missing(unquote(fragment), resolved, documents):
         return f"{location}: fragment {fragment!r} names no heading of {resolved}"
     return None
 

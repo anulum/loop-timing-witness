@@ -334,9 +334,20 @@ def test_missing_response_has_fixed_output_and_preserves_history(tmp_path: Path)
     assert not list(tmp_path.glob(".history.csv.*"))
 
 
-def test_real_verified_tls_fetch(tmp_path: Path) -> None:
-    """Refuse a real legacy handshake and verify the public command's authenticated TLS."""
-    certificate, key = tmp_path / "certificate.pem", tmp_path / "key.pem"
+def _self_signed_certificate(directory: Path) -> tuple[Path, Path]:
+    """Create a one-day self-signed certificate and key for localhost with OpenSSL.
+
+    Parameters
+    ----------
+    directory
+        Exclusive allocation.
+
+    Returns
+    -------
+    tuple[Path, Path]
+        Certificate and key files.
+    """
+    certificate, key = directory / "certificate.pem", directory / "key.pem"
     result = subprocess.run(
         [
             "openssl",
@@ -362,28 +373,45 @@ def test_real_verified_tls_fetch(tmp_path: Path) -> None:
         timeout=scaled(15),
     )
     assert result.returncode == 0
+    return certificate, key
+
+
+def _check_legacy_refused(url: str) -> None:
+    """Require the local endpoint to refuse a TLS 1.1 handshake with a protocol alert.
+
+    Parameters
+    ----------
+    url
+        HTTPS endpoint.
+    """
+    legacy = subprocess.run(
+        [
+            "openssl",
+            "s_client",
+            "-connect",
+            url.removeprefix("https://"),
+            "-tls1_1",
+            "-cipher",
+            "DEFAULT:@SECLEVEL=0",
+        ],
+        input="",
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(10),
+    )
+    assert legacy.returncode != 0
+    assert "alert protocol version" in legacy.stderr.lower()
+
+
+def test_real_verified_tls_fetch(tmp_path: Path) -> None:
+    """Refuse a real legacy handshake and verify the public command's authenticated TLS."""
+    certificate, key = _self_signed_certificate(tmp_path)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certificate, key)
     environment = {**os.environ, "SSL_CERT_FILE": str(certificate)}
     with endpoint(json.dumps(response()).encode(), context=context) as url:
-        legacy = subprocess.run(
-            [
-                "openssl",
-                "s_client",
-                "-connect",
-                url.removeprefix("https://"),
-                "-tls1_1",
-                "-cipher",
-                "DEFAULT:@SECLEVEL=0",
-            ],
-            input="",
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=scaled(10),
-        )
-        assert legacy.returncode != 0
-        assert "alert protocol version" in legacy.stderr.lower()
+        _check_legacy_refused(url)
         actual = command(tmp_path, "--url", url, environment=environment)
     assert actual.returncode == 0, actual.stderr
     assert json.loads(actual.stdout) == {"status": "updated", "observation_dates": 2}

@@ -55,6 +55,45 @@ def test_integrated_plant_faults_and_host_reports(
     """
     fault, thermal = scenario
     run, manifest = make_rtl_run()
+    stdout, rows = _simulate(run_rtl, run, fault, thermal)
+    check_trajectory(rows, thermal)
+    _write_tracking(run, rows)
+    _declare_plant(manifest, fault, thermal)
+    _bind_sources(run, manifest, tmp_path / "control_plant_witness_tb.vvp")
+    (run / "manifest.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+    output = tmp_path / "reports"
+    analysis = run_tool("analyze_run", str(run / "manifest.json"), "--output-dir", str(output))
+    assert analysis.returncode == 0, analysis.stderr
+    _check_plant_report(json.loads((output / "report.json").read_text(encoding="utf-8")), fault)
+    if fault == 1:
+        assert "delay=200000" in stdout
+    events = list(struct.iter_unpack("<BBHIQ", (run / "events.bin").read_bytes()))
+    assert [event[4] for event in events if event[0] == 4] == [
+        int(rows[0]["ticks"]) + period * 100000 for period in range(1, 6)
+    ]
+
+
+def _simulate(
+    run_rtl: RunRtl, run: Path, fault: int, thermal: int
+) -> tuple[str, list[dict[str, str]]]:
+    """Run the plant witness testbench into the run directory and read its plant rows.
+
+    Parameters
+    ----------
+    run_rtl
+        Public RTL compiler and simulator runner.
+    run
+        Run directory receiving ``events.bin`` and ``plant.csv``.
+    fault
+        Injected fault kind, or a negative value for none.
+    thermal
+        Mechanical (0) or thermal (1) plant.
+
+    Returns
+    -------
+    tuple[str, list[dict[str, str]]]
+        Simulator output, which reports both passes, and the five plant rows.
+    """
     raw_tracking = run / "plant.csv"
     result = run_rtl(
         "control_plant_witness_tb",
@@ -67,7 +106,19 @@ def test_integrated_plant_faults_and_host_reports(
     with raw_tracking.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
     assert len(rows) == 5
-    check_trajectory(rows, thermal)
+    return result.stdout, rows
+
+
+def _write_tracking(run: Path, rows: list[dict[str, str]]) -> None:
+    """Write the plant's reference and output as the run's tracking series.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    rows
+        Plant rows in Q8.24.
+    """
     (run / "tracking.csv").write_text(
         "cycle,reference,output\n"
         + "".join(
@@ -76,6 +127,20 @@ def test_integrated_plant_faults_and_host_reports(
         ),
         encoding="utf-8",
     )
+
+
+def _declare_plant(manifest: dict[str, Any], fault: int, thermal: int) -> None:
+    """Declare the five-cycle plant run and its fault schedule.
+
+    Parameters
+    ----------
+    manifest
+        Declaration changed in place.
+    fault
+        Injected fault kind at cycle 1, or a negative value for none.
+    thermal
+        Mechanical (0) or thermal (1) plant.
+    """
     # Energy is unavailable: no power-monitor hardware is present in simulation.
     manifest["files"]["power"] = None
     manifest["cycle_count"] = 5
@@ -93,6 +158,20 @@ def test_integrated_plant_faults_and_host_reports(
         if fault >= 0
         else []
     )
+
+
+def _bind_sources(run: Path, manifest: dict[str, Any], simulation: Path) -> None:
+    """Copy every RTL source, the testbench and its simulation into the run and bind them.
+
+    Parameters
+    ----------
+    run
+        Run directory holding the plant series.
+    manifest
+        Declaration changed in place.
+    simulation
+        Compiled testbench.
+    """
     repository = Path(__file__).resolve().parents[1]
     sources = [
         str(path.relative_to(repository)) for path in sorted((repository / "rtl").glob("*.sv"))
@@ -102,7 +181,7 @@ def test_integrated_plant_faults_and_host_reports(
         destination = run / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(repository / relative, destination)
-    shutil.copyfile(tmp_path / "control_plant_witness_tb.vvp", run / "control_plant_witness_tb.vvp")
+    shutil.copyfile(simulation, run / "control_plant_witness_tb.vvp")
     manifest["source"]["files"] = [
         {"path": relative, "sha256": hashlib.sha256((run / relative).read_bytes()).hexdigest()}
         for relative in [*sources, "control_plant_witness_tb.vvp", "plant.csv"]
@@ -111,11 +190,18 @@ def test_integrated_plant_faults_and_host_reports(
         manifest["files"][name]["sha256"] = hashlib.sha256(
             (run / manifest["files"][name]["path"]).read_bytes()
         ).hexdigest()
-    (run / "manifest.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
-    output = tmp_path / "reports"
-    analysis = run_tool("analyze_run", str(run / "manifest.json"), "--output-dir", str(output))
-    assert analysis.returncode == 0, analysis.stderr
-    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+
+
+def _check_plant_report(report: dict[str, Any], fault: int) -> None:
+    """Require the analysed plant run's faults, misses and latencies.
+
+    Parameters
+    ----------
+    report
+        Published analysis report.
+    fault
+        Injected fault kind, or a negative value for none.
+    """
     assert report["evidence_status"] == "simulation_only"
     assert report["fifo_overflow_count"] == 0
     assert report["events"]["control"]["fault_injections"] == (0 if fault < 0 else 1)
@@ -125,11 +211,6 @@ def test_integrated_plant_faults_and_host_reports(
     if fault == 1:
         assert report["events"]["intervals"]["fault_detection"]["maximum_ticks"] == 200000
         assert report["events"]["intervals"]["time_to_safe_state"]["maximum_ticks"] == 100000
-        assert "delay=200000" in result.stdout
-    events = list(struct.iter_unpack("<BBHIQ", (run / "events.bin").read_bytes()))
-    assert [event[4] for event in events if event[0] == 4] == [
-        int(rows[0]["ticks"]) + period * 100000 for period in range(1, 6)
-    ]
 
 
 def test_boundary_write_is_late(

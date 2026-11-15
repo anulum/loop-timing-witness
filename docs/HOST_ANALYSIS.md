@@ -354,16 +354,16 @@ artefact, measures with `--label ci` and uploads the result with a runner receip
 Local measurement:
 
 - artefact: [`control_run_analysis.local.json`](../benchmarks/control_run_analysis.local.json),
-  base commit `ae10270`;
+  base commit `d383f6e`;
 - host: Intel Core i5-11600K, shared workstation, `powersave` governor, child pinned to CPU 11;
-- load average 13.3–15.6 during the run, so the evidence is non-isolated.
+- load average 11.8–14.9 during the run, so the evidence is non-isolated.
 
 | Command | Cycles | Backend | P50 | P95 | Mean | Peak resident memory | Native speed-up of mean |
 |---|---|---|---|---|---|---|---|
-| run | 2·10⁵ | Python | 15.29 s | 18.58 s | 15.66 s | 763 MiB | — |
-| run | 2·10⁵ | native | 4.50 s | 5.41 s | 4.53 s | 1.60 GiB | 3.5× |
-| campaign | 10⁶ | Python | 39.31 s | 44.88 s | 38.58 s | 978 MiB | — |
-| campaign | 10⁶ | native | 2.70 s | 3.38 s | 2.88 s | 397 MiB | 13.4× |
+| run | 2·10⁵ | Python | 15.07 s | 18.70 s | 15.47 s | 764 MiB | — |
+| run | 2·10⁵ | native | 4.55 s | 5.44 s | 4.55 s | 1.60 GiB | 3.4× |
+| campaign | 10⁶ | Python | 42.50 s | 47.45 s | 43.05 s | 978 MiB | — |
+| campaign | 10⁶ | native | 3.19 s | 3.78 s | 3.28 s | 397 MiB | 13.1× |
 
 The run command publishes per-cycle interval and jitter tables, 37.7 MB and 75.2 MB for one
 repeat. The native run command reaches a peak memory about 2.1 times Python's, which is a known

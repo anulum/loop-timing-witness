@@ -136,6 +136,29 @@ def _sources(tree: DeviceTree, node: Node) -> tuple[tuple[str, tuple[int, ...]],
     return tuple(result)
 
 
+def _root_mapped(tree: DeviceTree, node: Node) -> bool:
+    """Tell whether a node's registers map through every ancestor to the root bus.
+
+    Parameters
+    ----------
+    tree
+        Original admitted topology.
+    node
+        Candidate node.
+
+    Returns
+    -------
+    bool
+        Whether the node has ``reg`` and every ancestor below the root declares ``ranges``.
+    """
+    if "reg" not in node.properties:
+        return False
+    parent = node.path.rpartition("/")[0] or "/"
+    while parent != "/" and "ranges" in tree.nodes[parent].properties:
+        parent = parent.rpartition("/")[0] or "/"
+    return parent == "/"
+
+
 def check_collisions(
     tree: DeviceTree, device_path: str, aperture: Region, plic_path: str, source: int
 ) -> None:
@@ -168,12 +191,7 @@ def check_collisions(
         ):
             message = "Witness PLIC source has another original consumer"
             raise ValueError(message)
-        if "reg" not in node.properties:
-            continue
-        parent = node.path.rpartition("/")[0] or "/"
-        while parent != "/" and "ranges" in tree.nodes[parent].properties:
-            parent = parent.rpartition("/")[0] or "/"
-        if parent != "/":
+        if not _root_mapped(tree, node):
             continue
         for region in register_regions(tree, node.path):
             if (

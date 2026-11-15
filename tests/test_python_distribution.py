@@ -18,7 +18,7 @@ import tarfile
 import tomllib
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -30,6 +30,27 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+# Programs run by an isolated interpreter: build both artifacts, rebuild the wheel, load
+# altered input through the installed API, and analyse through the installed package.
+BUILD_PROGRAM = (
+    "import json,sys; from flit_core.buildapi import build_wheel,build_sdist; "
+    "print(json.dumps([build_wheel(sys.argv[1]),build_sdist(sys.argv[1])]))"
+)
+REBUILD_PROGRAM = (
+    "import sys; from flit_core.buildapi import build_wheel; print(build_wheel(sys.argv[1]))"
+)
+NONFINITE_PROGRAM = (
+    "import sys\nfrom pathlib import Path\n"
+    "from loop_timing_witness import load_run\n"
+    "try:\n load_run(Path(sys.argv[1]))\n"
+    "except ValueError as error:\n print(str(error))\n"
+    "else:\n raise AssertionError('nonfinite input accepted')\n"
+)
+API_PROGRAM = (
+    "import json,sys; from pathlib import Path; import loop_timing_witness as w; "
+    "print(json.dumps({'origin':w.__file__,'prefix':sys.prefix,"
+    "'report':w.build_report(w.load_run(Path(sys.argv[1])))[0]}))"
+)
 PROFILE_RESOURCES = frozenset(
     {
         "neural-selected-source-contract.json",
@@ -81,19 +102,7 @@ def built_distribution(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir()
     built = _run(
-        [
-            sys.executable,
-            "-I",
-            "-c",
-            (
-                "import json,sys; from flit_core.buildapi import build_wheel,build_sdist; "
-                "print(json.dumps([build_wheel(sys.argv[1]),build_sdist(sys.argv[1])]))"
-            ),
-            str(artifacts),
-        ],
-        ROOT,
-        tmp_path,
-        "build",
+        [sys.executable, "-I", "-c", BUILD_PROGRAM, str(artifacts)], ROOT, tmp_path, "build"
     )
     assert built.returncode == 0, built.stdout + built.stderr
     wheel_name, source_name = json.loads(built.stdout.splitlines()[-1])
@@ -101,33 +110,56 @@ def built_distribution(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
     assert isinstance(source_name, str)
     wheel = artifacts / wheel_name
     if request.param == "sdist":
-        unpacked = tmp_path / "unpacked"
-        with tarfile.open(artifacts / source_name) as archive:
-            archive.extractall(unpacked, filter="data")
-        rebuilt = tmp_path / "rebuilt"
-        rebuilt.mkdir()
-        result = _run(
-            [
-                sys.executable,
-                "-I",
-                "-c",
-                (
-                    "import sys; from flit_core.buildapi import build_wheel; "
-                    "print(build_wheel(sys.argv[1]))"
-                ),
-                str(rebuilt),
-            ],
-            unpacked / f"loop_timing_witness-{VERSION}",
-            tmp_path,
-            "rebuild",
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        source_wheel = rebuilt / result.stdout.splitlines()[-1]
-        with zipfile.ZipFile(wheel) as direct, zipfile.ZipFile(source_wheel) as from_source:
-            assert {n: direct.read(n) for n in direct.namelist()} == {
-                n: from_source.read(n) for n in from_source.namelist()
-            }
-        wheel = source_wheel
+        wheel = _rebuilt_from_source(tmp_path, artifacts / source_name, wheel)
+    _check_wheel_resources(wheel)
+    return wheel
+
+
+def _rebuilt_from_source(directory: Path, source: Path, wheel: Path) -> Path:
+    """Rebuild the wheel from the unpacked source archive and require identical members.
+
+    Parameters
+    ----------
+    directory
+        Exclusive extraction, rebuild and log directory.
+    source
+        Built source archive.
+    wheel
+        Directly built wheel.
+
+    Returns
+    -------
+    Path
+        Wheel rebuilt from the source archive.
+    """
+    unpacked = directory / "unpacked"
+    with tarfile.open(source) as archive:
+        archive.extractall(unpacked, filter="data")
+    rebuilt = directory / "rebuilt"
+    rebuilt.mkdir()
+    result = _run(
+        [sys.executable, "-I", "-c", REBUILD_PROGRAM, str(rebuilt)],
+        unpacked / f"loop_timing_witness-{VERSION}",
+        directory,
+        "rebuild",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    source_wheel = rebuilt / result.stdout.splitlines()[-1]
+    with zipfile.ZipFile(wheel) as direct, zipfile.ZipFile(source_wheel) as from_source:
+        assert {n: direct.read(n) for n in direct.namelist()} == {
+            n: from_source.read(n) for n in from_source.namelist()
+        }
+    return source_wheel
+
+
+def _check_wheel_resources(wheel: Path) -> None:
+    """Require the wheel's package code and data resources to match the repository.
+
+    Parameters
+    ----------
+    wheel
+        Built wheel.
+    """
     with zipfile.ZipFile(wheel) as package:
         assert (
             package.read("loop_timing_witness/manifest_io.py")
@@ -147,8 +179,6 @@ def built_distribution(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
             assert (
                 package.read(f"loop_timing_witness/data/{resource.name}") == resource.read_bytes()
             )
-
-    return wheel
 
 
 @pytest.fixture
@@ -172,43 +202,34 @@ def installed_distribution(tmp_path: Path, built_distribution: Path) -> Path:
     assert created.returncode == 0, created.stderr
     interpreter = consumer / "bin/python"
     wheelhouse = Path(os.environ.get("WITNESS_PYTHON_WHEELHOUSE", ROOT / "build/python-wheelhouse"))
-    installed = _run(
-        [
-            str(interpreter),
-            "-I",
-            "-m",
-            "pip",
-            "install",
-            "--no-index",
-            "--find-links",
-            str(wheelhouse),
-            "--require-hashes",
-            "--no-deps",
-            "-r",
-            str(ROOT / "requirements-runtime.txt"),
-        ],
-        tmp_path,
-        tmp_path,
-        "runtime_install",
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    installed = _run(
-        [
-            str(interpreter),
-            "-I",
-            "-m",
-            "pip",
-            "install",
-            "--no-index",
-            "--no-deps",
-            str(built_distribution),
-        ],
-        tmp_path,
-        tmp_path,
-        "package_install",
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
+    runtime = ["--find-links", str(wheelhouse), "--require-hashes", "--no-deps"]
+    requirements = ["-r", str(ROOT / "requirements-runtime.txt")]
+    _pip_install(interpreter, [*runtime, *requirements], tmp_path, "runtime_install")
+    _pip_install(interpreter, ["--no-deps", str(built_distribution)], tmp_path, "package_install")
     return consumer
+
+
+def _pip_install(interpreter: Path, arguments: list[str], directory: Path, name: str) -> None:
+    """Install without an index into the consumer environment and require success.
+
+    Parameters
+    ----------
+    interpreter
+        Consumer environment interpreter.
+    arguments
+        Installer arguments after ``--no-index``.
+    directory
+        Working and log directory.
+    name
+        Log name.
+    """
+    installed = _run(
+        [str(interpreter), "-I", "-m", "pip", "install", "--no-index", *arguments],
+        directory,
+        directory,
+        name,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
 
 
 def assert_installed_nonfinite_refusal(consumer: Path, manifest_path: Path, tmp_path: Path) -> None:
@@ -227,19 +248,7 @@ def assert_installed_nonfinite_refusal(consumer: Path, manifest_path: Path, tmp_
     for index, token in enumerate(("NaN", "Infinity", "-Infinity", "1e999", "-1e999")):
         manifest_path.write_text(original.replace("{", '{"untrusted_numeric":' + token + ",", 1))
         api = _run(
-            [
-                str(consumer / "bin/python"),
-                "-I",
-                "-c",
-                (
-                    "import sys\nfrom pathlib import Path\n"
-                    "from loop_timing_witness import load_run\n"
-                    "try:\n load_run(Path(sys.argv[1]))\n"
-                    "except ValueError as error:\n print(str(error))\n"
-                    "else:\n raise AssertionError('nonfinite input accepted')\n"
-                ),
-                str(manifest_path),
-            ],
+            [str(consumer / "bin/python"), "-I", "-c", NONFINITE_PROGRAM, str(manifest_path)],
             tmp_path,
             tmp_path,
             f"nonfinite-api-{index}",
@@ -294,17 +303,7 @@ def test_installed_distribution_analyzes_real_rtl(
         manifest_path.write_text(json.dumps(manifest))
     expected, _ = build_report(load_run(manifest_path))
     api = _run(
-        [
-            str(interpreter),
-            "-I",
-            "-c",
-            (
-                "import json,sys; from pathlib import Path; import loop_timing_witness as w; "
-                "print(json.dumps({'origin':w.__file__,'prefix':sys.prefix,"
-                "'report':w.build_report(w.load_run(Path(sys.argv[1])))[0]}))"
-            ),
-            str(manifest_path),
-        ],
+        [str(interpreter), "-I", "-c", API_PROGRAM, str(manifest_path)],
         tmp_path,
         tmp_path,
         "public_api",
@@ -316,9 +315,64 @@ def test_installed_distribution_analyzes_real_rtl(
     assert observed["report"] == expected
     assert observed["report"]["started_utc"] == manifest["started_utc"]
     command = consumer / "bin/loop-timing-witness-analyze"
-    reports = tmp_path / "reports"
+    _check_command_report(command, manifest_path, expected, tmp_path)
+    assert_installed_nonfinite_refusal(consumer, manifest_path, tmp_path)
+    _check_digest_refusal(command, manifest, manifest_path, tmp_path)
+
+
+def _check_digest_refusal(
+    command: Path, manifest: dict[str, Any], manifest_path: Path, directory: Path
+) -> None:
+    """Zero the events digest and require the installed command to refuse the run.
+
+    Parameters
+    ----------
+    command
+        Installed public analyser command.
+    manifest
+        Run declaration, changed in place and written.
+    manifest_path
+        Run manifest path.
+    directory
+        Exclusive log and report directory.
+    """
+    manifest["files"]["events"]["sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(manifest))
+    refused = directory / "refused"
     result = _run(
-        [str(command), str(manifest_path), "--output-dir", str(reports)], tmp_path, tmp_path, "cli"
+        [str(command), str(manifest_path), "--output-dir", str(refused)],
+        directory,
+        directory,
+        "refusal",
+    )
+    assert result.returncode == 1
+    assert "input SHA-256 mismatch: events.bin" in result.stderr
+    assert "events.bin" in result.stderr
+    assert not refused.exists()
+
+
+def _check_command_report(
+    command: Path, manifest_path: Path, expected: dict[str, Any], directory: Path
+) -> None:
+    """Require the installed command to publish the expected report and jitter files.
+
+    Parameters
+    ----------
+    command
+        Installed public analyser command.
+    manifest_path
+        Valid run manifest.
+    expected
+        Report the repository analysis gives.
+    directory
+        Exclusive log and report directory.
+    """
+    reports = directory / "reports"
+    result = _run(
+        [str(command), str(manifest_path), "--output-dir", str(reports)],
+        directory,
+        directory,
+        "cli",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads((reports / "report.json").read_bytes()) == expected
@@ -329,17 +383,3 @@ def test_installed_distribution_analyzes_real_rtl(
         content = (reports / filename).read_text()
         assert "simulation_only" in content
         assert "compute_time" in content
-    assert_installed_nonfinite_refusal(consumer, manifest_path, tmp_path)
-    manifest["files"]["events"]["sha256"] = "0" * 64
-    manifest_path.write_text(json.dumps(manifest))
-    refused = tmp_path / "refused"
-    result = _run(
-        [str(command), str(manifest_path), "--output-dir", str(refused)],
-        tmp_path,
-        tmp_path,
-        "refusal",
-    )
-    assert result.returncode == 1
-    assert "input SHA-256 mismatch: events.bin" in result.stderr
-    assert "events.bin" in result.stderr
-    assert not refused.exists()

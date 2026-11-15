@@ -146,13 +146,21 @@ def test_real_native_run(
     ]
     check_fault_outcome(summary, rows, records, fault)
     check_native_commands(mode, rows, native_controllers)
+    _check_exclusive_rerun([str(native_run), str(config), str(events), str(tracking)])
+
+
+def _check_exclusive_rerun(command: list[str]) -> None:
+    """Require a second run onto existing outputs to be refused and to leave them unchanged.
+
+    Parameters
+    ----------
+    command
+        The completed run's command, whose last two arguments are its outputs.
+    """
+    events, tracking = Path(command[-2]), Path(command[-1])
     saved = events.read_bytes(), tracking.read_bytes()
     refused = subprocess.run(
-        [str(native_run), str(config), str(events), str(tracking)],
-        capture_output=True,
-        text=True,
-        timeout=scaled(5),
-        check=False,
+        command, capture_output=True, text=True, timeout=scaled(5), check=False
     )
     assert refused.returncode == 1
     assert "exclusive" in refused.stderr

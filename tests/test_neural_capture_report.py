@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import struct
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -22,6 +22,8 @@ from loop_timing_witness.neural_capture import NeuralCaptureConfiguration, load_
 from loop_timing_witness.neural_capture_report import neural_capture_report
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from test_neural_capture import CaptureBindings
 
 pytest_plugins = ("test_neural_capture",)
@@ -47,11 +49,39 @@ def test_actual_capture_report_retains_complete_references_and_record_positions(
     report = parse_json_object(
         canonical_json_bytes(neural_capture_report(capture)), "capture report"
     )
+    _check_steps(report, configuration.service_packets)
+    receipt = (directory / "capture-counts.json").read_bytes()
+    assert report["counter_receipt"] == {
+        "sha256": hashlib.sha256(receipt).hexdigest(),
+        "byte_length": len(receipt),
+    }
+    _check_channels(report["channels"], streams)
+    service = report["channels"][2]
+    assert service["observed_data_records"] == configuration.service_packets
+    assert service["observed_total_records"] == configuration.service_packets + 2
+    if empty_service:
+        assert service["events"] == []
+        assert service["sources"]["payload"] == {
+            "sha256": hashlib.sha256(b"").hexdigest(),
+            "byte_length": 0,
+        }
+
+
+def _check_steps(report: dict[str, Any], service_packets: int) -> None:
+    """Require the report's scope, request and its 1,000 one-tick step observations.
+
+    Parameters
+    ----------
+    report
+        Decoded capture report.
+    service_packets
+        Requested service packet population.
+    """
     assert report["scope"] == "capture"
     assert report["unit"] == "shared-counter ticks"
     assert report["requested"] == {
         "step_count": 1000,
-        "service_packets": configuration.service_packets,
+        "service_packets": service_packets,
         "capture_horizon_edges": 4096,
     }
     assert report["refusals"] == []
@@ -69,12 +99,19 @@ def test_actual_capture_report_retains_complete_references_and_record_positions(
         "observed_tick": 1020,
         "interval_ticks": 1,
     }
-    receipt = (directory / "capture-counts.json").read_bytes()
-    assert report["counter_receipt"] == {
-        "sha256": hashlib.sha256(receipt).hexdigest(),
-        "byte_length": len(receipt),
-    }
-    for index, channel in enumerate(report["channels"]):
+
+
+def _check_channels(channels: list[dict[str, Any]], streams: Sequence[bytes]) -> None:
+    """Require each channel's source digest, markers, exact drop counter and record offsets.
+
+    Parameters
+    ----------
+    channels
+        Reported channels in input, state, service order.
+    streams
+        Original raw capture of each channel.
+    """
+    for index, channel in enumerate(channels):
         assert channel["sources"]["capture"] == {
             "sha256": hashlib.sha256(streams[index]).hexdigest(),
             "byte_length": len(streams[index]),
@@ -85,15 +122,6 @@ def test_actual_capture_report_retains_complete_references_and_record_positions(
         for event in channel["events"]:
             original = struct.unpack_from("<BBHIQ", streams[index], event["record_byte_offset"])
             assert original == (14 + index, 0, 0, event["identity"], event["ticks"])
-    service = report["channels"][2]
-    assert service["observed_data_records"] == configuration.service_packets
-    assert service["observed_total_records"] == configuration.service_packets + 2
-    if empty_service:
-        assert service["events"] == []
-        assert service["sources"]["payload"] == {
-            "sha256": hashlib.sha256(b"").hexdigest(),
-            "byte_length": 0,
-        }
 
 
 def test_actual_report_locates_service_identity_gaps_without_relabelling(

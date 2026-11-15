@@ -17,6 +17,7 @@ from .neural_event_stream import NEURAL_RECORD
 
 if TYPE_CHECKING:
     from .neural_capture import NeuralCaptureBundle
+    from .neural_event_stream import NeuralChannel
 
 
 def _channel_report(capture: NeuralCaptureBundle, index: int) -> dict[str, object]:
@@ -37,25 +38,16 @@ def _channel_report(capture: NeuralCaptureBundle, index: int) -> dict[str, objec
     channel = capture.channels[index]
     counts = capture.counts[index]
     accounting = capture.accounting[index]
-    sources = {
-        name: {"sha256": hashlib.sha256(content).hexdigest(), "byte_length": len(content)}
-        for name, content in (
-            ("capture", capture.captures[index]),
-            ("payload", capture.payloads[index]),
-            ("markers", capture.markers[index]),
-        )
-    }
-    first_data_record = 1 if channel.start_tick is not None else 0
     return {
         "role": channel.role,
-        "sources": sources,
-        "derived_projections": {
-            name: {"sha256": hashlib.sha256(content).hexdigest(), "byte_length": len(content)}
-            for name, content in (
-                ("payload", channel.payload_bytes),
-                ("markers", channel.marker_bytes),
-            )
-        },
+        "sources": _identities(
+            capture=capture.captures[index],
+            payload=capture.payloads[index],
+            markers=capture.markers[index],
+        ),
+        "derived_projections": _identities(
+            payload=channel.payload_bytes, markers=channel.marker_bytes
+        ),
         "start_marker_tick": channel.start_tick,
         "end_marker_tick": channel.end_tick,
         "observed_data_records": len(channel.events),
@@ -70,16 +62,52 @@ def _channel_report(capture: NeuralCaptureBundle, index: int) -> dict[str, objec
             "lower_bound": accounting.dropped_lower_bound,
             "exact": accounting.drop_count_exact,
         },
-        "events": [
-            {
-                "identity": event.identity,
-                "ticks": event.ticks,
-                "record_byte_offset": (ordinal + first_data_record) * NEURAL_RECORD.size,
-            }
-            for ordinal, event in enumerate(channel.events)
-        ],
+        "events": _event_rows(channel),
         "accounting_refusals": list(accounting.refusals),
     }
+
+
+def _identities(**contents: bytes) -> dict[str, dict[str, object]]:
+    """Return the digest and length of each named byte string, in the given order.
+
+    Parameters
+    ----------
+    **contents
+        Byte strings keyed by their report name.
+
+    Returns
+    -------
+    dict[str, dict[str, object]]
+        ``sha256`` and ``byte_length`` of each byte string.
+    """
+    return {
+        name: {"sha256": hashlib.sha256(content).hexdigest(), "byte_length": len(content)}
+        for name, content in contents.items()
+    }
+
+
+def _event_rows(channel: NeuralChannel) -> list[dict[str, int]]:
+    """Return each observed event with its byte offset in the original capture.
+
+    Parameters
+    ----------
+    channel
+        Decoded channel; a start marker, when present, is the first record.
+
+    Returns
+    -------
+    list[dict[str, int]]
+        Identity, tick and record byte offset of every data record, in order.
+    """
+    first_data_record = 1 if channel.start_tick is not None else 0
+    return [
+        {
+            "identity": event.identity,
+            "ticks": event.ticks,
+            "record_byte_offset": (ordinal + first_data_record) * NEURAL_RECORD.size,
+        }
+        for ordinal, event in enumerate(channel.events)
+    ]
 
 
 def neural_capture_report(capture: NeuralCaptureBundle) -> dict[str, object]:

@@ -25,6 +25,24 @@ if TYPE_CHECKING:
 START_MARKER_TICK = 10
 FIRST_INPUT_TICK = 20
 SOURCE_DROP_COUNTER_BITS = 32
+_COMPLETION_FLAGS = ("pending_empty", "service_quiescent", "pipeline_quiescent", "drain_complete")
+_COMPLETION_FIELDS = {
+    **dict.fromkeys(
+        (
+            "requested_steps",
+            "observed_states",
+            "raw_spike_rows",
+            "raw_spikes",
+            "service_packets",
+            "simultaneous_spike_and_pending",
+            "tail_checked_after_edge_tick",
+            "counter_at_tail_check",
+            "final_counter",
+        ),
+        UNSIGNED,
+    ),
+    **dict.fromkeys(_COMPLETION_FLAGS, FLAG),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +62,45 @@ class NeuralReceiptFindings:
     completion: tuple[str, ...]
     capture: tuple[str, ...]
     publication: tuple[str, ...]
+
+
+def _root_findings(
+    run: BoundNeuralRun,
+    traces: NeuralTraceAnalysis,
+    completion: dict[str, Any],
+) -> list[str]:
+    """Compare the root completion declarations with the actual data and receipt.
+
+    Parameters
+    ----------
+    run
+        Original root completion declarations.
+    traces
+        Independent full source trace counts.
+    completion
+        Admitted actual producer receipt.
+
+    Returns
+    -------
+    list[str]
+        One finding for each root declaration that differs.
+    """
+    count = run.manifest["step_count"]
+    status = {
+        "requested_steps": count,
+        "observed_states": count,
+        "raw_spikes": traces.raw_spikes,
+        "observed_service_packets": traces.service_packets,
+        "pending_empty": completion["pending_empty"],
+        "service_valid_quiescent": completion["service_quiescent"],
+        "pipeline_quiescent": completion["pipeline_quiescent"],
+        "finalized": completion["drain_complete"],
+    }
+    return [
+        f"Root completion differs from actual source data: {name}."
+        for name, expected in status.items()
+        if run.manifest["completion"][name] != expected
+    ]
 
 
 def _completion_findings(
@@ -68,20 +125,7 @@ def _completion_findings(
         Full population, non-coalescence and termination inconsistencies.
     """
     count = run.manifest["step_count"]
-    failures = []
-    status = {
-        "requested_steps": count,
-        "observed_states": count,
-        "raw_spikes": traces.raw_spikes,
-        "observed_service_packets": traces.service_packets,
-        "pending_empty": completion["pending_empty"],
-        "service_valid_quiescent": completion["service_quiescent"],
-        "pipeline_quiescent": completion["pipeline_quiescent"],
-        "finalized": completion["drain_complete"],
-    }
-    for name, expected in status.items():
-        if run.manifest["completion"][name] != expected:
-            failures.append(f"Root completion differs from actual source data: {name}.")
+    failures = _root_findings(run, traces, completion)
     actual_counts = {
         "requested_steps": count,
         "observed_states": count,
@@ -95,10 +139,7 @@ def _completion_findings(
     for name, expected in actual_counts.items():
         if completion[name] != expected:
             failures.append(f"Actual selected completion predicate differs: {name}.")
-    if any(
-        completion[name] is not True
-        for name in ("pending_empty", "service_quiescent", "pipeline_quiescent", "drain_complete")
-    ):
+    if any(completion[name] is not True for name in _COMPLETION_FLAGS):
         failures.append("Actual tail/pipeline/service/drain is not finalized and quiescent.")
     return tuple(failures)
 
@@ -174,27 +215,7 @@ def analyze_receipt_dimensions(
         If receipt shape or nested original source binding is ambiguous.
     """
     completion = decode_actual_receipt(
-        run.files["actual_completion"],
-        "producer completion",
-        {
-            **dict.fromkeys(
-                (
-                    "requested_steps",
-                    "observed_states",
-                    "raw_spike_rows",
-                    "raw_spikes",
-                    "service_packets",
-                    "simultaneous_spike_and_pending",
-                    "tail_checked_after_edge_tick",
-                    "counter_at_tail_check",
-                    "final_counter",
-                ),
-                UNSIGNED,
-            ),
-            **dict.fromkeys(
-                ("pending_empty", "service_quiescent", "pipeline_quiescent", "drain_complete"), FLAG
-            ),
-        },
+        run.files["actual_completion"], "producer completion", _COMPLETION_FIELDS
     )
     source = analyze_source_receipts(run, traces)
     publication: tuple[str, ...] = ()

@@ -127,13 +127,11 @@ pub(crate) fn reset_files(
     )
 }
 
-/// Bind complete fixture and capture bytes after the caller's closed source admission.
-pub(crate) fn finish(
-    root: &Path,
-    manifest: Manifest,
-    sources: BTreeMap<String, Vec<u8>>,
-    mut files: BTreeMap<String, Vec<u8>>,
-) -> Result<BoundRun, String> {
+/// Require the selected fixture digests and the source stimulus equal to its input binding.
+fn check_fixture(
+    sources: &BTreeMap<String, Vec<u8>>,
+    files: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), String> {
     for (name, expected) in [
         (
             "original_stimulus",
@@ -153,7 +151,15 @@ pub(crate) fn finish(
             "Public neural source stimulus differs from its identified input binding.".into(),
         );
     }
-    let counts = crate::capture::counter_receipt(&files["counter_receipt"])?;
+    Ok(())
+}
+
+/// Read and decode every declared channel capture and keep its bytes in the run files.
+fn bind_channels(
+    root: &Path,
+    manifest: &Manifest,
+    files: &mut BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<Channel>, String> {
     let mut channels = Vec::new();
     for (index, declaration) in manifest.channels.iter().enumerate() {
         let population = if index == 2 {
@@ -170,6 +176,19 @@ pub(crate) fn finish(
         files.insert(format!("{}_markers", declaration.role), markers);
         channels.push(channel);
     }
+    Ok(channels)
+}
+
+/// Bind complete fixture and capture bytes after the caller's closed source admission.
+pub(crate) fn finish(
+    root: &Path,
+    manifest: Manifest,
+    sources: BTreeMap<String, Vec<u8>>,
+    mut files: BTreeMap<String, Vec<u8>>,
+) -> Result<BoundRun, String> {
+    check_fixture(&sources, &files)?;
+    let counts = crate::capture::counter_receipt(&files["counter_receipt"])?;
+    let channels = bind_channels(root, &manifest, &mut files)?;
     Ok(BoundRun {
         root: root.to_path_buf(),
         manifest,

@@ -75,6 +75,21 @@ pub(crate) fn load(run: &BoundRun) -> Result<Rows, String> {
             }
         }
     }
+    check_ranges(&rows)?;
+    check_ticks(&rows, run.manifest.capture_horizon_edges)?;
+    for (index, row) in rows["service_trace"].iter().enumerate() {
+        if row[..3] != [i64::from(run.manifest.epoch), index as i64, 0] {
+            return Err("Original service epoch/ordinal/neuron identity sequence differs.".into());
+        }
+        if !(0..65536).contains(&row[3]) {
+            return Err("Original embedded service timestamp outside unsigned16 range.".into());
+        }
+    }
+    Ok(rows)
+}
+
+/// Require signed 16-bit stimuli and states and binary spikes in every table.
+fn check_ranges(rows: &Rows) -> Result<(), String> {
     for (name, first, last) in [("original_stimulus", 0, 4), ("input_trace", 2, 6)] {
         if rows[name]
             .iter()
@@ -103,28 +118,25 @@ pub(crate) fn load(run: &BoundRun) -> Result<Rows, String> {
     {
         return Err("Original raw spike outside binary range.".into());
     }
+    Ok(())
+}
+
+/// Require every observed tick inside the capture horizon.
+fn check_ticks(rows: &Rows, horizon: u64) -> Result<(), String> {
     for name in [
         "input_trace",
         "numerical_trace",
         "raw_spike_trace",
         "service_trace",
     ] {
-        if rows[name].iter().any(|row| {
-            row.last()
-                .is_none_or(|v| *v < 0 || *v as u64 >= run.manifest.capture_horizon_edges)
-        }) {
+        if rows[name]
+            .iter()
+            .any(|row| row.last().is_none_or(|v| *v < 0 || *v as u64 >= horizon))
+        {
             return Err(format!(
                 "Original observed tick outside no-wrap horizon: {name}."
             ));
         }
     }
-    for (index, row) in rows["service_trace"].iter().enumerate() {
-        if row[..3] != [i64::from(run.manifest.epoch), index as i64, 0] {
-            return Err("Original service epoch/ordinal/neuron identity sequence differs.".into());
-        }
-        if !(0..65536).contains(&row[3]) {
-            return Err("Original embedded service timestamp outside unsigned16 range.".into());
-        }
-    }
-    Ok(rows)
+    Ok(())
 }

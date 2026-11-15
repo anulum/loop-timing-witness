@@ -45,7 +45,7 @@ pub(crate) fn checker(run: &BoundRun, traces: &TraceFindings) -> Result<Vec<Stri
         &run.files["source_owned_public_model_checker"],
         "historical source checker",
     )?;
-    let _paths = (c.model_module, c.constants_module);
+    let _paths = (&c.model_module, &c.constants_module);
     if c.rows > 65535 || c.spikes > 65535 {
         return Err("Invalid complete actual receipt: historical source checker.".into());
     }
@@ -60,7 +60,25 @@ pub(crate) fn checker(run: &BoundRun, traces: &TraceFindings) -> Result<Vec<Stri
             ));
         }
     }
-    for (name, actual, expected) in [
+    let pass = c.source_owned_public_checker_pass;
+    for (name, actual, expected) in digest_bindings(run, c) {
+        if actual != expected {
+            failures.push(format!(
+                "Historical source checker binding differs: {name}."
+            ));
+        }
+    }
+    if !pass {
+        failures.push(
+            "Historical source checker binding differs: source_owned_public_checker_pass.".into(),
+        );
+    }
+    Ok(failures)
+}
+
+/// Each recorded checker digest with the digest of the run file or pin it names.
+fn digest_bindings(run: &BoundRun, c: Checker) -> [(&'static str, String, String); 5] {
+    [
         (
             "original_input_sha256",
             c.original_input_sha256,
@@ -86,17 +104,5 @@ pub(crate) fn checker(run: &BoundRun, traces: &TraceFindings) -> Result<Vec<Stri
             c.constants_sha256,
             run.manifest.sc_body_pins.constants.clone(),
         ),
-    ] {
-        if actual != expected {
-            failures.push(format!(
-                "Historical source checker binding differs: {name}."
-            ));
-        }
-    }
-    if !c.source_owned_public_checker_pass {
-        failures.push(
-            "Historical source checker binding differs: source_owned_public_checker_pass.".into(),
-        );
-    }
-    Ok(failures)
+    ]
 }

@@ -36,8 +36,30 @@ struct Clock {
 
 /// Bind native driver/precision and compare common original edge predicates.
 pub(crate) fn analyze(run: &BoundRun, done: &ProducerCompletion) -> Result<Vec<String>, String> {
+    let c = admit(run)?;
+    let mut findings = Vec::new();
+    if run.files["declared_clock_schedule"] != run.files["clock_schedule_ref"] {
+        findings.push("Root and tool receipt clock schedule bytes differ.".into());
+    }
+    if c.simulation_time_unit != "1ns" {
+        findings.push("Actual source clock schedule differs: simulation_time_unit.".into());
+    }
+    for (name, actual, expected) in schedule(&c, run, done) {
+        if actual != expected {
+            findings.push(format!("Actual source clock schedule differs: {name}."));
+        }
+    }
+    let n = u64::from(run.manifest.step_count);
+    if done.final_counter <= n + 30 || done.final_counter >= run.manifest.capture_horizon_edges {
+        findings.push("Full final counter does not fit the admitted post-marker horizon.".into());
+    }
+    Ok(findings)
+}
+
+/// Decode the closed clock receipt and require its bounds, producer source and precision.
+fn admit(run: &BoundRun) -> Result<Clock, String> {
     let c: Clock = receipt(&run.files["clock_schedule_ref"], "native clock")?;
-    let _scope = c.scope;
+    let _scope = &c.scope;
     let values = [
         c.capture_half_period_units,
         c.drain_half_period_units,
@@ -71,15 +93,17 @@ pub(crate) fn analyze(run: &BoundRun, done: &ProducerCompletion) -> Result<Vec<S
     {
         return Err("Actual native clock/source/precision differs.".into());
     }
+    Ok(c)
+}
+
+/// Every recorded schedule field with the value the selected run requires.
+fn schedule(
+    c: &Clock,
+    run: &BoundRun,
+    done: &ProducerCompletion,
+) -> [(&'static str, u64, u64); 10] {
     let n = u64::from(run.manifest.step_count);
-    let mut findings = Vec::new();
-    if run.files["declared_clock_schedule"] != run.files["clock_schedule_ref"] {
-        findings.push("Root and tool receipt clock schedule bytes differ.".into());
-    }
-    if c.simulation_time_unit != "1ns" {
-        findings.push("Actual source clock schedule differs: simulation_time_unit.".into());
-    }
-    for (name, actual, expected) in [
+    [
         ("capture_half_period_units", c.capture_half_period_units, 5),
         ("drain_half_period_units", c.drain_half_period_units, 5),
         ("first_input_tick", c.first_input_tick, 20),
@@ -118,13 +142,5 @@ pub(crate) fn analyze(run: &BoundRun, done: &ProducerCompletion) -> Result<Vec<S
             c.capture_horizon_edges,
             run.manifest.capture_horizon_edges,
         ),
-    ] {
-        if actual != expected {
-            findings.push(format!("Actual source clock schedule differs: {name}."));
-        }
-    }
-    if done.final_counter <= n + 30 || done.final_counter >= run.manifest.capture_horizon_edges {
-        findings.push("Full final counter does not fit the admitted post-marker horizon.".into());
-    }
-    Ok(findings)
+    ]
 }

@@ -57,11 +57,52 @@ struct Reset {
     model_and_encoder_quiescent_after_reset: bool,
 }
 
+/// Original abandoned traces of the reset prefix.
+struct Abandoned {
+    /// Source input rows.
+    input: Vec<rows::Row>,
+    /// Numerical state rows.
+    state: Vec<rows::Row>,
+    /// Raw spike rows.
+    spikes: Vec<rows::Row>,
+    /// Encoder service rows.
+    service: Vec<rows::Row>,
+}
+
 /// Recompute the actual complete reset/prefix claim without inventing hidden state.
 pub(crate) fn analyze(run: &BoundRun, original_rows: &rows::Rows) -> Result<Vec<String>, String> {
     let Some(raw) = run.files.get("reset_epoch_receipt") else {
         return Ok(Vec::new());
     };
+    let r = admit(raw)?;
+    let a = abandoned(run)?;
+    let mut failures = prefix_failures(&a, original_rows);
+    if !a.service.is_empty() {
+        failures.push("Abandoned encoder pending spike was already serviced before reset.".into());
+    }
+    for (name, differs) in prefix_predicates(&r, run, &a)
+        .into_iter()
+        .chain(reset_predicates(&r))
+    {
+        if differs {
+            failures.push(format!("Actual joint reset predicate differs: {name}."));
+        }
+    }
+    if a.input.len() < 2
+        || a.state.len() != a.input.len() - 1
+        || a.spikes.len() != a.state.len()
+        || r.prefix_raw_spikes != 1
+        || !a.service.is_empty()
+    {
+        failures.push(
+            "Actual prefix did not establish the selected queued/inflight/pending reset.".into(),
+        );
+    }
+    Ok(failures)
+}
+
+/// Decode the closed reset receipt and require every count within 16 bits.
+fn admit(raw: &[u8]) -> Result<Reset, String> {
     let r: Reset = receipt(raw, "actual joint reset")?;
     let counts = [
         r.abandoned_epoch,
@@ -86,6 +127,11 @@ pub(crate) fn analyze(run: &BoundRun, original_rows: &rows::Rows) -> Result<Vec<
     {
         return Err("Invalid complete actual receipt: actual joint reset.".into());
     }
+    Ok(r)
+}
+
+/// Decode the four abandoned traces and require epoch zero and consecutive identities.
+fn abandoned(run: &BoundRun) -> Result<Abandoned, String> {
     let input = rows::decode(&run.files["abandoned_input_trace"], 7, "abandoned input")?;
     let state = rows::decode(
         &run.files["abandoned_numerical_trace"],
@@ -118,49 +164,67 @@ pub(crate) fn analyze(run: &BoundRun, original_rows: &rows::Rows) -> Result<Vec<
             ));
         }
     }
+    Ok(Abandoned {
+        input,
+        state,
+        spikes,
+        service,
+    })
+}
+
+/// Compare every abandoned row with the original fixture, oracle and source phase.
+fn prefix_failures(a: &Abandoned, original_rows: &rows::Rows) -> Vec<String> {
     let original = &original_rows["original_stimulus"];
     let expected = &original_rows["reference_projection"];
     let mut failures = Vec::new();
-    for (i, row) in input.iter().enumerate() {
+    for (i, row) in a.input.iter().enumerate() {
         if original.get(i).is_none_or(|v| row[2..6] != *v) || row[6] != 20 + i as i64 {
             failures.push(format!(
                 "Abandoned input {i}: original fixture or source phase differs."
             ));
         }
     }
-    for (i, row) in state.iter().enumerate() {
+    for (i, row) in a.state.iter().enumerate() {
         if expected.get(i).is_none_or(|v| row[2..4] != *v) || row[4] != 21 + i as i64 {
             failures.push(format!(
                 "Abandoned numerical {i}: original oracle or source phase differs."
             ));
         }
     }
-    for (i, row) in spikes.iter().enumerate() {
+    for (i, row) in a.spikes.iter().enumerate() {
         if expected.get(i).is_none_or(|v| row[2] != v[0]) || row[3] != 21 + i as i64 {
             failures.push(format!(
                 "Abandoned raw spike {i}: original flag or source phase differs."
             ));
         }
     }
-    let observed_spikes: i128 = spikes.iter().map(|row| i128::from(row[2])).sum();
-    if !service.is_empty() {
-        failures.push("Abandoned encoder pending spike was already serviced before reset.".into());
-    }
-    let actual_counters = [input.len() as u64, state.len() as u64, 1];
-    for (name, differs) in [
+    failures
+}
+
+/// Return each named prefix predicate and whether the receipt contradicts the traces.
+fn prefix_predicates(r: &Reset, run: &BoundRun, a: &Abandoned) -> [(&'static str, bool); 11] {
+    let observed_spikes: i128 = a.spikes.iter().map(|row| i128::from(row[2])).sum();
+    let actual_counters = [a.input.len() as u64, a.state.len() as u64, 1];
+    [
         ("abandoned_epoch", r.abandoned_epoch != 0),
         ("next_epoch", r.next_epoch != u64::from(run.manifest.epoch)),
-        ("prefix_inputs", r.prefix_inputs != input.len() as u64),
-        ("prefix_states", r.prefix_states != state.len() as u64),
-        ("prefix_raw_rows", r.prefix_raw_rows != spikes.len() as u64),
+        ("prefix_inputs", r.prefix_inputs != a.input.len() as u64),
+        ("prefix_states", r.prefix_states != a.state.len() as u64),
+        (
+            "prefix_raw_rows",
+            r.prefix_raw_rows != a.spikes.len() as u64,
+        ),
         (
             "prefix_raw_spikes",
             i128::from(r.prefix_raw_spikes) != observed_spikes,
         ),
-        ("prefix_services", r.prefix_services != service.len() as u64),
+        (
+            "prefix_services",
+            r.prefix_services != a.service.len() as u64,
+        ),
         (
             "counter_before_reset",
-            r.counter_before_reset != 20 + input.len() as u64,
+            r.counter_before_reset != 20 + a.input.len() as u64,
         ),
         (
             "uncommitted_input_records_before_reset",
@@ -168,6 +232,12 @@ pub(crate) fn analyze(run: &BoundRun, original_rows: &rows::Rows) -> Result<Vec<
         ),
         ("prefix_attempts", r.prefix_attempts != actual_counters),
         ("prefix_accepted", r.prefix_accepted != actual_counters),
+    ]
+}
+
+/// Return each named reset predicate and whether the receipt contradicts it.
+fn reset_predicates(r: &Reset) -> [(&'static str, bool); 8] {
+    [
         ("reset_counter", r.reset_counter != 0),
         ("reset_attempts", r.reset_attempts != [0, 0, 0]),
         ("reset_accepted", r.reset_accepted != [0, 0, 0]),
@@ -188,20 +258,5 @@ pub(crate) fn analyze(run: &BoundRun, original_rows: &rows::Rows) -> Result<Vec<
             "model_and_encoder_quiescent_after_reset",
             !r.model_and_encoder_quiescent_after_reset,
         ),
-    ] {
-        if differs {
-            failures.push(format!("Actual joint reset predicate differs: {name}."));
-        }
-    }
-    if input.len() < 2
-        || state.len() != input.len() - 1
-        || spikes.len() != state.len()
-        || r.prefix_raw_spikes != 1
-        || !service.is_empty()
-    {
-        failures.push(
-            "Actual prefix did not establish the selected queued/inflight/pending reset.".into(),
-        );
-    }
-    Ok(failures)
+    ]
 }

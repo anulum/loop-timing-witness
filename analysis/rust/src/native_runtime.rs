@@ -60,12 +60,78 @@ fn same(a: &FileRef, b: &FileRef) -> bool {
     a.path == b.path && a.sha256 == b.sha256 && a.byte_length == b.byte_length
 }
 
+/// Recorded job roles, in command order.
+const ROLES: [&str; 5] = [
+    "RTL_elaboration",
+    "generated_model_archive",
+    "native_CPP_compile",
+    "native_CPP_link",
+    "native_execution",
+];
+/// Model parameter names, in receipt order.
+const PARAMETERS: [&str; 4] = [
+    "EXTRA_STATE_REGISTER",
+    "TIMESTAMP_OFFSET",
+    "DROP_ENCODER_FEED",
+    "ADDRESS_BITS",
+];
+/// Model parameter defaults, in receipt order.
+const DEFAULTS: [u64; 4] = [0, 0, 0, 10];
+/// The complete RTL source inventory one native compile must elaborate.
+const REQUIRED_RTL: [&str; 7] = [
+    "native_neural_dut.sv",
+    "source/proposed_neural_wrapper.sv",
+    "source/SC-NEUROCORE/hdl/sc_lif_neuron.v",
+    "source/SC-NEUROCORE/hdl/sc_aer_encoder.v",
+    "source/LOOP-TIMING-WITNESS/rtl/clock_reset_release.sv",
+    "source/LOOP-TIMING-WITNESS/rtl/shared_event_witness.sv",
+    "source/LOOP-TIMING-WITNESS/rtl/event_record_fifo.sv",
+];
+/// Verilator options every native elaboration carries.
+const VERILATOR_OPTIONS: [&str; 5] = [
+    "--cc",
+    "--Wall",
+    "--assert",
+    "+1800-2012ext+v",
+    "+1800-2012ext+sv",
+];
+/// C++ options every native compile carries.
+const CPP_OPTIONS: [&str; 6] = [
+    "-std=c++17",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wconversion",
+    "-Wshadow",
+];
+
 /// Bind every native artifact/log and reconcile recorded compiler and run semantics.
 pub(crate) fn analyze(
     run: &mut BoundRun,
     p: &Policy,
 ) -> Result<(Vec<String>, Vec<String>), String> {
     let r: Runtime = receipt(&run.files["compiler_simulator_runtime"], "native runtime")?;
+    let params = admit(&r, p)?;
+    bind_artifacts(run, &r, p, params)?;
+    check_sources(run, &r, p)?;
+    bind_jobs(run, &r)?;
+    let actual_native = r
+        .actual_source_paths
+        .iter()
+        .find(|(_, v)| *v == "native/native_trial.cpp")
+        .ok_or("Native producer path missing.")?
+        .0;
+    let findings = findings(run, &r, p, params, actual_native);
+    let publication = if r.jobs[4].command().2 != 0 || !export_complete(run) {
+        vec!["Actual native execution/publication did not finalise cleanly.".into()]
+    } else {
+        Vec::new()
+    };
+    Ok((findings, publication))
+}
+
+/// Apply the closed receipt bounds and the supported backend, returning the parameters.
+fn admit(r: &Runtime, p: &Policy) -> Result<[u64; 4], String> {
     let params = [
         r.parameters.state,
         r.parameters.timestamp,
@@ -102,6 +168,16 @@ pub(crate) fn analyze(
         return Err("Unsupported actual native backend or dialect.".into());
     }
     let _scopes = (&r.scope, &r.runtime_object_source_scope);
+    Ok(params)
+}
+
+/// Require the policy's artifact cohort and bind each artifact's bytes into the run.
+fn bind_artifacts(
+    run: &mut BoundRun,
+    r: &Runtime,
+    p: &Policy,
+    params: [u64; 4],
+) -> Result<(), String> {
     let key = format!(
         "{},{},{},{}:{}",
         params[0], params[1], params[2], params[3], r.epoch
@@ -124,6 +200,11 @@ pub(crate) fn analyze(
             read_bound(&run.root, actual, ARTIFACT_LIMIT)?,
         );
     }
+    Ok(())
+}
+
+/// Require the root's source references and the complete recorded source path set.
+fn check_sources(run: &BoundRun, r: &Runtime, p: &Policy) -> Result<(), String> {
     let key = |reference: &FileRef| {
         (
             reference.path.clone(),
@@ -145,16 +226,14 @@ pub(crate) fn analyze(
     {
         return Err("Native recorded source path population differs.".into());
     }
-    let roles = [
-        "RTL_elaboration",
-        "generated_model_archive",
-        "native_CPP_compile",
-        "native_CPP_link",
-        "native_execution",
-    ];
+    Ok(())
+}
+
+/// Require the command roles in order and bind every job log into the run.
+fn bind_jobs(run: &mut BoundRun, r: &Runtime) -> Result<(), String> {
     for (i, j) in r.jobs.iter().enumerate() {
         let (kind, _, _) = j.command();
-        if kind != roles[i] {
+        if kind != ROLES[i] {
             return Err("Actual native command sequence differs.".into());
         }
         for (name, reference) in j.logs() {
@@ -164,49 +243,20 @@ pub(crate) fn analyze(
             );
         }
     }
+    Ok(())
+}
+
+/// Return the compiler, configuration and run findings of an admitted receipt.
+fn findings(
+    run: &BoundRun,
+    r: &Runtime,
+    p: &Policy,
+    params: [u64; 4],
+    actual_native: &str,
+) -> Vec<String> {
     let verilator = r.jobs[0].command().1;
-    let observed: BTreeSet<_> = verilator
-        .iter()
-        .filter(|x| x.starts_with("-G"))
-        .cloned()
-        .collect();
-    let names = [
-        "EXTRA_STATE_REGISTER",
-        "TIMESTAMP_OFFSET",
-        "DROP_ENCODER_FEED",
-        "ADDRESS_BITS",
-    ];
-    let expected: BTreeSet<_> = names
-        .iter()
-        .zip(params)
-        .zip([0, 0, 0, 10])
-        .filter(|((_, v), default)| v != default)
-        .map(|((n, v), _)| format!("-G{n}={v}"))
-        .collect();
-    let cpp = r.jobs[2].command().1;
-    let actual_native = r
-        .actual_source_paths
-        .iter()
-        .find(|(_, v)| *v == "native/native_trial.cpp")
-        .ok_or("Native producer path missing.")?
-        .0;
-    let mode = if run.manifest.epoch == 1 {
-        "reset"
-    } else {
-        "original"
-    };
     let mut findings = Vec::new();
-    let required: BTreeSet<_> = [
-        "native_neural_dut.sv",
-        "source/proposed_neural_wrapper.sv",
-        "source/SC-NEUROCORE/hdl/sc_lif_neuron.v",
-        "source/SC-NEUROCORE/hdl/sc_aer_encoder.v",
-        "source/LOOP-TIMING-WITNESS/rtl/clock_reset_release.sv",
-        "source/LOOP-TIMING-WITNESS/rtl/shared_event_witness.sv",
-        "source/LOOP-TIMING-WITNESS/rtl/event_record_fifo.sv",
-    ]
-    .into_iter()
-    .collect();
+    let required: BTreeSet<_> = REQUIRED_RTL.into_iter().collect();
     let compiled: BTreeSet<_> = verilator
         .iter()
         .filter_map(|a| r.actual_source_paths.get(a).map(String::as_str))
@@ -226,51 +276,54 @@ pub(crate) fn analyze(
     {
         findings.push("Actual native runtime identity/configuration differs.".into());
     }
-    if observed != expected
-        || !verilator
-            .windows(2)
-            .any(|a| a == ["--language", "1800-2012"])
-        || [
-            "--cc",
-            "--Wall",
-            "--assert",
-            "+1800-2012ext+v",
-            "+1800-2012ext+sv",
-        ]
-        .iter()
-        .any(|x| !verilator.iter().any(|a| a == x))
-        || !cpp.contains(actual_native)
-        || [
-            "-std=c++17",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wconversion",
-            "-Wshadow",
-        ]
-        .iter()
-        .any(|x| !cpp.iter().any(|a| a == x))
-        || r.jobs[4].command().1.last().map(String::as_str) != Some(mode)
-    {
+    let mode = if run.manifest.epoch == 1 {
+        "reset"
+    } else {
+        "original"
+    };
+    if arguments_differ(r, params, actual_native, mode) {
         findings.push("Actual native compiler/dialect/run arguments differ.".into());
     }
-    if r.jobs.iter().any(|j| j.command().2 != 0)
-        || run.files["native_job_4_stdout"] != b"NATIVE_JOINT_EXPORT_COMPLETE\n"
-        || !run.files["native_job_4_stderr"].is_empty()
-    {
+    if r.jobs.iter().any(|j| j.command().2 != 0) || !export_complete(run) {
         findings.push("Actual native build/execution did not complete cleanly.".into());
     }
-    if params != [0, 0, 0, 10] {
+    if params != DEFAULTS {
         findings
             .push("Actual compile parameters differ from selected source configuration.".into());
     }
-    let publication = if r.jobs[4].command().2 != 0
-        || run.files["native_job_4_stdout"] != b"NATIVE_JOINT_EXPORT_COMPLETE\n"
-        || !run.files["native_job_4_stderr"].is_empty()
-    {
-        vec!["Actual native execution/publication did not finalise cleanly.".into()]
-    } else {
-        Vec::new()
-    };
-    Ok((findings, publication))
+    findings
+}
+
+/// Whether the elaboration, compile or run arguments differ from the selected configuration.
+fn arguments_differ(r: &Runtime, params: [u64; 4], actual_native: &str, mode: &str) -> bool {
+    let verilator = r.jobs[0].command().1;
+    let cpp = r.jobs[2].command().1;
+    let observed: BTreeSet<_> = verilator
+        .iter()
+        .filter(|x| x.starts_with("-G"))
+        .cloned()
+        .collect();
+    let expected: BTreeSet<_> = PARAMETERS
+        .iter()
+        .zip(params)
+        .zip(DEFAULTS)
+        .filter(|((_, v), default)| v != default)
+        .map(|((n, v), _)| format!("-G{n}={v}"))
+        .collect();
+    observed != expected
+        || !verilator
+            .windows(2)
+            .any(|a| a == ["--language", "1800-2012"])
+        || VERILATOR_OPTIONS
+            .iter()
+            .any(|x| !verilator.iter().any(|a| a == x))
+        || !cpp.iter().any(|a| a == actual_native)
+        || CPP_OPTIONS.iter().any(|x| !cpp.iter().any(|a| a == x))
+        || r.jobs[4].command().1.last().map(String::as_str) != Some(mode)
+}
+
+/// Whether the execution job wrote exactly the completion line and no diagnostics.
+fn export_complete(run: &BoundRun) -> bool {
+    run.files["native_job_4_stdout"] == b"NATIVE_JOINT_EXPORT_COMPLETE\n"
+        && run.files["native_job_4_stderr"].is_empty()
 }

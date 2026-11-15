@@ -192,11 +192,7 @@ pub(crate) struct Channel {
 
 /// Decode each complete 16byte original tuple without relabelling after loss.
 pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel, String> {
-    let code = match role {
-        Role::Input => 14,
-        Role::State => 15,
-        Role::Service => 16,
-    };
+    let code = data_code(role);
     if !raw.len().is_multiple_of(16) {
         return Err("Neural capture is not a whole sequence of 16-byte records.".into());
     }
@@ -211,14 +207,7 @@ pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel,
     let mut previous_tick = None;
     let mut previous_id = None;
     for (index, record) in raw.as_chunks::<16>().0.iter().enumerate() {
-        let id = u32::from_le_bytes([record[4], record[5], record[6], record[7]]);
-        let tick = u64::from_le_bytes([
-            record[8], record[9], record[10], record[11], record[12], record[13], record[14],
-            record[15],
-        ]);
-        if record[1..4] != [0, 0, 0] {
-            return Err("Neural capture reserved bits must be zero.".into());
-        }
+        let (id, tick) = record_fields(record)?;
         if tick >= 65536 || previous_tick.is_some_and(|v| tick <= v) {
             return Err(
                 "Neural capture ticks regress, repeat or exceed the no-wrap horizon.".into(),
@@ -226,14 +215,7 @@ pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel,
         }
         previous_tick = Some(tick);
         if record[0] == 17 {
-            if id == 0 && index == 0 {
-                channel.start = Some(tick);
-            } else if id == 1 && index + 1 == raw.len() / 16 {
-                channel.end = Some(tick);
-            } else {
-                return Err("Neural alignment marker has an invalid identity or position.".into());
-            }
-            channel.markers.extend_from_slice(record);
+            marker(&mut channel, record, (id, tick), index, raw.len() / 16)?;
         } else {
             if record[0] != code {
                 return Err(
@@ -255,4 +237,45 @@ pub(crate) fn decode(raw: &[u8], role: Role, population: u32) -> Result<Channel,
         }
     }
     Ok(channel)
+}
+
+/// The record code of a channel's data records.
+fn data_code(role: Role) -> u8 {
+    match role {
+        Role::Input => 14,
+        Role::State => 15,
+        Role::Service => 16,
+    }
+}
+
+/// The identity and tick of one record whose reserved bytes are zero.
+fn record_fields(record: &[u8; 16]) -> Result<(u32, u64), String> {
+    let id = u32::from_le_bytes([record[4], record[5], record[6], record[7]]);
+    let tick = u64::from_le_bytes([
+        record[8], record[9], record[10], record[11], record[12], record[13], record[14],
+        record[15],
+    ]);
+    if record[1..4] != [0, 0, 0] {
+        return Err("Neural capture reserved bits must be zero.".into());
+    }
+    Ok((id, tick))
+}
+
+/// Record the start marker as the first record or the end marker as the last one.
+fn marker(
+    channel: &mut Channel,
+    record: &[u8; 16],
+    (id, tick): (u32, u64),
+    index: usize,
+    count: usize,
+) -> Result<(), String> {
+    if id == 0 && index == 0 {
+        channel.start = Some(tick);
+    } else if id == 1 && index + 1 == count {
+        channel.end = Some(tick);
+    } else {
+        return Err("Neural alignment marker has an invalid identity or position.".into());
+    }
+    channel.markers.extend_from_slice(record);
+    Ok(())
 }

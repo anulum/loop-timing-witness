@@ -34,10 +34,36 @@ pub(crate) fn completion(
     if values.iter().any(|v| *v > 65535) {
         return Err("Invalid complete actual receipt: producer completion.".into());
     }
-    let n = u64::from(run.manifest.step_count);
     let mut failures = Vec::new();
+    for (name, differs) in root_predicates(run, traces, &d) {
+        if differs {
+            failures.push(format!(
+                "Root completion differs from actual source data: {name}."
+            ));
+        }
+    }
+    for (name, actual, expected) in actual_predicates(run, traces, &d) {
+        if actual != expected {
+            failures.push(format!(
+                "Actual selected completion predicate differs: {name}."
+            ));
+        }
+    }
+    if !d.pending_empty || !d.service_quiescent || !d.pipeline_quiescent || !d.drain_complete {
+        failures.push("Actual tail/pipeline/service/drain is not finalized and quiescent.".into());
+    }
+    Ok((d, failures))
+}
+
+/// Each root completion declaration and whether the traces or receipt contradict it.
+fn root_predicates(
+    run: &BoundRun,
+    traces: &TraceFindings,
+    d: &ProducerCompletion,
+) -> [(&'static str, bool); 8] {
+    let n = u64::from(run.manifest.step_count);
     let c = &run.manifest.completion;
-    for (name, differs) in [
+    [
         ("requested_steps", c.requested_steps != n),
         ("observed_states", c.observed_states != n),
         ("raw_spikes", c.raw_spikes != traces.raw_spikes),
@@ -55,14 +81,17 @@ pub(crate) fn completion(
             c.pipeline_quiescent != d.pipeline_quiescent,
         ),
         ("finalized", c.finalized != d.drain_complete),
-    ] {
-        if differs {
-            failures.push(format!(
-                "Root completion differs from actual source data: {name}."
-            ));
-        }
-    }
-    for (name, actual, expected) in [
+    ]
+}
+
+/// Each actual completion count with the value the selected run requires.
+fn actual_predicates(
+    run: &BoundRun,
+    traces: &TraceFindings,
+    d: &ProducerCompletion,
+) -> [(&'static str, u64, u64); 8] {
+    let n = u64::from(run.manifest.step_count);
+    [
         ("requested_steps", d.requested_steps, n),
         ("observed_states", d.observed_states, n),
         ("raw_spike_rows", d.raw_spike_rows, n),
@@ -79,17 +108,7 @@ pub(crate) fn completion(
             n + 23,
         ),
         ("counter_at_tail_check", d.counter_at_tail_check, n + 24),
-    ] {
-        if actual != expected {
-            failures.push(format!(
-                "Actual selected completion predicate differs: {name}."
-            ));
-        }
-    }
-    if !d.pending_empty || !d.service_quiescent || !d.pipeline_quiescent || !d.drain_complete {
-        failures.push("Actual tail/pipeline/service/drain is not finalized and quiescent.".into());
-    }
-    Ok((d, failures))
+    ]
 }
 
 /// Compare all original channel metadata with decoded record and source counter values.

@@ -30,69 +30,86 @@ pub(crate) struct TraceFindings {
 
 /// Compute independent full-row equality and exact-key observation joins.
 pub(crate) fn analyze(run: &BoundRun, rows: &Rows) -> TraceFindings {
-    let mut result = TraceFindings {
-        raw_spikes: 0,
+    let spikes: Vec<_> = rows["raw_spike_trace"]
+        .iter()
+        .filter(|row| row[2] == 1)
+        .collect();
+    TraceFindings {
+        raw_spikes: spikes.len() as u64,
         services: rows["service_trace"].len() as u64,
-        numerical: Vec::new(),
-        source: Vec::new(),
-        service: Vec::new(),
-        joins: Vec::new(),
-    };
+        numerical: numerical(rows),
+        source: source(rows),
+        service: service(rows, &spikes),
+        joins: joins(run, rows),
+    }
+}
+
+/// Compare every numerical step with the original oracle.
+fn numerical(rows: &Rows) -> Vec<String> {
+    let mut findings = Vec::new();
     for (index, row) in rows["numerical_trace"].iter().enumerate() {
         if row[2..4] != rows["reference_projection"][index] {
-            result
-                .numerical
-                .push(format!("Numerical step {index}: original oracle differs."));
+            findings.push(format!("Numerical step {index}: original oracle differs."));
         }
     }
+    findings
+}
+
+/// Compare the declared projection, the input stimulus and the raw spike phases with the traces.
+fn source(rows: &Rows) -> Vec<String> {
+    let mut findings = Vec::new();
     if rows["numerical_trace"]
         .iter()
         .zip(&rows["numerical_projection"])
         .any(|(row, projection)| row[2..4] != *projection)
     {
-        result
-            .source
+        findings
             .push("Declared numerical projection differs from the full identified trace.".into());
     }
     for (index, row) in rows["input_trace"].iter().enumerate() {
         if row[2..6] != rows["original_stimulus"][index] {
-            result.source.push(format!(
+            findings.push(format!(
                 "Input step {index}: original stimulus fields differ."
             ));
         }
     }
-    let spikes: Vec<_> = rows["raw_spike_trace"]
-        .iter()
-        .filter(|row| row[2] == 1)
-        .collect();
-    result.raw_spikes = spikes.len() as u64;
     for (index, row) in rows["raw_spike_trace"].iter().enumerate() {
         if row[2] != rows["reference_projection"][index][0]
             || row[3] != rows["input_trace"][index][6] + 1
         {
-            result.source.push(format!(
+            findings.push(format!(
                 "Raw step {index}: original spike or source phase differs."
             ));
         }
     }
+    findings
+}
+
+/// Require one service packet per raw spike at the embedded and raw spike phases.
+fn service(rows: &Rows, spikes: &[&Vec<i64>]) -> Vec<String> {
+    let mut findings = Vec::new();
     let service = &rows["service_trace"];
     if service.len() != spikes.len() {
-        result
-            .service
-            .push("Service population differs from complete original raw spikes.".into());
+        findings.push("Service population differs from complete original raw spikes.".into());
     }
     for (index, row) in service.iter().enumerate() {
         if row[4] != row[3] + 1 {
-            result.service.push(format!(
+            findings.push(format!(
                 "Service {index}: embedded-to-observed phase differs."
             ));
         }
         if spikes.get(index).is_none_or(|spike| row[4] != spike[3] + 2) {
-            result.service.push(format!(
+            findings.push(format!(
                 "Service {index}: raw-spike-to-service phase differs."
             ));
         }
     }
+    findings
+}
+
+/// Join every trace row to its channel's witness event by identity and tick.
+fn joins(run: &BoundRun, rows: &Rows) -> Vec<String> {
+    let mut findings = Vec::new();
     for (channel, name) in
         run.channels
             .iter()
@@ -105,12 +122,12 @@ pub(crate) fn analyze(run: &BoundRun, rows: &Rows) -> TraceFindings {
             .collect();
         for row in &rows[name] {
             if observed.get(&row[1]) != row.last() {
-                result.joins.push(format!(
+                findings.push(format!(
                     "{} identity {}: witness unavailable or differs.",
                     channel.role, row[1]
                 ));
             }
         }
     }
-    result
+    findings
 }

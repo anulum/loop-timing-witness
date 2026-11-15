@@ -12,6 +12,13 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Changed
+
+- `tools/release_provenance.py collect` keeps the complete earlier registry artifacts a
+  specification lists and reads PyPI only when none of them is a PyPI file, so a source release
+  without a registry upload can be collected. It refuses, in its own words, while a hosted run of
+  the commit is unfinished; it raised a `TypeError` before.
+
 ## [0.3.0] - 2026-11-16
 
 ### Added

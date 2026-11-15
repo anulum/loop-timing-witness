@@ -305,10 +305,8 @@ def fetch_json(url: str) -> object:
     return json.loads(body)
 
 
-def registry_artifacts(
-    version: str, commit: str, crates: list[dict[str, str]], fetch: Callable[[str], Any]
-) -> list[dict[str, str]]:
-    """Return the PyPI distributions of a version and the listed crate publications.
+def pypi_artifacts(version: str, commit: str, fetch: Callable[[str], Any]) -> list[dict[str, str]]:
+    """Return the PyPI distributions of a version, built from the release commit.
 
     Parameters
     ----------
@@ -316,18 +314,16 @@ def registry_artifacts(
         Released package version.
     commit
         Commit the hosted publish workflow built the distributions from.
-    crates
-        Crate publications, each with ``crate``, ``version`` and ``note``.
     fetch
         JSON reader of one URL.
 
     Returns
     -------
     list[dict[str, str]]
-        PyPI files by file name, then the crates in the given order.
+        PyPI files by file name.
     """
     pypi = fetch(f"https://pypi.org/pypi/{PACKAGE}/{version}/json")
-    artifacts = [
+    return [
         {
             "registry": "pypi",
             "version": version,
@@ -338,15 +334,51 @@ def registry_artifacts(
         }
         for item in sorted(pypi["urls"], key=lambda entry: entry["filename"])
     ]
-    for crate in crates:
-        published = fetch(f"https://crates.io/api/v1/crates/{crate['crate']}/{crate['version']}")
+
+
+def registry_artifacts(
+    version: str, commit: str, listed: list[dict[str, str]], fetch: Callable[[str], Any]
+) -> list[dict[str, str]]:
+    """Return the registry artifacts of a release from the listed publications.
+
+    Parameters
+    ----------
+    version
+        Released package version.
+    commit
+        Commit the hosted publish workflow built the distributions from.
+    listed
+        Crate publications, each with ``crate``, ``version`` and ``note``, and
+        complete earlier artifacts that name their ``registry`` and are kept
+        unchanged. When one of those is a PyPI file, the release published no
+        distribution of its own and PyPI is not read for its version.
+    fetch
+        JSON reader of one URL.
+
+    Returns
+    -------
+    list[dict[str, str]]
+        PyPI files of the version by file name, unless earlier ones are kept, then
+        the listed entries in the given order.
+    """
+    kept = [item for item in listed if "registry" in item]
+    artifacts = (
+        []
+        if any(item["registry"] == "pypi" for item in kept)
+        else pypi_artifacts(version, commit, fetch)
+    )
+    for item in listed:
+        if "registry" in item:
+            artifacts.append(item)
+            continue
+        published = fetch(f"https://crates.io/api/v1/crates/{item['crate']}/{item['version']}")
         artifacts.append(
             {
                 "registry": "crates.io",
-                "crate": crate["crate"],
-                "version": crate["version"],
+                "crate": item["crate"],
+                "version": item["version"],
                 "sha256": published["version"]["checksum"],
-                "note": crate["note"],
+                "note": item["note"],
             }
         )
     return artifacts
@@ -370,6 +402,10 @@ def hosted_workflows(commit: str, fetch: Callable[[str], Any]) -> list[dict[str,
     runs = fetch(
         f"https://api.github.com/repos/anulum/{PACKAGE}/actions/runs?head_sha={commit}&per_page=100"
     )
+    unfinished = [run["html_url"] for run in runs["workflow_runs"] if run["conclusion"] is None]
+    if unfinished:
+        message = f"hosted runs of the commit still unfinished: {', '.join(sorted(unfinished))}"
+        raise ValueError(message)
     unique = sorted(
         {
             (run["name"], run["event"], run["conclusion"], run["html_url"])
@@ -390,7 +426,8 @@ def collect(
     Parameters
     ----------
     specification
-        Specification whose ``registry_artifacts`` lists only the crate publications.
+        Specification whose ``registry_artifacts`` lists the crate publications and
+        any earlier artifacts kept unchanged.
     commit
         Release commit.
     fetch

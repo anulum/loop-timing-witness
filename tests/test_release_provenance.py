@@ -227,6 +227,87 @@ def test_collect_reads_the_published_artifacts_and_runs(tmp_path: Path) -> None:
     assert json.loads(output.read_text()) == specification(record, "0.2.0")
 
 
+def _runs_only(record: dict[str, Any], version: str) -> dict[str, Any]:
+    """Return only the workflow-run document of a published record's commit.
+
+    Parameters
+    ----------
+    record
+        Published record.
+    version
+        Its release version.
+
+    Returns
+    -------
+    dict[str, Any]
+        The GitHub API document by URL, without any registry document.
+    """
+    return {
+        url: document
+        for url, document in responses(record, version).items()
+        if url.startswith("https://api.github.com/")
+    }
+
+
+def test_collect_keeps_listed_artifacts_without_reading_the_registries(tmp_path: Path) -> None:
+    """Keep complete earlier artifacts unchanged and read no registry for them.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive specification and output directory.
+    """
+    record = published("0.2.0")
+    partial = specification(record, "0.2.0")
+    partial["software_verification"] = {
+        "hardware_boundary": record["software_verification"]["hardware_boundary"]
+    }
+    spec = tmp_path / "specification.json"
+    release_provenance.write_json(partial, spec)
+    output = tmp_path / "collected.json"
+    arguments = ["collect", "--commit", record["source_commit"], "--specification", str(spec)]
+    documents = _runs_only(record, "0.2.0")
+    assert (
+        release_provenance.main([*arguments, "--output", str(output)], documents.__getitem__) == 0
+    )
+    collected = json.loads(output.read_text())
+    assert collected["registry_artifacts"] == record["registry_artifacts"]
+    assert collected == specification(record, "0.2.0")
+
+
+def test_collect_refuses_unfinished_hosted_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refuse a commit whose hosted runs have not all finished, writing nothing.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive specification and output directory.
+    capsys
+        Captured refusal.
+    """
+    record = published("0.2.0")
+    documents = _runs_only(record, "0.2.0")
+    (runs,) = documents.values()
+    pending = {
+        **runs["workflow_runs"][0],
+        "conclusion": None,
+        "html_url": "https://example.test/run",
+    }
+    runs["workflow_runs"] = [*runs["workflow_runs"], pending]
+    spec = tmp_path / "specification.json"
+    release_provenance.write_json(specification(record, "0.2.0"), spec)
+    output = tmp_path / "collected.json"
+    arguments = ["collect", "--commit", record["source_commit"], "--specification", str(spec)]
+    assert (
+        release_provenance.main([*arguments, "--output", str(output)], documents.__getitem__) == 1
+    )
+    refusal = capsys.readouterr().err
+    assert "hosted runs of the commit still unfinished: https://example.test/run" in refusal
+    assert not output.exists()
+
+
 @pytest.mark.parametrize("body", [None, b'{"version": {"checksum": "0"}}'])
 def test_fetch_json_refuses_an_unavailable_document(
     monkeypatch: pytest.MonkeyPatch, body: bytes | None

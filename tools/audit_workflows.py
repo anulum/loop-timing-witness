@@ -296,6 +296,47 @@ def _step_findings(label: str, steps: list[Any], reusables: set[str]) -> list[st
     return findings
 
 
+_NEEDS_JOBS = frozenset(
+    {
+        ("docs.yml", "deploy"),
+        ("publish.yml", "publish"),
+        ("reusable-tests.yml", "coverage"),
+        ("reusable-tests.yml", "shard"),
+        ("reusable-tests.yml", "run"),
+        ("pypi-downloads.yml", "snapshot"),
+        ("source-release-signatures.yml", "sign"),
+        ("source-release-signatures.yml", "publish"),
+    }
+)
+
+
+def _permission_findings(label: str, job_id: tuple[str, str], permissions: object) -> list[str]:
+    """Check that a job declares permissions and writes only to permitted scopes.
+
+    Parameters
+    ----------
+    label
+        Finding prefix naming the workflow and job.
+    job_id
+        Workflow file and job name, which may grant publication scopes.
+    permissions
+        The job's ``permissions`` value.
+
+    Returns
+    -------
+    list[str]
+        A finding for a missing mapping or for each write scope not permitted.
+    """
+    if not isinstance(permissions, dict):
+        return [f"{label}: must declare a permissions mapping"]
+    allowed = ALLOWED_WRITE_SCOPES | PUBLICATION_JOBS.get(job_id, frozenset())
+    return [
+        f"{label}: write scope {scope!r} is not permitted"
+        for scope, level in permissions.items()
+        if level == "write" and scope not in allowed
+    ]
+
+
 def _job_findings(file: str, kind: str, name: str, job: object, reusables: set[str]) -> list[str]:
     """Check one job for privilege, timeout, dependency and pinning rules.
 
@@ -320,32 +361,8 @@ def _job_findings(file: str, kind: str, name: str, job: object, reusables: set[s
     label = f"{file}: job {name}"
     if not isinstance(job, dict):
         return [f"{label}: must be a mapping"]
-    findings: list[str] = []
-    permissions = job.get("permissions")
-    if isinstance(permissions, dict):
-        allowed = ALLOWED_WRITE_SCOPES | PUBLICATION_JOBS.get((file, name), frozenset())
-        findings.extend(
-            f"{label}: write scope {scope!r} is not permitted"
-            for scope, level in permissions.items()
-            if level == "write" and scope not in allowed
-        )
-    else:
-        findings.append(f"{label}: must declare a permissions mapping")
-    if (
-        kind != "coordinator"
-        and (file, name)
-        not in {
-            ("docs.yml", "deploy"),
-            ("publish.yml", "publish"),
-            ("reusable-tests.yml", "coverage"),
-            ("reusable-tests.yml", "shard"),
-            ("reusable-tests.yml", "run"),
-            ("pypi-downloads.yml", "snapshot"),
-            ("source-release-signatures.yml", "sign"),
-            ("source-release-signatures.yml", "publish"),
-        }
-        and "needs" in job
-    ):
+    findings = _permission_findings(label, (file, name), job.get("permissions"))
+    if kind != "coordinator" and (file, name) not in _NEEDS_JOBS and "needs" in job:
         findings.append(f"{label}: only the coordinator may declare needs")
     if isinstance(job.get("uses"), str):
         finding = _reference_finding(label, job["uses"], reusables)
@@ -558,6 +575,49 @@ def _structure_findings(inventory: dict[str, Any], present: list[str]) -> list[s
     return findings
 
 
+def _present(workflows_dir: Path) -> list[str]:
+    """Return the sorted workflow file names present in the workflow directory.
+
+    Parameters
+    ----------
+    workflows_dir
+        The repository's workflow directory.
+
+    Returns
+    -------
+    list[str]
+        Names of ``.yml`` and ``.yaml`` files, or none if the directory is absent.
+    """
+    if not workflows_dir.is_dir():
+        return []
+    return sorted(path.name for path in workflows_dir.iterdir() if path.suffix in {".yml", ".yaml"})
+
+
+def _size_findings(file: str, raw: bytes, limits: dict[str, Any]) -> list[str]:
+    """Check one workflow file against the inventory's byte and line ceilings.
+
+    Parameters
+    ----------
+    file
+        Workflow file name.
+    raw
+        The file's bytes.
+    limits
+        Inventory size limits with ``max_bytes`` and ``max_lines``.
+
+    Returns
+    -------
+    list[str]
+        A finding for each ceiling the file exceeds.
+    """
+    findings = []
+    if len(raw) > limits["max_bytes"]:
+        findings.append(f"{file}: exceeds the byte ceiling")
+    if raw.count(b"\n") > limits["max_lines"]:
+        findings.append(f"{file}: exceeds the line ceiling")
+    return findings
+
+
 def audit(root: Path) -> list[str]:
     """Audit the workflow tree of one repository root.
 
@@ -579,12 +639,7 @@ def audit(root: Path) -> list[str]:
     if findings:
         return findings
     workflows_dir = root / WORKFLOWS_RELATIVE
-    present = (
-        sorted(path.name for path in workflows_dir.iterdir() if path.suffix in {".yml", ".yaml"})
-        if workflows_dir.is_dir()
-        else []
-    )
-    findings = _structure_findings(inventory, present)
+    findings = _structure_findings(inventory, _present(workflows_dir))
     if findings:
         return findings
     entries: list[dict[str, Any]] = inventory["workflows"]
@@ -594,10 +649,7 @@ def audit(root: Path) -> list[str]:
     for entry in entries:
         file = entry["file"]
         raw = (workflows_dir / file).read_bytes()
-        if len(raw) > limits["max_bytes"]:
-            findings.append(f"{file}: exceeds the byte ceiling")
-        if raw.count(b"\n") > limits["max_lines"]:
-            findings.append(f"{file}: exceeds the line ceiling")
+        findings.extend(_size_findings(file, raw, limits))
         try:
             workflow = load_workflow(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError) as exc:

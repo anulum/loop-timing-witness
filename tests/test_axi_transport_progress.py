@@ -25,6 +25,106 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _access_durations(
+    rows: list[tuple[int, ...]],
+    start: int,
+    requests: list[str],
+    counts: tuple[int, int],
+    state: str,
+) -> list[int]:
+    """Require each aperture access to complete in time with its expected response.
+
+    Parameters
+    ----------
+    rows
+        Response, data and elapsed nanoseconds of every request.
+    start
+        Index of the first aperture access.
+    requests
+        Every request, for failure messages.
+    counts
+        Number of aperture reads, which come first, and of partial writes.
+    state
+        Bank state, for failure messages.
+
+    Returns
+    -------
+    list[int]
+        Simulated duration of each access in nanoseconds.
+    """
+    reads, writes = counts
+    accesses = rows[start : start + reads + writes]
+    previous = rows[start - 1][2]
+    durations = []
+    for index, (response, _data, elapsed) in enumerate(accesses):
+        duration = elapsed - previous
+        durations.append(duration)
+        # This bound is for the fixed 7 ns/5 ns clocks and one serial transaction only.
+        assert 0 < duration <= 280, (state, requests[start + index], duration)
+        if index < reads:
+            assert response in {0, 2}
+            if index % 4:
+                assert response == 2
+        else:
+            assert response == 2, requests[start + index]
+        previous = elapsed
+    return durations
+
+
+def _check_configuration(
+    rows: list[tuple[int, ...]], setup: int, snapshot: int, state: str
+) -> None:
+    """Require the configuration snapshot after the accesses to equal the one before.
+
+    Parameters
+    ----------
+    rows
+        Response, data and elapsed nanoseconds of every request.
+    setup
+        Number of setup requests.
+    snapshot
+        Number of snapshot reads on each side.
+    state
+        Idle banks, asserted bank reset or a completed run.
+    """
+    before = [row[:2] for row in rows[setup : setup + snapshot]]
+    after = [row[:2] for row in rows[-snapshot - 1 : -1]]
+    assert after == before
+    if state == "held":
+        assert after[-1] == (0, 8)
+    else:
+        assert all(response == 0 for response, _data in after)
+        assert after[-1][1] & 7 == 7
+        assert bool(rows[-1][1] & 4) == (state == "finished")
+
+
+def _write_receipt(
+    directory: Path, state: str, counts: tuple[int, int], durations: list[int]
+) -> None:
+    """Retain the measured simulation-time receipt of one bank state.
+
+    Parameters
+    ----------
+    directory
+        Retained request and response directory.
+    state
+        Bank state.
+    counts
+        Number of aperture reads and of partial writes.
+    durations
+        Simulated duration of each access in nanoseconds.
+    """
+    receipt = {
+        "state": state,
+        "reads": counts[0],
+        "partial_writes": counts[1],
+        "maximum_transaction_ns": max(durations),
+        "duration_scope": "simulation_only",
+        "configuration_unchanged": True,
+    }
+    (directory / "progress.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+
 @pytest.mark.parametrize("state", ["idle", "held", "finished"])
 def test_aperture_response_progress(simulator: Path, tmp_path: Path, state: str) -> None:
     """Complete every aperture read and refuse all partial writes without mutating configuration.
@@ -66,36 +166,6 @@ def test_aperture_response_progress(simulator: Path, tmp_path: Path, state: str)
     assert len(rows) == len(requests) - 1
     assert all(len(row) == 3 for row in rows)
     start = len(setup) + len(snapshot) + 1
-    accesses = rows[start : start + len(reads) + len(writes)]
-    previous = rows[start - 1][2]
-    durations = []
-    for index, (response, _data, elapsed) in enumerate(accesses):
-        duration = elapsed - previous
-        durations.append(duration)
-        # This bound is for the fixed 7 ns/5 ns clocks and one serial transaction only.
-        assert 0 < duration <= 280, (state, requests[start + index], duration)
-        if index < len(reads):
-            assert response in {0, 2}
-            if index % 4:
-                assert response == 2
-        else:
-            assert response == 2, requests[start + index]
-        previous = elapsed
-    before = [row[:2] for row in rows[len(setup) : len(setup) + len(snapshot)]]
-    after = [row[:2] for row in rows[-len(snapshot) - 1 : -1]]
-    assert after == before
-    if state == "held":
-        assert after[-1] == (0, 8)
-    else:
-        assert all(response == 0 for response, _data in after)
-        assert after[-1][1] & 7 == 7
-        assert bool(rows[-1][1] & 4) == (state == "finished")
-    receipt = {
-        "state": state,
-        "reads": len(reads),
-        "partial_writes": len(writes),
-        "maximum_transaction_ns": max(durations),
-        "duration_scope": "simulation_only",
-        "configuration_unchanged": True,
-    }
-    (tmp_path / "progress.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    durations = _access_durations(rows, start, requests, (len(reads), len(writes)), state)
+    _check_configuration(rows, len(setup), len(snapshot), state)
+    _write_receipt(tmp_path, state, (len(reads), len(writes)), durations)

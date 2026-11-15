@@ -17,10 +17,56 @@ from .amp_elf_symbols import read_symbols
 
 if TYPE_CHECKING:
     from .amp_elf import LoadSegment
+    from .amp_elf_symbols import ElfSymbol
 
 CHANNEL_BYTES = 8
 CHANNEL_ALIGNMENT = 64
 OBJECT_KIND = 1
+
+
+def _channel_address(content: bytes, segments: tuple[LoadSegment, ...], symbol: ElfSymbol) -> int:
+    """Return one completion channel's address after checking its word and initial bytes.
+
+    Parameters
+    ----------
+    content
+        Complete original firmware.
+    segments
+        Admitted load segments.
+    symbol
+        Channel symbol.
+
+    Returns
+    -------
+    int
+        The channel's address.
+
+    Raises
+    ------
+    ValueError
+        If the channel is not one aligned object word in exactly one writable
+        segment's file bytes, or those bytes are not zero.
+    """
+    owners = [
+        segment
+        for segment in segments
+        if segment.flags == READ_WRITE
+        and segment.address <= symbol.address
+        and symbol.address + symbol.size <= segment.address + segment.file_bytes
+    ]
+    if (
+        symbol.kind != OBJECT_KIND
+        or symbol.size != CHANNEL_BYTES
+        or symbol.address % CHANNEL_ALIGNMENT
+        or len(owners) != 1
+    ):
+        message = "ISA completion channel must be one aligned writable original word"
+        raise ValueError(message)
+    offset = owners[0].offset + symbol.address - owners[0].address
+    if content[offset : offset + CHANNEL_BYTES] != bytes(CHANNEL_BYTES):
+        message = "ISA completion channel cannot be preloaded before target execution"
+        raise ValueError(message)
+    return symbol.address
 
 
 def admit_exit_channel(content: bytes, segments: tuple[LoadSegment, ...], *, isa: bool) -> None:
@@ -50,29 +96,7 @@ def admit_exit_channel(content: bytes, segments: tuple[LoadSegment, ...], *, isa
     if any(name not in symbols for name in names):
         message = "ISA firmware requires both original HTIF completion channel symbols"
         raise ValueError(message)
-    addresses = []
-    for name in names:
-        symbol = symbols[name]
-        owners = [
-            segment
-            for segment in segments
-            if segment.flags == READ_WRITE
-            and segment.address <= symbol.address
-            and symbol.address + symbol.size <= segment.address + segment.file_bytes
-        ]
-        if (
-            symbol.kind != OBJECT_KIND
-            or symbol.size != CHANNEL_BYTES
-            or symbol.address % CHANNEL_ALIGNMENT
-            or len(owners) != 1
-        ):
-            message = "ISA completion channel must be one aligned writable original word"
-            raise ValueError(message)
-        offset = owners[0].offset + symbol.address - owners[0].address
-        if content[offset : offset + CHANNEL_BYTES] != bytes(CHANNEL_BYTES):
-            message = "ISA completion channel cannot be preloaded before target execution"
-            raise ValueError(message)
-        addresses.append(symbol.address)
+    addresses = [_channel_address(content, segments, symbols[name]) for name in names]
     if addresses[0] == addresses[1]:
         message = "ISA completion channels must have distinct original addresses"
         raise ValueError(message)

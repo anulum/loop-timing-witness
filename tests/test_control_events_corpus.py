@@ -97,6 +97,17 @@ def _cases() -> dict[str, tuple[dict[str, Any], list[list[Any]]]]:
     dict[str, tuple[dict[str, Any], list[list[Any]]]]
         Run members and ``[name, cycle, ticks]`` events.
     """
+    return {**_series_cases(_event_series()), **_ordering_cases()}
+
+
+def _event_series() -> dict[str, list[list[Any]]]:
+    """Return the generated event series the run cases share.
+
+    Returns
+    -------
+    dict[str, list[list[Any]]]
+        Steady, gapped, fault, large-tick and compute ``[name, cycle, ticks]`` events.
+    """
     steady = [
         event
         for cycle in range(5)
@@ -130,17 +141,54 @@ def _cases() -> dict[str, tuple[dict[str, Any], list[list[Any]]]]:
         )
     ]
     return {
+        "steady": steady,
+        "gapped": gapped,
+        "faults": faults,
+        "large": large,
+        "compute": compute,
+    }
+
+
+def _series_cases(
+    series: dict[str, list[list[Any]]],
+) -> dict[str, tuple[dict[str, Any], list[list[Any]]]]:
+    """Return the runs over the generated event series.
+
+    Parameters
+    ----------
+    series
+        Generated events by series name.
+
+    Returns
+    -------
+    dict[str, tuple[dict[str, Any], list[list[Any]]]]
+        Run members and events by case name.
+    """
+    steady, faults = series["steady"], series["faults"]
+    return {
         "steady with warm-up": (_run(5, 1, []), steady),
-        "gapped cycles": (_run(5, 0, []), gapped),
+        "gapped cycles": (_run(5, 0, []), series["gapped"]),
         "one analysed cycle": (_run(5, 4, []), steady),
         "warm-up excludes every event": (_run(9, 8, []), steady),
         "faults, misses and safe states": (_run(5, 0, [1]), faults),
-        "large ticks": (_run(7, 0, []), large),
+        "large ticks": (_run(7, 0, []), series["large"]),
         "integral float counts": (_run(5.0, 1.0, []), steady),
         "float with one analysed cycle": (_run(5.0, 4.0, []), steady),
-        "compute": (_run(3, 0, [], "COMPUTE"), compute),
+        "compute": (_run(3, 0, [], "COMPUTE"), series["compute"]),
         "schedule count differs": (_run(5, 0, [1, 2]), faults),
         "schedule cycle differs": (_run(5, 0, [2]), faults),
+    }
+
+
+def _ordering_cases() -> dict[str, tuple[dict[str, Any], list[list[Any]]]]:
+    """Return the runs whose few written events break an interval or ordering rule.
+
+    Returns
+    -------
+    dict[str, tuple[dict[str, Any], list[list[Any]]]]
+        Run members and events by case name.
+    """
+    return {
         "negative interval": (
             _run(1, 0, []),
             [["SAMPLE_READY", 0, 50], ["ACT_WRITE", 0, 60], ["SAMPLE_READ", 0, 40]],

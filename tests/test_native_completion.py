@@ -14,7 +14,7 @@ import hashlib
 import json
 import shutil
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from native_simulation_manifest import write_native_manifest
@@ -29,6 +29,16 @@ if TYPE_CHECKING:
     from conftest import RunTool
 
 __all__ = ["native_run"]
+# Configured fault kind of each mutation that needs one; every other runs without a fault.
+FAULTS = {
+    "fault_cycle": "drop",
+    "fault_delay": "delay",
+    "fault_absent": "drop",
+    "fault_valid_drop": "drop",
+    "fault_valid_delay": "delay",
+    "fault_valid_freeze": "freeze",
+    "fault_valid_overload": "overload",
+}
 
 
 @pytest.mark.parametrize(
@@ -73,29 +83,57 @@ def test_bound_completion(
     mutation
         Original receipt or deliberate semantic corruption after real execution.
     """
-    config = tmp_path / "configuration.txt"
-    fault = {
-        "fault_cycle": "drop",
-        "fault_delay": "delay",
-        "fault_absent": "drop",
-        "fault_valid_drop": "drop",
-        "fault_valid_delay": "delay",
-        "fault_valid_freeze": "freeze",
-        "fault_valid_overload": "overload",
-    }.get(mutation, "none")
+    path, metadata = _execute(native_run, tmp_path, FAULTS.get(mutation, "none"))
+    manifest = json.loads(path.read_text())
+    facts = json.loads(metadata.read_text())
+    _mutate(mutation, manifest, facts)
+    digest = _rebind_metadata(path, manifest, metadata, facts)
+    result = run_tool("analyze_run", str(path), "--output-dir", str(tmp_path / "report"))
+    if mutation in {"none", "warmup"} or mutation.startswith("fault_valid_"):
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads((tmp_path / "report/report.json").read_text())
+        assert report["native_completion"] == facts["result"]
+        assert report["input_sha256"]["native_metadata"] == digest
+        assert report["tracking_error"]["sample_count"] == (
+            24 if mutation == "warmup" else facts["result"]["samples"]
+        )
+    else:
+        assert result.returncode == 1
+        assert "native" in result.stderr
+        assert not (tmp_path / "report").exists()
+
+
+def _execute(native_run: Path, directory: Path, fault: str) -> tuple[Path, Path]:
+    """Run the production native simulation once and write its manifest.
+
+    Parameters
+    ----------
+    native_run
+        Actual production RTL/controller executable.
+    directory
+        Exclusive capture allocation.
+    fault
+        Configured fault kind.
+
+    Returns
+    -------
+    tuple[Path, Path]
+        Written manifest and the native metadata receipt.
+    """
+    config = directory / "configuration.txt"
     config.write_text(configuration("pid", fault), encoding="utf-8")
-    program = tmp_path / "run_simulation"
+    program = directory / "run_simulation"
     shutil.copyfile(native_run, program)
     shutil.copyfile(
-        REPOSITORY_ROOT / "measurement-domain.json", tmp_path / "measurement-domain.json"
+        REPOSITORY_ROOT / "measurement-domain.json", directory / "measurement-domain.json"
     )
-    metadata = tmp_path / "native_metadata.json"
+    metadata = directory / "native_metadata.json"
     result = subprocess.run(
         [
             str(native_run),
             str(config),
-            str(tmp_path / "events.bin"),
-            str(tmp_path / "tracking_raw.csv"),
+            str(directory / "events.bin"),
+            str(directory / "tracking_raw.csv"),
             "--metadata",
             str(metadata),
         ],
@@ -109,10 +147,23 @@ def test_bound_completion(
         ["verilator", "--version"], check=True, text=True, capture_output=True, timeout=scaled(10)
     ).stdout.strip()
     path = write_native_manifest(
-        tmp_path, "2026-09-27T00:00:00Z", [program, config, metadata], version
+        directory, "2026-09-27T00:00:00Z", [program, config, metadata], version
     )
-    manifest = json.loads(path.read_text())
-    facts = json.loads(metadata.read_text())
+    return path, metadata
+
+
+def _mutate(mutation: str, manifest: dict[str, Any], facts: dict[str, Any]) -> None:
+    """Apply one semantic change to the receipt or the declared warm-up.
+
+    Parameters
+    ----------
+    mutation
+        Change name; ``none`` and the valid fault cases change nothing.
+    manifest
+        Declaration, changed in place for ``warmup``.
+    facts
+        Native metadata receipt, changed in place.
+    """
     if mutation in {"records", "misses", "overflow"}:
         facts["result"][mutation] += 1
     elif mutation in {"schema", "samples", "safe"}:
@@ -145,6 +196,29 @@ def test_bound_completion(
             "configsha": (facts["artifacts"]["configuration"], "sha256", "0" * 64),
         }[mutation]
         target[key] = value
+
+
+def _rebind_metadata(
+    path: Path, manifest: dict[str, Any], metadata: Path, facts: dict[str, Any]
+) -> str:
+    """Write the receipt and rebind the manifest to its new digest.
+
+    Parameters
+    ----------
+    path
+        Manifest file.
+    manifest
+        Declaration to write.
+    metadata
+        Native metadata receipt file.
+    facts
+        Receipt to write.
+
+    Returns
+    -------
+    str
+        SHA-256 of the written receipt.
+    """
     metadata.write_text(json.dumps(facts), encoding="utf-8")
     digest = hashlib.sha256(metadata.read_bytes()).hexdigest()
     manifest["native_metadata"]["sha256"] = digest
@@ -152,16 +226,4 @@ def test_bound_completion(
         if reference["path"] == "native_metadata.json":
             reference["sha256"] = digest
     path.write_text(json.dumps(manifest), encoding="utf-8")
-    result = run_tool("analyze_run", str(path), "--output-dir", str(tmp_path / "report"))
-    if mutation in {"none", "warmup"} or mutation.startswith("fault_valid_"):
-        assert result.returncode == 0, result.stdout + result.stderr
-        report = json.loads((tmp_path / "report/report.json").read_text())
-        assert report["native_completion"] == facts["result"]
-        assert report["input_sha256"]["native_metadata"] == digest
-        assert report["tracking_error"]["sample_count"] == (
-            24 if mutation == "warmup" else facts["result"]["samples"]
-        )
-    else:
-        assert result.returncode == 1
-        assert "native" in result.stderr
-        assert not (tmp_path / "report").exists()
+    return digest

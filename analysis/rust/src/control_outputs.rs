@@ -20,7 +20,9 @@ use crate::control_analysis::Row;
 use crate::control_json_text::{canonical_json, number_text};
 use crate::control_plots::plots;
 use serde_json::{Map, Value, json};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 /// Columns of `interval_summary.csv`.
 const INTERVAL_COLUMNS: [&str; 10] = [
@@ -89,17 +91,8 @@ pub(crate) fn report_files(report: &Value, rows: &[Row]) -> Vec<(String, Vec<u8>
             &with_provenance(summary_rows(report, "jitter"), &provenance),
         ),
     ));
-    files.push((
-        "cycle_jitter.csv".to_owned(),
-        csv_table(
-            &provenance_columns(&PAIR_COLUMNS),
-            &with_provenance(jitter_pairs(rows), &provenance),
-        ),
-    ));
-    files.push((
-        "cycle_intervals.csv".to_owned(),
-        csv_table(&CYCLE_COLUMNS, &cycle_rows(report, rows)),
-    ));
+    files.push(("cycle_jitter.csv".to_owned(), pair_table(&provenance, rows)));
+    files.push(("cycle_intervals.csv".to_owned(), cycle_table(report, rows)));
     files.extend(plots(report));
     files
 }
@@ -159,46 +152,60 @@ fn provenance_columns(tail: &[&'static str]) -> Vec<&'static str> {
     PROVENANCE.iter().chain(tail).copied().collect()
 }
 
-/// One identified row per analysed cycle interval.
-fn cycle_rows(report: &Value, rows: &[Row]) -> Vec<Map<String, Value>> {
-    rows.iter()
-        .map(|row| {
-            let mut fields = Map::new();
-            identify(report, &mut fields);
-            fields.insert("cycle".to_owned(), json!(row.cycle));
-            fields.insert("interval".to_owned(), json!(row.interval));
-            fields.insert("ticks".to_owned(), json!(row.ticks));
-            fields
-        })
-        .collect()
+/// `cycle_intervals.csv`: one identified row per analysed cycle interval.
+///
+/// Rows are written as they are formed, so no table of row mappings is held.
+fn cycle_table(report: &Value, rows: &[Row]) -> Vec<u8> {
+    let identity = format!(
+        "{},{}",
+        cell(Some(&report["run_id"])),
+        cell(Some(&report["evidence_status"]))
+    );
+    let mut text = header(&CYCLE_COLUMNS);
+    for row in rows {
+        let _ = write!(
+            text,
+            "{identity},{},{},{}\r\n",
+            row.cycle,
+            text_cell(&row.interval),
+            row.ticks
+        );
+    }
+    text.into_bytes()
 }
 
 /// Changes between adjacent cycles of the same interval, as Python's `jitter_pairs`.
 ///
 /// A change can exceed the 64-bit signed range, so it is kept as Python's
 /// decimal text of the integer, which is what its CSV cell holds.
-fn jitter_pairs(rows: &[Row]) -> Vec<Map<String, Value>> {
+///
+/// Rows are written as they are formed, after the provenance cells, so no table of
+/// pair mappings is held.
+fn pair_table(provenance: &Map<String, Value>, rows: &[Row]) -> Vec<u8> {
+    let identity = PROVENANCE
+        .iter()
+        .map(|name| cell(provenance.get(*name)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut text = header(&provenance_columns(&PAIR_COLUMNS));
     let mut previous: BTreeMap<&str, (u32, u64)> = BTreeMap::new();
-    let mut pairs = Vec::new();
     for row in rows {
         if let Some(&(cycle, ticks)) = previous.get(row.interval.as_str())
             && u64::from(row.cycle) == u64::from(cycle) + 1
         {
             let delta = i128::from(row.ticks) - i128::from(ticks);
-            let pair = json!({
-                "interval": row.interval,
-                "previous_cycle": cycle,
-                "cycle": row.cycle,
-                "previous_ticks": ticks,
-                "ticks": row.ticks,
-                "delta_ticks": delta.to_string(),
-                "absolute_delta_ticks": delta.unsigned_abs().to_string(),
-            });
-            pairs.push(pair.as_object().cloned().expect("pair object"));
+            let _ = write!(
+                text,
+                "{identity},{},{cycle},{},{ticks},{},{delta},{}\r\n",
+                text_cell(&row.interval),
+                row.cycle,
+                row.ticks,
+                delta.unsigned_abs()
+            );
         }
         previous.insert(&row.interval, (row.cycle, row.ticks));
     }
-    pairs
+    text.into_bytes()
 }
 
 /// Python's `str` of one CSV cell value, quoted as the excel dialect quotes it;
@@ -207,12 +214,25 @@ fn jitter_pairs(rows: &[Row]) -> Vec<Map<String, Value>> {
 pub(crate) fn cell(value: Option<&Value>) -> String {
     match value.unwrap_or(&Value::Null) {
         Value::Null => String::new(),
-        Value::String(string) if string.contains([',', '"', '\r', '\n']) => {
-            format!("\"{}\"", string.replace('"', "\"\""))
-        }
-        Value::String(string) => string.clone(),
+        Value::String(string) => text_cell(string).into_owned(),
         number => number_text(number, number.is_f64()),
     }
+}
+
+/// One text cell, quoted as the excel dialect quotes it.
+fn text_cell(string: &str) -> Cow<'_, str> {
+    if string.contains([',', '"', '\r', '\n']) {
+        Cow::Owned(format!("\"{}\"", string.replace('"', "\"\"")))
+    } else {
+        Cow::Borrowed(string)
+    }
+}
+
+/// The CRLF-terminated header line of a table.
+fn header(columns: &[&str]) -> String {
+    let mut text = columns.join(",");
+    text.push_str("\r\n");
+    text
 }
 
 /// A CSV table with a header and one CRLF-terminated row per mapping.

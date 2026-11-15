@@ -78,6 +78,81 @@ def _parent(tree: DeviceTree, node: Node) -> Node:
         current = tree.nodes[current.path.rpartition("/")[0] or "/"]
 
 
+def _interrupt(tree: DeviceTree, node: Node) -> tuple[Node | None, int]:
+    """Return the interrupt parent and source the device node declares.
+
+    Parameters
+    ----------
+    tree
+        Original verified topology.
+    node
+        Witness device node.
+
+    Returns
+    -------
+    tuple[Node | None, int]
+        Parent controller node, if its phandle resolves, and the source number.
+
+    Raises
+    ------
+    ValueError
+        If both interrupt forms are declared or the extended form is not one interrupt.
+    """
+    if "interrupts-extended" not in node.properties:
+        return _parent(tree, node), single_cell(node, "interrupts")
+    if "interrupts" in node.properties or "interrupt-parent" in node.properties:
+        message = "Witness interrupt declaration is ambiguous"
+        raise ValueError(message)
+    cells = property_cells(node.properties["interrupts-extended"])
+    if len(cells) != EXTENDED_INTERRUPT_CELLS:
+        message = "Witness requires exactly one original PLIC interrupt"
+        raise ValueError(message)
+    return phandle_nodes(tree).get(cells[0]), cells[1]
+
+
+def _aperture(tree: DeviceTree, path: str, selection: PlicSelection) -> Region:
+    """Return the device's one aligned 256-byte aperture, apart from the PLIC.
+
+    Parameters
+    ----------
+    tree
+        Original verified topology.
+    path
+        Witness device node path.
+    selection
+        Selected PLIC layout.
+
+    Returns
+    -------
+    Region
+        The AXI aperture.
+
+    Raises
+    ------
+    ValueError
+        If the device does not have exactly one aligned complete aperture, or it
+        overlaps the PLIC registers.
+    """
+    regions = register_regions(tree, path)
+    if (
+        len(regions) != 1
+        or not regions[0].address
+        or regions[0].address % APERTURE_BYTES
+        or regions[0].size != APERTURE_BYTES
+    ):
+        message = "Witness requires one aligned complete 256-byte AXI aperture"
+        raise ValueError(message)
+    aperture = regions[0]
+    controller = register_regions(tree, selection.path)[0]
+    if (
+        aperture.address < controller.address + controller.size
+        and controller.address < aperture.address + aperture.size
+    ):
+        message = "Witness AXI aperture overlaps the PLIC"
+        raise ValueError(message)
+    return aperture
+
+
 def bind_device(tree: DeviceTree, path: str, selection: PlicSelection) -> WitnessDevice:
     """Bind one explicit versioned AXI aperture and retained source to its actual PLIC.
 
@@ -108,39 +183,11 @@ def bind_device(tree: DeviceTree, path: str, selection: PlicSelection) -> Witnes
     ):
         message = "Witness requires an enabled original versioned AXI device node"
         raise ValueError(message)
-    if "interrupts-extended" in node.properties:
-        if "interrupts" in node.properties or "interrupt-parent" in node.properties:
-            message = "Witness interrupt declaration is ambiguous"
-            raise ValueError(message)
-        cells = property_cells(node.properties["interrupts-extended"])
-        if len(cells) != EXTENDED_INTERRUPT_CELLS:
-            message = "Witness requires exactly one original PLIC interrupt"
-            raise ValueError(message)
-        parent = phandle_nodes(tree).get(cells[0])
-        source = cells[1]
-    else:
-        parent = _parent(tree, node)
-        source = single_cell(node, "interrupts")
+    parent, source = _interrupt(tree, node)
     if parent is None or parent.path != selection.path or source != selection.source:
         message = "Witness interrupt does not match the selected PLIC and source"
         raise ValueError(message)
     plic = bind_plic(tree, selection)
-    regions = register_regions(tree, path)
-    if (
-        len(regions) != 1
-        or not regions[0].address
-        or regions[0].address % APERTURE_BYTES
-        or regions[0].size != APERTURE_BYTES
-    ):
-        message = "Witness requires one aligned complete 256-byte AXI aperture"
-        raise ValueError(message)
-    aperture = regions[0]
-    controller = register_regions(tree, selection.path)[0]
-    if (
-        aperture.address < controller.address + controller.size
-        and controller.address < aperture.address + aperture.size
-    ):
-        message = "Witness AXI aperture overlaps the PLIC"
-        raise ValueError(message)
+    aperture = _aperture(tree, path, selection)
     check_collisions(tree, path, aperture, selection.path, selection.source)
     return WitnessDevice(aperture, plic)

@@ -19,6 +19,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from amp_diagnostic_build import (
+    build_diagnostic_plugin,
+    device_source,
+    replace_once,
+    verified_receipt,
+)
 from amp_elf import admit_elf
 from amp_elf_symbols import read_symbols
 from amp_platform import bind_platform
@@ -35,49 +41,8 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture(scope="module", params=["WITNESS_SPIKE_PLUGIN", "WITNESS_SPIKE_THERMAL_PLUGIN"])
-def logger_api_plugin(
-    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
-) -> Path:
-    """Link API calls to unchanged logger code and hash-verified production model objects.
-
-    Parameters
-    ----------
-    request
-        Actual mechanical or thermal production plugin selection.
-    tmp_path_factory
-        Exclusive diagnostic source, dependency records and compiler output.
-
-    Returns
-    -------
-    Path
-        Actual Spike plugin whose additional calls use only the public logger API.
-    """
-    production = Path(os.environ[request.param])
-    receipt = json.loads((production.parent / "plugin.json").read_bytes())
-    assert sha256_of_file(production) == receipt["plugin_sha256"]
-    compiler = receipt["compilers"]["cxx"]["driver"]
-    assert sha256_of_file(Path(compiler["path"])) == compiler["sha256"]
-    for name, digest in receipt["link_inputs"].items():
-        assert sha256_of_file(Path(name)) == digest
-    directory = tmp_path_factory.mktemp("amp-logger-api-plugin")
-    original = ROOT / "runtime/isa/spike_axi_device.cpp"
-    source = original.read_text()
-    for include, header_path in [
-        ("../refusal.h", "runtime/refusal.h"),
-        ("../rtl/simulation.h", "runtime/rtl/simulation.h"),
-        ("spike_amp_transport.h", "runtime/isa/spike_amp_transport.h"),
-        ("../amp_logger.h", "runtime/amp_logger.h"),
-    ]:
-        anchor = f'#include "{include}"'
-        assert source.count(anchor) == 1
-        source = source.replace(anchor, f'#include "{ROOT / header_path}"')
-    source = "#include <cstdlib>\n" + source
-    members = "    witness::AmpLogger<witness::SpikeAmpTransport> logger;"
-    assert source.count(members) == 1
-    source = source.replace(
-        members,
-        """    const std::string mode = std::getenv("WITNESS_LOGGER_API");
+_MEMBERS = "    witness::AmpLogger<witness::SpikeAmpTransport> logger;"
+_HOOKS = """    const std::string mode = std::getenv("WITNESS_LOGGER_API");
     unsigned starts = 0, checks = 0, finishes = 0, arming_waits = 0, backlog_waits = 0;
     bool mailbox_faulted = false;
     const witness::RunHooks hooks{
@@ -94,17 +59,10 @@ def logger_api_plugin(
             if (mode == "finish-failure") throw std::runtime_error("API finish failure");
         }
     };
-    witness::AmpLogger<witness::SpikeAmpTransport> logger;""",
-    )
-    initialiser = "logger(transport, run, output, configuration.shared)"
-    assert source.count(initialiser) == 1
-    source = source.replace(initialiser, initialiser[:-1] + ", &hooks)")
-    constructor = "        witness::configure_run(transport, run);\n        synchronize();"
-    assert source.count(constructor) == 1
-    source = source.replace(
-        constructor,
-        constructor
-        + """
+"""
+_INITIALISER = "logger(transport, run, output, configuration.shared)"
+_CONSTRUCTOR = "        witness::configure_run(transport, run);\n        synchronize();"
+_LIFECYCLE_MODES = """
         if (mode == "contract") ++run.cycles;
         if (mode == "unready") (void)logger.completion();
         if (mode == "transport-zero" || mode == "transport-alignment" ||
@@ -160,17 +118,12 @@ def logger_api_plugin(
                 mode == "mailbox-alignment" ? 1ULL : UINT64_MAX - 7ULL;
             witness::AmpLogger<witness::SpikeAmpTransport> rejected(
                 transport, run, output, address);
-        }""",
-    )
-    final = (
-        "                if (!std::cout)\n"
-        '                    throw witness::RuntimeRefused("AMP completion receipt write failed");'
-    )
-    assert source.count(final) == 1
-    source = source.replace(
-        final,
-        final
-        + """
+        }"""
+_COMPLETION = (
+    "                if (!std::cout)\n"
+    '                    throw witness::RuntimeRefused("AMP completion receipt write failed");'
+)
+_COMPLETION_CHECKS = """
                 if (starts != 1 || !checks || finishes != 1)
                     throw std::runtime_error("API acquisition lifecycle differs");
                 if (mode == "arming-wait" && !arming_waits)
@@ -180,14 +133,9 @@ def logger_api_plugin(
                 std::cout << "API_HOOKS " << starts << " " << checks << " " << finishes << "\\n";
                 std::cout.flush();
                 (void)logger.completion();
-                if (mode == "repoll") (void)logger.poll();""",
-    )
-    entry = "    reg_t size() override { return 256; }"
-    assert source.count(entry) == 1
-    source = source.replace(
-        entry,
-        entry
-        + """
+                if (mode == "repoll") (void)logger.poll();"""
+_SIZE_ENTRY = "    reg_t size() override { return 256; }"
+_MAILBOX_DAMAGE = """
 
     /** Damage one actual reserved RAM word through the public Spike memory API. */
     void damage_mailbox(std::size_t offset) {
@@ -204,13 +152,9 @@ def logger_api_plugin(
             return;
         }
         throw std::runtime_error("API actual mailbox mapping absent");
-    }""",
-    )
-    polling = "            complete = logger.poll();"
-    assert source.count(polling) == 1
-    source = source.replace(
-        polling,
-        """            if (!mailbox_faulted && (mode.starts_with("fresh-") ||
+    }"""
+_POLLING = "            complete = logger.poll();"
+_MAILBOX_FAULTS = """            if (!mailbox_faulted && (mode.starts_with("fresh-") ||
                 mode.starts_with("arm-") || mode == "overflow-only")) {
                 const auto abi = transport.read_memory32(configuration.shared +
                     offsetof(witness_amp_mailbox, abi));
@@ -244,65 +188,62 @@ def logger_api_plugin(
                 return;
             }
 """
-        + polling
-        + """
+_ARMING_WAIT = """
             if (mode == "arming-wait" && !starts &&
                 transport.read_memory32(configuration.shared +
                     offsetof(witness_amp_mailbox, logger_status)) == WITNESS_AMP_LOGGER_READY) {
                 if (logger.poll()) throw std::runtime_error("API unexpected early completion");
                 ++arming_waits;
-            }""",
-    )
+            }"""
+_COMPLETE_MODES = frozenset(
+    {
+        "healthy",
+        "lqr",
+        "arming-wait",
+        "backlog",
+        "repoll",
+        "transport-roundtrip",
+        "adapter-requests",
+        "factory-tree",
+    }
+)
+_MARKERS = {
+    "transport-roundtrip": ("API_MEMORY_ROUNDTRIP",),
+    "adapter-requests": ("API_ADAPTER_REQUESTS",),
+    "factory-tree": (
+        "API_FACTORY_TREE",
+        "witness@40000000",
+        'compatible = "anulum,loop-timing-witness-axi-v1"',
+        "interrupts = <0x2>",
+    ),
+}
+
+
+@pytest.fixture(scope="module", params=["WITNESS_SPIKE_PLUGIN", "WITNESS_SPIKE_THERMAL_PLUGIN"])
+def logger_api_plugin(
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
+) -> Path:
+    """Link API calls to unchanged logger code and hash-verified production model objects.
+
+    Parameters
+    ----------
+    request
+        Actual mechanical or thermal production plugin selection.
+    tmp_path_factory
+        Exclusive diagnostic source, dependency records and compiler output.
+
+    Returns
+    -------
+    Path
+        Actual Spike plugin whose additional calls use only the public logger API.
+    """
+    production = Path(os.environ[request.param])
+    receipt = verified_receipt(production)
+    directory = tmp_path_factory.mktemp("amp-logger-api-plugin")
     diagnostic = directory / "logger_api_plugin.cpp"
-    diagnostic.write_text(source)
-    sdk = receipt["spike_sdk"]
-    verilator = Path(receipt["verilator"]["root"]) / "include"
-    includes = [
-        verilator,
-        verilator / "vltstd",
-        Path(sdk["source"]),
-        Path(sdk["source"]) / "riscv",
-        Path(sdk["source"]) / "fdt",
-        Path(sdk["build"]),
-    ]
-    target = directory / "witness_spike_axi.so"
-    commands = [
-        [
-            compiler["path"],
-            "-std=c++20",
-            "-O2",
-            "-fPIC",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wconversion",
-            "-Wshadow",
-            "-I" + str(production.parent / "rtl"),
-            *[argument for path in includes for argument in ["-isystem", str(path)]],
-            "-MD",
-            "-MF",
-            str(directory / "plugin.d"),
-            "-c",
-            str(diagnostic),
-            "-o",
-            str(directory / "plugin.o"),
-        ],
-        [
-            compiler["path"],
-            "-shared",
-            "-Wl,--fatal-warnings",
-            str(directory / "plugin.o"),
-            *[name for name in receipt["link_inputs"] if Path(name).name != "plugin.o"],
-            "-pthread",
-            "-o",
-            str(target),
-        ],
-    ]
-    (directory / "build.argv.json").write_text(json.dumps(commands, indent=2))
-    for index, argv in enumerate(commands):
-        result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, check=False)
-        (directory / f"build_{index}.log").write_text(result.stdout + result.stderr)
-        assert result.returncode == 0, result.stdout + result.stderr
+    diagnostic.write_text(_logger_api_source())
+    target = build_diagnostic_plugin(production, receipt, directory, diagnostic)
+    original = ROOT / "runtime/isa/spike_axi_device.cpp"
     (directory / "source_sha256.json").write_text(
         json.dumps(
             {"original": sha256_of_file(original), "diagnostic": sha256_of_file(diagnostic)},
@@ -310,6 +251,30 @@ def logger_api_plugin(
         )
     )
     return target
+
+
+def _logger_api_source() -> str:
+    """Return the production device source with the public API diagnostic modes added.
+
+    Returns
+    -------
+    str
+        Device source whose logger runs with counting hooks, mode-selected lifecycle
+        and transport violations, completion checks and actual mailbox damage.
+    """
+    source = "#include <cstdlib>\n" + device_source(
+        ROOT / "runtime/isa/spike_amp_transport.h", ROOT / "runtime/amp_logger.h"
+    )
+    for anchor, replacement in (
+        (_MEMBERS, _HOOKS + _MEMBERS),
+        (_INITIALISER, _INITIALISER[:-1] + ", &hooks)"),
+        (_CONSTRUCTOR, _CONSTRUCTOR + _LIFECYCLE_MODES),
+        (_COMPLETION, _COMPLETION + _COMPLETION_CHECKS),
+        (_SIZE_ENTRY, _SIZE_ENTRY + _MAILBOX_DAMAGE),
+        (_POLLING, _MAILBOX_FAULTS + _POLLING + _ARMING_WAIT),
+    ):
+        source = replace_once(source, anchor, replacement)
+    return source
 
 
 def lqr_diagnostic_image(original: Path, tmp_path: Path, reservation: Region) -> Path:
@@ -361,6 +326,54 @@ def lqr_diagnostic_image(original: Path, tmp_path: Path, reservation: Region) ->
         )
     )
     return image
+
+
+def _execute(
+    plugin: Path, tmp_path: Path, mode: str
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    """Run the actual firmware on Spike with the diagnostic plugin in one API mode.
+
+    Parameters
+    ----------
+    plugin
+        Diagnostic client of the unchanged production logger and real transport.
+    tmp_path
+        Exclusive raw execution outputs and complete diagnostics.
+    mode
+        Actual API argument, lifecycle violation or acquisition callback failure.
+
+    Returns
+    -------
+    tuple[subprocess.CompletedProcess[str], Path]
+        Completed Spike process and its retained execution directory.
+    """
+    image = Path(os.environ["WITNESS_AMP_IMAGE"])
+    tree = decode_device_tree((image / "platform.dtb").read_bytes())
+    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
+    if mode == "lqr":
+        image = lqr_diagnostic_image(image, tmp_path, platform.memory.firmware)
+    output = tmp_path / "execution"
+    output.mkdir()
+    argv = spike_command(
+        SpikeTools(Path(os.environ["WITNESS_SPIKE"]), plugin, 100, 10000000),
+        tree,
+        platform,
+        plic_path=REQUEST.plic.path,
+        paths=SpikePaths(image, output),
+    )
+    (output / "command.json").write_text(json.dumps(argv, indent=2))
+    (output / "api_mode.json").write_text(json.dumps({"mode": mode}))
+    result = subprocess.run(
+        argv,
+        cwd=ROOT,
+        env={**os.environ, "WITNESS_LOGGER_API": mode},
+        capture_output=True,
+        text=True,
+        timeout=scaled(30),
+        check=False,
+    )
+    (output / "spike.log").write_text(result.stdout + result.stderr)
+    return result, output
 
 
 @pytest.mark.parametrize(
@@ -418,63 +431,20 @@ def test_public_logger_api(
     finding
         Required failure; empty for the complete healthy lifecycle.
     """
-    image = Path(os.environ["WITNESS_AMP_IMAGE"])
-    tree = decode_device_tree((image / "platform.dtb").read_bytes())
-    platform = bind_platform(tree, REQUEST.memory, REQUEST.device_path, REQUEST.plic)
-    if mode == "lqr":
-        image = lqr_diagnostic_image(image, tmp_path, platform.memory.firmware)
-    output = tmp_path / "execution"
-    output.mkdir()
-    argv = spike_command(
-        SpikeTools(Path(os.environ["WITNESS_SPIKE"]), logger_api_plugin, 100, 10000000),
-        tree,
-        platform,
-        plic_path=REQUEST.plic.path,
-        paths=SpikePaths(image, output),
-    )
-    environment = dict(os.environ)
-    environment["WITNESS_LOGGER_API"] = mode
-    (output / "command.json").write_text(json.dumps(argv, indent=2))
-    (output / "api_mode.json").write_text(json.dumps({"mode": mode}))
-    result = subprocess.run(
-        argv,
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=scaled(30),
-        check=False,
-    )
-    (output / "spike.log").write_text(result.stdout + result.stderr)
+    result, output = _execute(logger_api_plugin, tmp_path, mode)
     if finding:
         assert result.returncode != 0
         assert finding in result.stderr
     else:
         assert result.returncode == 0, result.stdout + result.stderr
-    if mode in {
-        "healthy",
-        "lqr",
-        "arming-wait",
-        "backlog",
-        "repoll",
-        "transport-roundtrip",
-        "adapter-requests",
-        "factory-tree",
-    }:
+    if mode in _COMPLETE_MODES:
         assert '"samples":10,"events":40,"misses":0,"overflow":0,"safe":false' in result.stdout
         assert "API_HOOKS 1 " in result.stdout
         assert (output / "events.bin").stat().st_size == 640
         assert len((output / "tracking_raw.csv").read_text().splitlines()) == 11
     else:
         assert "WITNESS_AMP_COMPLETION" not in result.stdout
-    if mode == "transport-roundtrip":
-        assert "API_MEMORY_ROUNDTRIP" in result.stdout
-    if mode == "adapter-requests":
-        assert "API_ADAPTER_REQUESTS" in result.stdout
-    if mode == "factory-tree":
-        assert "API_FACTORY_TREE" in result.stdout
-        assert "witness@40000000" in result.stdout
-        assert 'compatible = "anulum,loop-timing-witness-axi-v1"' in result.stdout
-        assert "interrupts = <0x2>" in result.stdout
+    for marker in _MARKERS.get(mode, ()):
+        assert marker in result.stdout
     assert not (output / "capture.json").exists()
     assert not (output / "manifest.json").exists()

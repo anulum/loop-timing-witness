@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from pathlib import Path
 
 import pytest
+from amp_diagnostic_build import build_diagnostic_plugin, verified_receipt
 
 from manifest_io import sha256_of_file
 
@@ -84,64 +84,11 @@ def stall_plugin(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPa
         No production source, original SDK or installed object is changed.
     """
     production = Path(os.environ[request.param])
-    receipt = json.loads((production.parent / "plugin.json").read_text())
-    assert sha256_of_file(production) == receipt["plugin_sha256"]
-    compiler = receipt["compilers"]["cxx"]["driver"]
-    assert sha256_of_file(Path(compiler["path"])) == compiler["sha256"]
-    for name, digest in receipt["link_inputs"].items():
-        assert sha256_of_file(Path(name)) == digest
+    receipt = verified_receipt(production)
     directory = tmp_path_factory.mktemp("amp-stall-plugin")
     source = directory / "consumer_stall.cpp"
     source.write_text(scheduling_source())
-    sdk_source = Path(receipt["spike_sdk"]["source"])
-    sdk_build = Path(receipt["spike_sdk"]["build"])
-    verilator = Path(receipt["verilator"]["root"]) / "include"
-    includes = [
-        verilator,
-        verilator / "vltstd",
-        sdk_source,
-        sdk_source / "riscv",
-        sdk_source / "fdt",
-        sdk_build,
-    ]
-    target = directory / "witness_spike_axi.so"
-    commands = [
-        [
-            compiler["path"],
-            "-std=c++20",
-            "-O2",
-            "-fPIC",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wconversion",
-            "-Wshadow",
-            "-I" + str(production.parent / "rtl"),
-            *[argument for path in includes for argument in ["-isystem", str(path)]],
-            "-MD",
-            "-MF",
-            str(directory / "plugin.d"),
-            "-c",
-            str(source),
-            "-o",
-            str(directory / "plugin.o"),
-        ],
-        [
-            compiler["path"],
-            "-shared",
-            "-Wl,--fatal-warnings",
-            str(directory / "plugin.o"),
-            *[name for name in receipt["link_inputs"] if Path(name).name != "plugin.o"],
-            "-pthread",
-            "-o",
-            str(target),
-        ],
-    ]
-    (directory / "build.argv.json").write_text(json.dumps(commands, indent=2))
-    for index, argv in enumerate(commands):
-        result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, check=False)
-        (directory / f"build_{index}.log").write_text(result.stdout + result.stderr)
-        assert result.returncode == 0, result.stdout + result.stderr
+    target = build_diagnostic_plugin(production, receipt, directory, source)
     (directory / "source_sha256.json").write_text(
         json.dumps(
             {

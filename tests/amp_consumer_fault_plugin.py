@@ -12,12 +12,17 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 import pytest
+from amp_diagnostic_build import (
+    build_diagnostic_plugin,
+    device_source,
+    transport_header,
+    verified_receipt,
+)
 
 from manifest_io import sha256_of_file
 
@@ -49,21 +54,28 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
         Generated plugin translation unit, logger header and memory transport header.
         Exact production anchors make source drift fail before compilation.
     """
-    logger = (ROOT / "runtime/amp_logger.h").read_text()
-    logger = (
-        logger.replace(
-            '#include "refusal.h"',
-            '#include "' + str((ROOT / "runtime/refusal.h").resolve()) + '"',
-        )
-        .replace(
-            '#include "run_control.h"',
-            '#include "' + str((ROOT / "runtime/run_control.h").resolve()) + '"',
-        )
-        .replace(
-            '#include "bare_metal/amp_contract.h"',
-            '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
-        )
-    )
+    logger_path = _fault_logger(directory, fault)
+    transport_path = _fault_transport(directory, fault)
+    source_path = _fault_device(directory, fault, transport_path, logger_path)
+    return source_path, logger_path, transport_path
+
+
+def _fault_logger(directory: Path, fault: ConsumerFault) -> Path:
+    """Write the production logger with one owned transition changed by the fault.
+
+    Parameters
+    ----------
+    directory
+        Exclusive build directory.
+    fault
+        Consumer-owned startup release, ready-mailbox or completion fault.
+
+    Returns
+    -------
+    Path
+        Diagnostic logger header.
+    """
+    logger = _logger_header()
     ready_write = (
         "            device.write_memory32(shared + "
         "offsetof(witness_amp_mailbox, logger_status),\n"
@@ -91,22 +103,51 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
         )
     logger_path = directory / "consumer_fault_logger.h"
     logger_path.write_text(logger)
+    return logger_path
 
-    transport = (ROOT / "runtime/isa/spike_amp_transport.h").read_text()
-    transport = (
-        transport.replace(
-            '#include "../refusal.h"',
+
+def _logger_header() -> str:
+    """Return the production logger header with its includes made absolute.
+
+    Returns
+    -------
+    str
+        Header text whose refusal, run-control and contract includes name the
+        repository files.
+    """
+    logger = (ROOT / "runtime/amp_logger.h").read_text()
+    return (
+        logger.replace(
+            '#include "refusal.h"',
             '#include "' + str((ROOT / "runtime/refusal.h").resolve()) + '"',
         )
         .replace(
-            '#include "../rtl/simulation.h"',
-            '#include "' + str((ROOT / "runtime/rtl/simulation.h").resolve()) + '"',
+            '#include "run_control.h"',
+            '#include "' + str((ROOT / "runtime/run_control.h").resolve()) + '"',
         )
         .replace(
-            '#include "../bare_metal/amp_contract.h"',
+            '#include "bare_metal/amp_contract.h"',
             '#include "' + str((ROOT / "runtime/bare_metal/amp_contract.h").resolve()) + '"',
         )
     )
+
+
+def _fault_transport(directory: Path, fault: ConsumerFault) -> Path:
+    """Write the transport header, admitting the reserved word for the mailbox fault.
+
+    Parameters
+    ----------
+    directory
+        Exclusive build directory.
+    fault
+        Consumer fault; only ``corrupt-ready-mailbox`` widens the write guard.
+
+    Returns
+    -------
+    Path
+        Diagnostic memory transport header.
+    """
+    transport = transport_header()
     transport_guard = (
         "        if (displacement != offsetof(witness_amp_mailbox, consumer) &&\n"
         "            displacement != offsetof(witness_amp_mailbox, logger_status))"
@@ -121,18 +162,29 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
         )
     transport_path = directory / "consumer_fault_transport.h"
     transport_path.write_text(transport)
+    return transport_path
 
-    source = (ROOT / "runtime/isa/spike_axi_device.cpp").read_text()
-    replacements = {
-        "../refusal.h": str((ROOT / "runtime/refusal.h").resolve()),
-        "../rtl/simulation.h": str((ROOT / "runtime/rtl/simulation.h").resolve()),
-        "spike_amp_transport.h": str(transport_path.resolve()),
-        "../amp_logger.h": str(logger_path.resolve()),
-    }
-    for original_include, replacement in replacements.items():
-        anchor = '"' + original_include + '"'
-        assert source.count(anchor) == 1
-        source = source.replace(anchor, '"' + replacement + '"')
+
+def _fault_device(
+    directory: Path, fault: ConsumerFault, transport_path: Path, logger_path: Path
+) -> Path:
+    """Write the device source, reporting a refused completion for ``invalid-complete``.
+
+    Parameters
+    ----------
+    directory
+        Exclusive build directory.
+    fault
+        Consumer fault.
+    transport_path, logger_path
+        Diagnostic transport and logger headers to include.
+
+    Returns
+    -------
+    Path
+        Diagnostic plugin translation unit.
+    """
+    source = device_source(transport_path, logger_path)
     if fault == "invalid-complete":
         final_synchronise = """        }
         synchronize();
@@ -155,7 +207,7 @@ def consumer_fault_sources(directory: Path, fault: ConsumerFault) -> tuple[Path,
         )
     source_path = directory / "consumer_fault_plugin.cpp"
     source_path.write_text(source)
-    return source_path, logger_path, transport_path
+    return source_path
 
 
 @pytest.fixture(
@@ -175,64 +227,11 @@ def consumer_fault_plugin(
     """Link the diagnostic logger against hash-verified production RTL and SDK objects."""
     environment, fault = request.param
     production = Path(os.environ[environment])
-    receipt = json.loads((production.parent / "plugin.json").read_text())
-    assert sha256_of_file(production) == receipt["plugin_sha256"]
-    compiler = receipt["compilers"]["cxx"]["driver"]
-    assert sha256_of_file(Path(compiler["path"])) == compiler["sha256"]
-    for name, digest in receipt["link_inputs"].items():
-        assert sha256_of_file(Path(name)) == digest
+    receipt = verified_receipt(production)
 
     directory = tmp_path_factory.mktemp("amp-consumer-fault-plugin")
     source, logger, transport = consumer_fault_sources(directory, fault)
-    sdk_source = Path(receipt["spike_sdk"]["source"])
-    sdk_build = Path(receipt["spike_sdk"]["build"])
-    verilator = Path(receipt["verilator"]["root"]) / "include"
-    includes = [
-        verilator,
-        verilator / "vltstd",
-        sdk_source,
-        sdk_source / "riscv",
-        sdk_source / "fdt",
-        sdk_build,
-    ]
-    target = directory / "witness_spike_axi.so"
-    commands = [
-        [
-            compiler["path"],
-            "-std=c++20",
-            "-O2",
-            "-fPIC",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Wconversion",
-            "-Wshadow",
-            "-I" + str(production.parent / "rtl"),
-            *[argument for path in includes for argument in ["-isystem", str(path)]],
-            "-MD",
-            "-MF",
-            str(directory / "plugin.d"),
-            "-c",
-            str(source),
-            "-o",
-            str(directory / "plugin.o"),
-        ],
-        [
-            compiler["path"],
-            "-shared",
-            "-Wl,--fatal-warnings",
-            str(directory / "plugin.o"),
-            *[name for name in receipt["link_inputs"] if Path(name).name != "plugin.o"],
-            "-pthread",
-            "-o",
-            str(target),
-        ],
-    ]
-    (directory / "build.argv.json").write_text(json.dumps(commands, indent=2))
-    for index, argv in enumerate(commands):
-        result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, check=False)
-        (directory / f"build_{index}.log").write_text(result.stdout + result.stderr)
-        assert result.returncode == 0, result.stdout + result.stderr
+    target = build_diagnostic_plugin(production, receipt, directory, source)
     (directory / "source_sha256.json").write_text(
         json.dumps(
             {

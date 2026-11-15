@@ -76,6 +76,74 @@ def _recorded_integer(text: str) -> int:
     return int(text)
 
 
+def _request(arguments: dict[str, Any]) -> ImageRequest:
+    """Build the image request from the recorded resource arguments.
+
+    Parameters
+    ----------
+    arguments
+        Recorded option values keyed by option.
+
+    Returns
+    -------
+    ImageRequest
+        Memory, PLIC and device selection with the fixed mailbox size.
+
+    Raises
+    ------
+    ValueError
+        If a recorded integer is not canonical or not a signed 64-bit value.
+    """
+    return ImageRequest(
+        MemorySelection(
+            arguments["--ram-node"],
+            arguments["--firmware-node"],
+            arguments["--telemetry-node"],
+            MAILBOX_BYTES,
+            _recorded_integer(arguments["--stack-bytes"]),
+        ),
+        PlicSelection(
+            arguments["--plic-node"],
+            _recorded_integer(arguments["--hart"]),
+            _recorded_integer(arguments["--interrupt"]),
+            arguments["--plic-layout"],
+        ),
+        arguments["--device-node"],
+    )
+
+
+def _preparation_agrees(image: dict[str, Any], preparation: dict[str, Any]) -> bool:
+    """Tell whether the preparation and the image declare the same inputs and mode.
+
+    Parameters
+    ----------
+    image
+        Original verified image metadata.
+    preparation
+        Original preparation with its compiler and captured inputs.
+
+    Returns
+    -------
+    bool
+        Whether schemas, ISA mode, compiler identity, inputs, simulation-only,
+        physical verification and exit mode all agree.
+    """
+    toolchain = preparation["toolchain"]
+    return not (
+        preparation.get("schema") != "loop-timing-witness.amp-image-preparation.v1"
+        or preparation.get("isa") is not True
+        or preparation.get("compiler") != toolchain["driver"]["path"]
+        or preparation.get("compiler_sha256") != toolchain["driver"]["sha256"]
+        or "compiler" in preparation["inputs"]
+        or image.get("inputs")
+        != {"compiler": preparation.get("compiler_sha256"), **preparation["inputs"]}
+        or image.get("schema") != "loop-timing-witness.amp-image.v1"
+        or image.get("simulation_only") is not True
+        or image.get("physical_verified") is not False
+        or image.get("exit_mode") != "isa_htif"
+    )
+
+
 def recorded_request(directory: Path) -> ImageRequest:
     """Decode the original verification selection without executing its recorded command.
 
@@ -106,23 +174,7 @@ def recorded_request(directory: Path) -> ImageRequest:
     ):
         message = "AMP original image verification vector is invalid"
         raise ValueError(message)
-    arguments = dict(zip(vector[PREFIX_SIZE::2], vector[PREFIX_SIZE + 1 :: 2], strict=True))
-    request = ImageRequest(
-        MemorySelection(
-            arguments["--ram-node"],
-            arguments["--firmware-node"],
-            arguments["--telemetry-node"],
-            MAILBOX_BYTES,
-            _recorded_integer(arguments["--stack-bytes"]),
-        ),
-        PlicSelection(
-            arguments["--plic-node"],
-            _recorded_integer(arguments["--hart"]),
-            _recorded_integer(arguments["--interrupt"]),
-            arguments["--plic-layout"],
-        ),
-        arguments["--device-node"],
-    )
+    request = _request(dict(zip(vector[PREFIX_SIZE::2], vector[PREFIX_SIZE + 1 :: 2], strict=True)))
     if vector[PREFIX_SIZE:] != verification_arguments(request):
         message = "AMP original image verification arguments disagree"
         raise ValueError(message)
@@ -148,20 +200,7 @@ def validate_image_receipt(
     ValueError
         If source identities, simulation mode, original resource selection or ELF contract disagree.
     """
-    toolchain = preparation["toolchain"]
-    if (
-        preparation.get("schema") != "loop-timing-witness.amp-image-preparation.v1"
-        or preparation.get("isa") is not True
-        or preparation.get("compiler") != toolchain["driver"]["path"]
-        or preparation.get("compiler_sha256") != toolchain["driver"]["sha256"]
-        or "compiler" in preparation["inputs"]
-        or image.get("inputs")
-        != {"compiler": preparation.get("compiler_sha256"), **preparation["inputs"]}
-        or image.get("schema") != "loop-timing-witness.amp-image.v1"
-        or image.get("simulation_only") is not True
-        or image.get("physical_verified") is not False
-        or image.get("exit_mode") != "isa_htif"
-    ):
+    if not _preparation_agrees(image, preparation):
         message = "AMP original image preparation or mode declarations disagree"
         raise ValueError(message)
     validate_rust_image_receipt(directory, image, preparation)

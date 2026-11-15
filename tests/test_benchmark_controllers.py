@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from benchmark_batches import decode_batch
@@ -101,27 +101,40 @@ def test_actual_comparison(native_batches: list[str], tmp_path: Path, run_tool: 
         (backend, controller) for backend in ("c", "rust") for controller in ("pid", "lqr")
     }
     for row in artifact["results"]:
-        batches = [
-            batch
-            for batch in artifact["raw_batches"]
-            if batch["phase"] == "measured"
-            and batch["backend"] == row["backend"]
-            and batch["controller"] == row["controller"]
-        ]
-        samples = sorted(batch["total_ns"] / 1000000 for batch in batches)
-        stats = row["stats"]
-        assert len(samples) == 5
-        assert stats["p50_ns"] == samples[2]
-        assert stats["p95_ns"] == pytest.approx(samples[3] + 0.8 * (samples[4] - samples[3]))
-        assert stats["p99_ns"] == pytest.approx(samples[3] + 0.96 * (samples[4] - samples[3]))
-        assert stats["mean_ns"] == pytest.approx(sum(samples) / 5)
-        assert stats["throughput_steps_per_second"] == pytest.approx(1e9 / (sum(samples) / 5))
-        assert len({batch["command_checksum"] for batch in batches}) == 1
+        _check_statistics(row, artifact["raw_batches"])
     original = output.read_bytes()
     repeated = run_tool("benchmark_controllers", *args)
     assert repeated.returncode == 1
     assert repeated.stderr == "controller benchmark: FAIL: could not complete measurement\n"
     assert output.read_bytes() == original
+
+
+def _check_statistics(row: dict[str, Any], raw_batches: list[dict[str, Any]]) -> None:
+    """Require one result row's statistics to follow from its five measured batches.
+
+    Parameters
+    ----------
+    row
+        Result of one backend and controller.
+    raw_batches
+        Every recorded batch of the comparison.
+    """
+    batches = [
+        batch
+        for batch in raw_batches
+        if batch["phase"] == "measured"
+        and batch["backend"] == row["backend"]
+        and batch["controller"] == row["controller"]
+    ]
+    samples = sorted(batch["total_ns"] / 1000000 for batch in batches)
+    stats = row["stats"]
+    assert len(samples) == 5
+    assert stats["p50_ns"] == samples[2]
+    assert stats["p95_ns"] == pytest.approx(samples[3] + 0.8 * (samples[4] - samples[3]))
+    assert stats["p99_ns"] == pytest.approx(samples[3] + 0.96 * (samples[4] - samples[3]))
+    assert stats["mean_ns"] == pytest.approx(sum(samples) / 5)
+    assert stats["throughput_steps_per_second"] == pytest.approx(1e9 / (sum(samples) / 5))
+    assert len({batch["command_checksum"] for batch in batches}) == 1
 
 
 @pytest.mark.parametrize(

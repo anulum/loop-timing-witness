@@ -33,6 +33,48 @@ COMPILED_RTL = {
 }
 
 
+_VERILATOR_OPTIONS = frozenset(
+    {"--cc", "--Wall", "--assert", "+1800-2012ext+v", "+1800-2012ext+sv"}
+)
+_CPP_OPTIONS = frozenset({"-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wconversion", "-Wshadow"})
+
+
+def _arguments_match(run: BoundNeuralRun, runtime: dict[str, Any]) -> bool:
+    """Tell whether the recorded compiler and run arguments are the selected ones.
+
+    Parameters
+    ----------
+    run
+        Full source-bound native run.
+    runtime
+        Complete closed decoded runtime receipt.
+
+    Returns
+    -------
+    bool
+        Whether Verilator received exactly the non-default parameter flags, the
+        SystemVerilog dialect and the required options, the C++ compile received
+        the native trial source and the required warnings, and the run mode is
+        the run's epoch mode.
+    """
+    params = runtime["parameters"]
+    paths = runtime["actual_source_paths"]
+    jobs = runtime["jobs"]
+    flags = {f"-G{name}={value}" for name, value in params.items() if value != DEFAULTS[name]}
+    verilator = jobs[0]["command"]
+    cpp = jobs[2]["command"]
+    mode = "reset" if run.manifest["epoch"] else "original"
+    actual_native = next(path for path, name in paths.items() if name == "native/native_trial.cpp")
+    return (
+        {arg for arg in verilator if arg.startswith("-G")} == flags
+        and ["--language", "1800-2012"] in [verilator[i : i + 2] for i in range(len(verilator) - 1)]
+        and _VERILATOR_OPTIONS.issubset(verilator)
+        and actual_native in cpp
+        and _CPP_OPTIONS.issubset(cpp)
+        and jobs[4]["command"][-1] == mode
+    )
+
+
 def native_command_findings(run: BoundNeuralRun, runtime: dict[str, Any]) -> tuple[str, ...]:
     """Compare actual compiler, source, parameter, mode and execution declarations.
 
@@ -51,13 +93,8 @@ def native_command_findings(run: BoundNeuralRun, runtime: dict[str, Any]) -> tup
     params = runtime["parameters"]
     paths = runtime["actual_source_paths"]
     jobs = runtime["jobs"]
-    flags = {f"-G{name}={value}" for name, value in params.items() if value != DEFAULTS[name]}
-    verilator = jobs[0]["command"]
-    cpp = jobs[2]["command"]
-    mode = "reset" if run.manifest["epoch"] else "original"
-    actual_native = next(path for path, name in paths.items() if name == "native/native_trial.cpp")
     failures = []
-    if {paths[arg] for arg in verilator if arg in paths} != COMPILED_RTL:
+    if {paths[arg] for arg in jobs[0]["command"] if arg in paths} != COMPILED_RTL:
         failures.append("Actual native compiled RTL source inventory differs.")
     if runtime["tool_versions"] != run.contract.policy["tool_versions"]:
         failures.append("Actual native compiler versions differ.")
@@ -69,19 +106,7 @@ def native_command_findings(run: BoundNeuralRun, runtime: dict[str, Any]) -> tup
         or run.manifest["fifo_capacity_records"] != 1 << params["ADDRESS_BITS"]
     ):
         failures.append("Actual native runtime identity/configuration differs.")
-    if (
-        {arg for arg in verilator if arg.startswith("-G")} != flags
-        or ["--language", "1800-2012"]
-        not in [verilator[i : i + 2] for i in range(len(verilator) - 1)]
-        or not {"--cc", "--Wall", "--assert", "+1800-2012ext+v", "+1800-2012ext+sv"}.issubset(
-            verilator
-        )
-        or actual_native not in cpp
-        or not {"-std=c++17", "-Wall", "-Wextra", "-Werror", "-Wconversion", "-Wshadow"}.issubset(
-            cpp
-        )
-        or jobs[4]["command"][-1] != mode
-    ):
+    if not _arguments_match(run, runtime):
         failures.append("Actual native compiler/dialect/run arguments differ.")
     if (
         any(job["returncode"] != 0 for job in jobs)

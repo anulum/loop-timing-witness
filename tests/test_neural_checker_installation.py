@@ -20,6 +20,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import Final
 
 import pytest
 from neural_operator_support import measure_package_copy
@@ -108,6 +109,53 @@ def test_original_installed_file_reference_and_complete_verification(
     installed_source.verify()
 
 
+# Rebuilds an installation in a fresh interpreter from the stdin payload and verifies it.
+CONSTRUCTOR_PROGRAM: Final = (
+    "import json,sys;from pathlib import Path;"
+    "sys.path.insert(0,sys.argv[1]);"
+    "from loop_timing_witness.neural_checker_installation import "
+    "CheckerInstalledFile,NeuralCheckerInstallation;"
+    "from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError;"
+    "data=json.load(sys.stdin);"
+    "files=tuple(CheckerInstalledFile(name,Path(path),sha,size) "
+    "for name,path,sha,size in data['files'])\n"
+    "try:\n"
+    " installation=NeuralCheckerInstallation(files[0],files[1],files,"
+    "tuple(Path(p) for p in data['import_roots']),"
+    "data['baseline_id'],data['kernel_release'])\n"
+    " installation.verify()\n"
+    "except NeuralCaptureRefusalError as exc:\n"
+    " print(str(exc),file=sys.stderr);raise SystemExit(1)\n"
+    "print('installation verified')"
+)
+
+
+def _installation_payload(installation: NeuralCheckerInstallation) -> str:
+    """Return the constructor arguments of a verified installation as JSON.
+
+    Parameters
+    ----------
+    installation
+        Verified installation.
+
+    Returns
+    -------
+    str
+        Files, import roots, baseline and kernel release for ``CONSTRUCTOR_PROGRAM``.
+    """
+    return json.dumps(
+        {
+            "files": [
+                [item.name, str(item.path), item.sha256, item.byte_length]
+                for item in installation.files
+            ],
+            "import_roots": [str(path) for path in installation.import_roots],
+            "baseline_id": installation.baseline_id,
+            "kernel_release": installation.kernel_release,
+        }
+    )
+
+
 @pytest.mark.parametrize(
     "worker", ["__init__.py", "neural_checker_worker.py", "neural_checker_isolation.py"]
 )
@@ -130,36 +178,8 @@ def test_public_installation_constructor_bounds_actual_worker_sources(
     shutil.copytree(original, installed, ignore=shutil.ignore_patterns("__pycache__"))
     module = "neural_checker_installation.py"
     assert (installed / module).read_bytes() == (original / module).read_bytes()
-    payload = json.dumps(
-        {
-            "files": [
-                [item.name, str(item.path), item.sha256, item.byte_length]
-                for item in verified_installation.files
-            ],
-            "import_roots": [str(path) for path in verified_installation.import_roots],
-            "baseline_id": verified_installation.baseline_id,
-            "kernel_release": verified_installation.kernel_release,
-        }
-    )
-    program = (
-        "import json,sys;from pathlib import Path;"
-        "sys.path.insert(0,sys.argv[1]);"
-        "from loop_timing_witness.neural_checker_installation import "
-        "CheckerInstalledFile,NeuralCheckerInstallation;"
-        "from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError;"
-        "data=json.load(sys.stdin);"
-        "files=tuple(CheckerInstalledFile(name,Path(path),sha,size) "
-        "for name,path,sha,size in data['files'])\n"
-        "try:\n"
-        " installation=NeuralCheckerInstallation(files[0],files[1],files,"
-        "tuple(Path(p) for p in data['import_roots']),"
-        "data['baseline_id'],data['kernel_release'])\n"
-        " installation.verify()\n"
-        "except NeuralCaptureRefusalError as exc:\n"
-        " print(str(exc),file=sys.stderr);raise SystemExit(1)\n"
-        "print('installation verified')"
-    )
-    command = [sys.executable, "-B", "-c", program, str(installed.parent)]
+    payload = _installation_payload(verified_installation)
+    command = [sys.executable, "-B", "-c", CONSTRUCTOR_PROGRAM, str(installed.parent)]
     baseline = subprocess.run(
         command, input=payload, capture_output=True, text=True, timeout=scaled(20), check=False
     )

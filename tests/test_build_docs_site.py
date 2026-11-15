@@ -19,7 +19,7 @@ import re
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from build_docs_site import REPOSITORY, RepositoryTextDoc, main
 
@@ -54,6 +54,18 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
     for name, digest in inventory["files"].items():
         assert hashlib.sha256((output / name).read_bytes()).hexdigest() == digest
     assert (output / ".nojekyll").is_file()
+    _check_landing(output)
+    _check_api_pages(output, inventory)
+
+
+def _check_landing(output: Path) -> None:
+    """Require the landing page's anchors, overview label and byte-identical image assets.
+
+    Parameters
+    ----------
+    output
+        Built website.
+    """
     landing = (output / "index.html").read_text()
     assert 'id="validation"' in landing
     assert 'href="VALIDATION.html"' in landing
@@ -66,6 +78,18 @@ def test_actual_website_has_native_api_source_anchors_and_asset(
         assert (output / asset).read_bytes() == (REPOSITORY_ROOT / asset).read_bytes()
         assert f'src="./{asset}"' in landing
     assert 'aria-label="Loop Timing Witness overview"' in landing
+
+
+def _check_api_pages(output: Path, inventory: dict[str, Any]) -> None:
+    """Require every API reference page, its logos and source paths relative to the tree.
+
+    Parameters
+    ----------
+    output
+        Built website.
+    inventory
+        Site provenance.
+    """
     for page in (
         "api/c/index.html",
         "api/rust/witness_analysis/index.html",

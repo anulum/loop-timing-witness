@@ -262,46 +262,12 @@ pub(crate) fn energy_per_cycle(
         })));
     };
     let samples = power_samples(content, rails)?;
-    let anchor = if profile == "CONTROL" {
-        "SAMPLE_READY"
-    } else {
-        "INPUT_WRITE"
-    };
-    let mut cycle_ticks: Vec<u64> = events
-        .iter()
-        .filter(|event| {
-            names.get(event.code) == Some(anchor) && u64::from(event.cycle) >= warmup_cycles
-        })
-        .map(|event| event.ticks)
-        .collect();
-    cycle_ticks.sort_unstable();
-    let mut energy: Vec<Decimal> = rails.iter().map(|_| Decimal::zero()).collect();
-    let (mut covered, mut windows) = (0_u64, 0_u64);
-    let boundaries: Vec<(&u64, &BTreeMap<String, Decimal>)> = samples.iter().collect();
-    for pair in boundaries.windows(2) {
-        let ((&start, first), (&end, last)) = (pair[0], pair[1]);
-        let inside = u64::try_from(
-            cycle_ticks.partition_point(|&tick| tick < end)
-                - cycle_ticks.partition_point(|&tick| tick < start),
-        )
-        .expect("count");
-        if inside != 0 && warmup_cycles != 0 && start < cycle_ticks[0] {
-            return Err("power window overlaps discarded warm-up cycles".to_owned());
-        }
-        for (total, rail) in energy.iter_mut().zip(rails) {
-            let delta = last[*rail].sub(&first[*rail]);
-            if delta.is_negative() {
-                return Err(format!("cumulative energy decreases for {rail}"));
-            }
-            if inside != 0 {
-                *total = total.add(&delta);
-            }
-        }
-        if inside != 0 {
-            covered += inside;
-            windows += 1;
-        }
-    }
+    let cycle_ticks = anchor_ticks(events, names, profile, warmup_cycles);
+    let Windows {
+        energy,
+        covered,
+        windows,
+    } = windows(&samples, &cycle_ticks, rails, warmup_cycles)?;
     if covered != u64::try_from(cycle_ticks.len()).expect("count") || covered == 0 {
         return Err("power windows do not cover every analysed cycle".to_owned());
     }
@@ -322,6 +288,74 @@ pub(crate) fn energy_per_cycle(
         "per_rail": per_rail,
         "total": python_sum(&means),
     })))
+}
+
+/// The sorted ticks of each analysed cycle's anchor event.
+fn anchor_ticks(events: &[Event], names: &Names, profile: &str, warmup_cycles: u64) -> Vec<u64> {
+    let anchor = if profile == "CONTROL" {
+        "SAMPLE_READY"
+    } else {
+        "INPUT_WRITE"
+    };
+    let mut cycle_ticks: Vec<u64> = events
+        .iter()
+        .filter(|event| {
+            names.get(event.code) == Some(anchor) && u64::from(event.cycle) >= warmup_cycles
+        })
+        .map(|event| event.ticks)
+        .collect();
+    cycle_ticks.sort_unstable();
+    cycle_ticks
+}
+
+/// Rail energy summed over the power windows that contain analysed cycles.
+struct Windows {
+    /// Energy per rail.
+    energy: Vec<Decimal>,
+    /// Analysed cycles inside the counted windows.
+    covered: u64,
+    /// Counted windows.
+    windows: u64,
+}
+
+/// Sum each rail's energy over every window between adjacent samples that holds a cycle.
+fn windows(
+    samples: &BTreeMap<u64, BTreeMap<String, Decimal>>,
+    cycle_ticks: &[u64],
+    rails: &[&str],
+    warmup_cycles: u64,
+) -> Result<Windows, String> {
+    let mut result = Windows {
+        energy: rails.iter().map(|_| Decimal::zero()).collect(),
+        covered: 0,
+        windows: 0,
+    };
+    let boundaries: Vec<(&u64, &BTreeMap<String, Decimal>)> = samples.iter().collect();
+    for pair in boundaries.windows(2) {
+        let ((&start, first), (&end, last)) = (pair[0], pair[1]);
+        let inside = u64::try_from(
+            cycle_ticks.partition_point(|&tick| tick < end)
+                - cycle_ticks.partition_point(|&tick| tick < start),
+        )
+        .expect("count");
+        if inside != 0 && warmup_cycles != 0 && start < cycle_ticks[0] {
+            return Err("power window overlaps discarded warm-up cycles".to_owned());
+        }
+        for (total, rail) in result.energy.iter_mut().zip(rails) {
+            let delta = last[*rail].sub(&first[*rail]);
+            if delta.is_negative() {
+                return Err(format!("cumulative energy decreases for {rail}"));
+            }
+            if inside != 0 {
+                *total = total.add(&delta);
+            }
+        }
+        if inside != 0 {
+            result.covered += inside;
+            result.windows += 1;
+        }
+    }
+    Ok(result)
 }
 
 /// The object of a JSON object literal.

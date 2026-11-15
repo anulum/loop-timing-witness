@@ -71,32 +71,20 @@ pub(crate) fn decode(
     if content.is_empty() {
         return Err("event file is empty".to_owned());
     }
-    let declared = &contracts["event_profiles"][profile];
-    let allowed: Vec<&str> = ["periodic_events", "occasional_events"]
-        .iter()
-        .flat_map(|list| declared[*list].as_array().expect("schema-checked array"))
-        .map(|name| name.as_str().expect("schema-checked string"))
-        .collect();
+    let allowed = allowed(contracts, profile);
     let names = Names::of(contracts);
+    let admitted = Admitted {
+        names: &names,
+        allowed: &allowed,
+        profile,
+        cycle_count,
+    };
     let mut events = Vec::with_capacity(content.len() / RECORD);
     let mut seen = [false; 256];
     let (mut previous_ticks, mut previous_cycle): (Option<u64>, Option<u32>) = (None, None);
     let (records, _) = content.as_chunks::<RECORD>();
     for (index, record) in records.iter().enumerate() {
-        let code = record[0];
-        let cycle = u32::from_le_bytes(record[4..8].try_into().expect("four bytes"));
-        let ticks = u64::from_le_bytes(record[8..16].try_into().expect("eight bytes"));
-        if record[1..4] != [0, 0, 0] {
-            return Err(format!("event record {index}: reserved bits must be zero"));
-        }
-        if !names.get(code).is_some_and(|name| allowed.contains(&name)) {
-            return Err(format!(
-                "event record {index}: code {code} is not in {profile}"
-            ));
-        }
-        if Num::Int(u128::from(cycle)).compare(cycle_count) != Ordering::Less {
-            return Err(format!("event record {index}: cycle is outside the run"));
-        }
+        let Event { code, cycle, ticks } = admitted.event(index, record)?;
         if previous_ticks.is_some_and(|previous| ticks < previous)
             || previous_cycle.is_some_and(|previous| cycle < previous)
         {
@@ -116,6 +104,54 @@ pub(crate) fn decode(
         (previous_ticks, previous_cycle) = (Some(ticks), Some(cycle));
     }
     Ok(events)
+}
+
+/// The event names the profile admits, periodic before occasional.
+fn allowed<'a>(contracts: &'a Value, profile: &str) -> Vec<&'a str> {
+    let declared = &contracts["event_profiles"][profile];
+    ["periodic_events", "occasional_events"]
+        .iter()
+        .flat_map(|list| declared[*list].as_array().expect("schema-checked array"))
+        .map(|name| name.as_str().expect("schema-checked string"))
+        .collect()
+}
+
+/// The event names, the profile's admitted names and the run length one record is checked against.
+struct Admitted<'a> {
+    /// Event names by code.
+    names: &'a Names,
+    /// Names the profile admits.
+    allowed: &'a [&'a str],
+    /// Profile name, for refusals.
+    profile: &'a str,
+    /// Declared cycle count.
+    cycle_count: Num,
+}
+
+impl Admitted<'_> {
+    /// Decode one record with zero reserved bits, an admitted code and a cycle in the run.
+    fn event(&self, index: usize, record: &[u8; RECORD]) -> Result<Event, String> {
+        let code = record[0];
+        let cycle = u32::from_le_bytes(record[4..8].try_into().expect("four bytes"));
+        let ticks = u64::from_le_bytes(record[8..16].try_into().expect("eight bytes"));
+        if record[1..4] != [0, 0, 0] {
+            return Err(format!("event record {index}: reserved bits must be zero"));
+        }
+        if !self
+            .names
+            .get(code)
+            .is_some_and(|name| self.allowed.contains(&name))
+        {
+            return Err(format!(
+                "event record {index}: code {code} is not in {}",
+                self.profile
+            ));
+        }
+        if Num::Int(u128::from(cycle)).compare(self.cycle_count) != Ordering::Less {
+            return Err(format!("event record {index}: cycle is outside the run"));
+        }
+        Ok(Event { code, cycle, ticks })
+    }
 }
 
 #[cfg(test)]

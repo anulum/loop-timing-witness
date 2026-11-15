@@ -94,15 +94,6 @@ fn svg_plot(title: &str, labels: &[String], values: &[f64], unit: &str) -> Vec<u
 /// The plots of the available metrics, in Python's `_plots` order.
 pub(crate) fn plots(report: &Value) -> Vec<(String, Vec<u8>)> {
     let status = report["evidence_status"].as_str().expect("evidence status");
-    let percentile = |block: &Value| -> (Vec<String>, Vec<f64>) {
-        block
-            .as_object()
-            .expect("summary block")
-            .iter()
-            .filter(|(_, data)| !data["p99_ticks"].is_null())
-            .map(|(name, data)| (name.clone(), data["p99_ticks"].as_f64().expect("ticks")))
-            .unzip()
-    };
     let mut files = Vec::new();
     let (labels, values) = percentile(&report["events"]["intervals"]);
     files.push((
@@ -124,23 +115,39 @@ pub(crate) fn plots(report: &Value) -> Vec<(String, Vec<u8>)> {
             "clock ticks",
         ),
     ));
-    let energy = &report["energy"];
-    if energy["status"] == "available" {
-        let (labels, values): (Vec<String>, Vec<f64>) = energy["per_rail"]
-            .as_object()
-            .expect("rails")
-            .iter()
-            .map(|(rail, value)| (rail.clone(), value.as_f64().expect("energy")))
-            .unzip();
-        files.push((
-            "energy_per_cycle.svg".to_owned(),
-            svg_plot(
-                &format!("Mean rail energy per cycle ({status})"),
-                &labels,
-                &values,
-                "J/cycle",
-            ),
-        ));
-    }
+    files.extend(energy_plot(&report["energy"], status));
     files
+}
+
+/// The named 99th percentile of every interval of a summary block that has one.
+fn percentile(block: &Value) -> (Vec<String>, Vec<f64>) {
+    block
+        .as_object()
+        .expect("summary block")
+        .iter()
+        .filter(|(_, data)| !data["p99_ticks"].is_null())
+        .map(|(name, data)| (name.clone(), data["p99_ticks"].as_f64().expect("ticks")))
+        .unzip()
+}
+
+/// The mean rail energy plot, when the energy series is available.
+fn energy_plot(energy: &Value, status: &str) -> Option<(String, Vec<u8>)> {
+    if energy["status"] != "available" {
+        return None;
+    }
+    let (labels, values): (Vec<String>, Vec<f64>) = energy["per_rail"]
+        .as_object()
+        .expect("rails")
+        .iter()
+        .map(|(rail, value)| (rail.clone(), value.as_f64().expect("energy")))
+        .unzip();
+    Some((
+        "energy_per_cycle.svg".to_owned(),
+        svg_plot(
+            &format!("Mean rail energy per cycle ({status})"),
+            &labels,
+            &values,
+            "J/cycle",
+        ),
+    ))
 }

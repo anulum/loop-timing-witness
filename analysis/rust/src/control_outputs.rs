@@ -77,30 +77,59 @@ const CYCLE_COLUMNS: [&str; 5] = ["run_id", "evidence_status", "cycle", "interva
 pub(crate) fn report_files(report: &Value, rows: &[Row]) -> Vec<(String, Vec<u8>)> {
     let mut files = Vec::new();
     files.push(("report.json".to_owned(), canonical_json(report)));
-    let identity = |row: &mut Map<String, Value>| {
-        row.insert("run_id".to_owned(), report["run_id"].clone());
-        row.insert(
-            "evidence_status".to_owned(),
-            report["evidence_status"].clone(),
-        );
-    };
-    let summary = |metric: &str| -> Vec<Map<String, Value>> {
-        report["events"][metric]
-            .as_object()
-            .expect("summary block")
-            .iter()
-            .map(|(name, statistics)| {
-                let mut row = statistics.as_object().expect("statistics").clone();
-                identity(&mut row);
-                row.insert("interval".to_owned(), json!(name));
-                row
-            })
-            .collect()
-    };
     files.push((
         "interval_summary.csv".to_owned(),
-        csv_table(&INTERVAL_COLUMNS, &summary("intervals")),
+        csv_table(&INTERVAL_COLUMNS, &summary_rows(report, "intervals")),
     ));
+    let provenance = provenance(report);
+    files.push((
+        "jitter_summary.csv".to_owned(),
+        csv_table(
+            &provenance_columns(&JITTER_COLUMNS),
+            &with_provenance(summary_rows(report, "jitter"), &provenance),
+        ),
+    ));
+    files.push((
+        "cycle_jitter.csv".to_owned(),
+        csv_table(
+            &provenance_columns(&PAIR_COLUMNS),
+            &with_provenance(jitter_pairs(rows), &provenance),
+        ),
+    ));
+    files.push((
+        "cycle_intervals.csv".to_owned(),
+        csv_table(&CYCLE_COLUMNS, &cycle_rows(report, rows)),
+    ));
+    files.extend(plots(report));
+    files
+}
+
+/// Add the run identity and evidence status to one table row.
+fn identify(report: &Value, row: &mut Map<String, Value>) {
+    row.insert("run_id".to_owned(), report["run_id"].clone());
+    row.insert(
+        "evidence_status".to_owned(),
+        report["evidence_status"].clone(),
+    );
+}
+
+/// One identified row per interval of an `events` summary block.
+fn summary_rows(report: &Value, metric: &str) -> Vec<Map<String, Value>> {
+    report["events"][metric]
+        .as_object()
+        .expect("summary block")
+        .iter()
+        .map(|(name, statistics)| {
+            let mut row = statistics.as_object().expect("statistics").clone();
+            identify(report, &mut row);
+            row.insert("interval".to_owned(), json!(name));
+            row
+        })
+        .collect()
+}
+
+/// The provenance columns of the jitter tables.
+fn provenance(report: &Value) -> Map<String, Value> {
     let mut provenance = Map::new();
     for name in PROVENANCE {
         let value = match name {
@@ -109,48 +138,39 @@ pub(crate) fn report_files(report: &Value, rows: &[Row]) -> Vec<(String, Vec<u8>
         };
         provenance.insert(name.to_owned(), value);
     }
-    let with_provenance = |rows: Vec<Map<String, Value>>| -> Vec<Map<String, Value>> {
-        rows.into_iter()
-            .map(|mut row| {
-                row.extend(provenance.clone());
-                row
-            })
-            .collect()
-    };
-    let columns = |tail: &[&'static str]| -> Vec<&'static str> {
-        PROVENANCE.iter().chain(tail).copied().collect()
-    };
-    files.push((
-        "jitter_summary.csv".to_owned(),
-        csv_table(
-            &columns(&JITTER_COLUMNS),
-            &with_provenance(summary("jitter")),
-        ),
-    ));
-    files.push((
-        "cycle_jitter.csv".to_owned(),
-        csv_table(
-            &columns(&PAIR_COLUMNS),
-            &with_provenance(jitter_pairs(rows)),
-        ),
-    ));
-    let cycles: Vec<Map<String, Value>> = rows
-        .iter()
+    provenance
+}
+
+/// The rows with the provenance columns added.
+fn with_provenance(
+    rows: Vec<Map<String, Value>>,
+    provenance: &Map<String, Value>,
+) -> Vec<Map<String, Value>> {
+    rows.into_iter()
+        .map(|mut row| {
+            row.extend(provenance.clone());
+            row
+        })
+        .collect()
+}
+
+/// The provenance column names followed by a table's own columns.
+fn provenance_columns(tail: &[&'static str]) -> Vec<&'static str> {
+    PROVENANCE.iter().chain(tail).copied().collect()
+}
+
+/// One identified row per analysed cycle interval.
+fn cycle_rows(report: &Value, rows: &[Row]) -> Vec<Map<String, Value>> {
+    rows.iter()
         .map(|row| {
             let mut fields = Map::new();
-            identity(&mut fields);
+            identify(report, &mut fields);
             fields.insert("cycle".to_owned(), json!(row.cycle));
             fields.insert("interval".to_owned(), json!(row.interval));
             fields.insert("ticks".to_owned(), json!(row.ticks));
             fields
         })
-        .collect();
-    files.push((
-        "cycle_intervals.csv".to_owned(),
-        csv_table(&CYCLE_COLUMNS, &cycles),
-    ));
-    files.extend(plots(report));
-    files
+        .collect()
 }
 
 /// Changes between adjacent cycles of the same interval, as Python's `jitter_pairs`.

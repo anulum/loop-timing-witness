@@ -159,9 +159,7 @@ fn control(
     cycle_count: Num,
 ) -> Result<(Value, Vec<u64>, Vec<u64>), String> {
     let (first, last) = (whole(warmup), whole(cycle_count));
-    let (mut misses, mut observed, mut injections) = (0_u64, 0_u64, 0_u64);
-    let (mut detected, mut safe) = (Vec::new(), Vec::new());
-    let (mut open, mut missed): (Option<u64>, Option<u64>) = (None, None);
+    let mut tally = Tally::default();
     let empty = Cycle {
         number: 0,
         ticks: Vec::new(),
@@ -178,58 +176,98 @@ fn control(
             Some(cycle) if u128::from(cycle.number) == number => *cycle,
             _ => &empty,
         };
+        tally.faults(number, cycle)?;
+        tally.deadlines(number, cycle)?;
+    }
+    Ok(tally.finish())
+}
+
+/// Running deadline and fault counts over the analysed cycles.
+#[derive(Default)]
+struct Tally {
+    /// Missed deadlines.
+    misses: u64,
+    /// Observed deadlines.
+    observed: u64,
+    /// Fault injections.
+    injections: u64,
+    /// Ticks from each injection to its detection.
+    detected: Vec<u64>,
+    /// Ticks from each first missed deadline to the safe state.
+    safe: Vec<u64>,
+    /// Tick of the injection still undetected.
+    open: Option<u64>,
+    /// Tick of the first deadline missed since the last met one.
+    missed: Option<u64>,
+}
+
+impl Tally {
+    /// Count one cycle's fault injection and detection.
+    fn faults(&mut self, number: u128, cycle: &Cycle) -> Result<(), String> {
         if let Some(injection) = cycle.get("FAULT_INJECTED") {
-            injections += 1;
-            if open.is_some() {
+            self.injections += 1;
+            if self.open.is_some() {
                 return Err(format!(
                     "cycle {number}: fault injection overlaps an undetected fault"
                 ));
             }
-            open = Some(injection);
+            self.open = Some(injection);
         }
         if let Some(detection) = cycle.get("FAULT_DETECTED") {
-            let injection = open
+            let injection = self
+                .open
                 .filter(|&injection| detection >= injection)
                 .ok_or_else(|| {
                     format!("cycle {number}: fault detection lacks a prior injection")
                 })?;
-            detected.push(detection - injection);
-            open = None;
+            self.detected.push(detection - injection);
+            self.open = None;
         }
+        Ok(())
+    }
+
+    /// Count one cycle's deadline and safe state.
+    fn deadlines(&mut self, number: u128, cycle: &Cycle) -> Result<(), String> {
         if let Some(deadline) = cycle.get("DEADLINE") {
-            observed += 1;
+            self.observed += 1;
             if cycle.get("ACT_WRITE").is_none_or(|write| write >= deadline) {
-                misses += 1;
-                missed = missed.or(Some(deadline));
+                self.misses += 1;
+                self.missed = self.missed.or(Some(deadline));
             } else {
-                missed = None;
+                self.missed = None;
             }
         }
         if let Some(state) = cycle.get("SAFE_STATE") {
-            let deadline = missed
+            let deadline = self
+                .missed
                 .filter(|&deadline| state >= deadline)
                 .ok_or_else(|| {
                     format!("cycle {number}: safe state lacks a prior missed deadline")
                 })?;
-            safe.push(state - deadline);
-            missed = None;
+            self.safe.push(state - deadline);
+            self.missed = None;
         }
+        Ok(())
     }
-    let rate = if observed == 0 {
-        Value::Null
-    } else {
-        json!(misses as f64 / observed as f64)
-    };
-    let block = json!({
-        "observed_deadlines": observed,
-        "deadline_misses": misses,
-        "deadline_miss_rate": rate,
-        "fault_injections": injections,
-        "fault_detections": detected.len(),
-        "undetected_faults": injections - detected.len() as u64,
-        "safe_state_events": safe.len(),
-    });
-    Ok((block, detected, safe))
+
+    /// The control block with the detection and safe-state samples.
+    fn finish(self) -> (Value, Vec<u64>, Vec<u64>) {
+        let rate = if self.observed == 0 {
+            Value::Null
+        } else {
+            json!(self.misses as f64 / self.observed as f64)
+        };
+        let block = json!({
+            "observed_deadlines": self.observed,
+            "deadline_misses": self.misses,
+            "deadline_miss_rate": rate,
+            "fault_injections": self.injections,
+            "fault_detections": self.detected.len(),
+            "undetected_faults": self.injections - self.detected.len() as u64,
+            "safe_state_events": self.safe.len(),
+        });
+        (block, self.detected, self.safe)
+    }
 }
 
 /// Python `int(number)` of a schema-checked non-negative count.
@@ -243,6 +281,17 @@ pub(crate) fn whole(number: Num) -> u128 {
 /// Adjacent-cycle jitter distributions and pair coverage by periodic interval.
 fn jitter(rows: &[Row], names: &[String], analysed: Num, duration: u64) -> Value {
     let expected = analysed.sub(Num::Int(1)).at_least_zero();
+    let (latencies, changes) = pairs(rows, names);
+    let mut result = Map::new();
+    for (index, name) in names.iter().enumerate() {
+        let summary = interval_jitter(&changes[index], &latencies[index], expected, duration);
+        result.insert(name.clone(), Value::Object(summary));
+    }
+    Value::Object(result)
+}
+
+/// Latencies and adjacent-cycle latency changes by interval index.
+fn pairs(rows: &[Row], names: &[String]) -> (Vec<Vec<u64>>, Vec<Vec<u64>>) {
     let mut previous: Vec<(String, u32, u64)> = Vec::new();
     let mut latencies: Vec<Vec<u64>> = vec![Vec::new(); names.len()];
     let mut changes: Vec<Vec<u64>> = vec![Vec::new(); names.len()];
@@ -264,40 +313,45 @@ fn jitter(rows: &[Row], names: &[String], analysed: Num, duration: u64) -> Value
             previous.push((row.interval.clone(), row.cycle, row.ticks));
         }
     }
-    let mut result = Map::new();
-    for (index, name) in names.iter().enumerate() {
-        let count = changes[index].len() as u64;
-        let mut summary = distribution(&changes[index]);
-        let status = if count == 0 {
-            "unavailable"
-        } else if Num::Int(u128::from(count)).same(expected) {
-            "available"
-        } else {
-            "partial"
-        };
-        let samples = &latencies[index];
-        let spread = match (samples.iter().max(), samples.iter().min()) {
-            (Some(high), Some(low)) if samples.len() > 1 => json!(high - low),
-            _ => Value::Null,
-        };
-        summary.insert("status".to_owned(), json!(status));
-        summary.insert("latency_sample_count".to_owned(), json!(samples.len()));
-        summary.insert("expected_pair_count".to_owned(), expected.json());
-        summary.insert(
-            "missing_pair_count".to_owned(),
-            expected.sub(Num::Int(u128::from(count))).json(),
-        );
-        let coverage = if expected.truthy() {
-            json!(expected.divide(count))
-        } else {
-            Value::Null
-        };
-        summary.insert("pair_coverage_fraction".to_owned(), coverage);
-        summary.insert("duration_ticks".to_owned(), json!(duration));
-        summary.insert("peak_to_peak_ticks".to_owned(), spread);
-        result.insert(name.clone(), Value::Object(summary));
-    }
-    Value::Object(result)
+    (latencies, changes)
+}
+
+/// One interval's jitter distribution, pair coverage and latency spread.
+fn interval_jitter(
+    changes: &[u64],
+    samples: &[u64],
+    expected: Num,
+    duration: u64,
+) -> Map<String, Value> {
+    let count = changes.len() as u64;
+    let mut summary = distribution(changes);
+    let status = if count == 0 {
+        "unavailable"
+    } else if Num::Int(u128::from(count)).same(expected) {
+        "available"
+    } else {
+        "partial"
+    };
+    let spread = match (samples.iter().max(), samples.iter().min()) {
+        (Some(high), Some(low)) if samples.len() > 1 => json!(high - low),
+        _ => Value::Null,
+    };
+    summary.insert("status".to_owned(), json!(status));
+    summary.insert("latency_sample_count".to_owned(), json!(samples.len()));
+    summary.insert("expected_pair_count".to_owned(), expected.json());
+    summary.insert(
+        "missing_pair_count".to_owned(),
+        expected.sub(Num::Int(u128::from(count))).json(),
+    );
+    let coverage = if expected.truthy() {
+        json!(expected.divide(count))
+    } else {
+        Value::Null
+    };
+    summary.insert("pair_coverage_fraction".to_owned(), coverage);
+    summary.insert("duration_ticks".to_owned(), json!(duration));
+    summary.insert("peak_to_peak_ticks".to_owned(), spread);
+    summary
 }
 
 /// Build the report's `events` block and the per-cycle interval rows.
@@ -307,6 +361,72 @@ pub(crate) fn events_block(
     events: &[Event],
 ) -> Result<(Value, Vec<Row>), String> {
     let names = Names::of(contracts);
+    check_fault_schedule(manifest, events, &names)?;
+    let profile = &contracts["event_profiles"][text(&manifest["profile"])];
+    let (cycle_count, warmup) = (
+        Num::of(&manifest["cycle_count"]),
+        Num::of(&manifest["warmup_cycles"]),
+    );
+    let grouped = cycles(events, &names);
+    let (mut values, rows) = intervals(&grouped, profile, warmup)?;
+    let periodic: Vec<String> = values.iter().map(|(name, _)| name.clone()).collect();
+    let mut control_block = control_samples(profile, &grouped, (warmup, cycle_count), &mut values)?;
+    let analysed: Vec<&Event> = events
+        .iter()
+        .filter(|event| Num::Int(u128::from(event.cycle)).compare(warmup) != Ordering::Less)
+        .collect();
+    let duration = match (analysed.first(), analysed.last()) {
+        (Some(first), Some(last)) => last.ticks - first.ticks,
+        _ => 0,
+    };
+    let distributions = distributions(&values, duration);
+    if let Value::Object(block) = &mut control_block {
+        block.insert(
+            "sample_count".to_owned(),
+            block["observed_deadlines"].clone(),
+        );
+        block.insert("duration_ticks".to_owned(), json!(duration));
+    }
+    let analysed_cycles = cycle_count.sub(warmup);
+    let block = json!({
+        "event_count": analysed.len(),
+        "cycle_count": analysed_cycles.json(),
+        "duration_ticks": duration,
+        "intervals": distributions,
+        "control": control_block,
+        "jitter_method": JITTER_METHOD,
+        "jitter": jitter(&rows, &periodic, analysed_cycles, duration),
+    });
+    Ok((block, rows))
+}
+
+/// The control block of a profile with deadlines, its samples added to the values.
+fn control_samples(
+    profile: &Value,
+    grouped: &[Cycle],
+    (warmup, cycle_count): (Num, Num),
+    values: &mut Samples,
+) -> Result<Value, String> {
+    let deadline = profile["periodic_events"]
+        .as_array()
+        .expect("schema-checked array")
+        .iter()
+        .any(|name| name == "DEADLINE");
+    if !deadline {
+        return Ok(Value::Null);
+    }
+    let (block, detected, safe) = control(grouped, warmup, cycle_count)?;
+    values.push(("fault_detection".to_owned(), detected));
+    values.push(("time_to_safe_state".to_owned(), safe));
+    Ok(block)
+}
+
+/// Require the captured fault injections at exactly the scheduled cycles.
+fn check_fault_schedule(
+    manifest: &Map<String, Value>,
+    events: &[Event],
+    names: &Names,
+) -> Result<(), String> {
     let mut scheduled: Vec<Num> = manifest["fault_schedule"]
         .as_array()
         .expect("schema-checked array")
@@ -327,58 +447,18 @@ pub(crate) fn events_block(
     {
         return Err("fault schedule does not match captured FAULT_INJECTED events".to_owned());
     }
-    let profile = &contracts["event_profiles"][text(&manifest["profile"])];
-    let (cycle_count, warmup) = (
-        Num::of(&manifest["cycle_count"]),
-        Num::of(&manifest["warmup_cycles"]),
-    );
-    let grouped = cycles(events, &names);
-    let (mut values, rows) = intervals(&grouped, profile, warmup)?;
-    let periodic: Vec<String> = values.iter().map(|(name, _)| name.clone()).collect();
-    let deadline = profile["periodic_events"]
-        .as_array()
-        .expect("schema-checked array")
-        .iter()
-        .any(|name| name == "DEADLINE");
-    let mut control_block = Value::Null;
-    if deadline {
-        let (block, detected, safe) = control(&grouped, warmup, cycle_count)?;
-        control_block = block;
-        values.push(("fault_detection".to_owned(), detected));
-        values.push(("time_to_safe_state".to_owned(), safe));
-    }
-    let analysed: Vec<&Event> = events
-        .iter()
-        .filter(|event| Num::Int(u128::from(event.cycle)).compare(warmup) != Ordering::Less)
-        .collect();
-    let duration = match (analysed.first(), analysed.last()) {
-        (Some(first), Some(last)) => last.ticks - first.ticks,
-        _ => 0,
-    };
+    Ok(())
+}
+
+/// The distribution of every interval sample set with the analysed duration.
+fn distributions(values: &Samples, duration: u64) -> Map<String, Value> {
     let mut distributions = Map::new();
-    for (name, samples) in &values {
+    for (name, samples) in values {
         let mut summary = distribution(samples);
         summary.insert("duration_ticks".to_owned(), json!(duration));
         distributions.insert(name.clone(), Value::Object(summary));
     }
-    if let Value::Object(block) = &mut control_block {
-        block.insert(
-            "sample_count".to_owned(),
-            block["observed_deadlines"].clone(),
-        );
-        block.insert("duration_ticks".to_owned(), json!(duration));
-    }
-    let analysed_cycles = cycle_count.sub(warmup);
-    let block = json!({
-        "event_count": analysed.len(),
-        "cycle_count": analysed_cycles.json(),
-        "duration_ticks": duration,
-        "intervals": distributions,
-        "control": control_block,
-        "jitter_method": JITTER_METHOD,
-        "jitter": jitter(&rows, &periodic, analysed_cycles, duration),
-    });
-    Ok((block, rows))
+    distributions
 }
 
 /// The control counts of every cycle, warm-up included, as Python's

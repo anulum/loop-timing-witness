@@ -25,6 +25,9 @@ use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+/// One report block.
+type Block = Map<String, Value>;
+
 /// Report schema identifier.
 const REPORT_SCHEMA: &str = "loop-timing-witness.analysis-report.v1";
 /// Hardware artefacts whose digests a board report lists.
@@ -62,35 +65,32 @@ pub(crate) fn build_report(
         u64::try_from(whole(cycle_count)).unwrap_or(u64::MAX),
         u64::try_from(whole(warmup)).unwrap_or(u64::MAX),
     );
-    let unit = manifest["plant"]["tracking_unit"]
-        .as_str()
-        .unwrap_or_default();
-    let mut tracking = if manifest.get("tracking_sampling") == Some(&json!("observed")) {
-        observed_tracking_error(&files["tracking"], &events, &names, cycles, first, unit)?
-    } else if profile == "CONTROL" {
-        tracking_error(
-            files.get("tracking").map(Vec::as_slice),
-            cycles,
-            first,
-            unit,
-        )?
-    } else {
-        object(json!({"status": "not_applicable", "reason": "COMPUTE has no control plant"}))
-    };
-    let rails: Vec<&str> = contracts["power_rails"]
-        .as_array()
-        .expect("schema-checked rails")
-        .iter()
-        .map(|rail| rail.as_str().expect("schema-checked rail"))
-        .collect();
-    let mut energy = energy_per_cycle(
-        files.get("power").map(Vec::as_slice),
-        &events,
-        &names,
+    let window = Window {
+        events: &events,
+        names: &names,
         profile,
+        cycles,
         first,
-        &rails,
-    )?;
+    };
+    let (tracking, energy) = series(manifest, (contracts, files), &window, &summary)?;
+    let complete = python_equal(&anchors(&summary, &window), &summary["cycle_count"]);
+    let mut report = report_object(manifest, contracts, complete, tracking, energy);
+    report.insert("events".to_owned(), std::mem::take(&mut summary));
+    attach_completion(manifest, contracts, files, &events, &names, &mut report)?;
+    attach_amp_completion(manifest, contracts, files, directory, &events, &mut report)?;
+    attach_host_load(manifest, files, &mut report)?;
+    Ok((Value::Object(report), rows))
+}
+
+/// The tracking and energy series with the analysed duration and sample counts.
+fn series(
+    manifest: &Map<String, Value>,
+    (contracts, files): (&Value, &BTreeMap<String, Vec<u8>>),
+    window: &Window<'_>,
+    summary: &Value,
+) -> Result<(Block, Block), String> {
+    let mut tracking = tracking(manifest, files, window)?;
+    let mut energy = energy(contracts, files, window)?;
     let duration = summary["duration_ticks"].clone();
     tracking.insert("duration_ticks".to_owned(), duration.clone());
     energy.insert("duration_ticks".to_owned(), duration);
@@ -98,54 +98,26 @@ pub(crate) fn build_report(
     if energy["status"] == "unavailable" {
         energy.insert("sample_count".to_owned(), json!(0));
     }
-    let anchors = if profile == "CONTROL" {
-        summary["control"]["observed_deadlines"].clone()
-    } else {
-        json!(
-            events
-                .iter()
-                .filter(|event| names.get(event.code) == Some("INPUT_WRITE")
-                    && u64::from(event.cycle) >= first)
-                .count()
-        )
-    };
-    let complete = python_equal(&anchors, &summary["cycle_count"]);
+    Ok((tracking, energy))
+}
+
+/// The report object before its events, completion and host load blocks.
+fn report_object(
+    manifest: &Map<String, Value>,
+    contracts: &Value,
+    complete: bool,
+    tracking: Map<String, Value>,
+    energy: Map<String, Value>,
+) -> Map<String, Value> {
+    let profile = manifest["profile"]
+        .as_str()
+        .expect("schema-checked profile");
     let overflow = &manifest["instrument"]["fifo_overflow_count"];
-    let missing_tracking = profile == "CONTROL" && tracking["status"] != "available";
-    let missing_energy = energy["status"] != "available";
-    let valid = complete && !Num::of(overflow).truthy() && !missing_tracking && !missing_energy;
-    let mut reasons = Vec::new();
-    if Num::of(overflow).truthy() {
-        reasons.push("event FIFO overflow");
-    }
-    if !complete {
-        reasons.push("missing cycle anchor events");
-    }
-    if tracking["status"] == "partial" {
-        reasons.push("tracking series incomplete");
-    } else if missing_tracking {
-        reasons.push("tracking series unavailable");
-    }
-    if missing_energy {
-        reasons.push("power series unavailable");
-    }
+    let (valid, reasons) = validity(complete, overflow, &tracking, &energy, profile);
     let resolution = &contracts["timebase"]["resolution_ns"];
-    let mut limits = vec![
-        format!(
-            "Timebase ticks resolve {} ns; interconnect offsets require calibration.",
-            python_number(resolution)
-        ),
-        "The plant is emulated; these are not physical-machine control results.".to_owned(),
-        "Power rails share processor and fabric consumption. Energy is a window mean.".to_owned(),
-    ];
-    if tracking.get("sampling") == Some(&json!("observed")) {
-        limits.push(
-            "Tracking errors describe observed cycles only; missing samples may bias the metric."
-                .to_owned(),
-        );
-    }
+    let limits = limits(resolution, &tracking);
     let source_kind = &manifest["source"]["kind"];
-    let mut report = object(json!({
+    object(json!({
         "schema": REPORT_SCHEMA,
         "run_id": manifest["run_id"],
         "started_utc": manifest["started_utc"],
@@ -168,12 +140,139 @@ pub(crate) fn build_report(
         "tracking_error": tracking,
         "energy": energy,
         "limits": limits,
-    }));
-    report.insert("events".to_owned(), std::mem::take(&mut summary));
-    attach_completion(manifest, contracts, files, &events, &names, &mut report)?;
-    attach_amp_completion(manifest, contracts, files, directory, &events, &mut report)?;
-    attach_host_load(manifest, files, &mut report)?;
-    Ok((Value::Object(report), rows))
+    }))
+}
+
+/// The decoded events and the measured cycle window of one run.
+struct Window<'a> {
+    /// Decoded events.
+    events: &'a [Event],
+    /// Event names by code.
+    names: &'a Names,
+    /// Run profile.
+    profile: &'a str,
+    /// Declared cycle count.
+    cycles: u64,
+    /// First measured cycle after warm-up.
+    first: u64,
+}
+
+/// The tracking error series: observed samples, the CONTROL series or not applicable.
+fn tracking(
+    manifest: &Map<String, Value>,
+    files: &BTreeMap<String, Vec<u8>>,
+    window: &Window<'_>,
+) -> Result<Map<String, Value>, String> {
+    let unit = manifest["plant"]["tracking_unit"]
+        .as_str()
+        .unwrap_or_default();
+    if manifest.get("tracking_sampling") == Some(&json!("observed")) {
+        observed_tracking_error(
+            &files["tracking"],
+            window.events,
+            window.names,
+            window.cycles,
+            window.first,
+            unit,
+        )
+    } else if window.profile == "CONTROL" {
+        tracking_error(
+            files.get("tracking").map(Vec::as_slice),
+            window.cycles,
+            window.first,
+            unit,
+        )
+    } else {
+        Ok(object(
+            json!({"status": "not_applicable", "reason": "COMPUTE has no control plant"}),
+        ))
+    }
+}
+
+/// The energy per cycle over the declared power rails.
+fn energy(
+    contracts: &Value,
+    files: &BTreeMap<String, Vec<u8>>,
+    window: &Window<'_>,
+) -> Result<Map<String, Value>, String> {
+    let rails: Vec<&str> = contracts["power_rails"]
+        .as_array()
+        .expect("schema-checked rails")
+        .iter()
+        .map(|rail| rail.as_str().expect("schema-checked rail"))
+        .collect();
+    energy_per_cycle(
+        files.get("power").map(Vec::as_slice),
+        window.events,
+        window.names,
+        window.profile,
+        window.first,
+        &rails,
+    )
+}
+
+/// The cycle anchors: observed deadlines for CONTROL, measured input writes otherwise.
+fn anchors(summary: &Value, window: &Window<'_>) -> Value {
+    if window.profile == "CONTROL" {
+        summary["control"]["observed_deadlines"].clone()
+    } else {
+        json!(
+            window
+                .events
+                .iter()
+                .filter(|event| window.names.get(event.code) == Some("INPUT_WRITE")
+                    && u64::from(event.cycle) >= window.first)
+                .count()
+        )
+    }
+}
+
+/// Whether the run is valid, and every reason it is not.
+fn validity(
+    complete: bool,
+    overflow: &Value,
+    tracking: &Map<String, Value>,
+    energy: &Map<String, Value>,
+    profile: &str,
+) -> (bool, Vec<&'static str>) {
+    let missing_tracking = profile == "CONTROL" && tracking["status"] != "available";
+    let missing_energy = energy["status"] != "available";
+    let valid = complete && !Num::of(overflow).truthy() && !missing_tracking && !missing_energy;
+    let mut reasons = Vec::new();
+    if Num::of(overflow).truthy() {
+        reasons.push("event FIFO overflow");
+    }
+    if !complete {
+        reasons.push("missing cycle anchor events");
+    }
+    if tracking["status"] == "partial" {
+        reasons.push("tracking series incomplete");
+    } else if missing_tracking {
+        reasons.push("tracking series unavailable");
+    }
+    if missing_energy {
+        reasons.push("power series unavailable");
+    }
+    (valid, reasons)
+}
+
+/// The stated limits of the report.
+fn limits(resolution: &Value, tracking: &Map<String, Value>) -> Vec<String> {
+    let mut limits = vec![
+        format!(
+            "Timebase ticks resolve {} ns; interconnect offsets require calibration.",
+            python_number(resolution)
+        ),
+        "The plant is emulated; these are not physical-machine control results.".to_owned(),
+        "Power rails share processor and fabric consumption. Energy is a window mean.".to_owned(),
+    ];
+    if tracking.get("sampling") == Some(&json!("observed")) {
+        limits.push(
+            "Tracking errors describe observed cycles only; missing samples may bias the metric."
+                .to_owned(),
+        );
+    }
+    limits
 }
 
 /// Input digests by name: declared files, the measurement domain, source files

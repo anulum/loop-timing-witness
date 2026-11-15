@@ -128,9 +128,23 @@ pub(crate) fn completion_statistics(
     sample_reads: usize,
 ) -> Result<Value, String> {
     let native = receipt(content, "native metadata", &NATIVE_SCHEMA, "native run")?;
+    if !python_equal(&fault_schedule(&native), &manifest["fault_schedule"]) {
+        return Err("native metadata fault schedule does not match the run declaration".to_owned());
+    }
+    if configuration_differs(&native, manifest, event_count) {
+        return Err("native metadata configuration does not match the run declaration".to_owned());
+    }
+    if counters_differ(&native, manifest, event_count, control, sample_reads) {
+        return Err("native completion counters do not match captured events".to_owned());
+    }
+    Ok(native["result"].clone())
+}
+
+/// The fault schedule the native metadata implies, in the run declaration's form.
+fn fault_schedule(native: &Value) -> Value {
     let fault = &native["fault"];
     let kind = fault["kind"].as_str().expect("schema-checked kind");
-    let schedule = if kind == "none" {
+    if kind == "none" {
         json!([])
     } else {
         let delay = if kind == "delay" {
@@ -139,13 +153,18 @@ pub(crate) fn completion_statistics(
             json!(0)
         };
         json!([{"cycle": fault["cycle"], "kind": kind, "delay_periods": delay}])
-    };
-    if !python_equal(&schedule, &manifest["fault_schedule"]) {
-        return Err("native metadata fault schedule does not match the run declaration".to_owned());
     }
+}
+
+/// Whether the native configuration or artifacts differ from the run declaration.
+fn configuration_differs(
+    native: &Value,
+    manifest: &Map<String, Value>,
+    event_count: usize,
+) -> bool {
     let artifacts = &native["artifacts"];
     let thermal = manifest["plant"]["name"] == "first_order_thermal";
-    let differs = native["source_kind"] != "rtl_simulation"
+    native["source_kind"] != "rtl_simulation"
         || manifest["source"]["kind"] != "rtl_simulation"
         || !python_equal(&native["cycles"], &manifest["cycle_count"])
         || !python_equal(&native["period_ticks"], &manifest["sample_period_ticks"])
@@ -163,13 +182,20 @@ pub(crate) fn completion_statistics(
             .as_array()
             .expect("schema-checked array")
             .iter()
-            .any(|reference| reference["sha256"] == artifacts["configuration"]["sha256"]);
-    if differs {
-        return Err("native metadata configuration does not match the run declaration".to_owned());
-    }
+            .any(|reference| reference["sha256"] == artifacts["configuration"]["sha256"])
+}
+
+/// Whether the native completion counters differ from the captured events.
+fn counters_differ(
+    native: &Value,
+    manifest: &Map<String, Value>,
+    event_count: usize,
+    control: &Value,
+    sample_reads: usize,
+) -> bool {
     let result = &native["result"];
     let complete = !Num::of(&result["overflow"]).truthy();
-    let counters_differ = !python_equal(&result["records"], &json!(event_count))
+    !python_equal(&result["records"], &json!(event_count))
         || !python_equal(
             &result["overflow"],
             &manifest["instrument"]["fifo_overflow_count"],
@@ -178,11 +204,7 @@ pub(crate) fn completion_statistics(
             && (!python_equal(&result["misses"], &control["deadline_misses"])
                 || !python_equal(&native["cycles"], &control["observed_deadlines"])
                 || !python_equal(&result["samples"], &json!(sample_reads))
-                || result["safe"] != Num::of(&control["safe_state_events"]).truthy()));
-    if counters_differ {
-        return Err("native completion counters do not match captured events".to_owned());
-    }
-    Ok(result.clone())
+                || result["safe"] != Num::of(&control["safe_state_events"]).truthy()))
 }
 
 /// Validate a completed host load receipt and its native execution bracket,
@@ -219,7 +241,19 @@ pub(crate) fn host_load(content: &[u8]) -> Result<Value, String> {
     let counters = receipt["counters"]
         .as_object()
         .expect("schema-checked counters");
-    let chunks = Num::of(&counters["chunks"]);
+    let expected = expected_counters(profile, Num::of(&counters["chunks"]), size);
+    // The schema requires every counter, so only the values can differ.
+    let matches = counters.iter().all(|(name, value)| {
+        Num::of(value).same(expected.get(name.as_str()).copied().unwrap_or(Num::Int(0)))
+    });
+    if !matches {
+        return Err("host load counters differ from complete workload chunks".to_owned());
+    }
+    Ok(receipt)
+}
+
+/// The counters a complete workload of the profile performs over its chunks.
+fn expected_counters(profile: &str, chunks: Num, size: Num) -> BTreeMap<&'static str, Num> {
     let mut expected: BTreeMap<&str, Num> = BTreeMap::from([("chunks", chunks)]);
     match profile {
         "cpu" => {
@@ -242,14 +276,7 @@ pub(crate) fn host_load(content: &[u8]) -> Result<Value, String> {
             expected.insert("idle_waits", chunks);
         }
     }
-    // The schema requires every counter, so only the values can differ.
-    let matches = counters.iter().all(|(name, value)| {
-        Num::of(value).same(expected.get(name.as_str()).copied().unwrap_or(Num::Int(0)))
-    });
-    if !matches {
-        return Err("host load counters differ from complete workload chunks".to_owned());
-    }
-    Ok(receipt)
+    expected
 }
 
 /// Python's `(size + 63) // 64` for a schema-bounded working-set size.

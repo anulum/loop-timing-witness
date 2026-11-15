@@ -29,6 +29,37 @@ _DISTRIBUTION_COLUMNS: Final = (
     "maximum_ticks",
 )
 _METRICS: Final = (("latency", "intervals"), ("jitter", "jitter"))
+_IDENTITY: Final = ("campaign_id", "evidence_status")
+_REPEAT_COLUMNS: Final = (
+    *_IDENTITY,
+    "repeat_index",
+    "run_id",
+    "status",
+    "metric",
+    "interval",
+    *_DISTRIBUTION_COLUMNS,
+    "duration_ticks",
+)
+_POOLED_COLUMNS: Final = (
+    *_IDENTITY,
+    "metric",
+    "interval",
+    "repeat_count",
+    *_DISTRIBUTION_COLUMNS,
+    "expected_pair_count",
+    "missing_pair_count",
+    "pair_coverage_fraction",
+    "duration_ticks",
+)
+_SPREAD_COLUMNS: Final = (
+    *_IDENTITY,
+    "metric",
+    "interval",
+    "statistic",
+    "minimum",
+    "maximum",
+    "range",
+)
 
 
 def _repeat_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
@@ -145,39 +176,10 @@ def write_campaign_report(output_directory: Path, report: dict[str, Any]) -> Non
         If the parent is missing, atomic publication is unavailable or a
         file cannot be written.
     """
-    identity = ("campaign_id", "evidence_status")
     files = {
         "campaign_report.json": canonical_json_bytes(report),
-        "repeat_summary.csv": csv_table_bytes(
-            (
-                *identity,
-                "repeat_index",
-                "run_id",
-                "status",
-                "metric",
-                "interval",
-                *_DISTRIBUTION_COLUMNS,
-                "duration_ticks",
-            ),
-            _repeat_rows(report),
-        ),
-        "pooled_summary.csv": csv_table_bytes(
-            (
-                *identity,
-                "metric",
-                "interval",
-                "repeat_count",
-                *_DISTRIBUTION_COLUMNS,
-                "expected_pair_count",
-                "missing_pair_count",
-                "pair_coverage_fraction",
-                "duration_ticks",
-            ),
-            _pooled_rows(report),
-        ),
-        "repeat_spread.csv": csv_table_bytes(
-            (*identity, "metric", "interval", "statistic", "minimum", "maximum", "range"),
-            _spread_rows(report),
-        ),
+        "repeat_summary.csv": csv_table_bytes(_REPEAT_COLUMNS, _repeat_rows(report)),
+        "pooled_summary.csv": csv_table_bytes(_POOLED_COLUMNS, _pooled_rows(report)),
+        "repeat_spread.csv": csv_table_bytes(_SPREAD_COLUMNS, _spread_rows(report)),
     }
     publish_report_directory(output_directory, files)

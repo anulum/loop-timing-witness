@@ -207,6 +207,113 @@ def _stop_for_watchdog(process: subprocess.Popen[str]) -> None:
         process.communicate(timeout=0.05)
 
 
+def _owned_plugin(capture_arguments: list[str], image: Path) -> Path:
+    """Copy the selected plugin and its receipt and select the copy for the capture.
+
+    Parameters
+    ----------
+    capture_arguments
+        Capture command arguments, changed in place.
+    image
+        Image directory beside which the copy is written.
+
+    Returns
+    -------
+    Path
+        Owned plugin copy.
+    """
+    original_plugin = Path(capture_arguments[capture_arguments.index("--plugin") + 1])
+    owned_plugin = image.parent / "actual-plugin.so"
+    shutil.copyfile(original_plugin, owned_plugin)
+    shutil.copyfile(original_plugin.with_name("plugin.json"), owned_plugin.with_name("plugin.json"))
+    capture_arguments[capture_arguments.index("--plugin") + 1] = str(owned_plugin)
+    return owned_plugin
+
+
+def _selected_runtime_library(
+    capture_arguments: list[str], image: Path, fault: str, environment: dict[str, str]
+) -> Path:
+    """Return the runtime library a runtime fault changes, loading an owned copy if needed.
+
+    Parameters
+    ----------
+    capture_arguments
+        Capture command arguments with the Spike executable.
+    image
+        Image directory beside which a copy is written.
+    fault
+        Live fault; ``runtime-library`` loads Spike's first runtime library from a copy.
+    environment
+        Capture environment, changed in place to load the copy.
+
+    Returns
+    -------
+    Path
+        Owned library copy, or an unused path for other faults.
+    """
+    if fault != "runtime-library":
+        return image.parent / "actual-runtime-library"
+    executable = Path(capture_arguments[capture_arguments.index("--spike") + 1])
+    return _copy_runtime_library(executable, image.parent / "actual-runtime", environment)
+
+
+def _await_target_start(process: subprocess.Popen[str], output: Path, deadline: float) -> None:
+    """Wait until the capture opens its Spike log, exits or reaches the deadline.
+
+    Parameters
+    ----------
+    process
+        Running capture command.
+    output
+        Capture directory.
+    deadline
+        Monotonic time limit.
+    """
+    while (
+        not (output / "spike.log").exists()
+        and process.poll() is None
+        and time.monotonic() < deadline
+    ):
+        time.sleep(0.001)
+    assert (output / "spike.log").exists()
+
+
+def _inject(
+    process: subprocess.Popen[str], fault: str, output: Path, plugin: Path, library: Path
+) -> None:
+    """Stop the capture or change one of its inputs after the target started.
+
+    Parameters
+    ----------
+    process
+        Running capture command.
+    fault
+        ``watchdog``, ``receipt``, ``runtime-library``, ``runtime-source``, ``firmware``
+        or ``plugin``.
+    output
+        Capture directory.
+    plugin
+        Owned plugin copy.
+    library
+        Owned runtime library copy.
+    """
+    if fault == "watchdog":
+        _stop_for_watchdog(process)
+    elif fault == "receipt":
+        with plugin.with_name("plugin.json").open("ab") as stream:
+            stream.write(b"\n")
+    elif fault in {"runtime-library", "runtime-source"}:
+        if fault == "runtime-source":
+            index = json.loads((output / "runtime_source_index.json").read_bytes())
+            library = output / next(iter(index.values()))["path"]
+        with library.open("ab") as stream:
+            stream.write(b"changed actual runtime library after target startup")
+    else:
+        path = output / "image/firmware.elf" if fault == "firmware" else plugin
+        with path.open("ab") as stream:
+            stream.write(b"observed post-start byte drift")
+
+
 @pytest.mark.parametrize(
     "fault", ["firmware", "plugin", "receipt", "runtime-library", "runtime-source", "watchdog"]
 )
@@ -222,18 +329,9 @@ def test_live_input_mutation_or_stall_refused(capture_arguments: list[str], faul
     """
     output = Path(capture_arguments[capture_arguments.index("--output") + 1])
     image = Path(capture_arguments[capture_arguments.index("--image") + 1])
-    original_plugin = Path(capture_arguments[capture_arguments.index("--plugin") + 1])
-    owned_plugin = image.parent / "actual-plugin.so"
-    shutil.copyfile(original_plugin, owned_plugin)
-    shutil.copyfile(original_plugin.with_name("plugin.json"), owned_plugin.with_name("plugin.json"))
-    capture_arguments[capture_arguments.index("--plugin") + 1] = str(owned_plugin)
+    owned_plugin = _owned_plugin(capture_arguments, image)
     environment = os.environ.copy()
-    actual_library = image.parent / "actual-runtime-library"
-    if fault == "runtime-library":
-        executable = Path(capture_arguments[capture_arguments.index("--spike") + 1])
-        actual_library = _copy_runtime_library(
-            executable, image.parent / "actual-runtime", environment
-        )
+    actual_library = _selected_runtime_library(capture_arguments, image, fault, environment)
     with subprocess.Popen(
         [sys.executable, "tools/capture_amp_simulation.py", *capture_arguments],
         cwd=ROOT,
@@ -245,29 +343,8 @@ def test_live_input_mutation_or_stall_refused(capture_arguments: list[str], faul
     ) as process:
         deadline = time.monotonic() + scaled(75)
         try:
-            while (
-                not (output / "spike.log").exists()
-                and process.poll() is None
-                and time.monotonic() < deadline
-            ):
-                time.sleep(0.001)
-            assert (output / "spike.log").exists()
-            if fault == "watchdog":
-                _stop_for_watchdog(process)
-            elif fault == "receipt":
-                receipt_path = owned_plugin.with_name("plugin.json")
-                with receipt_path.open("ab") as stream:
-                    stream.write(b"\n")
-            elif fault in {"runtime-library", "runtime-source"}:
-                if fault == "runtime-source":
-                    index = json.loads((output / "runtime_source_index.json").read_bytes())
-                    actual_library = output / next(iter(index.values()))["path"]
-                with actual_library.open("ab") as stream:
-                    stream.write(b"changed actual runtime library after target startup")
-            else:
-                path = output / "image/firmware.elf" if fault == "firmware" else owned_plugin
-                with path.open("ab") as stream:
-                    stream.write(b"observed post-start byte drift")
+            _await_target_start(process, output, deadline)
+            _inject(process, fault, output, owned_plugin, actual_library)
             if fault != "watchdog":
                 process.communicate(timeout=max(0.001, deadline - time.monotonic()))
         finally:

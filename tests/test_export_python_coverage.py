@@ -77,25 +77,7 @@ def test_original_source_profile_keeps_duplicate_basenames_and_refuses_incomplet
     dependency modules with the same basename. Exporting cannot turn it green.
     """
     data = tmp_path / "profile"
-    subprocess.run(
-        [
-            str(REPOSITORY_ROOT / ".venv/bin/python"),
-            "-m",
-            "coverage",
-            "run",
-            f"--data-file={data}",
-            "tools/prepare_amp_image.py",
-            "--help",
-        ],
-        cwd=REPOSITORY_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    collected = Coverage(data_file=str(data), config_file="pyproject.toml")
-    collected.combine()
-    collected.save()
-    collected.get_data().close()
+    _profile_preparation_help(data)
     monkeypatch.setenv("COVERAGE_FILE", str(data))
     original = Coverage(config_file="pyproject.toml")
     original.load()
@@ -128,3 +110,32 @@ def test_original_source_profile_keeps_duplicate_basenames_and_refuses_incomplet
         loaded.close()
         original.get_data().close(force=True)
         unchanged.get_data().close()
+
+
+def _profile_preparation_help(data: Path) -> None:
+    """Measure the image preparation command's help under coverage and combine the data.
+
+    Parameters
+    ----------
+    data
+        Coverage data file.
+    """
+    subprocess.run(
+        [
+            str(REPOSITORY_ROOT / ".venv/bin/python"),
+            "-m",
+            "coverage",
+            "run",
+            f"--data-file={data}",
+            "tools/prepare_amp_image.py",
+            "--help",
+        ],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    collected = Coverage(data_file=str(data), config_file="pyproject.toml")
+    collected.combine()
+    collected.save()
+    collected.get_data().close()

@@ -291,36 +291,13 @@ def corrupt_actual_capture_source(actual_capture: Path, fault: str) -> Path:
         with changed.open("ab") as stream:
             stream.write(b"\n")
     elif fault in {"firmware-dependency-source", "firmware-dependency-index"}:
-        directory = actual_capture / "image"
-        dependency_path = directory / "compiler_source_index.json"
-        dependencies = json.loads(dependency_path.read_bytes())
-        if fault == "firmware-dependency-index":
-            dependencies.pop(next(iter(dependencies)))
-            dependency_path.write_text(json.dumps(dependencies), encoding="ascii")
-            changed = dependency_path
-        else:
-            changed = directory / next(iter(dependencies.values()))["path"]
-            with changed.open("ab") as stream:
-                stream.write(b"changed original captured compiler header")
+        changed = _change_firmware_dependency(actual_capture / "image", fault)
     elif fault == "index":
         index.pop(next(iter(index)))
         index_path.write_text(json.dumps(index), encoding="ascii")
         changed = index_path
     else:
-        if fault in {"simulator-runtime-library", "image-runtime-library"}:
-            directory = (
-                actual_capture / "image" if fault == "image-runtime-library" else actual_capture
-            )
-            runtime_index = json.loads((directory / "runtime_source_index.json").read_bytes())
-            item = next(iter(runtime_index.values()))
-            item = {**item, "path": str((directory / item["path"]).relative_to(actual_capture))}
-        elif fault == "runtime-library":
-            plugin = json.loads((actual_capture / "plugin_build.json").read_bytes())
-            name = next(iter(plugin["runtime_libraries"]))
-            item = index[name]
-        else:
-            item = next(iter(index.values()))
-        changed = actual_capture / item["path"]
+        changed = actual_capture / _compiler_input(actual_capture, index, fault)["path"]
         with changed.open("ab") as stream:
             stream.write(b"changed captured compiler input")
     return changed
@@ -351,45 +328,12 @@ def test_public_reanalysis_refuses_rehashed_plugin_source(actual_capture: Path, 
         Captured source/library bytes or the original-to-captured source index to change.
     """
     changed = corrupt_actual_capture_source(actual_capture, fault)
-    capture_path = actual_capture / "capture.json"
-    capture = json.loads(capture_path.read_bytes())
     changed_names = {changed.relative_to(actual_capture).as_posix()}
     if next(iter(changed_names)).startswith("image/") and fault != "preparation-input":
-        preparation_path = actual_capture / "image/preparation.json"
-        preparation = json.loads(preparation_path.read_bytes())
-        preparation["inputs"][changed.relative_to(actual_capture / "image").as_posix()] = (
-            sha256_of_file(changed)
-        )
-        preparation_path.write_text(json.dumps(preparation), encoding="ascii")
-        image_path = actual_capture / "image/image.json"
-        image = json.loads(image_path.read_bytes())
-        image["preparation_sha256"] = sha256_of_file(preparation_path)
-        image_path.write_text(json.dumps(image), encoding="ascii")
+        _rebind_preparation_input(actual_capture, changed)
         changed_names.update({"image/preparation.json", "image/image.json"})
-    for name in changed_names:
-        capture["files"][name] = sha256_of_file(actual_capture / name)
-    capture_path.write_text(json.dumps(capture), encoding="ascii")
-    manifest_path = actual_capture / "manifest.json"
-    manifest = json.loads(manifest_path.read_bytes())
-    manifest["amp_capture"]["sha256"] = sha256_of_file(capture_path)
-    for reference in manifest["source"]["files"]:
-        if reference["path"] in changed_names:
-            reference["sha256"] = sha256_of_file(actual_capture / reference["path"])
-    manifest_path.write_text(json.dumps(manifest), encoding="ascii")
-    result = subprocess.run(
-        [
-            sys.executable,
-            "tools/analyze_run.py",
-            str(manifest_path),
-            "--output-dir",
-            str(actual_capture.parent / "refused-reanalysis"),
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=scaled(30),
-        check=False,
-    )
+    manifest_path = _rebind_capture(actual_capture, changed_names)
+    result = _reanalyse(manifest_path, actual_capture.parent / "refused-reanalysis")
     assert result.returncode == 1
     finding = (
         "preprocessing record identities"
@@ -437,9 +381,111 @@ def test_public_reanalysis_refuses_incomplete_compiler_metadata(
     preparation_path.write_text(json.dumps(preparation), encoding="ascii")
     image["preparation_sha256"] = sha256_of_file(preparation_path)
     image_path.write_text(json.dumps(image), encoding="ascii")
+    manifest_path = _rebind_capture(actual_capture, {"image/preparation.json", "image/image.json"})
+    output = actual_capture.parent / "refused-compiler-reanalysis"
+    result = _reanalyse(manifest_path, output)
+    assert result.returncode == 1
+    assert "original compiler identity is invalid" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (output / "report.json").exists()
+
+
+def _change_firmware_dependency(image: Path, fault: str) -> Path:
+    """Drop the first firmware dependency index entry or append to its captured source.
+
+    Parameters
+    ----------
+    image
+        Captured image directory.
+    fault
+        ``firmware-dependency-index`` or ``firmware-dependency-source``.
+
+    Returns
+    -------
+    Path
+        Changed file.
+    """
+    dependency_path = image / "compiler_source_index.json"
+    dependencies = json.loads(dependency_path.read_bytes())
+    if fault == "firmware-dependency-index":
+        dependencies.pop(next(iter(dependencies)))
+        dependency_path.write_text(json.dumps(dependencies), encoding="ascii")
+        return dependency_path
+    changed: Path = image / next(iter(dependencies.values()))["path"]
+    with changed.open("ab") as stream:
+        stream.write(b"changed original captured compiler header")
+    return changed
+
+
+def _compiler_input(actual_capture: Path, index: dict[str, Any], fault: str) -> dict[str, Any]:
+    """Return the captured compiler input record one source fault changes.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    index
+        Plugin source index.
+    fault
+        Runtime library of the simulator, image or plugin, or any other plugin source.
+
+    Returns
+    -------
+    dict[str, Any]
+        Record whose ``path`` is relative to the capture.
+    """
+    if fault in {"simulator-runtime-library", "image-runtime-library"}:
+        directory = actual_capture / "image" if fault == "image-runtime-library" else actual_capture
+        runtime_index = json.loads((directory / "runtime_source_index.json").read_bytes())
+        item = next(iter(runtime_index.values()))
+        return {**item, "path": str((directory / item["path"]).relative_to(actual_capture))}
+    if fault == "runtime-library":
+        plugin = json.loads((actual_capture / "plugin_build.json").read_bytes())
+        result: dict[str, Any] = index[next(iter(plugin["runtime_libraries"]))]
+        return result
+    first: dict[str, Any] = next(iter(index.values()))
+    return first
+
+
+def _rebind_preparation_input(actual_capture: Path, changed: Path) -> None:
+    """Record a changed image input in the preparation and the preparation in the image.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    changed
+        Changed file inside the captured image.
+    """
+    preparation_path = actual_capture / "image/preparation.json"
+    preparation = json.loads(preparation_path.read_bytes())
+    preparation["inputs"][changed.relative_to(actual_capture / "image").as_posix()] = (
+        sha256_of_file(changed)
+    )
+    preparation_path.write_text(json.dumps(preparation), encoding="ascii")
+    image_path = actual_capture / "image/image.json"
+    image = json.loads(image_path.read_bytes())
+    image["preparation_sha256"] = sha256_of_file(preparation_path)
+    image_path.write_text(json.dumps(image), encoding="ascii")
+
+
+def _rebind_capture(actual_capture: Path, changed: set[str]) -> Path:
+    """Rehash changed files in the capture receipt and the receipt in the manifest.
+
+    Parameters
+    ----------
+    actual_capture
+        Original real complete capture.
+    changed
+        Capture-relative names of the changed files.
+
+    Returns
+    -------
+    Path
+        Rewritten run manifest.
+    """
     capture_path = actual_capture / "capture.json"
     capture = json.loads(capture_path.read_bytes())
-    changed = {"image/preparation.json", "image/image.json"}
     for name in changed:
         capture["files"][name] = sha256_of_file(actual_capture / name)
     capture_path.write_text(json.dumps(capture), encoding="ascii")
@@ -450,8 +496,25 @@ def test_public_reanalysis_refuses_incomplete_compiler_metadata(
         if reference["path"] in changed:
             reference["sha256"] = sha256_of_file(actual_capture / reference["path"])
     manifest_path.write_text(json.dumps(manifest), encoding="ascii")
-    output = actual_capture.parent / "refused-compiler-reanalysis"
-    result = subprocess.run(
+    return manifest_path
+
+
+def _reanalyse(manifest_path: Path, output: Path) -> subprocess.CompletedProcess[str]:
+    """Run the public analysis command on a run manifest.
+
+    Parameters
+    ----------
+    manifest_path
+        Run manifest.
+    output
+        Report directory.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Finished command.
+    """
+    return subprocess.run(
         [sys.executable, "tools/analyze_run.py", str(manifest_path), "--output-dir", str(output)],
         cwd=ROOT,
         capture_output=True,
@@ -459,7 +522,3 @@ def test_public_reanalysis_refuses_incomplete_compiler_metadata(
         timeout=scaled(30),
         check=False,
     )
-    assert result.returncode == 1
-    assert "original compiler identity is invalid" in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (output / "report.json").exists()

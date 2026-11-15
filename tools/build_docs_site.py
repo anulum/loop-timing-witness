@@ -365,6 +365,90 @@ def render_document(
     write_page(output, destination(name), source.stem, rendered, revision)
 
 
+def _copy_assets(paths: list[str], output: Path) -> None:
+    """Copy every tracked image and PDF asset to the same path in the site.
+
+    Parameters
+    ----------
+    paths
+        Tracked repository paths.
+    output
+        Site directory.
+    """
+    for name in paths:
+        if Path(name).suffix in ASSET_SUFFIXES:
+            asset = output / name
+            asset.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, asset)
+
+
+def _python_reference(output: Path, revision: str) -> list[str]:
+    """Write one plain-text reference page for every module of the package.
+
+    Parameters
+    ----------
+    output
+        Site directory.
+    revision
+        Source commit shown on each page.
+
+    Returns
+    -------
+    list[str]
+        Names of the documented modules, the package first.
+    """
+    package = importlib.import_module("loop_timing_witness")
+    modules = [
+        package.__name__,
+        *(item.name for item in pkgutil.walk_packages(package.__path__, package.__name__ + ".")),
+    ]
+    reference_renderer = RepositoryTextDoc()
+    for name in modules:
+        module = importlib.import_module(name)
+        reference = pydoc.plain(pydoc.render_doc(module, renderer=reference_renderer)).replace(
+            f"\nFILE\n    {ROOT}{os.sep}", "\nFILE\n    "
+        )
+        content = (
+            f"<h1>{html.escape(name)}</h1>"
+            "<p>Repository paths are shown relative to the source tree.</p>"
+            f"<pre>{html.escape(reference)}</pre>"
+        )
+        write_page(output, Path("api/python") / (name + ".html"), name, content, revision)
+    return modules
+
+
+def _write_provenance(
+    output: Path, revision: str, documents: list[str], modules: list[str]
+) -> None:
+    """Write the site provenance with the digest of every published file.
+
+    Parameters
+    ----------
+    output
+        Completed site directory.
+    revision
+        Source commit.
+    documents
+        Sorted rendered Markdown documents.
+    modules
+        Documented Python modules.
+    """
+    manifest = {
+        "source_revision": revision,
+        "documents": documents,
+        "python_api_modules": modules,
+        "native_api": ["c", "witness_analysis", "witness_controller", "witness_amp_rust_kernel"],
+        "files": {
+            str(path.relative_to(output)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(output.rglob("*"))
+            if path.is_file()
+        },
+    }
+    (output / "site-provenance.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def build(output: Path) -> None:
     """Build all public documents and actual package/native API references.
 
@@ -401,45 +485,12 @@ def build(output: Path) -> None:
     renderer = MarkdownIt("commonmark", {"html": True}).enable(["table", "strikethrough"])
     for name in sorted(documents):
         render_document(name, documents, renderer, output, revision)
-    for name in paths:
-        if Path(name).suffix in ASSET_SUFFIXES:
-            asset = output / name
-            asset.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / name, asset)
-    package = importlib.import_module("loop_timing_witness")
-    modules = [
-        package.__name__,
-        *(item.name for item in pkgutil.walk_packages(package.__path__, package.__name__ + ".")),
-    ]
-    reference_renderer = RepositoryTextDoc()
-    for name in modules:
-        module = importlib.import_module(name)
-        reference = pydoc.plain(pydoc.render_doc(module, renderer=reference_renderer)).replace(
-            f"\nFILE\n    {ROOT}{os.sep}", "\nFILE\n    "
-        )
-        content = (
-            f"<h1>{html.escape(name)}</h1>"
-            "<p>Repository paths are shown relative to the source tree.</p>"
-            f"<pre>{html.escape(reference)}</pre>"
-        )
-        write_page(output, Path("api/python") / (name + ".html"), name, content, revision)
+    _copy_assets(paths, output)
+    modules = _python_reference(output, revision)
     shutil.copytree(native / "c/html", output / "api/c")
     shutil.copytree(native / "rust/doc", output / "api/rust")
     (output / ".nojekyll").write_text("", encoding="utf-8")
-    manifest = {
-        "source_revision": revision,
-        "documents": sorted(documents),
-        "python_api_modules": modules,
-        "native_api": ["c", "witness_analysis", "witness_controller", "witness_amp_rust_kernel"],
-        "files": {
-            str(path.relative_to(output)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in sorted(output.rglob("*"))
-            if path.is_file()
-        },
-    }
-    (output / "site-provenance.json").write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-    )
+    _write_provenance(output, revision, sorted(documents), modules)
 
 
 def main(argv: list[str] | None = None) -> int:

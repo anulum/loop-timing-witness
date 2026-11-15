@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from neural_operator_support import adopt_operator_descriptors, image_binding
@@ -361,33 +361,8 @@ def test_unregistered_policy_identity_never_selects_an_executable(tmp_path: Path
     assert list(tmp_path.iterdir()) == []
 
 
-def test_partial_consumer_upgrade_refuses_the_old_registration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Refuse a real package reload whose policy identity outlives the registry snapshot.
-
-    Parameters
-    ----------
-    tmp_path
-        Owned consumer package and authentic original acquisition declaration.
-    monkeypatch
-        Selects the operator descriptors adopted by the package copy.
-    """
-    original = _ROOT / "src/loop_timing_witness"
-    installed = tmp_path / "consumer/loop_timing_witness"
-    shutil.copytree(original, installed, ignore=shutil.ignore_patterns("__pycache__"))
-    adopt_operator_descriptors(installed, tmp_path, monkeypatch)
-    policy_module = installed / "neural_run_policy.py"
-    expected_source = (original / "neural_run_policy.py").read_bytes()
-    assert policy_module.read_bytes() == expected_source
-    manifest = tmp_path / "run.json"
-    manifest.write_bytes((_ROOT / "tests/data/neural-selected-original.run.json").read_bytes())
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-B",
-            "-c",
-            """
+# Run in a fresh interpreter: reloads a changed selector after admitting the original policy.
+UPGRADE_PROGRAM: Final = """
 import hashlib, importlib, json, sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
@@ -425,7 +400,36 @@ except NeuralCaptureRefusalError as error:
     }))
 else:
     raise SystemExit(3)
-""",
+"""
+
+
+def test_partial_consumer_upgrade_refuses_the_old_registration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refuse a real package reload whose policy identity outlives the registry snapshot.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned consumer package and authentic original acquisition declaration.
+    monkeypatch
+        Selects the operator descriptors adopted by the package copy.
+    """
+    original = _ROOT / "src/loop_timing_witness"
+    installed = tmp_path / "consumer/loop_timing_witness"
+    shutil.copytree(original, installed, ignore=shutil.ignore_patterns("__pycache__"))
+    adopt_operator_descriptors(installed, tmp_path, monkeypatch)
+    policy_module = installed / "neural_run_policy.py"
+    expected_source = (original / "neural_run_policy.py").read_bytes()
+    assert policy_module.read_bytes() == expected_source
+    manifest = tmp_path / "run.json"
+    manifest.write_bytes((_ROOT / "tests/data/neural-selected-original.run.json").read_bytes())
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            UPGRADE_PROGRAM,
             str(installed.parent),
             str(tmp_path),
         ],

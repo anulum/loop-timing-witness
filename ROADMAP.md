@@ -92,7 +92,9 @@ with eight checked source invariants and no unresolved or excluded points. C++ l
 is tracked separately in [the coverage guide](docs/CONTROLLER_COVERAGE.md). Physical UIO/PAC1934
 operation, privileged scheduling and board timing require their actual resources.
 
-1. Vendor tool project generation scripts and constraints.
+1. Vendor tool project generation scripts and constraints. The generation scripts produce a Libero
+   project for MPFS250T and a [recorded timing run](hardware/icicle/README.md#recorded-libero-run);
+   the witness misses its 100 MHz capture clock there, and its CDC constraints are not written yet.
 2. Bare-metal controller on a dedicated application core.
 3. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.

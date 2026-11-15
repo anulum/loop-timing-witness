@@ -105,10 +105,52 @@ Libero SoC 2026.1 generates this project for MPFS250T. Its core generators need 
 on a host without one, pass a wrapper that runs Libero under `xvfb-run` as the runner's
 Libero executable. A host without internet access sets Libero's vault to the MegaVault of
 the release (`change_vault_location`); it holds every core the reference requests. The
-witness CCC's lock output is not used. Synthesis, place-and-route, timing and the CDC
-review remain to be qualified. The original board support package must establish the
+witness CCC's lock output is not used. The original board support package must establish the
 interrupt's PLIC and device-tree identity before a processor may consume it. Source
 derivation and RTL simulation do not qualify a board.
+
+## Recorded Libero run
+
+On 2026-11-15, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T (FCVG484 package,
+STD speed grade, production timing data) on the tree derived at commit `f4bd98f`, whose
+`witness_derivation.json` has SHA-256
+`94785d6b7f20a9f71dbb94ce57a8271b1aee528b326c5c0fef5f5a5297f7991f`. Synthesis,
+place-and-route and timing verification ran in the slow_lv_lt, fast_hv_lt and slow_lv_ht
+corners. The run exited 0 after 35 minutes and reports that the timing constraints are not met.
+
+| Clock | Period | Worst setup slack | Worst hold slack |
+| --- | --- | --- | --- |
+| FIC0 bus clock, reference CCC output 0 | 8 ns | +1.491 ns | +0.037 ns |
+| FIC1 clock, reference CCC output 1 | 8 ns | +1.736 ns | +0.058 ns |
+| FIC3 clock, reference CCC output 3 | 20 ns | +2.027 ns | +0.060 ns |
+| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | **−2.419 ns** | +0.068 ns |
+
+The failing setup paths lie in the witness plant model, the reference generator and the paths
+from the configuration registers to the reference generator. Each computes a 32×32-bit product,
+a wide sum and a saturation in one capture cycle. The documented 100 MHz capture clock is
+therefore not met on this part and speed grade; closing it is open work. Timing constraint
+coverage is 99.97 %.
+
+The synthesis CDC check lists 50 witness crossings. Two are safe and two are FIFO RAM reads
+that it does not analyse. It flags 46, mostly the transaction bridge's handshake-held data and
+the Gray-pointer synchronisers. The reference constraint file makes the FIC0 clock asynchronous
+to every other clock, so these crossings carry no timing constraint yet; witness-specific CDC
+constraints are open work too. The whole design uses 26 515 4LUT (10.4 %), 19 846 DFF (7.8 %),
+104 uSRAM, 127 LSRAM and 20 math blocks.
+
+The reports stay with the run; their SHA-256 values are:
+
+| Report | SHA-256 |
+| --- | --- |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `6906d4d1ac4d08ce41aa0d7b47373c39cc116e10b8fbc19150dabaf4353318ce` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `8c762208be63be501246562a1d95fc7c18a0314db997d86522ac271f5702609f` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `45db8c4e68f61a3a3cde4a515deae88e3eb4183e783ddc8058e6381a3d7a0c45` |
+| `designer/…/max_report.json` | `89752023994ebe2a510154f7ba9cebb5fe179ffa9886488be4bcae6be3d720b1` |
+| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `482785d3e6991414bf08ed7df48548c9c3b79c6aaead10163d69d417c23bdb1f` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `0cf8ee7616c63fc8c680fde4da571b6f773b522daf0f22fdd75f1a6e356c1a7d` |
+
+A vendor timing report is not board evidence: no bitstream was programmed and no board was
+measured.
 
 In the pinned reference source, `FIC_0_PERIPHERALS_1:ACLK` takes
 `CLOCKS_AND_RESETS:FIC_0_CLK` from the reference CCC's GL0_0 output configured for 125 MHz.

@@ -71,6 +71,10 @@ Loop Timing Witness — changelog
   Every output is unchanged in every cycle: a SAT proof of the selection and pop logic over all
   inputs, and co-simulation of both versions. The RTL source-flow union now has 822 of 830 points
   executed: each of the file's two elaborations lost the scan's two branch points.
+- A recorded Libero SoC 2026.1 run of the derived design for MPFS250T (STD) is documented with its
+  report digests: every reference clock meets timing; the 100 MHz witness capture clock misses
+  setup by 2.419 ns in the plant model and reference generator; hold is met; CDC constraints for
+  the witness are still to be written.
 
 ## [0.2.0] - 2026-11-14
 

@@ -14,7 +14,7 @@ import csv
 import hashlib
 import json
 import struct
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -24,6 +24,193 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from conftest import MakeRtlRun, RunTool
+
+RECORD = struct.Struct("<BBHIQ")
+
+
+def _records(run: Path) -> list[tuple[int, ...]]:
+    """Return every event record of a capture.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        Code, flags, reserved, cycle and ticks of each record, in capture order.
+    """
+    raw = (run / "events.bin").read_bytes()
+    return [RECORD.unpack_from(raw, offset) for offset in range(0, len(raw), RECORD.size)]
+
+
+def _rebind_events(run: Path, manifest: dict[str, Any], records: list[tuple[int, ...]]) -> bytes:
+    """Write event records as the capture and bind the manifest to them.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    manifest
+        Declaration changed in place; the caller writes it.
+    records
+        Event records in capture order.
+
+    Returns
+    -------
+    bytes
+        The written event stream.
+    """
+    data = b"".join(RECORD.pack(*record) for record in records)
+    (run / "events.bin").write_bytes(data)
+    manifest["files"]["events"]["sha256"] = hashlib.sha256(data).hexdigest()
+    return data
+
+
+def _check_statistics(
+    statistics: dict[str, Any], profile: str, manifest: dict[str, Any], duration: int
+) -> None:
+    """Require the latency change statistics of an unchanged capture.
+
+    Parameters
+    ----------
+    statistics
+        Reported statistics of the profile's variable or constant interval.
+    profile
+        Capture profile.
+    manifest
+        Capture declaration.
+    duration
+        Reported event duration in ticks.
+    """
+    count = manifest["cycle_count"] - 1
+    assert statistics["status"] == "available"
+    assert {
+        key: statistics[key]
+        for key in (
+            "sample_count",
+            "expected_pair_count",
+            "missing_pair_count",
+            "pair_coverage_fraction",
+        )
+    } == {
+        "sample_count": count,
+        "expected_pair_count": count,
+        "missing_pair_count": 0,
+        "pair_coverage_fraction": 1,
+    }
+    assert statistics["latency_sample_count"] == manifest["cycle_count"]
+    assert statistics["duration_ticks"] == duration
+    assert statistics["median_ticks"] == (2495 if profile == "CONTROL" else 0)
+    assert statistics["p95_ticks"] == pytest.approx(4740.5 if profile == "CONTROL" else 0)
+    assert statistics["p99_ticks"] == pytest.approx(4940.1 if profile == "CONTROL" else 0)
+    assert statistics["p999_ticks"] == pytest.approx(4985.01 if profile == "CONTROL" else 0)
+    assert statistics["maximum_ticks"] == (4990 if profile == "CONTROL" else 0)
+    assert statistics["peak_to_peak_ticks"] == (4990 if profile == "CONTROL" else 0)
+
+
+def _check_summary(
+    output: Path, name: str, statistics: dict[str, Any], manifest: dict[str, Any]
+) -> dict[str, str]:
+    """Require the published summary row of one interval to match its statistics.
+
+    Parameters
+    ----------
+    output
+        Published report directory.
+    name
+        Interval name.
+    statistics
+        Reported statistics of the interval.
+    manifest
+        Capture declaration.
+
+    Returns
+    -------
+    dict[str, str]
+        The summary row.
+    """
+    with (output / "jitter_summary.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    observed = next(row for row in rows if row["interval"] == name)
+    assert observed["sample_count"] == str(manifest["cycle_count"] - 1)
+    assert float(observed["p99_ticks"]) == statistics["p99_ticks"]
+    assert float(observed["p99_ticks"]) * int(observed["timebase_resolution_ns"]) == pytest.approx(
+        statistics["p99_ticks"] * 10
+    )
+    assert observed["instrument_floor_ticks"] == ""
+    assert observed["evidence_status"] == "simulation_only"
+    assert observed["run_id"] == manifest["run_id"]
+    assert observed["jitter_method"] == "absolute_cycle_to_cycle_latency_change.v1"
+    return observed
+
+
+def _check_pairs(
+    output: Path,
+    intervals: list[dict[str, Any]],
+    jitter: dict[str, Any],
+    observed: dict[str, str],
+) -> None:
+    """Require every published adjacent-cycle pair to hold the raw intervals' change.
+
+    Parameters
+    ----------
+    output
+        Published report directory.
+    intervals
+        Raw per-cycle intervals of the analysis.
+    jitter
+        Reported statistics of every interval.
+    observed
+        Summary row whose evidence status and method every pair carries.
+    """
+    with (output / "cycle_jitter.csv").open(newline="") as stream:
+        pairs = list(csv.DictReader(stream))
+    expected = {(int(row["cycle"]), str(row["interval"])): int(row["ticks"]) for row in intervals}
+    assert len(pairs) == sum(item["sample_count"] for item in jitter.values())
+    for pair in pairs:
+        previous, cycle = int(pair["previous_cycle"]), int(pair["cycle"])
+        interval = pair["interval"]
+        assert cycle == previous + 1
+        assert int(pair["previous_ticks"]) == expected[previous, interval]
+        assert int(pair["ticks"]) == expected[cycle, interval]
+        delta = expected[cycle, interval] - expected[previous, interval]
+        assert int(pair["delta_ticks"]) == delta
+        assert int(pair["absolute_delta_ticks"]) == abs(delta)
+        assert pair["evidence_status"] == observed["evidence_status"]
+        assert pair["jitter_method"] == observed["jitter_method"]
+
+
+def _vary(
+    variant: str, records: list[tuple[int, ...]], manifest: dict[str, Any]
+) -> list[tuple[int, ...]]:
+    """Remove the variant's records, or declare its warm-up without the series.
+
+    Parameters
+    ----------
+    variant
+        ``gap``, ``tail`` or ``no_reads`` removal, or ``warmup_one`` or ``warmup_two``.
+    records
+        Event records of the actual capture.
+    manifest
+        Declaration changed in place for a warm-up variant.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        Records to write.
+    """
+    if variant == "gap":
+        return [record for record in records if not (record[0] == 2 and record[3] == 1)]
+    if variant == "tail":
+        return [record for record in records if not (record[0] == 3 and record[3] == 2)]
+    if variant == "no_reads":
+        return [record for record in records if record[0] != 2]
+    manifest["warmup_cycles"] = 1 if variant == "warmup_one" else 2
+    manifest["files"]["power"] = None
+    manifest["files"]["tracking"] = None
+    return records
 
 
 @pytest.mark.parametrize("profile", ["CONTROL", "COMPUTE"])
@@ -48,63 +235,15 @@ def test_jitter_reports_real_adjacent_intervals(
     jitter = report["events"]["jitter"]
     name = "compute_time" if profile == "CONTROL" else "compute_duration"
     statistics = jitter[name]
-    count = manifest["cycle_count"] - 1
-    assert statistics["status"] == "available"
-    assert {
-        key: statistics[key]
-        for key in (
-            "sample_count",
-            "expected_pair_count",
-            "missing_pair_count",
-            "pair_coverage_fraction",
-        )
-    } == {
-        "sample_count": count,
-        "expected_pair_count": count,
-        "missing_pair_count": 0,
-        "pair_coverage_fraction": 1,
-    }
-    assert statistics["latency_sample_count"] == manifest["cycle_count"]
-    assert statistics["duration_ticks"] == report["events"]["duration_ticks"]
-    assert statistics["median_ticks"] == (2495 if profile == "CONTROL" else 0)
-    assert statistics["p95_ticks"] == pytest.approx(4740.5 if profile == "CONTROL" else 0)
-    assert statistics["p99_ticks"] == pytest.approx(4940.1 if profile == "CONTROL" else 0)
-    assert statistics["p999_ticks"] == pytest.approx(4985.01 if profile == "CONTROL" else 0)
-    assert statistics["maximum_ticks"] == (4990 if profile == "CONTROL" else 0)
-    assert statistics["peak_to_peak_ticks"] == (4990 if profile == "CONTROL" else 0)
+    _check_statistics(statistics, profile, manifest, report["events"]["duration_ticks"])
     assert "fault_detection" not in jitter
     assert "time_to_safe_state" not in jitter
     output = tmp_path / "report"
     result = run_tool("analyze_run", str(run / "manifest.json"), "--output-dir", str(output))
     assert result.returncode == 0, result.stderr
     assert json.loads((output / "report.json").read_bytes()) == report
-    with (output / "jitter_summary.csv").open(newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    observed = next(row for row in rows if row["interval"] == name)
-    assert observed["sample_count"] == str(count)
-    assert float(observed["p99_ticks"]) == statistics["p99_ticks"]
-    assert float(observed["p99_ticks"]) * int(observed["timebase_resolution_ns"]) == pytest.approx(
-        statistics["p99_ticks"] * 10
-    )
-    assert observed["instrument_floor_ticks"] == ""
-    assert observed["evidence_status"] == "simulation_only"
-    assert observed["run_id"] == manifest["run_id"]
-    assert observed["jitter_method"] == "absolute_cycle_to_cycle_latency_change.v1"
-    with (output / "cycle_jitter.csv").open(newline="") as stream:
-        pairs = list(csv.DictReader(stream))
-    expected = {(int(row["cycle"]), str(row["interval"])): int(row["ticks"]) for row in intervals}
-    assert len(pairs) == sum(item["sample_count"] for item in jitter.values())
-    for pair in pairs:
-        previous, cycle = int(pair["previous_cycle"]), int(pair["cycle"])
-        interval = pair["interval"]
-        assert cycle == previous + 1
-        assert int(pair["previous_ticks"]) == expected[previous, interval]
-        assert int(pair["ticks"]) == expected[cycle, interval]
-        delta = expected[cycle, interval] - expected[previous, interval]
-        assert int(pair["delta_ticks"]) == delta
-        assert int(pair["absolute_delta_ticks"]) == abs(delta)
-        assert pair["evidence_status"] == observed["evidence_status"]
-        assert pair["jitter_method"] == observed["jitter_method"]
+    observed = _check_summary(output, name, statistics, manifest)
+    _check_pairs(output, intervals, jitter, observed)
     svg = (output / "jitter_p99.svg").read_text()
     assert "absolute adjacent-cycle latency change" in svg
     assert "simulation_only" in svg
@@ -144,23 +283,7 @@ def test_missing_intervals_and_warmup_never_create_pairs(
     """
     latencies, pairs, expected, status, spread = expectations
     run, manifest = make_rtl_run()
-    raw = (run / "events.bin").read_bytes()
-    records = [
-        struct.unpack("<BBHIQ", raw[offset : offset + 16]) for offset in range(0, len(raw), 16)
-    ]
-    if variant == "gap":
-        records = [record for record in records if not (record[0] == 2 and record[3] == 1)]
-    elif variant == "tail":
-        records = [record for record in records if not (record[0] == 3 and record[3] == 2)]
-    elif variant == "no_reads":
-        records = [record for record in records if record[0] != 2]
-    else:
-        manifest["warmup_cycles"] = 1 if variant == "warmup_one" else 2
-        manifest["files"]["power"] = None
-        manifest["files"]["tracking"] = None
-    data = b"".join(struct.pack("<BBHIQ", *record) for record in records)
-    (run / "events.bin").write_bytes(data)
-    manifest["files"]["events"]["sha256"] = hashlib.sha256(data).hexdigest()
+    _rebind_events(run, manifest, _vary(variant, _records(run), manifest))
     path = run / "manifest.json"
     path.write_text(json.dumps(manifest))
     output = tmp_path / "report"
@@ -202,16 +325,11 @@ def test_decreasing_latency_preserves_signed_pair(
     """
     run, manifest = make_rtl_run("COMPUTE")
     raw = (run / "events.bin").read_bytes()
-    records = [
-        struct.unpack("<BBHIQ", raw[offset : offset + 16]) for offset in range(0, len(raw), 16)
-    ]
     changed = [
-        (*record[:4], 1025) if record[0] == 10 and record[3] == 1 else record for record in records
+        (*record[:4], 1025) if record[0] == 10 and record[3] == 1 else record
+        for record in _records(run)
     ]
-    data = b"".join(struct.pack("<BBHIQ", *record) for record in changed)
-    assert data != raw
-    (run / "events.bin").write_bytes(data)
-    manifest["files"]["events"]["sha256"] = hashlib.sha256(data).hexdigest()
+    assert _rebind_events(run, manifest, changed) != raw
     (run / "manifest.json").write_text(json.dumps(manifest))
     output = tmp_path / "report"
     result = run_tool("analyze_run", str(run / "manifest.json"), "--output-dir", str(output))

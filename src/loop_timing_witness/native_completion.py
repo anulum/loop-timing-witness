@@ -24,6 +24,104 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parent / "data"
 
 
+def _fault_schedule(fault: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the native fault declaration in the run manifest's schedule form.
+
+    Parameters
+    ----------
+    fault
+        Schema-valid native fault declaration.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        No entry for ``none``; otherwise the cycle, kind and delay periods.
+    """
+    if fault["kind"] == "none":
+        return []
+    return [
+        {
+            "cycle": fault["cycle"],
+            "kind": fault["kind"],
+            "delay_periods": fault["duration_periods"] if fault["kind"] == "delay" else 0,
+        }
+    ]
+
+
+def _configuration_matches(
+    native: dict[str, Any], manifest: dict[str, Any], event_count: int
+) -> bool:
+    """Tell whether the native receipt describes the declared run and its event file.
+
+    Parameters
+    ----------
+    native
+        Schema-valid native metadata.
+    manifest
+        Validated run declaration.
+    event_count
+        Number of actually decoded records.
+
+    Returns
+    -------
+    bool
+        Whether source kind, cycles, period, controller, plant, event file and
+        configuration file all agree.
+    """
+    return not (
+        native["source_kind"] != "rtl_simulation"
+        or manifest["source"]["kind"] != "rtl_simulation"
+        or native["cycles"] != manifest["cycle_count"]
+        or native["period_ticks"] != manifest["sample_period_ticks"]
+        or native["controller"] != manifest["controller"]["name"]
+        or native["coefficients"] != manifest["controller"]["coefficients"]
+        or native["thermal"] != (manifest["plant"]["name"] == "first_order_thermal")
+        or native["result"]["samples"] > native["cycles"]
+        or native["artifacts"]["events"]["sha256"] != manifest["files"]["events"]["sha256"]
+        or native["artifacts"]["events"]["bytes"] != event_count * 16
+        or native["artifacts"]["configuration"]["sha256"]
+        not in {reference["sha256"] for reference in manifest["source"]["files"]}
+    )
+
+
+def _counters_match(
+    native: dict[str, Any], manifest: dict[str, Any], event_count: int, control: dict[str, Any]
+) -> bool:
+    """Tell whether the native completion counters agree with the captured events.
+
+    Parameters
+    ----------
+    native
+        Schema-valid native metadata.
+    manifest
+        Validated run declaration.
+    event_count
+        Number of actually decoded records.
+    control
+        Full-run control analysis and sample-read count, before warm-up exclusion.
+
+    Returns
+    -------
+    bool
+        Whether records and overflow agree and, without overflow, so do misses,
+        deadlines, sample reads and the safe state.
+    """
+    result = native["result"]
+    return not (
+        result["records"] != event_count
+        or result["overflow"] != manifest["instrument"]["fifo_overflow_count"]
+        or (
+            not result["overflow"]
+            and (
+                result["misses"] != control["deadline_misses"]
+                or native["cycles"] != control["observed_deadlines"]
+                or result["samples"] != control["sample_read_events"]
+                or result["safe"] != bool(control["safe_state_events"])
+            )
+        )
+    )
+
+
 def completion_statistics(
     content: bytes, manifest: dict[str, Any], event_count: int, control: dict[str, Any]
 ) -> dict[str, Any]:
@@ -55,53 +153,16 @@ def completion_statistics(
     if locations:
         message = f"native metadata {locations[0]}: does not satisfy the native run schema"
         raise ValueError(message)
-    fault = native["fault"]
-    schedule = (
-        []
-        if fault["kind"] == "none"
-        else [
-            {
-                "cycle": fault["cycle"],
-                "kind": fault["kind"],
-                "delay_periods": fault["duration_periods"] if fault["kind"] == "delay" else 0,
-            }
-        ]
-    )
-    if schedule != manifest["fault_schedule"]:
+    if _fault_schedule(native["fault"]) != manifest["fault_schedule"]:
         message = "native metadata fault schedule does not match the run declaration"
         raise ValueError(message)
-    if (
-        native["source_kind"] != "rtl_simulation"
-        or manifest["source"]["kind"] != "rtl_simulation"
-        or native["cycles"] != manifest["cycle_count"]
-        or native["period_ticks"] != manifest["sample_period_ticks"]
-        or native["controller"] != manifest["controller"]["name"]
-        or native["coefficients"] != manifest["controller"]["coefficients"]
-        or native["thermal"] != (manifest["plant"]["name"] == "first_order_thermal")
-        or native["result"]["samples"] > native["cycles"]
-        or native["artifacts"]["events"]["sha256"] != manifest["files"]["events"]["sha256"]
-        or native["artifacts"]["events"]["bytes"] != event_count * 16
-        or native["artifacts"]["configuration"]["sha256"]
-        not in {reference["sha256"] for reference in manifest["source"]["files"]}
-    ):
+    if not _configuration_matches(native, manifest, event_count):
         message = "native metadata configuration does not match the run declaration"
         raise ValueError(message)
-    result: dict[str, Any] = native["result"]
-    if (
-        result["records"] != event_count
-        or result["overflow"] != manifest["instrument"]["fifo_overflow_count"]
-        or (
-            not result["overflow"]
-            and (
-                result["misses"] != control["deadline_misses"]
-                or native["cycles"] != control["observed_deadlines"]
-                or result["samples"] != control["sample_read_events"]
-                or result["safe"] != bool(control["safe_state_events"])
-            )
-        )
-    ):
+    if not _counters_match(native, manifest, event_count, control):
         message = "native completion counters do not match captured events"
         raise ValueError(message)
+    result: dict[str, Any] = native["result"]
     return result
 
 

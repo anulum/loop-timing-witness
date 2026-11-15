@@ -255,8 +255,28 @@ def monorepo_registry(root: Path) -> Path | None:
     return None
 
 
-def build_plan(root: Path) -> list[Gate]:
-    """Build the ordered gate plan for one repository root.
+def _command(name: str, argv: list[str], root: Path) -> Gate:
+    """Return a gate that runs one command vector in the repository root.
+
+    Parameters
+    ----------
+    name
+        Gate name.
+    argv
+        Command vector; no shell interprets it.
+    root
+        Repository root the command runs in.
+
+    Returns
+    -------
+    Gate
+        Gate showing the joined command.
+    """
+    return Gate(name, shlex.join(argv), lambda: run_command(name, argv, root))
+
+
+def _build_gates(root: Path) -> list[Gate]:
+    """Return the lint, typing, native build and test gates, in execution order.
 
     Parameters
     ----------
@@ -266,27 +286,19 @@ def build_plan(root: Path) -> list[Gate]:
     Returns
     -------
     list[Gate]
-        Gates in execution order.
+        Ruff, mypy, native analysis and controller builds and tests, and the
+        Python suite under the complete coverage gate.
     """
     venv = root / ".venv" / "bin"
-    python = str(venv / "python")
-
-    def command(name: str, argv: list[str]) -> Gate:
-        return Gate(name, shlex.join(argv), lambda: run_command(name, argv, root))
-
-    validator = [python, "tools/validate_measurement_domain.py"]
-    registry = monorepo_registry(root)
-    if registry is not None:
-        validator += ["--registry", str(registry)]
     return [
-        command("ruff-check", [str(venv / "ruff"), "check", "."]),
-        command("ruff-format", [str(venv / "ruff"), "format", "--check", "."]),
-        command("mypy", [str(venv / "mypy")]),
-        command("analysis-build", ["make", "analysis-build"]),
-        command("analysis-tests", ["make", "analysis-tests"]),
-        command("controller-build", ["make", "controller-build"]),
-        command("controller-tests", ["make", "controller-tests"]),
-        command(
+        _command("ruff-check", [str(venv / "ruff"), "check", "."], root),
+        _command("ruff-format", [str(venv / "ruff"), "format", "--check", "."], root),
+        _command("mypy", [str(venv / "mypy")], root),
+        _command("analysis-build", ["make", "analysis-build"], root),
+        _command("analysis-tests", ["make", "analysis-tests"], root),
+        _command("controller-build", ["make", "controller-build"], root),
+        _command("controller-tests", ["make", "controller-tests"], root),
+        _command(
             "tests",
             [
                 str(venv / "pytest"),
@@ -295,31 +307,69 @@ def build_plan(root: Path) -> list[Gate]:
                 "--cov-report=term-missing",
                 "--cov-fail-under=100",
             ],
+            root,
         ),
-        command("source-gates", [python, "tools/check_source_gates.py"]),
-        command("native-format", [python, "tools/check_native_format.py"]),
-        command("measurement-domain", validator),
-        command(
-            "capability-inventory", [python, "tools/generate_capability_inventory.py", "--check"]
+    ]
+
+
+def _policy_gates(root: Path) -> list[Gate]:
+    """Return the repository policy gates, in execution order.
+
+    Parameters
+    ----------
+    root
+        Repository root the gates run against.
+
+    Returns
+    -------
+    list[Gate]
+        Source enrolment, native format, measurement domain, inventory,
+        provenance, documentation, licence, workflow, REUSE and zizmor gates.
+    """
+    venv = root / ".venv" / "bin"
+    python = str(venv / "python")
+    validator = [python, "tools/validate_measurement_domain.py"]
+    registry = monorepo_registry(root)
+    if registry is not None:
+        validator += ["--registry", str(registry)]
+    zizmor = [str(venv / "zizmor"), "--config", str(root / ".github" / "zizmor.yml")]
+    return [
+        _command("source-gates", [python, "tools/check_source_gates.py"], root),
+        _command("native-format", [python, "tools/check_native_format.py"], root),
+        _command("measurement-domain", validator, root),
+        _command(
+            "capability-inventory",
+            [python, "tools/generate_capability_inventory.py", "--check"],
+            root,
         ),
-        command("provenance-headers", [python, "tools/check_provenance_headers.py"]),
-        command("documentation", [python, "tools/check_documentation.py"]),
-        command("dependency-licences", [python, "tools/check_dependency_licences.py"]),
-        command("workflows", [python, "tools/audit_workflows.py"]),
-        command("reuse", [str(venv / "reuse"), "lint"]),
-        command(
+        _command("provenance-headers", [python, "tools/check_provenance_headers.py"], root),
+        _command("documentation", [python, "tools/check_documentation.py"], root),
+        _command("dependency-licences", [python, "tools/check_dependency_licences.py"], root),
+        _command("workflows", [python, "tools/audit_workflows.py"], root),
+        _command("reuse", [str(venv / "reuse"), "lint"], root),
+        _command(
             "zizmor",
-            [
-                str(venv / "zizmor"),
-                "--config",
-                str(root / ".github" / "zizmor.yml"),
-                "--offline",
-                "--persona",
-                "pedantic",
-                "--strict-collection",
-                ".",
-            ],
+            [*zizmor, "--offline", "--persona", "pedantic", "--strict-collection", "."],
+            root,
         ),
+    ]
+
+
+def _pinned_tool_gates(root: Path) -> list[Gate]:
+    """Return the gates of the pinned external tools, in execution order.
+
+    Parameters
+    ----------
+    root
+        Repository root the gates run against.
+
+    Returns
+    -------
+    list[Gate]
+        Actionlint, typos and the secret scan, each verifying its pinned build.
+    """
+    venv = root / ".venv" / "bin"
+    return [
         Gate(
             "actionlint",
             f"actionlint (build {ACTIONLINT_MODULE[0]} {ACTIONLINT_MODULE[1]} verified)",
@@ -337,6 +387,22 @@ def build_plan(root: Path) -> list[Gate]:
             lambda: secret_scan_gate(root),
         ),
     ]
+
+
+def build_plan(root: Path) -> list[Gate]:
+    """Build the ordered gate plan for one repository root.
+
+    Parameters
+    ----------
+    root
+        Repository root the gates run against.
+
+    Returns
+    -------
+    list[Gate]
+        Gates in execution order.
+    """
+    return [*_build_gates(root), *_policy_gates(root), *_pinned_tool_gates(root)]
 
 
 def run_gates(root: Path, only: str | None) -> int:

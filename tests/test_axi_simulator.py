@@ -343,6 +343,55 @@ def test_reference_waveform_through_axi(
         assert process.wait(timeout=scaled(5)) == 0
 
 
+def _read_sample(process: subprocess.Popen[str], cycle: int) -> tuple[str, int]:
+    """Advance one sample period and read the cycle's state and read tick through AXI.
+
+    Parameters
+    ----------
+    process
+        Running plant simulation.
+    cycle
+        Expected sample cycle.
+
+    Returns
+    -------
+    tuple[str, int]
+        Cycle, signed reference, position and velocity as a controller row, and the
+        64-bit sample-read tick.
+    """
+    assert exchange(process, "I 1000000")[1] == 1
+    assert exchange(process, "R 156")[1] == cycle + 1
+    position = exchange(process, "R 0")[1]
+    assert exchange(process, "R 16")[1] == cycle
+    velocity = exchange(process, "R 20")[1]
+    reference = exchange(process, "R 24")[1]
+    low = exchange(process, "R 28")[1]
+    high = exchange(process, "R 32")[1]
+    signed = [
+        value if value < 1 << 31 else value - (1 << 32) for value in (reference, position, velocity)
+    ]
+    return ",".join(map(str, [cycle, *signed])), low | (high << 32)
+
+
+def _write_command(process: subprocess.Popen[str], cycle: int, command: str) -> None:
+    """Write one native command through AXI and commit it with its cycle.
+
+    Parameters
+    ----------
+    process
+        Running plant simulation.
+    cycle
+        Command cycle.
+    command
+        Native six-field command line.
+    """
+    raw = int(command.split(",")[1]) & 0xFFFFFFFF
+    assert exchange(process, f"W 40 {cycle} 15")[0] == 0
+    assert exchange(process, f"W 44 {raw} 15")[0] == 0
+    assert exchange(process, "W 48 1 15")[0] == 0
+    assert exchange(process, "W 164 1 15")[0] == 0
+
+
 def drain_capture(
     process: subprocess.Popen[str], read_ticks: list[int]
 ) -> list[tuple[int, int, int]]:
@@ -405,31 +454,15 @@ def test_native_feedback_and_capture(
             assert exchange(process, "W 56 1 15")[0] == 0
             samples, commands, read_ticks = [], [], []
             for cycle in range(4):
-                assert exchange(process, "I 1000000")[1] == 1
-                assert exchange(process, "R 156")[1] == cycle + 1
-                position = exchange(process, "R 0")[1]
-                assert exchange(process, "R 16")[1] == cycle
-                velocity = exchange(process, "R 20")[1]
-                reference = exchange(process, "R 24")[1]
-                low = exchange(process, "R 28")[1]
-                high = exchange(process, "R 32")[1]
-                read_ticks.append(low | (high << 32))
-                signed = [
-                    value if value < 1 << 31 else value - (1 << 32)
-                    for value in (reference, position, velocity)
-                ]
-                row = ",".join(map(str, [cycle, *signed]))
+                row, read_tick = _read_sample(process, cycle)
+                read_ticks.append(read_tick)
                 samples.append(row)
                 kernel.stdin.write(row + "\n")
                 kernel.stdin.flush()
                 assert select.select([kernel.stdout], [], [], scaled(5))[0]
                 command = kernel.stdout.readline()
                 commands.append(command)
-                raw = int(command.split(",")[1]) & 0xFFFFFFFF
-                assert exchange(process, f"W 40 {cycle} 15")[0] == 0
-                assert exchange(process, f"W 44 {raw} 15")[0] == 0
-                assert exchange(process, "W 48 1 15")[0] == 0
-                assert exchange(process, "W 164 1 15")[0] == 0
+                _write_command(process, cycle, command)
             records = drain_capture(process, read_ticks)
             assert "".join(commands) == oracle(mode, DEFAULT, samples)
             histories.append((samples, commands, records))

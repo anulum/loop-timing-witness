@@ -988,22 +988,16 @@ def test_public_vendor_runner_refuses_regular_file_tree(tmp_path: Path) -> None:
     assert not output.exists()
 
 
-@pytest.mark.parametrize("command", [DERIVE, RUN], ids=["derive", "run"])
-def test_public_shell_entrypoint_refuses_unpinned_actual_commit(
-    official_reference: Path, tmp_path: Path, command: Path
-) -> None:
-    """Reject a clean real Git commit whose vendor file bytes are unchanged.
+def _commit_unpinned(official_reference: Path, source: Path) -> None:
+    """Copy the pinned reference and add one clean empty commit on top of it.
 
     Parameters
     ----------
     official_reference
-        Pinned vendor source copied before the local empty commit.
-    tmp_path
-        Exclusive repository and unopened output.
-    command
-        Actual derivation or vendor-runner command.
+        Pinned vendor source.
+    source
+        Copy to create and commit in.
     """
-    source = tmp_path / "unpinned-reference"
     shutil.copytree(official_reference, source, symlinks=True)
     committed = invoke(
         "git",
@@ -1028,6 +1022,25 @@ def test_public_shell_entrypoint_refuses_unpinned_actual_commit(
     assert commit.returncode == 0
     assert commit.stdout.strip() != COMMIT
     assert not invoke("git", "-C", str(source), "status", "--porcelain").stdout
+
+
+@pytest.mark.parametrize("command", [DERIVE, RUN], ids=["derive", "run"])
+def test_public_shell_entrypoint_refuses_unpinned_actual_commit(
+    official_reference: Path, tmp_path: Path, command: Path
+) -> None:
+    """Reject a clean real Git commit whose vendor file bytes are unchanged.
+
+    Parameters
+    ----------
+    official_reference
+        Pinned vendor source copied before the local empty commit.
+    tmp_path
+        Exclusive repository and unopened output.
+    command
+        Actual derivation or vendor-runner command.
+    """
+    source = tmp_path / "unpinned-reference"
+    _commit_unpinned(official_reference, source)
     vendor = Path("script_support/components/MSS_WRAPPER.tcl")
     assert (source / vendor).read_bytes() == (official_reference / vendor).read_bytes()
     output = tmp_path / "unopened-output"

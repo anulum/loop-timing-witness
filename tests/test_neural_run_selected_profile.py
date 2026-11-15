@@ -275,16 +275,7 @@ def test_operator_descriptor_must_be_selected_and_reviewed(
         monkeypatch.setenv(variable, target.name)
     else:
         target.unlink()
-    if damage == "symlink":
-        replacement = tmp_path / "replacement.json"
-        replacement.write_bytes(raw)
-        target.symlink_to(replacement)
-    elif damage == "fifo":
-        os.mkfifo(target)
-    elif damage == "changed":
-        target.write_bytes(raw + b" ")
-    elif damage == "oversized":
-        target.write_bytes(b" " * 262145)
+        _replace_descriptor(target, raw, damage, tmp_path)
     output = tmp_path / "report"
     result = _analysis(installed.parent, manifest, output)
     assert result.returncode == 1
@@ -293,6 +284,32 @@ def test_operator_descriptor_must_be_selected_and_reviewed(
     assert expected in result.stderr
     assert "Traceback" not in result.stderr
     assert not output.exists()
+
+
+def _replace_descriptor(target: Path, raw: bytes, damage: str, directory: Path) -> None:
+    """Put a link, a FIFO, changed bytes or an oversized file where the descriptor was.
+
+    Parameters
+    ----------
+    target
+        Removed descriptor path.
+    raw
+        Original descriptor bytes.
+    damage
+        ``symlink``, ``fifo``, ``changed`` or ``oversized``; ``missing`` leaves it absent.
+    directory
+        Owned directory for the link's replacement file.
+    """
+    if damage == "symlink":
+        replacement = directory / "replacement.json"
+        replacement.write_bytes(raw)
+        target.symlink_to(replacement)
+    elif damage == "fifo":
+        os.mkfifo(target)
+    elif damage == "changed":
+        target.write_bytes(raw + b" ")
+    elif damage == "oversized":
+        target.write_bytes(b" " * 262145)
 
 
 def _image_declaration(manifest: Path) -> None:

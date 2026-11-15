@@ -388,11 +388,12 @@ firmware telemetry and fabric events after the dedicated controller arms. Its re
 configuration names both IRQ-free maps explicitly; Linux does not write controller commands
 or acknowledge the dedicated hart interrupt.
 
-The simulation transport advances its context one nanosecond at a time. It evaluates inputs
-before sampling the next bus edge, toggles the 7 ns/5 ns half-period clocks, and evaluates again
-when a clock changes. This production RTL has no delayed processes or time-dependent HDL
-expressions; an unchanged-clock step does not need that second evaluation. Input-before-clock
-ordering follows the [Verilator evaluation guidance](https://verilator.org/guide/latest/connecting.html).
+The simulation transport advances its context one nanosecond at a time. It evaluates changed
+inputs before sampling the next bus edge, toggles the 7 ns/5 ns half-period clocks, and evaluates
+again when a clock changes. This production RTL has no delayed processes or time-dependent HDL
+expressions, so a step whose clocks and inputs did not change needs no evaluation: the model keeps
+the state of its last one. Input-before-clock ordering follows the
+[Verilator evaluation guidance](https://verilator.org/guide/latest/connecting.html).
 Reference comparisons preserve byte-identical events, raw tracking and summaries for both plants,
 PID/LQR, different references and injected freeze/overload cases. This is simulation parity,
 not physical timing or processor performance evidence.

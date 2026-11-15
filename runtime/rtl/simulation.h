@@ -34,10 +34,20 @@ struct Edge {
 class Simulation {
     VerilatedContext context;
     Vaxi_control_witness model{&context};
+    /** Whether the model was evaluated after its last input or clock change. */
+    bool settled = false;
 
-    /** Settle inputs, sample the bus before its edge, then evaluate changed clocks. */
+    /** Record that an input changed, so the next tick evaluates before it samples. */
+    void changed() { settled = false; }
+
+    /** Settle changed inputs, sample the bus before its edge, then evaluate changed clocks.
+     *
+     * Between clock edges a model whose inputs did not change keeps its evaluated
+     * state, so it is evaluated only after an input or clock change.
+     */
     Edge tick() {
-        model.eval();
+        if (!settled)
+            model.eval();
         context.timeInc(1);
         const bool bus_edge = context.time() % 7 == 0;
         const bool capture_edge = context.time() % 5 == 0;
@@ -55,6 +65,7 @@ class Simulation {
             model.capture_clock = !model.capture_clock;
         if (bus_edge || capture_edge)
             model.eval();
+        settled = true;
         if (context.gotFinish())
             throw witness::RuntimeRefused("RTL ended during transaction");
         return edge;
@@ -67,6 +78,7 @@ class Simulation {
         model.eval();
         advance(140);
         model.run_reset_n = 1;
+        changed();
         advance(140);
     }
 
@@ -87,12 +99,16 @@ class Simulation {
         model.araddr = address;
         model.arvalid = 1;
         model.rready = 1;
+        changed();
         for (std::uint64_t index = 0; index < transaction_limit; ++index) {
             const Edge edge = tick();
-            if (edge.ar)
+            if (edge.ar) {
                 model.arvalid = 0;
+                changed();
+            }
             if (edge.r) {
                 model.rready = 0;
+                changed();
                 return edge;
             }
         }
@@ -107,14 +123,20 @@ class Simulation {
         model.awvalid = 1;
         model.wvalid = 1;
         model.bready = 1;
+        changed();
         for (std::uint64_t index = 0; index < transaction_limit; ++index) {
             const Edge edge = tick();
-            if (edge.aw)
+            if (edge.aw) {
                 model.awvalid = 0;
-            if (edge.w)
+                changed();
+            }
+            if (edge.w) {
                 model.wvalid = 0;
+                changed();
+            }
             if (edge.b) {
                 model.bready = 0;
+                changed();
                 return edge;
             }
         }

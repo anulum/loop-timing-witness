@@ -53,6 +53,11 @@ Loop Timing Witness — changelog
   rows are formed, instead of building both tables in memory first. On a 2·10⁵-cycle benchmark
   repeat its peak memory falls from about 2.1 times Python's to about 0.31 times, with
   byte-identical reports. The local control-run timing is re-measured on ML350.
+- The native RTL simulation transport evaluates the model only after an input or clock change.
+  It still steps one nanosecond at a time, but a step with unchanged inputs and no clock edge no
+  longer evaluates. The native run simulator writes byte-identical outputs for both plants, PID
+  and LQR, every reference and every injected fault; a 60-cycle PID run at the compiled period
+  takes 2.11 s instead of 3.61 s (median of six alternating runs on ML350).
 
 ## [0.2.0] - 2026-11-14
 

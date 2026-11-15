@@ -20,8 +20,11 @@ import tempfile
 from datetime import UTC, date, datetime
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from urllib.parse import SplitResult
 
 PACKAGE = "loop-timing-witness"
 CSV_PATH = Path("downloads/loop-timing-witness.csv")
@@ -160,6 +163,74 @@ def _write(path: Path, rows: Rows) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def _endpoint(url: str) -> tuple[SplitResult, str]:
+    """Split the source URL after requiring an uncredentialed HTTP(S) endpoint.
+
+    Parameters
+    ----------
+    url
+        Statistics source URL.
+
+    Returns
+    -------
+    tuple[SplitResult, str]
+        The URL's parts and its host name.
+
+    Raises
+    ------
+    ValueError
+        If the scheme, host, credentials, fragment or line breaks are not allowed.
+    """
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.fragment
+        or "\r" in url
+        or "\n" in url
+    ):
+        msg = "source URL must be an uncredentialed HTTP(S) endpoint"
+        raise ValueError(msg)
+    return parsed, parsed.hostname
+
+
+def _body(response: http.client.HTTPResponse) -> bytes | None:
+    """Return a bounded JSON body, or nothing for a missing or unavailable source.
+
+    Parameters
+    ----------
+    response
+        Provider response.
+
+    Returns
+    -------
+    bytes | None
+        The body, or ``None`` for 404, 429 and server errors.
+
+    Raises
+    ------
+    ValueError
+        If the status is another failure, the body is not JSON or it exceeds the bound.
+    """
+    if (
+        response.status in {404, 429}
+        or HTTPStatus.INTERNAL_SERVER_ERROR <= response.status < MAX_HTTP_STATUS
+    ):
+        return None
+    if response.status != HTTPStatus.OK:
+        msg = f"provider returned HTTP {response.status}"
+        raise ValueError(msg)
+    if not response.getheader("Content-Type", "").lower().startswith("application/json"):
+        msg = "provider response is not JSON"
+        raise ValueError(msg)
+    body = response.read(MAX_BYTES + 1)
+    if len(body) > MAX_BYTES:
+        msg = "provider response exceeds size bound"
+        raise ValueError(msg)
+    return body
+
+
 def fetch(url: str = SOURCE_URL) -> bytes | None:
     """Read one bounded HTTP(S) response; known temporary absence produces no observations.
 
@@ -180,41 +251,15 @@ def fetch(url: str = SOURCE_URL) -> bytes | None:
     OSError
         If the selected network transport cannot complete.
     """
-    parsed = urlsplit(url)
-    if (
-        parsed.scheme not in {"http", "https"}
-        or not parsed.hostname
-        or parsed.username is not None
-        or parsed.fragment
-        or "\r" in url
-        or "\n" in url
-    ):
-        msg = "source URL must be an uncredentialed HTTP(S) endpoint"
-        raise ValueError(msg)
+    parsed, host = _endpoint(url)
     kind = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-    connection = kind(parsed.hostname, parsed.port, timeout=15)
+    connection = kind(host, parsed.port, timeout=15)
     try:
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
         connection.request("GET", target, headers={"Accept": "application/json"})
-        response = connection.getresponse()
-        if (
-            response.status in {404, 429}
-            or HTTPStatus.INTERNAL_SERVER_ERROR <= response.status < MAX_HTTP_STATUS
-        ):
-            return None
-        if response.status != HTTPStatus.OK:
-            msg = f"provider returned HTTP {response.status}"
-            raise ValueError(msg)
-        if not response.getheader("Content-Type", "").lower().startswith("application/json"):
-            msg = "provider response is not JSON"
-            raise ValueError(msg)
-        body = response.read(MAX_BYTES + 1)
-        if len(body) > MAX_BYTES:
-            msg = "provider response exceeds size bound"
-            raise ValueError(msg)
-        return body
+        return _body(connection.getresponse())
     finally:
         connection.close()
 

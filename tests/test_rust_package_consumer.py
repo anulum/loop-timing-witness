@@ -19,6 +19,23 @@ from pathlib import Path
 from test_amp_rust_branch_coverage import cargo_artifact
 
 ROOT = Path(__file__).resolve().parents[1]
+# Client steps: lock, test, lint, then build for WebAssembly and the RV64 target.
+CLIENT_COMMANDS = [
+    ["cargo", "generate-lockfile", "--offline"],
+    ["cargo", "test", "--offline", "--locked"],
+    ["cargo", "clippy", "--offline", "--locked", "--all-targets", "--", "-D", "warnings"],
+    ["cargo", "build", "--offline", "--locked", "--lib", "--target", "wasm32-unknown-unknown"],
+    [
+        "cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--lib",
+        "--target",
+        "riscv64imac-unknown-none-elf",
+        "--message-format=json",
+    ],
+]
 
 
 def test_packaged_rust_public_api(tmp_path: Path) -> None:
@@ -31,7 +48,37 @@ def test_packaged_rust_public_api(tmp_path: Path) -> None:
         The client resolves the unpacked package rather than the working-tree source.
         Its compiler and static checks use the repository's recorded Rust toolchain.
     """
-    package_target = tmp_path / "producer"
+    unpacked = _package(tmp_path)
+    client = tmp_path / "client"
+    _write_client(client, unpacked)
+    commands = CLIENT_COMMANDS
+    (client / "commands.json").write_text(json.dumps(commands, indent=2))
+    observed: subprocess.CompletedProcess[str] | None = None
+    for index, argv in enumerate(commands):
+        observed = subprocess.run(argv, cwd=client, capture_output=True, text=True, check=False)
+        (client / f"command_{index}.log").write_text(observed.stdout + observed.stderr)
+        assert observed.returncode == 0, observed.stdout + observed.stderr
+    assert "2 passed" in (client / "command_1.log").read_text()
+    # Inspect the shipped kernel's actual generated target objects, beyond Cargo's exit status.
+    assert observed is not None
+    library = cargo_artifact(observed.stdout, "witness_controller", executable=False)
+    _check_riscv_objects(library)
+
+
+def _package(directory: Path) -> Path:
+    """Package the controller crate as an archive and unpack it.
+
+    Parameters
+    ----------
+    directory
+        Exclusive allocation for the producer output, its argv and log, and the unpacked copy.
+
+    Returns
+    -------
+    Path
+        Unpacked package root.
+    """
+    package_target = directory / "producer"
     package = [
         "cargo",
         "package",
@@ -43,25 +90,37 @@ def test_packaged_rust_public_api(tmp_path: Path) -> None:
         "--target-dir",
         str(package_target),
     ]
-    (tmp_path / "package.argv.json").write_text(json.dumps(package, indent=2))
+    (directory / "package.argv.json").write_text(json.dumps(package, indent=2))
     result = subprocess.run(package, cwd=ROOT, capture_output=True, text=True, check=False)
-    (tmp_path / "package.log").write_text(result.stdout + result.stderr)
+    (directory / "package.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     archives = list((package_target / "package").glob("*.crate"))
     assert len(archives) == 1
-    dependency = tmp_path / "dependency"
+    dependency = directory / "dependency"
     with tarfile.open(archives[0]) as archive:
         archive.extractall(dependency, filter="data")
     unpacked = list(dependency.iterdir())
     assert len(unpacked) == 1
-    client = tmp_path / "client"
+    return unpacked[0]
+
+
+def _write_client(client: Path, unpacked: Path) -> None:
+    """Write an independent client crate of the unpacked package, with its shipped API test.
+
+    Parameters
+    ----------
+    client
+        Client crate to create.
+    unpacked
+        Unpacked package root.
+    """
     (client / "src").mkdir(parents=True)
     (client / "tests").mkdir()
     shutil.copy2(ROOT / "rust-toolchain.toml", client / "rust-toolchain.toml")
     (client / "Cargo.toml").write_text(
         '[package]\nname = "witness-package-consumer"\nversion = "0.0.0"\n'
         'edition = "2024"\npublish = false\n\n[dependencies]\n'
-        f'witness-controller = {{ path = "{unpacked[0].as_posix()}" }}\n'
+        f'witness-controller = {{ path = "{unpacked.as_posix()}" }}\n'
     )
     (client / "src/lib.rs").write_text(
         "//! An independent allocator-free client of the packaged public API.\n"
@@ -70,35 +129,19 @@ def test_packaged_rust_public_api(tmp_path: Path) -> None:
         "    Command, Coefficients, InvalidCoefficients, PidState, lqr_step,\n};\n"
     )
     original = ROOT / "controllers/rust/tests/controller_api.rs"
-    shipped = unpacked[0] / "tests/controller_api.rs"
+    shipped = unpacked / "tests/controller_api.rs"
     assert original.read_bytes() == shipped.read_bytes()
     shutil.copy2(shipped, client / "tests/controller_api.rs")
-    commands = [
-        ["cargo", "generate-lockfile", "--offline"],
-        ["cargo", "test", "--offline", "--locked"],
-        ["cargo", "clippy", "--offline", "--locked", "--all-targets", "--", "-D", "warnings"],
-        ["cargo", "build", "--offline", "--locked", "--lib", "--target", "wasm32-unknown-unknown"],
-        [
-            "cargo",
-            "build",
-            "--offline",
-            "--locked",
-            "--lib",
-            "--target",
-            "riscv64imac-unknown-none-elf",
-            "--message-format=json",
-        ],
-    ]
-    (client / "commands.json").write_text(json.dumps(commands, indent=2))
-    observed: subprocess.CompletedProcess[str] | None = None
-    for index, argv in enumerate(commands):
-        observed = subprocess.run(argv, cwd=client, capture_output=True, text=True, check=False)
-        (client / f"command_{index}.log").write_text(observed.stdout + observed.stderr)
-        assert observed.returncode == 0, observed.stdout + observed.stderr
-    assert "2 passed" in (client / "command_1.log").read_text()
-    # Inspect the shipped kernel's actual generated target objects, beyond Cargo's exit status.
-    assert observed is not None
-    library = cargo_artifact(observed.stdout, "witness_controller", executable=False)
+
+
+def _check_riscv_objects(library: Path) -> None:
+    """Require every object of the built library to be a soft-float RV64 ELF object.
+
+    Parameters
+    ----------
+    library
+        Built static library for the RISC-V target.
+    """
     assert "riscv64imac-unknown-none-elf" in library.parts
     members = subprocess.check_output(["ar", "t", str(library)], text=True).splitlines()
     objects = [member for member in members if member.endswith(".o")]

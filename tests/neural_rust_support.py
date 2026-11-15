@@ -159,6 +159,51 @@ def rust_outcome(
         ``{"report": ...}`` or ``{"refusal": message}`` from the API, or the
         command's ``status``, ``stdout`` and ``stderr``.
     """
+    environment = _registry_environment(acquisition, directory, command, binding)
+    result = subprocess.run(
+        [
+            *wrapper,
+            str(consumer()),
+            "--exact",
+            "consumer_registry_acquisition",
+            "--nocapture",
+            "--test-threads=1",
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=scaled(600),
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    outcome: dict[str, Any] = json.loads((directory / "outcome.json").read_bytes())
+    return outcome
+
+
+def _registry_environment(
+    acquisition: NeuralAcquisition, directory: Path, command: Path | None, binding: bytes | None
+) -> dict[str, str]:
+    """Write the consumer's registry description and return the environment that names it.
+
+    Parameters
+    ----------
+    acquisition
+        Written acquisition and reviewed entry.
+    directory
+        Owned directory for the entry files, the description and the outcome, created
+        when absent.
+    command
+        New report directory for the analysis command, or ``None`` for the API.
+    binding
+        Image executor binding bytes in place of the entry's, or ``None``.
+
+    Returns
+    -------
+    dict[str, str]
+        This process's environment with the description and, when a profile
+        directory is selected, the LLVM profile file pattern.
+    """
     directory.mkdir(exist_ok=True)
     policy, checker, executor = acquisition.entry
     (directory / "policy.json").write_bytes(policy)
@@ -179,25 +224,7 @@ def rust_outcome(
     profiles = os.environ.get("WITNESS_RUST_PROFILE_DIRECTORY")
     if profiles:
         environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
-    result = subprocess.run(
-        [
-            *wrapper,
-            str(consumer()),
-            "--exact",
-            "consumer_registry_acquisition",
-            "--nocapture",
-            "--test-threads=1",
-        ],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        env=environment,
-        timeout=scaled(600),
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    outcome: dict[str, Any] = json.loads((directory / "outcome.json").read_bytes())
-    return outcome
+    return environment
 
 
 def _observations(report: dict[str, Any]) -> dict[str, Any]:

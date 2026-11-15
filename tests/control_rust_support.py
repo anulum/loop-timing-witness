@@ -37,8 +37,19 @@ HANG_GUARD_SECONDS = 600
 It is not a performance budget; no run is judged by its speed against it.
 """
 
+# Writes python_outcome of a manifest, with optional root bytes, to an outcome file.
+_OUTCOME_SCRIPT = (
+    "import json, sys\n"
+    "from pathlib import Path\n"
+    "from control_rust_support import python_outcome\n"
+    "root = Path(sys.argv[2]).read_bytes() if sys.argv[3] == 'yes' else None\n"
+    "Path(sys.argv[4]).write_text(json.dumps(python_outcome(Path(sys.argv[1]), root)))\n"
+)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from loop_timing_witness.run_manifest import RunInputs
 
 
 def _printed(error: BaseException) -> str:
@@ -76,41 +87,9 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         inputs = load_run(manifest, manifest_bytes=root)
     except (OSError, ValueError) as error:
         return {"refusal": _printed(error)}
-    decoded: list[list[object]] | None = None
-    refusal: str | None = None
-    events: tuple[Event, ...] = ()
-    try:
-        events = decode_events(
-            inputs.files["events"],
-            inputs.domain["design_contracts"],
-            inputs.manifest["profile"],
-            inputs.manifest["cycle_count"],
-        )
-    except ValueError as error:
-        refusal = _printed(error)
-    else:
-        decoded = [[event.name, event.cycle, event.ticks] for event in events]
-    summary: dict[str, Any] | None = None
-    summary_refusal: str | None = None
-    if refusal is not None:
-        summary_refusal = refusal
-    else:
-        try:
-            block, rows = events_block(inputs.manifest, inputs.domain["design_contracts"], events)
-        except ValueError as error:
-            summary_refusal = _printed(error)
-        else:
-            listed = [[row["cycle"], row["interval"], row["ticks"]] for row in rows]
-            summary = {"block": block, "rows": listed}
-    report: dict[str, Any] | None = None
-    report_refusal: str | None = None
-    try:
-        built, report_rows = build_report(inputs)
-    except (OSError, ValueError) as error:
-        report_refusal = _printed(error)
-    else:
-        rows_listed = [[row["cycle"], row["interval"], row["ticks"]] for row in report_rows]
-        report = {"report": built, "rows": rows_listed}
+    events, decoded, refusal = _decoded_events(inputs)
+    summary, summary_refusal = _events_summary(inputs, events, refusal)
+    report, report_refusal = _report_outcome(inputs)
     return {
         "manifest": inputs.manifest,
         "domain": inputs.domain,
@@ -123,6 +102,86 @@ def python_outcome(manifest: Path, root: bytes | None = None) -> dict[str, Any]:
         "report": report,
         "report_refusal": report_refusal,
     }
+
+
+def _decoded_events(
+    inputs: RunInputs,
+) -> tuple[tuple[Event, ...], list[list[object]] | None, str | None]:
+    """Decode the run's events, or keep the decoder's refusal.
+
+    Parameters
+    ----------
+    inputs
+        Loaded run.
+
+    Returns
+    -------
+    tuple[tuple[Event, ...], list[list[object]] | None, str | None]
+        Events, their ``[name, cycle, ticks]`` rows and no refusal, or no events,
+        ``None`` and the refusal text.
+    """
+    try:
+        events = decode_events(
+            inputs.files["events"],
+            inputs.domain["design_contracts"],
+            inputs.manifest["profile"],
+            inputs.manifest["cycle_count"],
+        )
+    except ValueError as error:
+        return (), None, _printed(error)
+    return events, [[event.name, event.cycle, event.ticks] for event in events], None
+
+
+def _events_summary(
+    inputs: RunInputs, events: tuple[Event, ...], refusal: str | None
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Return the events block and interval rows, or why they are absent.
+
+    Parameters
+    ----------
+    inputs
+        Loaded run.
+    events
+        Decoded events.
+    refusal
+        Decoder refusal, which the summary inherits.
+
+    Returns
+    -------
+    tuple[dict[str, Any] | None, str | None]
+        Block and ``[cycle, interval, ticks]`` rows, or ``None`` and the refusal.
+    """
+    if refusal is not None:
+        return None, refusal
+    try:
+        block, rows = events_block(inputs.manifest, inputs.domain["design_contracts"], events)
+    except ValueError as error:
+        return None, _printed(error)
+    return {
+        "block": block,
+        "rows": [[row["cycle"], row["interval"], row["ticks"]] for row in rows],
+    }, None
+
+
+def _report_outcome(inputs: RunInputs) -> tuple[dict[str, Any] | None, str | None]:
+    """Return the complete report and its interval rows, or the report refusal.
+
+    Parameters
+    ----------
+    inputs
+        Loaded run.
+
+    Returns
+    -------
+    tuple[dict[str, Any] | None, str | None]
+        Report and ``[cycle, interval, ticks]`` rows, or ``None`` and the refusal.
+    """
+    try:
+        built, report_rows = build_report(inputs)
+    except (OSError, ValueError) as error:
+        return None, _printed(error)
+    rows_listed = [[row["cycle"], row["interval"], row["ticks"]] for row in report_rows]
+    return {"report": built, "rows": rows_listed}, None
 
 
 def python_outcome_under(
@@ -151,13 +210,6 @@ def python_outcome_under(
     if root is not None:
         root_path.write_bytes(root)
     outcome = directory / "python-outcome.json"
-    script = (
-        "import json, sys\n"
-        "from pathlib import Path\n"
-        "from control_rust_support import python_outcome\n"
-        "root = Path(sys.argv[2]).read_bytes() if sys.argv[3] == 'yes' else None\n"
-        "Path(sys.argv[4]).write_text(json.dumps(python_outcome(Path(sys.argv[1]), root)))\n"
-    )
     tests = Path(__file__).resolve().parent
     environment = {**os.environ, "PYTHONPATH": os.pathsep.join([str(tests), str(tests.parent)])}
     result = subprocess.run(
@@ -165,7 +217,7 @@ def python_outcome_under(
             *wrapper,
             sys.executable,
             "-c",
-            script,
+            _OUTCOME_SCRIPT,
             str(manifest),
             str(root_path),
             "yes" if root is not None else "no",
@@ -204,20 +256,7 @@ def rust_outcome(
     dict[str, Any]
         Inputs and events, or ``{"refusal": text}``.
     """
-    directory.mkdir(exist_ok=True)
-    spec: dict[str, Any] = {
-        "manifest": str(manifest),
-        "outcome": str(directory / "outcome.json"),
-        "root": None,
-    }
-    if root is not None:
-        (directory / "root.json").write_bytes(root)
-        spec["root"] = str(directory / "root.json")
-    (directory / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
-    environment = {**os.environ, "CONTROL_RUN_SPEC": str(directory / "spec.json")}
-    profiles = os.environ.get("WITNESS_RUST_PROFILE_DIRECTORY")
-    if profiles:
-        environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
+    environment = _spec_environment(manifest, directory, root)
     result = subprocess.run(
         [
             *wrapper,
@@ -237,6 +276,42 @@ def rust_outcome(
     assert result.returncode == 0, result.stdout + result.stderr
     outcome: dict[str, Any] = json.loads((directory / "outcome.json").read_bytes())
     return outcome
+
+
+def _spec_environment(manifest: Path, directory: Path, root: bytes | None) -> dict[str, str]:
+    """Write the consumer's run description and return the environment that names it.
+
+    Parameters
+    ----------
+    manifest
+        Run manifest path.
+    directory
+        Owned directory for the description, the root bytes and the outcome, created
+        when absent.
+    root
+        Manifest bytes already read for the path, or ``None``.
+
+    Returns
+    -------
+    dict[str, str]
+        This process's environment with the description and, when a profile
+        directory is selected, the LLVM profile file pattern.
+    """
+    directory.mkdir(exist_ok=True)
+    spec: dict[str, Any] = {
+        "manifest": str(manifest),
+        "outcome": str(directory / "outcome.json"),
+        "root": None,
+    }
+    if root is not None:
+        (directory / "root.json").write_bytes(root)
+        spec["root"] = str(directory / "root.json")
+    (directory / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    environment = {**os.environ, "CONTROL_RUN_SPEC": str(directory / "spec.json")}
+    profiles = os.environ.get("WITNESS_RUST_PROFILE_DIRECTORY")
+    if profiles:
+        environment["LLVM_PROFILE_FILE"] = str(Path(profiles) / "registry-%p-%m.profraw")
+    return environment
 
 
 def canonical(outcome: dict[str, Any]) -> str:
@@ -286,6 +361,36 @@ def python_command(
     dict[str, Any]
         ``status``, ``stdout`` and ``stderr``.
     """
+    module = (
+        "loop_timing_witness.analyze_campaign" if campaign else "loop_timing_witness.analyze_run"
+    )
+    result = subprocess.run(
+        [*wrapper, sys.executable, "-m", module, *arguments],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=_command_environment(measured=measured),
+        timeout=scaled(HANG_GUARD_SECONDS),
+        check=False,
+    )
+    return {"status": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+
+
+def _command_environment(*, measured: bool) -> dict[str, str]:
+    """Return the environment of a Python command run from the repository source tree.
+
+    Parameters
+    ----------
+    measured
+        Whether coverage measures the command; an unmeasured command drops the
+        coverage variables.
+
+    Returns
+    -------
+    dict[str, str]
+        Environment with ``PYTHONPATH`` on the repository ``src``.
+    """
     tests = Path(__file__).resolve().parent
     environment = {
         key: value
@@ -293,25 +398,7 @@ def python_command(
         if measured or not key.startswith(("COVERAGE_", "COV_CORE"))
     }
     environment["PYTHONPATH"] = str(tests.parent / "src")
-    result = subprocess.run(
-        [
-            *wrapper,
-            sys.executable,
-            "-m",
-            "loop_timing_witness.analyze_campaign"
-            if campaign
-            else "loop_timing_witness.analyze_run",
-            *arguments,
-        ],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-        env=environment,
-        timeout=scaled(HANG_GUARD_SECONDS),
-        check=False,
-    )
-    return {"status": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+    return environment
 
 
 def rust_command(

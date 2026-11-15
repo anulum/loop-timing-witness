@@ -60,28 +60,7 @@ def test_launch_refusal(native_run: Path, tmp_path: Path, violation: str) -> Non
     program = tmp_path / "nonexecutable"
     program.write_bytes(b"owner bytes")
     journal, workspace = tmp_path / "load.json", tmp_path / "worker"
-    command = [str(native_run.resolve())]
-    timeout = 120.0
-    if violation == "empty":
-        command = []
-    elif violation in {"short_timeout", "long_timeout"}:
-        timeout = 0 if violation == "short_timeout" else 3601
-    elif violation in {"relative", "missing", "directory", "permission"}:
-        command = [
-            {
-                "relative": "relative-executable",
-                "missing": str(tmp_path / "missing"),
-                "directory": str(tmp_path),
-                "permission": str(program),
-            }[violation]
-        ]
-    elif violation == "journal":
-        journal.write_bytes(b"preserve journal")
-    elif violation == "symlink":
-        journal.symlink_to(tmp_path / "missing")
-    else:
-        workspace.mkdir()
-        (workspace / "owner.txt").write_bytes(b"preserve workspace")
+    command, timeout = _violate(violation, native_run, tmp_path)
     with (
         (tmp_path / "stdout.log").open("xb") as stream,
         pytest.raises(
@@ -105,6 +84,49 @@ def test_launch_refusal(native_run: Path, tmp_path: Path, violation: str) -> Non
     assert program.read_bytes() == b"owner bytes"
 
 
+def _violate(violation: str, native_run: Path, directory: Path) -> tuple[list[str], float]:
+    """Return the command and lifetime of one violation, creating its conflicting paths.
+
+    Parameters
+    ----------
+    violation
+        Public command, lifetime or filesystem requirement to violate.
+    native_run
+        Actual production native executable.
+    directory
+        Exclusive allocation holding ``nonexecutable``, ``load.json`` and ``worker``.
+
+    Returns
+    -------
+    tuple[list[str], float]
+        Native command and lifetime in seconds.
+    """
+    journal, workspace = directory / "load.json", directory / "worker"
+    command = [str(native_run.resolve())]
+    timeout = 120.0
+    if violation == "empty":
+        command = []
+    elif violation in {"short_timeout", "long_timeout"}:
+        timeout = 0 if violation == "short_timeout" else 3601
+    elif violation in {"relative", "missing", "directory", "permission"}:
+        command = [
+            {
+                "relative": "relative-executable",
+                "missing": str(directory / "missing"),
+                "directory": str(directory),
+                "permission": str(directory / "nonexecutable"),
+            }[violation]
+        ]
+    elif violation == "journal":
+        journal.write_bytes(b"preserve journal")
+    elif violation == "symlink":
+        journal.symlink_to(directory / "missing")
+    else:
+        workspace.mkdir()
+        (workspace / "owner.txt").write_bytes(b"preserve workspace")
+    return command, timeout
+
+
 @pytest.mark.parametrize("failure", ["worker_source", "native_format", "journal_parent"])
 def test_actual_launch_io_failure(native_run: Path, tmp_path: Path, failure: str) -> None:
     """Retain failures from real worker exec, native exec or exclusive journal creation.
@@ -118,24 +140,12 @@ def test_actual_launch_io_failure(native_run: Path, tmp_path: Path, failure: str
     failure
         Actual absent worker source, invalid executable format or journal parent.
     """
-    config = tmp_path / "run.conf"
-    config.write_text(configuration("pid", "none"), encoding="utf-8")
-    command = [
-        str(native_run.resolve()),
-        str(config),
-        str(tmp_path / "events.bin"),
-        str(tmp_path / "raw.csv"),
-    ]
+    command = _launch_command(native_run, tmp_path, failure)
     workspace = tmp_path / "worker"
     journal = (
         tmp_path / "missing/load.json" if failure == "journal_parent" else tmp_path / "load.json"
     )
     source = tmp_path / "missing.py" if failure == "worker_source" else None
-    if failure == "native_format":
-        program = tmp_path / "invalid_elf"
-        program.write_bytes(b"invalid executable format")
-        program.chmod(0o700)
-        command[0] = str(program)
     expected = ValueError if failure == "worker_source" else OSError
     with (
         (tmp_path / "stdout.log").open("xb") as stream,
@@ -157,6 +167,39 @@ def test_actual_launch_io_failure(native_run: Path, tmp_path: Path, failure: str
             os.kill(receipt["worker_pid"], 0)
         assert (tmp_path / "events.bin").stat().st_size > 0
         assert (tmp_path / "stdout.log").read_text().startswith("simulation_only ")
+
+
+def _launch_command(native_run: Path, directory: Path, failure: str) -> list[str]:
+    """Return the native run command, with an invalid executable for ``native_format``.
+
+    Parameters
+    ----------
+    native_run
+        Production controller and actual plant/AXI executable.
+    directory
+        Exclusive allocation for the configuration, outputs and invalid executable.
+    failure
+        Launch failure of the case.
+
+    Returns
+    -------
+    list[str]
+        Native command.
+    """
+    config = directory / "run.conf"
+    config.write_text(configuration("pid", "none"), encoding="utf-8")
+    command = [
+        str(native_run.resolve()),
+        str(config),
+        str(directory / "events.bin"),
+        str(directory / "raw.csv"),
+    ]
+    if failure == "native_format":
+        program = directory / "invalid_elf"
+        program.write_bytes(b"invalid executable format")
+        program.chmod(0o700)
+        command[0] = str(program)
+    return command
 
 
 def test_actual_worker_receipt_failure(native_run: Path, tmp_path: Path) -> None:

@@ -112,6 +112,46 @@ def _number(cells: tuple[int, ...]) -> int:
     return value
 
 
+def _mapped_address(
+    ranges: tuple[int, ...], region: Region, child_cells: int, parent_cells: int, width: int
+) -> int:
+    """Return the parent-bus address of a region through the one range that holds it.
+
+    Parameters
+    ----------
+    ranges
+        A bus's ``ranges`` cells: child address, parent address and size per entry.
+    region
+        Register extent in the bus's child address space.
+    child_cells, parent_cells
+        Address cells of the bus and of its parent.
+    width
+        Cells per entry: both address widths and the size cells.
+
+    Returns
+    -------
+    int
+        The region's address on the parent bus.
+
+    Raises
+    ------
+    ValueError
+        If no range, or more than one, holds the complete region.
+    """
+    candidates = []
+    for offset in range(0, len(ranges), width):
+        entry = ranges[offset : offset + width]
+        child = _number(entry[:child_cells])
+        host = _number(entry[child_cells : child_cells + parent_cells])
+        size = _number(entry[child_cells + parent_cells :])
+        if child <= region.address and region.address + region.size <= child + size:
+            candidates.append(host + region.address - child)
+    if len(candidates) != 1:
+        message = "device-tree register extent lacks a unique complete bus mapping"
+        raise ValueError(message)
+    return candidates[0]
+
+
 def _translate(tree: DeviceTree, bus_path: str, region: Region) -> Region:
     """Translate one extent through every declared ancestor mapping.
 
@@ -150,18 +190,8 @@ def _translate(tree: DeviceTree, bus_path: str, region: Region) -> Region:
             message = "device-tree bus ranges have invalid cell geometry"
             raise ValueError(message)
         if ranges:
-            candidates = []
-            for offset in range(0, len(ranges), width):
-                entry = ranges[offset : offset + width]
-                child = _number(entry[:child_cells])
-                host = _number(entry[child_cells : child_cells + parent_cells])
-                size = _number(entry[child_cells + parent_cells :])
-                if child <= region.address and region.address + region.size <= child + size:
-                    candidates.append(host + region.address - child)
-            if len(candidates) != 1:
-                message = "device-tree register extent lacks a unique complete bus mapping"
-                raise ValueError(message)
-            region = Region(candidates[0], region.size)
+            address = _mapped_address(ranges, region, child_cells, parent_cells, width)
+            region = Region(address, region.size)
         if region.address + region.size > 1 << (WORD_BYTES * 8 * parent_cells):
             message = "translated device-tree register exceeds the parent address space"
             raise ValueError(message)

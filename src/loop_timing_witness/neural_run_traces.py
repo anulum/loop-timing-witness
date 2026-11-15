@@ -244,6 +244,40 @@ def analyze_original_traces(run: BoundNeuralRun) -> NeuralTraceAnalysis:
         for index, pair in enumerate(actual)
         if pair != expected[index]
     ]
+    source = _source_findings(rows, actual, expected)
+    spikes = [row for row in rows["raw_spike_trace"] if row[2] == 1]
+    joins = _join_findings(run, rows)
+    return NeuralTraceAnalysis(
+        len(spikes),
+        len(rows["service_trace"]),
+        tuple(numeric),
+        tuple(source),
+        _service_findings(rows["service_trace"], spikes),
+        joins,
+    )
+
+
+def _source_findings(
+    rows: dict[str, list[tuple[int, ...]]],
+    actual: list[tuple[int, ...]],
+    expected: list[tuple[int, ...]],
+) -> list[str]:
+    """Compare the projection, input fields and raw-spike phase with their sources.
+
+    Parameters
+    ----------
+    rows
+        Decoded original traces and fixtures.
+    actual
+        Numerical pairs of the identified trace.
+    expected
+        Original reference projection.
+
+    Returns
+    -------
+    list[str]
+        Projection, stimulus and raw-spike findings, in that order.
+    """
     source = []
     if actual != rows["numerical_projection"]:
         source.append("Declared numerical projection differs from the full identified trace.")
@@ -254,7 +288,24 @@ def analyze_original_traces(run: BoundNeuralRun) -> NeuralTraceAnalysis:
     for index, row in enumerate(rows["raw_spike_trace"]):
         if row[2] != expected[index][0] or row[3] != inputs[index][6] + 1:
             source.append(f"Raw step {index}: original spike or source phase differs.")
-    spikes = [row for row in rows["raw_spike_trace"] if row[2] == 1]
+    return source
+
+
+def _join_findings(run: BoundNeuralRun, rows: dict[str, list[tuple[int, ...]]]) -> tuple[str, ...]:
+    """Join each source trace row to its capture witness by identity.
+
+    Parameters
+    ----------
+    run
+        Full bound run with its decoded capture channels.
+    rows
+        Decoded original traces.
+
+    Returns
+    -------
+    tuple[str, ...]
+        One finding for each row whose witness tick is missing or different.
+    """
     joins: list[str] = []
     for channel, name in zip(
         run.capture.channels, ("input_trace", "numerical_trace", "service_trace"), strict=True
@@ -265,11 +316,4 @@ def analyze_original_traces(run: BoundNeuralRun) -> NeuralTraceAnalysis:
             for row in rows[name]
             if observed.get(row[1]) != row[-1]
         )
-    return NeuralTraceAnalysis(
-        len(spikes),
-        len(rows["service_trace"]),
-        tuple(numeric),
-        tuple(source),
-        _service_findings(rows["service_trace"], spikes),
-        tuple(joins),
-    )
+    return tuple(joins)

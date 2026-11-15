@@ -208,20 +208,10 @@ fn plic_value(tree: &DeviceTree, selection: &PlicSelection) -> Value {
 
 /// Every reader outcome of one tree under the corpus's flat keys.
 fn readers(tree: &DeviceTree) -> Map<String, Value> {
-    let regions = |path: &str| {
-        attempt(register_regions(tree, path), |regions| {
-            Value::Array(
-                regions
-                    .iter()
-                    .map(|region| json!([number(region.address), number(region.size)]))
-                    .collect(),
-            )
-        })
-    };
     let mut outcomes = Map::new();
     for node in tree.nodes() {
         let path = node.path();
-        outcomes.insert(format!("regions {path}"), regions(path));
+        outcomes.insert(format!("regions {path}"), regions(tree, path));
         if node.property("compatible").is_some() {
             let strings = attempt(string_list(node, "compatible"), Value::from);
             outcomes.insert(format!("compatible {path}"), strings);
@@ -236,7 +226,7 @@ fn readers(tree: &DeviceTree) -> Map<String, Value> {
             );
         }
     }
-    outcomes.insert(format!("regions {ABSENT_NODE}"), regions(ABSENT_NODE));
+    outcomes.insert(format!("regions {ABSENT_NODE}"), regions(tree, ABSENT_NODE));
     let handles = attempt(phandle_nodes(tree), |handles| {
         handles
             .iter()
@@ -245,6 +235,25 @@ fn readers(tree: &DeviceTree) -> Map<String, Value> {
             .into()
     });
     outcomes.insert("phandles".to_owned(), handles);
+    outcomes.extend(plic_outcomes(tree));
+    outcomes
+}
+
+/// The register region outcome of one node path.
+fn regions(tree: &DeviceTree, path: &str) -> Value {
+    attempt(register_regions(tree, path), |regions| {
+        Value::Array(
+            regions
+                .iter()
+                .map(|region| json!([number(region.address), number(region.size)]))
+                .collect(),
+        )
+    })
+}
+
+/// Every PLIC selection outcome of the tree's PLIC nodes, then of an absent PLIC.
+fn plic_outcomes(tree: &DeviceTree) -> Map<String, Value> {
+    let mut outcomes = Map::new();
     let paths = tree
         .nodes()
         .iter()

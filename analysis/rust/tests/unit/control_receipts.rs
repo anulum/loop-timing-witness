@@ -148,6 +148,31 @@ fn completion_checks_every_declared_fact() {
         Ok(native["result"].clone())
     );
     let configuration = "native metadata configuration does not match the run declaration";
+    for (changed, run) in &configuration_changes(&native, &manifest) {
+        assert_eq!(
+            completion(changed, run, &control).err().as_deref(),
+            Some(configuration)
+        );
+    }
+    assert_fault_schedules(&native, &manifest, &control);
+    assert_counter_refusals(&native, &manifest, &control);
+    let mut overflowed = native.clone();
+    overflowed["result"]["overflow"] = json!(2);
+    overflowed["result"]["misses"] = json!(0);
+    let mut lossy = manifest.clone();
+    lossy["instrument"]["fifo_overflow_count"] = json!(2);
+    assert!(completion(&overflowed, &lossy, &control).is_ok());
+    assert_eq!(
+        completion(&json!({}), &manifest, &control).err().as_deref(),
+        Some("native metadata (root): does not satisfy the native run schema")
+    );
+}
+
+/// Native receipts and run declarations each contradicting the configuration once.
+fn configuration_changes(
+    native: &Value,
+    manifest: &Map<String, Value>,
+) -> Vec<(Value, Map<String, Value>)> {
     let mut changes: Vec<(Value, Map<String, Value>)> = Vec::new();
     let mut amp = native.clone();
     amp["source_kind"] = json!("amp_uio_unqualified");
@@ -171,24 +196,27 @@ fn completion_checks_every_declared_fact() {
     let mut run = manifest.clone();
     run["source"]["kind"] = json!("board");
     changes.push((native.clone(), run));
-    for (changed, run) in &changes {
-        assert_eq!(
-            completion(changed, run, &control).err().as_deref(),
-            Some(configuration)
-        );
-    }
+    changes
+}
+
+/// Require delay and drop faults to match their scheduled declarations and nothing else.
+fn assert_fault_schedules(native: &Value, manifest: &Map<String, Value>, control: &Value) {
     let mut fault = native.clone();
     fault["fault"] = json!({"kind": "delay", "cycle": 1, "duration_periods": 2});
     let mut scheduled = manifest.clone();
     scheduled["fault_schedule"] = json!([{"cycle": 1, "kind": "delay", "delay_periods": 2}]);
-    assert!(completion(&fault, &scheduled, &control).is_ok());
+    assert!(completion(&fault, &scheduled, control).is_ok());
     fault["fault"] = json!({"kind": "drop", "cycle": 1, "duration_periods": 2});
     scheduled["fault_schedule"] = json!([{"cycle": 1, "kind": "drop", "delay_periods": 0}]);
-    assert!(completion(&fault, &scheduled, &control).is_ok());
+    assert!(completion(&fault, &scheduled, control).is_ok());
     assert_eq!(
-        completion(&fault, &manifest, &control).err().as_deref(),
+        completion(&fault, manifest, control).err().as_deref(),
         Some("native metadata fault schedule does not match the run declaration")
     );
+}
+
+/// Require each changed completion counter and deadline count to be refused.
+fn assert_counter_refusals(native: &Value, manifest: &Map<String, Value>, control: &Value) {
     let counters = "native completion counters do not match captured events";
     for (pointer, value) in [
         ("/result/records", json!(11)),
@@ -200,25 +228,15 @@ fn completion_checks_every_declared_fact() {
         let mut changed = native.clone();
         *changed.pointer_mut(pointer).expect("pointer") = value;
         assert_eq!(
-            completion(&changed, &manifest, &control).err().as_deref(),
+            completion(&changed, manifest, control).err().as_deref(),
             Some(counters)
         );
     }
     let mut cycles = control.clone();
     cycles["observed_deadlines"] = json!(2);
     assert_eq!(
-        completion(&native, &manifest, &cycles).err().as_deref(),
+        completion(native, manifest, &cycles).err().as_deref(),
         Some(counters)
-    );
-    let mut overflowed = native.clone();
-    overflowed["result"]["overflow"] = json!(2);
-    overflowed["result"]["misses"] = json!(0);
-    let mut lossy = manifest.clone();
-    lossy["instrument"]["fifo_overflow_count"] = json!(2);
-    assert!(completion(&overflowed, &lossy, &control).is_ok());
-    assert_eq!(
-        completion(&json!({}), &manifest, &control).err().as_deref(),
-        Some("native metadata (root): does not satisfy the native run schema")
     );
 }
 

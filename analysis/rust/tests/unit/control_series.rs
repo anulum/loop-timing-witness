@@ -69,31 +69,7 @@ fn every_series_case_has_the_python_result() {
     for case in cases {
         let bytes = content(case);
         let events = events(case, contracts);
-        let warmup = case["warmup_cycles"].as_u64().expect("warm-up");
-        let outcome: Result<Map<String, Value>, String> = match case["kind"].as_str() {
-            Some("tracking") => tracking_error(
-                bytes.as_deref(),
-                case["cycle_count"].as_u64().expect("cycles"),
-                warmup,
-                "rad",
-            ),
-            Some("observed") => observed_tracking_error(
-                &bytes.expect("observed content"),
-                &events,
-                &names,
-                case["cycle_count"].as_u64().expect("cycles"),
-                warmup,
-                "rad",
-            ),
-            _ => energy_per_cycle(
-                bytes.as_deref(),
-                &events,
-                &names,
-                case["profile"].as_str().expect("profile"),
-                warmup,
-                &rails,
-            ),
-        };
+        let outcome = series_outcome(case, (&events, &names), bytes.as_deref(), &rails);
         match case.get("refusal") {
             Some(refusal) => assert_eq!(outcome.err().as_deref(), refusal.as_str(), "{case}"),
             None => assert_eq!(
@@ -102,6 +78,40 @@ fn every_series_case_has_the_python_result() {
                 "{case}"
             ),
         }
+    }
+}
+
+/// The tracking, observed tracking or energy outcome one corpus case selects.
+fn series_outcome(
+    case: &Value,
+    (events, names): (&[Event], &Names),
+    bytes: Option<&[u8]>,
+    rails: &[&str],
+) -> Result<Map<String, Value>, String> {
+    let warmup = case["warmup_cycles"].as_u64().expect("warm-up");
+    match case["kind"].as_str() {
+        Some("tracking") => tracking_error(
+            bytes,
+            case["cycle_count"].as_u64().expect("cycles"),
+            warmup,
+            "rad",
+        ),
+        Some("observed") => observed_tracking_error(
+            bytes.expect("observed content"),
+            events,
+            names,
+            case["cycle_count"].as_u64().expect("cycles"),
+            warmup,
+            "rad",
+        ),
+        _ => energy_per_cycle(
+            bytes,
+            events,
+            names,
+            case["profile"].as_str().expect("profile"),
+            warmup,
+            rails,
+        ),
     }
 }
 

@@ -54,90 +54,15 @@ struct SelectedInstallation {
 
 impl SelectedInstallation {
     fn create() -> Self {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let instant = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("current clock")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "witness-installation-{}-{instant}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let root = owned_root();
         let workers = root.join("worker-package");
         std::fs::create_dir(&root).expect("exclusive installation allocation");
         std::fs::create_dir_all(workers.join("loop_timing_witness"))
             .expect("owned actual worker package");
-        let python = Command::new("python3")
-            .args(["-I", "-S", "-c", "import sys; print(sys.executable)"])
-            .output()
-            .expect("actual installed Python identity");
-        assert!(python.status.success(), "{python:?}");
-        assert!(python.stderr.is_empty());
-        let interpreter = PathBuf::from(
-            String::from_utf8(python.stdout)
-                .expect("actual interpreter path")
-                .trim(),
-        )
-        .canonicalize()
-        .expect("resolved actual Python executable");
-        let search = std::env::var_os("PATH").expect("actual executable search path");
-        let tracer = std::env::split_paths(&search)
-            .filter_map(|directory| directory.join("strace").canonicalize().ok())
-            .find(|path| path.is_file())
-            .expect("actual installed process tracer");
-        let tools = vec![interpreter, tracer];
-        let files: Vec<_> = ["interpreter/python", "tracer/strace"]
-            .into_iter()
-            .zip(&tools)
-            .map(|(name, path)| {
-                let raw = std::fs::read(path).expect("complete actual installed tool bytes");
-                json!({
-                    "path": name,
-                    "sha256": sha256_hex(&raw),
-                    "byte_length": raw.len(),
-                })
-            })
-            .collect();
-        let worker_sources: Vec<_> = WORKERS
-            .iter()
-            .map(|(name, raw)| {
-                let relative = format!("loop_timing_witness/{name}");
-                std::fs::write(workers.join(&relative), raw)
-                    .expect("unchanged actual packaged worker bytes");
-                json!({
-                    "path": relative,
-                    "sha256": sha256_hex(raw),
-                    "byte_length": raw.len(),
-                })
-            })
-            .collect();
-        let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease")
-            .expect("actual running kernel release");
-        let descriptor = json!({
-            "schema_id": "loop-timing-witness.sc-checker-runtime.v1",
-            "interpreter": files[0],
-            "tracer": files[1],
-            "import_namespaces": ["imports/0"],
-            "worker_sources": worker_sources,
-            "files": files,
-            "platform_baseline": {
-                "id": "public-installation-constructor-metadata-control",
-                "system": "Linux",
-                "machine": "x86_64",
-                "kernel_release": kernel.trim_end(),
-            },
-            "execution_contract": {
-                "profile": "linux-x86_64-seccomp-no-network.v1",
-                "address_space_bytes": 805306368,
-                "cpu_seconds": 30,
-                "wall_seconds": 45,
-                "file_bytes": 1048576,
-                "python_site_initialisation": false,
-                "bytecode_writes": false,
-                "bytecode_reads": "owned-empty-prefix",
-            },
-        });
+        let tools = installed_tools();
+        let files = tool_references(&tools);
+        let worker_sources = worker_references(&workers);
+        let descriptor = descriptor(&files, worker_sources);
         Self {
             root,
             workers,
@@ -180,6 +105,106 @@ impl SelectedInstallation {
             self.workers.clone(),
         )
     }
+}
+
+/// A new unique installation root below the temporary directory.
+fn owned_root() -> PathBuf {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let instant = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("current clock")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "witness-installation-{}-{instant}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+/// The resolved installed Python interpreter and process tracer.
+fn installed_tools() -> Vec<PathBuf> {
+    let python = Command::new("python3")
+        .args(["-I", "-S", "-c", "import sys; print(sys.executable)"])
+        .output()
+        .expect("actual installed Python identity");
+    assert!(python.status.success(), "{python:?}");
+    assert!(python.stderr.is_empty());
+    let interpreter = PathBuf::from(
+        String::from_utf8(python.stdout)
+            .expect("actual interpreter path")
+            .trim(),
+    )
+    .canonicalize()
+    .expect("resolved actual Python executable");
+    let search = std::env::var_os("PATH").expect("actual executable search path");
+    let tracer = std::env::split_paths(&search)
+        .filter_map(|directory| directory.join("strace").canonicalize().ok())
+        .find(|path| path.is_file())
+        .expect("actual installed process tracer");
+    vec![interpreter, tracer]
+}
+
+/// The descriptor references of the installed interpreter and tracer.
+fn tool_references(tools: &[PathBuf]) -> Vec<Value> {
+    ["interpreter/python", "tracer/strace"]
+        .into_iter()
+        .zip(tools)
+        .map(|(name, path)| {
+            let raw = std::fs::read(path).expect("complete actual installed tool bytes");
+            json!({
+                "path": name,
+                "sha256": sha256_hex(&raw),
+                "byte_length": raw.len(),
+            })
+        })
+        .collect()
+}
+
+/// Write the packaged worker sources and return their descriptor references.
+fn worker_references(workers: &Path) -> Vec<Value> {
+    WORKERS
+        .iter()
+        .map(|(name, raw)| {
+            let relative = format!("loop_timing_witness/{name}");
+            std::fs::write(workers.join(&relative), raw)
+                .expect("unchanged actual packaged worker bytes");
+            json!({
+                "path": relative,
+                "sha256": sha256_hex(raw),
+                "byte_length": raw.len(),
+            })
+        })
+        .collect()
+}
+
+/// The complete runtime descriptor of the running host.
+fn descriptor(files: &[Value], worker_sources: Vec<Value>) -> Value {
+    let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease")
+        .expect("actual running kernel release");
+    json!({
+        "schema_id": "loop-timing-witness.sc-checker-runtime.v1",
+        "interpreter": files[0],
+        "tracer": files[1],
+        "import_namespaces": ["imports/0"],
+        "worker_sources": worker_sources,
+        "files": files,
+        "platform_baseline": {
+            "id": "public-installation-constructor-metadata-control",
+            "system": "Linux",
+            "machine": "x86_64",
+            "kernel_release": kernel.trim_end(),
+        },
+        "execution_contract": {
+            "profile": "linux-x86_64-seccomp-no-network.v1",
+            "address_space_bytes": 805306368,
+            "cpu_seconds": 30,
+            "wall_seconds": 45,
+            "file_bytes": 1048576,
+            "python_site_initialisation": false,
+            "bytecode_writes": false,
+            "bytecode_reads": "owned-empty-prefix",
+        },
+    })
 }
 
 /// Bind the descriptor's tool references to the actual tool paths.
@@ -306,50 +331,8 @@ fn descriptor_inventory_platform_and_worker_population_are_closed() {
     selected
         .construct(&selected.descriptor)
         .expect("intact metadata");
-    let mut changes = Vec::new();
-    for (pointer, replacement) in [
-        ("/schema_id", json!("unsupported-runtime")),
-        ("/platform_baseline/id", json!("")),
-        ("/platform_baseline/system", json!("unsupported-system")),
-        ("/platform_baseline/machine", json!("unsupported-machine")),
-        (
-            "/platform_baseline/kernel_release",
-            json!("unsupported-kernel"),
-        ),
-        ("/import_namespaces", json!(["imports/1"])),
-        (
-            "/worker_sources/0/path",
-            json!("loop_timing_witness/unknown.py"),
-        ),
-        ("/worker_sources/0/sha256", json!("0".repeat(64))),
-        ("/files/0/sha256", json!("0".repeat(64))),
-    ] {
-        let mut altered = selected.descriptor.clone();
-        *altered
-            .pointer_mut(pointer)
-            .expect("original declared field") = replacement;
-        let expected = if pointer == "/worker_sources/0/sha256" {
-            "Selected checker runtime file differs from its reviewed binding."
-        } else {
-            INVENTORY
-        };
-        changes.push((altered, expected));
-    }
-    for field in ["files", "worker_sources"] {
-        let mut missing = selected.descriptor.clone();
-        missing[field]
-            .as_array_mut()
-            .expect("original inventory")
-            .pop();
-        changes.push((missing, INVENTORY));
-        let mut duplicate = selected.descriptor.clone();
-        let first = duplicate[field][0].clone();
-        duplicate[field]
-            .as_array_mut()
-            .expect("original inventory")
-            .push(first);
-        changes.push((duplicate, INVENTORY));
-    }
+    let mut changes = pointer_changes(&selected.descriptor);
+    changes.extend(population_changes(&selected.descriptor));
     for (altered, expected) in changes {
         assert_eq!(
             selected.construct(&altered).err().as_deref(),
@@ -456,49 +439,8 @@ fn executable_membership_and_worker_runtime_aliases_are_distinct_refusals() {
         );
     }
     for alias in ["name", "path", "both"] {
-        let mut descriptor = selected.descriptor.clone();
-        let mut reference = descriptor["worker_sources"][1].clone();
-        if alias == "path" {
-            reference["path"] = json!("runtime/worker-source");
-        }
-        let actual_worker = selected
-            .workers
-            .join("loop_timing_witness/neural_checker_worker.py");
-        let path = if alias == "name" {
-            let copy = selected.root.join("runtime-worker-copy.py");
-            std::fs::write(&copy, WORKERS[1].1).expect("exact owned distinct worker copy");
-            copy
-        } else {
-            actual_worker
-        };
-        let mut files = selected.files();
-        files.push(InstalledFile {
-            name: reference["path"]
-                .as_str()
-                .expect("alias control role")
-                .into(),
-            path,
-            sha256: reference["sha256"]
-                .as_str()
-                .expect("actual worker hash")
-                .into(),
-            byte_length: reference["byte_length"]
-                .as_u64()
-                .expect("actual worker length"),
-        });
-        descriptor["files"]
-            .as_array_mut()
-            .expect("tool inventory")
-            .push(reference);
         assert_eq!(
-            Installation::from_selected_contract(
-                serde_json::to_vec(&descriptor).expect("complete alias declaration"),
-                files,
-                vec![selected.workers.clone()],
-                selected.workers.clone(),
-            )
-            .err()
-            .as_deref(),
+            alias_installation(&selected, alias).err().as_deref(),
             Some("Selected checker worker/runtime roles contain an alias.")
         );
     }
@@ -577,53 +519,7 @@ fn embedded_workers_are_verified_before_an_owned_copy_is_written() {
         .embed(&selected.descriptor, &borrowed(&workers))
         .expect("exact embedded worker bodies");
     assert_eq!(installation.verify(), Ok(()));
-    let mut unknown = borrowed(&workers);
-    unknown[0].0 = "loop_timing_witness/unknown.py";
-    let mut changed = borrowed(&workers);
-    changed[1].1 = b"changed";
-    let mut same_length = borrowed(&workers);
-    let mut altered = WORKERS[2].1.to_vec();
-    altered[0] ^= 1;
-    same_length[2].1 = altered.leak();
-    let mut outside = selected.descriptor.clone();
-    outside["worker_sources"][0]["path"] = json!("/outside/__init__.py");
-    let mut escaping = borrowed(&workers);
-    escaping[0].0 = "/outside/__init__.py";
-    let mut kernel = selected.descriptor.clone();
-    kernel["platform_baseline"]["kernel_release"] = json!("unsupported-kernel");
-    for (descriptor, workers, message) in [
-        (
-            json!({}),
-            borrowed(&workers),
-            "Invalid original selected embedded-worker descriptor.",
-        ),
-        (
-            selected.descriptor.clone(),
-            borrowed(&workers[..2]),
-            "Embedded checker worker source population differs.",
-        ),
-        (
-            selected.descriptor.clone(),
-            unknown,
-            "Embedded checker worker role is not admitted.",
-        ),
-        (
-            outside,
-            escaping,
-            "Embedded checker worker role is not admitted.",
-        ),
-        (
-            selected.descriptor.clone(),
-            changed,
-            "Embedded checker worker body differs from its reviewed binding.",
-        ),
-        (
-            selected.descriptor.clone(),
-            same_length,
-            "Embedded checker worker body differs from its reviewed binding.",
-        ),
-        (kernel, borrowed(&workers), INVENTORY),
-    ] {
+    for (descriptor, workers, message) in embed_refusals(&selected, &workers) {
         assert_eq!(
             selected.embed(&descriptor, &workers).err().as_deref(),
             Some(message)
@@ -739,23 +635,7 @@ fn runtime_file_and_kernel_read_failures_are_named_refusals() {
         ),
     ] {
         let trace = selected.root.join(format!("{syscall}.trace"));
-        let output = Command::new("timeout")
-            .args(timeout_arguments(20))
-            .args(["strace", "-f", "-P", path])
-            .args(["-e", &format!("trace={syscall}")])
-            .args(["-e", &format!("inject={syscall}:error=EIO")])
-            .arg("-o")
-            .arg(&trace)
-            .arg(std::env::current_exe().expect("current test executable"))
-            .args([
-                "--exact",
-                "runtime_file_and_kernel_read_failures_are_named_refusals",
-                "--test-threads=1",
-            ])
-            .env(CHILD, &request)
-            .env("WITNESS_EXPECTED_REFUSAL", expected)
-            .output()
-            .expect("traced child test process");
+        let output = inject_failure(&request, (path, syscall, expected), &trace);
         assert!(
             output.status.success(),
             "{syscall}: {}",
@@ -764,4 +644,193 @@ fn runtime_file_and_kernel_read_failures_are_named_refusals() {
         let recorded = std::fs::read_to_string(&trace).expect("trace");
         assert!(recorded.contains("INJECTED"), "{recorded}");
     }
+}
+
+/// Descriptors each changing one declared field, with the refusal each must give.
+fn pointer_changes(descriptor: &Value) -> Vec<(Value, &'static str)> {
+    let mut changes = Vec::new();
+    for (pointer, replacement) in [
+        ("/schema_id", json!("unsupported-runtime")),
+        ("/platform_baseline/id", json!("")),
+        ("/platform_baseline/system", json!("unsupported-system")),
+        ("/platform_baseline/machine", json!("unsupported-machine")),
+        (
+            "/platform_baseline/kernel_release",
+            json!("unsupported-kernel"),
+        ),
+        ("/import_namespaces", json!(["imports/1"])),
+        (
+            "/worker_sources/0/path",
+            json!("loop_timing_witness/unknown.py"),
+        ),
+        ("/worker_sources/0/sha256", json!("0".repeat(64))),
+        ("/files/0/sha256", json!("0".repeat(64))),
+    ] {
+        let mut altered = descriptor.clone();
+        *altered
+            .pointer_mut(pointer)
+            .expect("original declared field") = replacement;
+        let expected = if pointer == "/worker_sources/0/sha256" {
+            "Selected checker runtime file differs from its reviewed binding."
+        } else {
+            INVENTORY
+        };
+        changes.push((altered, expected));
+    }
+    changes
+}
+
+/// Descriptors each missing or repeating one inventory entry.
+fn population_changes(descriptor: &Value) -> Vec<(Value, &'static str)> {
+    let mut changes = Vec::new();
+    for field in ["files", "worker_sources"] {
+        let mut missing = descriptor.clone();
+        missing[field]
+            .as_array_mut()
+            .expect("original inventory")
+            .pop();
+        changes.push((missing, INVENTORY));
+        let mut duplicate = descriptor.clone();
+        let first = duplicate[field][0].clone();
+        duplicate[field]
+            .as_array_mut()
+            .expect("original inventory")
+            .push(first);
+        changes.push((duplicate, INVENTORY));
+    }
+    changes
+}
+
+/// Construct an installation whose runtime files repeat a worker by name, path or both.
+fn alias_installation(
+    selected: &SelectedInstallation,
+    alias: &str,
+) -> Result<Installation, String> {
+    let mut descriptor = selected.descriptor.clone();
+    let mut reference = descriptor["worker_sources"][1].clone();
+    if alias == "path" {
+        reference["path"] = json!("runtime/worker-source");
+    }
+    let actual_worker = selected
+        .workers
+        .join("loop_timing_witness/neural_checker_worker.py");
+    let path = if alias == "name" {
+        let copy = selected.root.join("runtime-worker-copy.py");
+        std::fs::write(&copy, WORKERS[1].1).expect("exact owned distinct worker copy");
+        copy
+    } else {
+        actual_worker
+    };
+    let mut files = selected.files();
+    files.push(InstalledFile {
+        name: reference["path"]
+            .as_str()
+            .expect("alias control role")
+            .into(),
+        path,
+        sha256: reference["sha256"]
+            .as_str()
+            .expect("actual worker hash")
+            .into(),
+        byte_length: reference["byte_length"]
+            .as_u64()
+            .expect("actual worker length"),
+    });
+    descriptor["files"]
+        .as_array_mut()
+        .expect("tool inventory")
+        .push(reference);
+    Installation::from_selected_contract(
+        serde_json::to_vec(&descriptor).expect("complete alias declaration"),
+        files,
+        vec![selected.workers.clone()],
+        selected.workers.clone(),
+    )
+}
+
+/// Borrowed embedded worker names and bodies.
+type Workers<'a> = Vec<(&'a str, &'static [u8])>;
+
+/// Descriptors and worker sets each refused before an owned copy, with the refusal.
+fn embed_refusals<'a>(
+    selected: &SelectedInstallation,
+    workers: &'a [(String, &'static [u8])],
+) -> Vec<(Value, Workers<'a>, &'static str)> {
+    let mut unknown = borrowed(workers);
+    unknown[0].0 = "loop_timing_witness/unknown.py";
+    let mut changed = borrowed(workers);
+    changed[1].1 = b"changed";
+    let mut same_length = borrowed(workers);
+    same_length[2].1 = flipped(WORKERS[2].1);
+    let mut outside = selected.descriptor.clone();
+    outside["worker_sources"][0]["path"] = json!("/outside/__init__.py");
+    let mut escaping = borrowed(workers);
+    escaping[0].0 = "/outside/__init__.py";
+    let mut kernel = selected.descriptor.clone();
+    kernel["platform_baseline"]["kernel_release"] = json!("unsupported-kernel");
+    vec![
+        (
+            json!({}),
+            borrowed(workers),
+            "Invalid original selected embedded-worker descriptor.",
+        ),
+        (
+            selected.descriptor.clone(),
+            borrowed(&workers[..2]),
+            "Embedded checker worker source population differs.",
+        ),
+        (
+            selected.descriptor.clone(),
+            unknown,
+            "Embedded checker worker role is not admitted.",
+        ),
+        (
+            outside,
+            escaping,
+            "Embedded checker worker role is not admitted.",
+        ),
+        (
+            selected.descriptor.clone(),
+            changed,
+            "Embedded checker worker body differs from its reviewed binding.",
+        ),
+        (
+            selected.descriptor.clone(),
+            same_length,
+            "Embedded checker worker body differs from its reviewed binding.",
+        ),
+        (kernel, borrowed(workers), INVENTORY),
+    ]
+}
+
+/// Run this test in a traced child that fails one system call on one path with EIO.
+fn inject_failure(
+    request: &Path,
+    (path, syscall, expected): (&str, &str, &str),
+    trace: &Path,
+) -> std::process::Output {
+    Command::new("timeout")
+        .args(timeout_arguments(20))
+        .args(["strace", "-f", "-P", path])
+        .args(["-e", &format!("trace={syscall}")])
+        .args(["-e", &format!("inject={syscall}:error=EIO")])
+        .arg("-o")
+        .arg(trace)
+        .arg(std::env::current_exe().expect("current test executable"))
+        .args([
+            "--exact",
+            "runtime_file_and_kernel_read_failures_are_named_refusals",
+            "--test-threads=1",
+        ])
+        .env(CHILD, request)
+        .env("WITNESS_EXPECTED_REFUSAL", expected)
+        .output()
+        .expect("traced child test process")
+}
+
+/// A leaked copy of a body with its first byte changed, keeping its length.
+fn flipped(body: &[u8]) -> &'static [u8] {
+    let mut altered = body.to_vec();
+    altered[0] ^= 1;
+    altered.leak()
 }

@@ -73,7 +73,18 @@ fn malformed_files_and_records_are_refused_in_order() {
             .as_deref(),
         Some("event file is empty")
     );
-    for (records, refusal) in [
+    for (records, refusal) in malformed_records(&base) {
+        assert_eq!(
+            control(&records).err().as_deref(),
+            Some(refusal),
+            "{refusal}"
+        );
+    }
+}
+
+/// Record sequences each refused at its first bad record, with the refusal.
+fn malformed_records(base: &[u8]) -> Vec<(Vec<Vec<u8>>, &'static str)> {
+    vec![
         (
             vec![record(1, [0, 1, 0], 0, 1)],
             "event record 0: reserved bits must be zero",
@@ -83,7 +94,7 @@ fn malformed_files_and_records_are_refused_in_order() {
             "event record 0: reserved bits must be zero",
         ),
         (
-            vec![base.clone(), record(8, [0; 3], 0, 11)],
+            vec![base.to_vec(), record(8, [0; 3], 0, 11)],
             "event record 1: code 8 is not in CONTROL",
         ),
         (
@@ -95,7 +106,7 @@ fn malformed_files_and_records_are_refused_in_order() {
             "event record 0: cycle is outside the run",
         ),
         (
-            vec![base.clone(), record(4, [0; 3], 0, 9)],
+            vec![base.to_vec(), record(4, [0; 3], 0, 9)],
             "event record 1: order is not monotonic",
         ),
         (
@@ -103,14 +114,8 @@ fn malformed_files_and_records_are_refused_in_order() {
             "event record 1: order is not monotonic",
         ),
         (
-            vec![base.clone(), record(1, [0; 3], 0, 10)],
+            vec![base.to_vec(), record(1, [0; 3], 0, 10)],
             "event record 1: duplicate SAMPLE_READY in cycle 0",
         ),
-    ] {
-        assert_eq!(
-            control(&records).err().as_deref(),
-            Some(refusal),
-            "{refusal}"
-        );
-    }
+    ]
 }

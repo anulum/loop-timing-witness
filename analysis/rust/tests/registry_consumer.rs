@@ -35,9 +35,10 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use witness_analysis::public_runtime::{Installation, InstalledFile};
 use witness_analysis::{
-    ImageExecutor, NeuralEntry, NeuralRegistry, build_neural_run_report, campaign_command,
-    control_events_summary, control_run_report, decode_control_events, load_control_run,
-    load_control_run_bytes, load_neural_run_with_registry, neural_key, public_command,
+    ControlInputs, ImageExecutor, IntervalRow, NeuralEntry, NeuralRegistry,
+    build_neural_run_report, campaign_command, control_events_summary, control_run_report,
+    decode_control_events, load_control_run, load_control_run_bytes, load_neural_run_with_registry,
+    neural_key, public_command,
 };
 
 /// Registry description written by the Python parity helper.
@@ -185,51 +186,52 @@ fn control_run_acquisition() {
     };
     let rendered = match loaded {
         Err(refusal) => json!({ "refusal": refusal }),
-        Ok(inputs) => {
-            let files: serde_json::Map<String, Value> = inputs
-                .files()
-                .iter()
-                .map(|(name, bytes)| (name.clone(), json!(sha256_hex(bytes))))
-                .collect();
-            let events = decode_control_events(&inputs).map(|events| {
-                events
-                    .iter()
-                    .map(|event| json!([event.name, event.cycle, event.ticks]))
-                    .collect::<Vec<_>>()
-            });
-            let summary = control_events_summary(&inputs).map(|(block, rows)| {
-                let rows: Vec<Value> = rows
-                    .iter()
-                    .map(|row| json!([row.cycle, row.interval, row.ticks]))
-                    .collect();
-                json!({ "block": block, "rows": rows })
-            });
-            let report = control_run_report(&inputs).map(|(report, rows)| {
-                let rows: Vec<Value> = rows
-                    .iter()
-                    .map(|row| json!([row.cycle, row.interval, row.ticks]))
-                    .collect();
-                json!({ "report": report, "rows": rows })
-            });
-            json!({
-                "manifest": inputs.manifest(),
-                "domain": inputs.domain(),
-                "files": files,
-                "directory": inputs.directory(),
-                "events": events.as_ref().ok(),
-                "events_refusal": events.err(),
-                "summary": summary.as_ref().ok(),
-                "summary_refusal": summary.err(),
-                "report": report.as_ref().ok(),
-                "report_refusal": report.err(),
-            })
-        }
+        Ok(inputs) => rendered(&inputs),
     };
     std::fs::write(
         spec.outcome,
         serde_json::to_vec(&rendered).expect("outcome JSON"),
     )
     .expect("outcome file");
+}
+
+/// Every file digest, the events, the events block and the report of loaded inputs,
+/// each refusal recorded in its place.
+fn rendered(inputs: &ControlInputs) -> Value {
+    let files: serde_json::Map<String, Value> = inputs
+        .files()
+        .iter()
+        .map(|(name, bytes)| (name.clone(), json!(sha256_hex(bytes))))
+        .collect();
+    let events = decode_control_events(inputs).map(|events| {
+        events
+            .iter()
+            .map(|event| json!([event.name, event.cycle, event.ticks]))
+            .collect::<Vec<_>>()
+    });
+    let summary = control_events_summary(inputs)
+        .map(|(block, rows)| json!({ "block": block, "rows": interval_rows(&rows) }));
+    let report = control_run_report(inputs)
+        .map(|(report, rows)| json!({ "report": report, "rows": interval_rows(&rows) }));
+    json!({
+        "manifest": inputs.manifest(),
+        "domain": inputs.domain(),
+        "files": files,
+        "directory": inputs.directory(),
+        "events": events.as_ref().ok(),
+        "events_refusal": events.err(),
+        "summary": summary.as_ref().ok(),
+        "summary_refusal": summary.err(),
+        "report": report.as_ref().ok(),
+        "report_refusal": report.err(),
+    })
+}
+
+/// Interval rows as `[cycle, interval, ticks]` triples.
+fn interval_rows(rows: &[IntervalRow]) -> Vec<Value> {
+    rows.iter()
+        .map(|row| json!([row.cycle, row.interval, row.ticks]))
+        .collect()
 }
 
 /// Command description written by the Python control-command parity helper.

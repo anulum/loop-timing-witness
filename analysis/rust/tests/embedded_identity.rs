@@ -262,19 +262,7 @@ fn a_reviewed_installation_descriptor_reaches_installation_verification() {
         refusal(&binary, &manifest, &[(INSTALLATION, &selected)]),
         "Selected checker worker or installation differs from its reviewed runtime."
     );
-    // A runtime that binds the current initialiser reaches installation verification.
-    let reviewed = format!(
-        "\"byte_length\": 2181,\n      \"path\": \"loop_timing_witness/__init__.py\",\n      \"sha256\": \"{}\"",
-        "6d6ff4fdd628f6f3f21c495b37dbfcb92d00b1404a8bf2610c0427bfd3bab5f2"
-    );
-    let current = format!(
-        "\"byte_length\": {},\n      \"path\": \"loop_timing_witness/__init__.py\",\n      \"sha256\": \"{}\"",
-        INITIALISER.len(),
-        sha(INITIALISER)
-    );
-    let source = String::from_utf8(RUNTIME.to_vec()).expect("UTF-8 runtime");
-    assert_eq!(source.matches(&reviewed).count(), 1);
-    let runtime = source.replace(&reviewed, &current).into_bytes();
+    let runtime = current_initialiser_runtime();
     let binary = patched_all(
         &fixture,
         "installation-current-worker",
@@ -284,17 +272,9 @@ fn a_reviewed_installation_descriptor_reaches_installation_verification() {
             (INSTALLATION_PIN.as_bytes(), sha(&descriptor).as_bytes()),
         ],
     );
-    let platform: Value = serde_json::from_slice(RUNTIME).expect("packaged runtime");
-    let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").expect("kernel");
-    // The reviewed runtime names one host kernel; elsewhere the platform is refused first.
-    let expected = if platform["platform_baseline"]["kernel_release"] == kernel.trim_end() {
-        "Selected checker runtime file is unavailable."
-    } else {
-        "Selected checker runtime inventory or platform baseline differs."
-    };
     assert_eq!(
         refusal(&binary, &manifest, &[(INSTALLATION, &selected)]),
-        expected
+        reviewed_runtime_refusal()
     );
     let malformed = fixture.write("malformed.json", b"{}");
     let binary = patched(
@@ -344,22 +324,54 @@ fn a_reviewed_image_binding_requires_its_image_then_its_closed_form() {
         refusal(&binary, &manifest, &[(BINDING, &binding), (IMAGE, &root)]),
         "Cannot open original file without symlinks: source-contract.json."
     );
+    assert_eq!(
+        open_binding_refusal(&fixture, &manifest, &root),
+        "Checker image executor binding is not its closed reviewed form."
+    );
+}
+
+/// The refusal of a reviewed-pin image binding with an empty command.
+fn open_binding_refusal(fixture: &Declaration, manifest: &Path, root: &Path) -> String {
     let open = image_binding(json!([]));
     let unreviewed = fixture.write("open.json", &open);
     let binary = patched(
-        &fixture,
+        fixture,
         "image-open",
         IMAGE_PIN.as_bytes(),
         sha(&open).as_bytes(),
     );
-    assert_eq!(
-        refusal(
-            &binary,
-            &manifest,
-            &[(BINDING, &unreviewed), (IMAGE, &root)]
-        ),
-        "Checker image executor binding is not its closed reviewed form."
+    refusal(&binary, manifest, &[(BINDING, &unreviewed), (IMAGE, root)])
+}
+
+/// The packaged runtime with its initialiser reference replaced by the current worker's.
+///
+/// A runtime that binds the current initialiser reaches installation verification.
+fn current_initialiser_runtime() -> Vec<u8> {
+    let reviewed = format!(
+        "\"byte_length\": 2181,\n      \"path\": \"loop_timing_witness/__init__.py\",\n      \"sha256\": \"{}\"",
+        "6d6ff4fdd628f6f3f21c495b37dbfcb92d00b1404a8bf2610c0427bfd3bab5f2"
     );
+    let current = format!(
+        "\"byte_length\": {},\n      \"path\": \"loop_timing_witness/__init__.py\",\n      \"sha256\": \"{}\"",
+        INITIALISER.len(),
+        sha(INITIALISER)
+    );
+    let source = String::from_utf8(RUNTIME.to_vec()).expect("UTF-8 runtime");
+    assert_eq!(source.matches(&reviewed).count(), 1);
+    source.replace(&reviewed, &current).into_bytes()
+}
+
+/// The refusal the reviewed runtime gives on this host.
+///
+/// The reviewed runtime names one host kernel; elsewhere the platform is refused first.
+fn reviewed_runtime_refusal() -> &'static str {
+    let platform: Value = serde_json::from_slice(RUNTIME).expect("packaged runtime");
+    let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").expect("kernel");
+    if platform["platform_baseline"]["kernel_release"] == kernel.trim_end() {
+        "Selected checker runtime file is unavailable."
+    } else {
+        "Selected checker runtime inventory or platform baseline differs."
+    }
 }
 
 /// Run the installed command under a tracer that fails one syscall on one path.
@@ -429,7 +441,28 @@ fn a_runtime_binding_the_current_workers_constructs_the_host_installation() {
         .iter()
         .map(|(name, path)| reference(name, path))
         .collect();
-    let workers = [
+    let runtime = host_runtime(&files);
+    let descriptor = host_descriptor(&tools, &imports);
+    let selected = fixture.write("installation.json", &descriptor);
+    let binary = patched_all(
+        &fixture,
+        "installation-host",
+        &[
+            (RUNTIME, &runtime),
+            (RUNTIME_PIN.as_bytes(), sha(&runtime).as_bytes()),
+            (INSTALLATION_PIN.as_bytes(), sha(&descriptor).as_bytes()),
+        ],
+    );
+    // The installation is constructed; the absent acquisition files are refused next.
+    assert_eq!(
+        refusal(&binary, &manifest, &[(INSTALLATION, &selected)]),
+        "Cannot open original file without symlinks: source-contract.json."
+    );
+}
+
+/// The current worker sources as runtime descriptor references.
+fn worker_references() -> [Value; 3] {
+    [
         "__init__.py",
         "neural_checker_worker.py",
         "neural_checker_isolation.py",
@@ -441,7 +474,12 @@ fn a_runtime_binding_the_current_workers_constructs_the_host_installation() {
                 .join("checker_worker/loop_timing_witness")
                 .join(name),
         )
-    });
+    })
+}
+
+/// A runtime descriptor of this host and the current workers, padded to the embedded length.
+fn host_runtime(files: &[Value]) -> Vec<u8> {
+    let workers = worker_references();
     let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").expect("kernel");
     let mut runtime = serde_json::to_vec(&json!({
         "schema_id": "loop-timing-witness.sc-checker-runtime.v1",
@@ -471,7 +509,12 @@ fn a_runtime_binding_the_current_workers_constructs_the_host_installation() {
     // Trailing JSON whitespace keeps the embedded asset length.
     assert!(runtime.len() < RUNTIME.len());
     runtime.resize(RUNTIME.len(), b' ');
-    let descriptor = serde_json::to_vec(&json!({
+    runtime
+}
+
+/// The installation descriptor binding the actual tools and the import root.
+fn host_descriptor(tools: &[(&str, PathBuf)], imports: &Path) -> Vec<u8> {
+    serde_json::to_vec(&json!({
         "bindings": tools.iter().map(|(name, path)| {
             let item = reference(name, path);
             json!({
@@ -483,20 +526,5 @@ fn a_runtime_binding_the_current_workers_constructs_the_host_installation() {
         }).collect::<Vec<_>>(),
         "import_roots": [imports],
     }))
-    .expect("JSON");
-    let selected = fixture.write("installation.json", &descriptor);
-    let binary = patched_all(
-        &fixture,
-        "installation-host",
-        &[
-            (RUNTIME, &runtime),
-            (RUNTIME_PIN.as_bytes(), sha(&runtime).as_bytes()),
-            (INSTALLATION_PIN.as_bytes(), sha(&descriptor).as_bytes()),
-        ],
-    );
-    // The installation is constructed; the absent acquisition files are refused next.
-    assert_eq!(
-        refusal(&binary, &manifest, &[(INSTALLATION, &selected)]),
-        "Cannot open original file without symlinks: source-contract.json."
-    );
+    .expect("JSON")
 }

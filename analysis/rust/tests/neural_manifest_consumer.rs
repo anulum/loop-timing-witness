@@ -204,58 +204,12 @@ fn malformed_bytes_and_non_object_roots_have_no_carrier_identity() {
 fn closed_manifest_grammar_refuses_actual_input_contradictions() {
     let fixture = Declaration::recorded();
     let mut cases: Vec<(&str, Value)> = Vec::new();
-    for (field, value) in [
-        ("schema_id", json!("unsupported")),
-        ("native_source_cohort", Value::Null),
-        ("native_source_cohort", json!("unsupported")),
-        ("profile", json!("unsupported")),
-        ("evidence_class", json!("physical-timing")),
-        ("source_files", Value::Null),
-        ("channels", Value::Null),
-        ("epoch", json!(2)),
-        ("step_count", json!(1000.0)),
-        ("step_count", json!(999)),
-        ("counter_bits", json!(true)),
-        ("counter_bits", json!(32)),
-        ("encoder_timestamp_bits", json!(15)),
-        ("encoder_id_width", json!(0)),
-        ("fifo_capacity_records", json!(7)),
-        ("capture_horizon_edges", json!(0)),
-        ("capture_horizon_edges", json!(65536)),
-        ("encoder_tail_edges", json!(3)),
-        ("run_id", json!("")),
-        ("run_id", json!("a".repeat(129))),
-        ("run_id", json!("-leading")),
-        ("run_id", json!("invalid name")),
-        ("accepted_oracle_commit", json!("0".repeat(40))),
-    ] {
+    for (field, value) in field_contradictions() {
         let mut control = fixture.value();
         control[field] = value;
         cases.push((field, control));
     }
-    let mut control = fixture.value();
-    control["unexpected"] = json!(0);
-    cases.push(("unknown-root", control));
-    let mut control = fixture.value();
-    control
-        .as_object_mut()
-        .expect("original object")
-        .remove("source_contract_ref");
-    cases.push(("missing-contract-role", control));
-    let mut control = fixture.value();
-    control["source_files"][1] = control["source_files"][0].clone();
-    cases.push(("duplicate-source-path", control));
-    for path in [
-        "/absolute",
-        "../escape",
-        "source/../escape",
-        "source\\escape",
-        "source/\0escape",
-    ] {
-        let mut control = fixture.value();
-        control["input_trace"]["path"] = json!(path);
-        cases.push(("nonportable-reference", control));
-    }
+    cases.extend(structural_contradictions(&fixture));
     for (label, value) in cases {
         let raw = serde_json::to_vec(&value).expect("whole input control");
         let path = fixture.write("contradiction.json", &raw);
@@ -321,89 +275,9 @@ fn declaration_boundaries_do_not_admit_absent_sources() {
 fn source_channel_and_completion_declarations_retain_their_exact_contracts() {
     let fixture = Declaration::recorded();
     let original = fixture.value();
-    let mut cases: Vec<Value> = Vec::new();
-    for pin in original["sc_body_pins"]
-        .as_object()
-        .expect("original seven pins")
-        .keys()
-    {
-        let mut control = original.clone();
-        control["sc_body_pins"][pin] = json!("A".repeat(64));
-        cases.push(control);
-    }
-    let mut control = original.clone();
-    control["source_files"] = json!([]);
-    cases.push(control);
-    for (field, value) in [
-        ("path", json!("")),
-        ("path", json!("a".repeat(4097))),
-        ("path", json!("source//input.py")),
-        ("path", json!("source/./input.py")),
-        ("sha256", json!("0".repeat(63))),
-        ("sha256", json!("g".repeat(64))),
-        ("byte_length", json!(1048577)),
-    ] {
-        let mut control = original.clone();
-        control["source_files"][0][field] = value;
-        cases.push(control);
-    }
-    for role in [
-        "tool_receipt",
-        "input_trace",
-        "numerical_trace",
-        "numerical_projection",
-        "reference_projection",
-        "service_trace",
-        "clock_schedule_ref",
-        "source_contract_ref",
-    ] {
-        let mut control = original.clone();
-        control[role]["byte_length"] = json!(65537);
-        cases.push(control);
-    }
-    for field in [
-        "requested_steps",
-        "observed_states",
-        "raw_spikes",
-        "observed_service_packets",
-    ] {
-        let mut control = original.clone();
-        control["completion"][field] = json!(65536);
-        cases.push(control);
-    }
-    for field in original["event_codes"]
-        .as_object()
-        .expect("original event vocabulary")
-        .keys()
-    {
-        let mut control = original.clone();
-        control["event_codes"][field] = json!(0);
-        cases.push(control);
-    }
-    for index in 0..3 {
-        let mut control = original.clone();
-        control["channels"][index]["role"] = json!(if index == 0 { "state" } else { "input" });
-        cases.push(control);
-        let mut control = original.clone();
-        control["channels"][index]["marker_records"] = json!(3);
-        cases.push(control);
-        for field in [
-            "attempts",
-            "accepted",
-            "dropped",
-            "drained",
-            "payload_records",
-        ] {
-            let mut control = original.clone();
-            control["channels"][index][field] = json!(65536);
-            cases.push(control);
-        }
-        for role in ["capture", "payload", "markers"] {
-            let mut control = original.clone();
-            control["channels"][index][role]["byte_length"] = json!(65537);
-            cases.push(control);
-        }
-    }
+    let mut cases = source_cases(&original);
+    cases.extend(bound_cases(&original));
+    cases.extend(channel_cases(&original));
     for control in cases {
         let path = fixture.write(
             "contradiction.json",
@@ -538,8 +412,188 @@ fn positional_root_arrays_cannot_substitute_the_schema_object() {
 fn positional_nested_arrays_cannot_substitute_schema_objects() {
     let fixture = Declaration::recorded();
     let original = fixture.value();
+    let replacements = replacements();
+    for (pointer, fields) in replacements {
+        let mut control = original.clone();
+        let object = original.pointer(&pointer).expect("actual original object");
+        let array = Value::Array(fields.iter().map(|field| object[field].clone()).collect());
+        *control
+            .pointer_mut(&pointer)
+            .expect("actual original carrier location") = array;
+        let path = fixture.write(
+            "positional-nested.json",
+            &serde_json::to_vec(&control).expect("actual nested array JSON"),
+        );
+        assert!(
+            load_neural_manifest(&path).is_err(),
+            "schema object at {pointer} was accepted as a positional array"
+        );
+    }
+}
+
+/// One contradicting value for each closed root field, some fields more than once.
+fn field_contradictions() -> Vec<(&'static str, Value)> {
+    vec![
+        ("schema_id", json!("unsupported")),
+        ("native_source_cohort", Value::Null),
+        ("native_source_cohort", json!("unsupported")),
+        ("profile", json!("unsupported")),
+        ("evidence_class", json!("physical-timing")),
+        ("source_files", Value::Null),
+        ("channels", Value::Null),
+        ("epoch", json!(2)),
+        ("step_count", json!(1000.0)),
+        ("step_count", json!(999)),
+        ("counter_bits", json!(true)),
+        ("counter_bits", json!(32)),
+        ("encoder_timestamp_bits", json!(15)),
+        ("encoder_id_width", json!(0)),
+        ("fifo_capacity_records", json!(7)),
+        ("capture_horizon_edges", json!(0)),
+        ("capture_horizon_edges", json!(65536)),
+        ("encoder_tail_edges", json!(3)),
+        ("run_id", json!("")),
+        ("run_id", json!("a".repeat(129))),
+        ("run_id", json!("-leading")),
+        ("run_id", json!("invalid name")),
+        ("accepted_oracle_commit", json!("0".repeat(40))),
+    ]
+}
+
+/// Contradictions of the root object: an unknown or missing role, a repeated source
+/// and nonportable reference paths.
+fn structural_contradictions(fixture: &Declaration) -> Vec<(&'static str, Value)> {
+    let mut cases: Vec<(&'static str, Value)> = Vec::new();
+    let mut control = fixture.value();
+    control["unexpected"] = json!(0);
+    cases.push(("unknown-root", control));
+    let mut control = fixture.value();
+    control
+        .as_object_mut()
+        .expect("original object")
+        .remove("source_contract_ref");
+    cases.push(("missing-contract-role", control));
+    let mut control = fixture.value();
+    control["source_files"][1] = control["source_files"][0].clone();
+    cases.push(("duplicate-source-path", control));
+    for path in [
+        "/absolute",
+        "../escape",
+        "source/../escape",
+        "source\\escape",
+        "source/\0escape",
+    ] {
+        let mut control = fixture.value();
+        control["input_trace"]["path"] = json!(path);
+        cases.push(("nonportable-reference", control));
+    }
+    cases
+}
+
+/// Changed SC body pins, an empty source list and malformed source references.
+fn source_cases(original: &Value) -> Vec<Value> {
+    let mut cases: Vec<Value> = Vec::new();
+    for pin in original["sc_body_pins"]
+        .as_object()
+        .expect("original seven pins")
+        .keys()
+    {
+        let mut control = original.clone();
+        control["sc_body_pins"][pin] = json!("A".repeat(64));
+        cases.push(control);
+    }
+    let mut control = original.clone();
+    control["source_files"] = json!([]);
+    cases.push(control);
+    for (field, value) in [
+        ("path", json!("")),
+        ("path", json!("a".repeat(4097))),
+        ("path", json!("source//input.py")),
+        ("path", json!("source/./input.py")),
+        ("sha256", json!("0".repeat(63))),
+        ("sha256", json!("g".repeat(64))),
+        ("byte_length", json!(1048577)),
+    ] {
+        let mut control = original.clone();
+        control["source_files"][0][field] = value;
+        cases.push(control);
+    }
+    cases
+}
+
+/// Oversized role references, completion counts and zeroed event codes.
+fn bound_cases(original: &Value) -> Vec<Value> {
+    let mut cases: Vec<Value> = Vec::new();
+    for role in [
+        "tool_receipt",
+        "input_trace",
+        "numerical_trace",
+        "numerical_projection",
+        "reference_projection",
+        "service_trace",
+        "clock_schedule_ref",
+        "source_contract_ref",
+    ] {
+        let mut control = original.clone();
+        control[role]["byte_length"] = json!(65537);
+        cases.push(control);
+    }
+    for field in [
+        "requested_steps",
+        "observed_states",
+        "raw_spikes",
+        "observed_service_packets",
+    ] {
+        let mut control = original.clone();
+        control["completion"][field] = json!(65536);
+        cases.push(control);
+    }
+    for field in original["event_codes"]
+        .as_object()
+        .expect("original event vocabulary")
+        .keys()
+    {
+        let mut control = original.clone();
+        control["event_codes"][field] = json!(0);
+        cases.push(control);
+    }
+    cases
+}
+
+/// Swapped roles, wrong marker counts and oversized counts or references per channel.
+fn channel_cases(original: &Value) -> Vec<Value> {
+    let mut cases: Vec<Value> = Vec::new();
+    for index in 0..3 {
+        let mut control = original.clone();
+        control["channels"][index]["role"] = json!(if index == 0 { "state" } else { "input" });
+        cases.push(control);
+        let mut control = original.clone();
+        control["channels"][index]["marker_records"] = json!(3);
+        cases.push(control);
+        for field in [
+            "attempts",
+            "accepted",
+            "dropped",
+            "drained",
+            "payload_records",
+        ] {
+            let mut control = original.clone();
+            control["channels"][index][field] = json!(65536);
+            cases.push(control);
+        }
+        for role in ["capture", "payload", "markers"] {
+            let mut control = original.clone();
+            control["channels"][index][role]["byte_length"] = json!(65537);
+            cases.push(control);
+        }
+    }
+    cases
+}
+
+/// Every schema object of the root, with its member names in schema order.
+fn replacements() -> Vec<(String, Vec<&'static str>)> {
     let reference_fields = ["path", "sha256", "byte_length"];
-    let mut replacements: Vec<(String, Vec<&str>)> = [
+    let mut replacements: Vec<(String, Vec<&'static str>)> = [
         "/tool_receipt",
         "/input_trace",
         "/numerical_trace",
@@ -578,7 +632,13 @@ fn positional_nested_arrays_cannot_substitute_schema_objects() {
             ));
         }
     }
-    replacements.extend([
+    replacements.extend(named_objects());
+    replacements
+}
+
+/// The pin, event code and completion objects with their member names.
+fn named_objects() -> [(String, Vec<&'static str>); 3] {
+    [
         (
             "/sc_body_pins".into(),
             vec![
@@ -613,21 +673,5 @@ fn positional_nested_arrays_cannot_substitute_schema_objects() {
                 "finalized",
             ],
         ),
-    ]);
-    for (pointer, fields) in replacements {
-        let mut control = original.clone();
-        let object = original.pointer(&pointer).expect("actual original object");
-        let array = Value::Array(fields.iter().map(|field| object[field].clone()).collect());
-        *control
-            .pointer_mut(&pointer)
-            .expect("actual original carrier location") = array;
-        let path = fixture.write(
-            "positional-nested.json",
-            &serde_json::to_vec(&control).expect("actual nested array JSON"),
-        );
-        assert!(
-            load_neural_manifest(&path).is_err(),
-            "schema object at {pointer} was accepted as a positional array"
-        );
-    }
+    ]
 }

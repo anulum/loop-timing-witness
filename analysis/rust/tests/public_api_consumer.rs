@@ -51,26 +51,7 @@ fn public_source_admission_and_snapshot() {
     caller["verification"]["whole"] = Value::String("caller mutation".into());
     assert_eq!(build_neural_run_report(&inputs), original);
     for operation in ["generate", "check"] {
-        let invocation = &original["source_binding"]["checker_invocations"][operation];
-        assert_eq!(invocation["native_returncode"], 0);
-        assert_eq!(invocation["worker_observation"]["native_returncode"], 0);
-        assert_eq!(invocation["worker_observation"]["phase"], "source");
-        assert_eq!(invocation["interrupted"], false);
-        assert!(
-            invocation["elapsed_ns"]
-                .as_u64()
-                .expect("real elapsed time")
-                > 0
-        );
-        assert!(
-            invocation["worker_observation"]["modules"]
-                .as_array()
-                .expect("actual imported modules")
-                .iter()
-                .any(|module| module["name"]
-                    .as_str()
-                    .is_some_and(|name| name.starts_with("sc_neurocore")))
-        );
+        assert_source_invocation(&original["source_binding"]["checker_invocations"][operation]);
     }
     let python: Value =
         serde_json::from_slice(&std::fs::read(expected).expect("complete original Python report"))
@@ -78,5 +59,28 @@ fn public_source_admission_and_snapshot() {
     assert_eq!(
         original_observations(original),
         original_observations(python)
+    );
+}
+
+/// Require one fresh checker operation to have run the SC source cleanly to completion.
+fn assert_source_invocation(invocation: &Value) {
+    assert_eq!(invocation["native_returncode"], 0);
+    assert_eq!(invocation["worker_observation"]["native_returncode"], 0);
+    assert_eq!(invocation["worker_observation"]["phase"], "source");
+    assert_eq!(invocation["interrupted"], false);
+    assert!(
+        invocation["elapsed_ns"]
+            .as_u64()
+            .expect("real elapsed time")
+            > 0
+    );
+    assert!(
+        invocation["worker_observation"]["modules"]
+            .as_array()
+            .expect("actual imported modules")
+            .iter()
+            .any(|module| module["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("sc_neurocore")))
     );
 }

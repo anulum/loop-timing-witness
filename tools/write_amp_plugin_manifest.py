@@ -22,6 +22,68 @@ from amp_plugin_preparation import verified_preparation
 
 from manifest_io import canonical_json_bytes, sha256_of_file
 
+_IDENTITY_FIELDS = (
+    "working_directory",
+    "thermal",
+    "fifo_address_bits",
+    "compilers",
+    "verilator",
+    "spike_sdk",
+    "build_tools",
+    "runtime_libraries",
+)
+
+
+def _compiled_dependencies(
+    directory: Path,
+) -> tuple[tuple[Path, ...], tuple[Path, ...], dict[str, str]]:
+    """Read the dependency records of the native objects and the Verilated model.
+
+    Parameters
+    ----------
+    directory
+        Resolved plugin build directory.
+
+    Returns
+    -------
+    tuple[tuple[Path, ...], tuple[Path, ...], dict[str, str]]
+        Native object records, model records (excluding ``__ver.d``) and the
+        digest of every dependency they name.
+    """
+    records = tuple(directory / (name + ".d") for name in NATIVE_OBJECTS)
+    dependencies = dependency_hashes(records, ROOT)
+    model = directory / "rtl"
+    model_records = tuple(
+        path for path in sorted(model.glob("*.d")) if not path.name.endswith("__ver.d")
+    )
+    dependencies.update(dependency_hashes(model_records, model))
+    return records, model_records, dependencies
+
+
+def _add_preparation(
+    dependencies: dict[str, str], preparation: dict[str, Any], directory: Path
+) -> None:
+    """Add the preparation's sources, files and records and its own documents.
+
+    Parameters
+    ----------
+    dependencies
+        Dependency digests, extended in place.
+    preparation
+        Verified plugin preparation.
+    directory
+        Resolved plugin build directory.
+    """
+    dependencies.update(preparation["identity"]["sources"])
+    dependencies.update(preparation["build_files"])
+    dependencies.update(preparation["dependency_records"])
+    dependencies.update(
+        {
+            str(directory / name): sha256_of_file(directory / name)
+            for name in ("generation.json", "compilation.json")
+        }
+    )
+
 
 def write_plugin_manifest(build: PluginBuild) -> Path:
     """Bind the actual post-build source/header/tool/link closure to the resulting library.
@@ -46,42 +108,17 @@ def write_plugin_manifest(build: PluginBuild) -> Path:
         If actual Git/compiler/version introspection fails.
     """
     directory = build.directory.resolve()
-    records = tuple(directory / (name + ".d") for name in NATIVE_OBJECTS)
-    dependencies = dependency_hashes(records, ROOT)
     model = directory / "rtl"
-    model_records = tuple(
-        path for path in sorted(model.glob("*.d")) if not path.name.endswith("__ver.d")
-    )
-    dependencies.update(dependency_hashes(model_records, model))
+    records, model_records, dependencies = _compiled_dependencies(directory)
     preparation = verified_preparation(build, dependencies)
     identity = preparation["identity"]
-    dependencies.update(identity["sources"])
-    dependencies.update(preparation["build_files"])
-    dependencies.update(preparation["dependency_records"])
-    dependencies.update(
-        {
-            str(directory / name): sha256_of_file(directory / name)
-            for name in ("generation.json", "compilation.json")
-        }
-    )
+    _add_preparation(dependencies, preparation, directory)
     link_inputs = [directory / (name + ".o") for name in NATIVE_OBJECTS]
     link_inputs.append(model / "Vaxi_control_witness__ALL.a")
     data: dict[str, Any] = {
         "schema": "loop-timing-witness.amp-plugin-build.v1",
         "simulation_only": True,
-        **{
-            name: identity[name]
-            for name in (
-                "working_directory",
-                "thermal",
-                "fifo_address_bits",
-                "compilers",
-                "verilator",
-                "spike_sdk",
-                "build_tools",
-                "runtime_libraries",
-            )
-        },
+        **{name: identity[name] for name in _IDENTITY_FIELDS},
         "plugin_sha256": sha256_of_file(directory / "witness_spike_axi.so"),
         "preparation": preparation,
         "preparation_path": str(directory / "compilation.json"),

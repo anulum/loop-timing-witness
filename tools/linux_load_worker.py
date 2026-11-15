@@ -32,6 +32,20 @@ if TYPE_CHECKING:
     from typing import BinaryIO
 
 
+_COUNTERS = (
+    "chunks",
+    "arithmetic_operations",
+    "memory_touches",
+    "datagrams",
+    "bytes_sent",
+    "bytes_received",
+    "bytes_written",
+    "bytes_read",
+    "fsyncs",
+    "idle_waits",
+)
+
+
 class _Workload:
     """Own the resources and counters of one selected host workload."""
 
@@ -51,21 +65,7 @@ class _Workload:
         """
         self.profile = configuration.profile
         size = configuration.working_set_bytes
-        self.counters = dict.fromkeys(
-            (
-                "chunks",
-                "arithmetic_operations",
-                "memory_touches",
-                "datagrams",
-                "bytes_sent",
-                "bytes_received",
-                "bytes_written",
-                "bytes_read",
-                "fsyncs",
-                "idle_waits",
-            ),
-            0,
-        )
+        self.counters = dict.fromkeys(_COUNTERS, 0)
         self.checksum = 0
         self.memory = bytearray(size if self.profile == "memory" else 0)
         self.payload = (

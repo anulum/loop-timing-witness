@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass, field
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
@@ -165,6 +166,110 @@ def _accept_injection(open_injection: int | None, injection: int, cycle: int) ->
     return injection
 
 
+@dataclass(slots=True)
+class _ControlTally:
+    """Running deadline and fault accounting of one control run, cycle by cycle.
+
+    Attributes
+    ----------
+    observed_deadlines, misses, injections
+        Deadlines seen, deadlines missed and faults injected so far.
+    detected, safe
+        Injection-to-detection and first-miss-to-safe-state intervals.
+    open_injection, first_missed_deadline
+        Pending injection tick, and the first deadline of the current run of misses.
+    """
+
+    observed_deadlines: int = 0
+    misses: int = 0
+    injections: int = 0
+    detected: list[int] = field(default_factory=list)
+    safe: list[int] = field(default_factory=list)
+    open_injection: int | None = None
+    first_missed_deadline: int | None = None
+
+    def faults(self, observed: dict[str, int], cycle: int) -> None:
+        """Pair one cycle's fault injection and detection.
+
+        Parameters
+        ----------
+        observed
+            Event ticks of the cycle.
+        cycle
+            Cycle number for refusal text.
+
+        Raises
+        ------
+        ValueError
+            If an injection overlaps a pending one, or a detection has no prior injection.
+        """
+        injection = observed.get("FAULT_INJECTED")
+        if injection is not None:
+            self.injections += 1
+            self.open_injection = _accept_injection(self.open_injection, injection, cycle)
+        detection = observed.get("FAULT_DETECTED")
+        if detection is not None:
+            if self.open_injection is None or detection < self.open_injection:
+                message = f"cycle {cycle}: fault detection lacks a prior injection"
+                raise ValueError(message)
+            self.detected.append(detection - self.open_injection)
+            self.open_injection = None
+
+    def deadlines(self, observed: dict[str, int], cycle: int) -> None:
+        """Count one cycle's deadline and pair a safe state with the first missed deadline.
+
+        Parameters
+        ----------
+        observed
+            Event ticks of the cycle.
+        cycle
+            Cycle number for refusal text.
+
+        Raises
+        ------
+        ValueError
+            If a safe state has no prior missed deadline.
+        """
+        deadline = observed.get("DEADLINE")
+        if deadline is not None:
+            self.observed_deadlines += 1
+            write = observed.get("ACT_WRITE")
+            if write is None or write >= deadline:
+                self.misses += 1
+                if self.first_missed_deadline is None:
+                    self.first_missed_deadline = deadline
+            else:
+                self.first_missed_deadline = None
+        safe_state = observed.get("SAFE_STATE")
+        if safe_state is not None:
+            if self.first_missed_deadline is None or safe_state < self.first_missed_deadline:
+                message = f"cycle {cycle}: safe state lacks a prior missed deadline"
+                raise ValueError(message)
+            self.safe.append(safe_state - self.first_missed_deadline)
+            self.first_missed_deadline = None
+
+    def summary(self) -> dict[str, Any]:
+        """Return the deadline and fault counts of the report.
+
+        Returns
+        -------
+        dict[str, Any]
+            Observed deadlines, misses and miss rate, injections, detections,
+            undetected faults and safe-state events.
+        """
+        return {
+            "observed_deadlines": self.observed_deadlines,
+            "deadline_misses": self.misses,
+            "deadline_miss_rate": (
+                self.misses / self.observed_deadlines if self.observed_deadlines else None
+            ),
+            "fault_injections": self.injections,
+            "fault_detections": len(self.detected),
+            "undetected_faults": self.injections - len(self.detected),
+            "safe_state_events": len(self.safe),
+        }
+
+
 def _control_faults(
     cycles: dict[int, dict[str, int]], warmup_cycles: int, cycle_count: int
 ) -> tuple[dict[str, Any], list[int], list[int]]:
@@ -189,56 +294,12 @@ def _control_faults(
     ValueError
         If detection or safe state precedes its causal event.
     """
-    misses = 0
-    observed_deadlines = 0
-    injections = 0
-    detected: list[int] = []
-    safe: list[int] = []
-    open_injection: int | None = None
-    first_missed_deadline: int | None = None
+    tally = _ControlTally()
     for cycle in range(int(warmup_cycles), int(cycle_count)):
         observed = cycles.get(cycle, {})
-        injection = observed.get("FAULT_INJECTED")
-        if injection is not None:
-            injections += 1
-            open_injection = _accept_injection(open_injection, injection, cycle)
-        detection = observed.get("FAULT_DETECTED")
-        if detection is not None:
-            if open_injection is None or detection < open_injection:
-                message = f"cycle {cycle}: fault detection lacks a prior injection"
-                raise ValueError(message)
-            detected.append(detection - open_injection)
-            open_injection = None
-        deadline = observed.get("DEADLINE")
-        if deadline is not None:
-            observed_deadlines += 1
-            write = observed.get("ACT_WRITE")
-            if write is None or write >= deadline:
-                misses += 1
-                if first_missed_deadline is None:
-                    first_missed_deadline = deadline
-            else:
-                first_missed_deadline = None
-        safe_state = observed.get("SAFE_STATE")
-        if safe_state is not None:
-            if first_missed_deadline is None or safe_state < first_missed_deadline:
-                message = f"cycle {cycle}: safe state lacks a prior missed deadline"
-                raise ValueError(message)
-            safe.append(safe_state - first_missed_deadline)
-            first_missed_deadline = None
-    return (
-        {
-            "observed_deadlines": observed_deadlines,
-            "deadline_misses": misses,
-            "deadline_miss_rate": misses / observed_deadlines if observed_deadlines else None,
-            "fault_injections": injections,
-            "fault_detections": len(detected),
-            "undetected_faults": injections - len(detected),
-            "safe_state_events": len(safe),
-        },
-        detected,
-        safe,
-    )
+        tally.faults(observed, cycle)
+        tally.deadlines(observed, cycle)
+    return tally.summary(), tally.detected, tally.safe
 
 
 def analyse_events(

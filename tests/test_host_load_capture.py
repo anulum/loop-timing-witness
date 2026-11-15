@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from linux_load_config import PROFILES
@@ -23,6 +23,19 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from conftest import RunTool
+
+# Load tools a capture snapshots under source/tools.
+LOAD_TOOLS = (
+    "linux_load.py",
+    "linux_load_config.py",
+    "linux_load_worker.py",
+    "linux_load_channels.py",
+    "linux_load_readiness.py",
+    "linux_load_process.py",
+    "manifest_io.py",
+)
+DIGEST = "input SHA-256 mismatch: host_load.json"
+STATUS = "host load profile or native exit status"
 
 
 @pytest.mark.parametrize("profile", PROFILES)
@@ -55,6 +68,45 @@ def test_frozen_load_capture(tmp_path: Path, run_tool: RunTool, profile: str) ->
         str(min(os.sched_getaffinity(0))),
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    manifest, receipt, report = _check_bound_capture(run, profile)
+    reanalysis = run_tool(
+        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "repeat")
+    )
+    assert reanalysis.returncode == 0, reanalysis.stdout + reanalysis.stderr
+    assert json.loads((run / "repeat/report.json").read_bytes()) == report
+    wrong_digest = dict(manifest)
+    wrong_digest["host_load"] = {**manifest["host_load"], "sha256": "0" * 64}
+    _check_refused(run_tool, run / "wrong_digest", wrong_digest, "wrong_digest_report", (DIGEST,))
+    wrong_profile = dict(manifest)
+    wrong_profile["load_case"] = "storage" if profile != "storage" else "cpu"
+    _check_refused(
+        run_tool, run / "wrong_profile", wrong_profile, "wrong_profile_report", (STATUS,)
+    )
+    malformed = dict(receipt)
+    malformed["native_returncode"] = 1
+    raw = (json.dumps(malformed) + "\n").encode()
+    (run / "altered_load.json").write_bytes(raw)
+    manifest["host_load"] = {"path": "altered_load.json", "sha256": hashlib.sha256(raw).hexdigest()}
+    _check_refused(run_tool, run / "altered_manifest", manifest, "refused", (STATUS,))
+
+
+def _check_bound_capture(
+    run: Path, profile: str
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Require the capture to bind its load receipt, its sources and its report.
+
+    Parameters
+    ----------
+    run
+        Completed capture directory.
+    profile
+        Captured load profile.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+        Manifest, host load receipt and report.
+    """
     manifest = json.loads((run / "manifest.json").read_bytes())
     receipt = json.loads((run / "host_load.json").read_bytes())
     report = json.loads((run / "reports/report.json").read_bytes())
@@ -70,63 +122,42 @@ def test_frozen_load_capture(tmp_path: Path, run_tool: RunTool, profile: str) ->
     assert report["energy"]["status"] == "unavailable"
     assert report["valid"] is False
     paths = {item["path"] for item in manifest["source"]["files"]}
-    assert all(
-        "source/tools/" + name in paths
-        for name in (
-            "linux_load.py",
-            "linux_load_config.py",
-            "linux_load_worker.py",
-            "linux_load_channels.py",
-            "linux_load_readiness.py",
-            "linux_load_process.py",
-            "manifest_io.py",
-        )
-    )
+    assert all("source/tools/" + name in paths for name in LOAD_TOOLS)
     assert "host_load_workspace/worker.json" in paths
     assert "host_load_workspace/worker.log" in paths
     for item in manifest["source"]["files"]:
         assert hashlib.sha256((run / item["path"]).read_bytes()).hexdigest() == item["sha256"]
-    reanalysis = run_tool(
-        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "repeat")
-    )
-    assert reanalysis.returncode == 0, reanalysis.stdout + reanalysis.stderr
-    assert json.loads((run / "repeat/report.json").read_bytes()) == report
-    wrong_digest = dict(manifest)
-    wrong_digest["host_load"] = {**manifest["host_load"], "sha256": "0" * 64}
-    (run / "wrong_digest.json").write_text(json.dumps(wrong_digest), encoding="utf-8")
-    digest_refusal = run_tool(
-        "analyze_run",
-        str(run / "wrong_digest.json"),
-        "--output-dir",
-        str(run / "wrong_digest_report"),
-    )
-    assert digest_refusal.returncode == 1
-    assert "input SHA-256 mismatch: host_load.json" in digest_refusal.stderr
-    assert not (run / "wrong_digest_report").exists()
-    wrong_profile = dict(manifest)
-    wrong_profile["load_case"] = "storage" if profile != "storage" else "cpu"
-    (run / "wrong_profile.json").write_text(json.dumps(wrong_profile), encoding="utf-8")
-    mismatched = run_tool(
-        "analyze_run",
-        str(run / "wrong_profile.json"),
-        "--output-dir",
-        str(run / "wrong_profile_report"),
-    )
-    assert mismatched.returncode == 1
-    assert "host load profile or native exit status" in mismatched.stderr
-    assert not (run / "wrong_profile_report").exists()
-    malformed = dict(receipt)
-    malformed["native_returncode"] = 1
-    raw = (json.dumps(malformed) + "\n").encode()
-    (run / "altered_load.json").write_bytes(raw)
-    manifest["host_load"] = {"path": "altered_load.json", "sha256": hashlib.sha256(raw).hexdigest()}
-    (run / "altered_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    refused = run_tool(
-        "analyze_run", str(run / "altered_manifest.json"), "--output-dir", str(run / "refused")
-    )
+    return manifest, receipt, report
+
+
+def _check_refused(
+    run_tool: RunTool,
+    stem: Path,
+    manifest: dict[str, Any],
+    output: str,
+    messages: tuple[str, ...],
+) -> None:
+    """Write a changed manifest beside the capture and require its analysis to be refused.
+
+    Parameters
+    ----------
+    run_tool
+        Analyzer CLI runner.
+    stem
+        Changed manifest path without its ``.json`` suffix.
+    manifest
+        Changed declaration.
+    output
+        Report directory name beside the capture, which must stay absent.
+    messages
+        Texts the refusal must contain.
+    """
+    path = stem.with_name(stem.name + ".json")
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    refused = run_tool("analyze_run", str(path), "--output-dir", str(stem.parent / output))
     assert refused.returncode == 1
-    assert "host load profile or native exit status" in refused.stderr
-    assert not (run / "refused").exists()
+    assert all(message in refused.stderr for message in messages)
+    assert not (stem.parent / output).exists()
 
 
 @pytest.mark.parametrize(
@@ -212,14 +243,5 @@ def test_capture_binds_parent_json_implementation(tmp_path: Path, run_tool: RunT
         item for item in wrong_source["source"]["files"] if item["path"] == implementation
     )
     source["sha256"] = "0" * 64
-    (run / "wrong_source.json").write_text(json.dumps(wrong_source), encoding="utf-8")
-    source_refusal = run_tool(
-        "analyze_run",
-        str(run / "wrong_source.json"),
-        "--output-dir",
-        str(run / "wrong_source_report"),
-    )
-    assert source_refusal.returncode == 1
-    assert "artefact SHA-256 mismatch" in source_refusal.stderr
-    assert implementation in source_refusal.stderr
-    assert not (run / "wrong_source_report").exists()
+    messages = ("artefact SHA-256 mismatch", implementation)
+    _check_refused(run_tool, run / "wrong_source", wrong_source, "wrong_source_report", messages)

@@ -26,6 +26,45 @@ from .validate_measurement_domain import schema_locations
 ROOT = Path(__file__).resolve().parent / "data"
 
 
+def _identities_agree(data: dict[str, Any]) -> bool:
+    """Tell whether the receipt repeats every preparation identity it depends on.
+
+    Parameters
+    ----------
+    data
+        Schema-valid plugin build receipt.
+
+    Returns
+    -------
+    bool
+        Whether the build identity fields equal the preparation's, every source,
+        library, dependency, record and build file digest is a recorded dependency,
+        and the preparation and its generation record are recorded beside each other.
+    """
+    preparation = data["preparation"]
+    identity = preparation["identity"]
+    preparation_path = data["preparation_path"]
+    groups = [
+        identity["sources"],
+        identity["runtime_libraries"],
+        *(compiler["runtime_libraries"] for compiler in identity["compilers"].values()),
+        *(preparation[name] for name in ("dependencies", "dependency_records", "build_files")),
+    ]
+    return not (
+        any(identity[name] != data[name] for name in identity if name != "sources")
+        or any(
+            data["dependencies"].get(name) != digest
+            for group in groups
+            for name, digest in group.items()
+        )
+        or data["dependencies"].get(preparation_path)
+        != hashlib.sha256(canonical_json_bytes(preparation)).hexdigest()
+        or not Path(preparation_path).name
+        or data["dependencies"].get(str(Path(preparation_path).with_name("generation.json")))
+        != preparation["generation_sha256"]
+    )
+
+
 def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
     """Require the complete versioned original native compiler and SDK receipt shape.
 
@@ -52,28 +91,7 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
             f"AMP plugin build receipt {locations[0]}: does not satisfy the AMP plugin build schema"
         )
         raise ValueError(message)
-    preparation = data["preparation"]
-    identity = preparation["identity"]
-    preparation_path = data["preparation_path"]
-    groups = [
-        identity["sources"],
-        identity["runtime_libraries"],
-        *(compiler["runtime_libraries"] for compiler in identity["compilers"].values()),
-        *(preparation[name] for name in ("dependencies", "dependency_records", "build_files")),
-    ]
-    if (
-        any(identity[name] != data[name] for name in identity if name != "sources")
-        or any(
-            data["dependencies"].get(name) != digest
-            for group in groups
-            for name, digest in group.items()
-        )
-        or data["dependencies"].get(preparation_path)
-        != hashlib.sha256(canonical_json_bytes(preparation)).hexdigest()
-        or not Path(preparation_path).name
-        or data["dependencies"].get(str(Path(preparation_path).with_name("generation.json")))
-        != preparation["generation_sha256"]
-    ):
+    if not _identities_agree(data):
         message = "AMP plugin receipt omits or contradicts original preparation identities"
         raise ValueError(message)
     return data

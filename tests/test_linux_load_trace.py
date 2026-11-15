@@ -59,24 +59,8 @@ def test_actual_policy_readback_mismatch(tmp_path: Path) -> None:
         "sched_getscheduler:delay_enter=2s:when=1",
         tmp_path / "policy.strace",
     ) as trace:
-        deadline = time.monotonic() + scaled(10)
-        observed = False
-        while not observed and time.monotonic() < deadline:
-            trace.observe()
-            observed = trace.log.exists() and "sched_setaffinity" in trace.log.read_text()
-            if not observed:
-                assert trace.process.poll() is None
-                time.sleep(0.005)
-        assert observed, "actual worker affinity syscall was not observed"
-        children = (
-            Path(f"/proc/{trace.process.pid}/task/{trace.process.pid}/children").read_text().split()
-        )
-        assert len(children) == 1
-        worker = int(children[0])
-        trace.observe()
-        assert worker in trace.descriptors
-        assert not select.select([trace.descriptors[worker]], [], [], 0)[0]
-        assert b"linux_load_worker.py" in Path(f"/proc/{worker}/cmdline").read_bytes()
+        _await_affinity(trace)
+        worker = _traced_worker(trace)
         os.sched_setscheduler(worker, os.SCHED_BATCH, os.sched_param(0))
         assert os.sched_getscheduler(worker) == os.SCHED_BATCH
         stdout, stderr = trace.process.communicate(timeout=scaled(10))
@@ -89,6 +73,50 @@ def test_actual_policy_readback_mismatch(tmp_path: Path) -> None:
         assert not (workspace / "worker.json").exists()
     assert os.sched_getscheduler(0) == policy
     assert os.sched_getaffinity(0) == affinity
+
+
+def _await_affinity(trace: OwnedTrace) -> None:
+    """Wait at most ten scaled seconds for the traced worker to set its affinity.
+
+    Parameters
+    ----------
+    trace
+        Owned trace of the worker launcher.
+    """
+    deadline = time.monotonic() + scaled(10)
+    observed = False
+    while not observed and time.monotonic() < deadline:
+        trace.observe()
+        observed = trace.log.exists() and "sched_setaffinity" in trace.log.read_text()
+        if not observed:
+            assert trace.process.poll() is None
+            time.sleep(0.005)
+    assert observed, "actual worker affinity syscall was not observed"
+
+
+def _traced_worker(trace: OwnedTrace) -> int:
+    """Return the traced launcher's only child, a live owned load worker.
+
+    Parameters
+    ----------
+    trace
+        Owned trace of the worker launcher.
+
+    Returns
+    -------
+    int
+        Worker process ID.
+    """
+    children = (
+        Path(f"/proc/{trace.process.pid}/task/{trace.process.pid}/children").read_text().split()
+    )
+    assert len(children) == 1
+    worker = int(children[0])
+    trace.observe()
+    assert worker in trace.descriptors
+    assert not select.select([trace.descriptors[worker]], [], [], 0)[0]
+    assert b"linux_load_worker.py" in Path(f"/proc/{worker}/cmdline").read_bytes()
+    return worker
 
 
 @pytest.mark.parametrize(
@@ -111,23 +139,7 @@ def test_actual_completed_receipt_corruption(native_run: Path, tmp_path: Path, f
     workspace = tmp_path / "worker"
     journal = tmp_path / "load.json"
     with trace_command(
-        [
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/linux_load.py"),
-            "--profile",
-            "idle",
-            "--cpu",
-            str(min(os.sched_getaffinity(0))),
-            "--journal",
-            str(journal),
-            "--workspace",
-            str(workspace),
-            "--",
-            str(native_run.resolve()),
-            str(config),
-            str(tmp_path / "events.bin"),
-            str(tmp_path / "raw.csv"),
-        ],
+        _idle_load_command(native_run, config, tmp_path),
         "exit_group:delay_enter=2s:when=1",
         tmp_path / "receipt.strace",
     ) as trace:
@@ -139,20 +151,7 @@ def test_actual_completed_receipt_corruption(native_run: Path, tmp_path: Path, f
         assert receipt["started_ns"] < receipt["finished_ns"]
         assert receipt["counters"]["chunks"] > 0
         (tmp_path / "original_worker.json").write_bytes(original)
-        if field == "duplicate_worker_pid":
-            altered = original.replace(b"{", b'{"worker_pid":0,', 1)
-            expected = "duplicate JSON key: worker_pid"
-        elif field == "duplicate_chunks":
-            altered = original.replace(b'"chunks":', b'"chunks":0,"chunks":', 1)
-            expected = "duplicate JSON key: chunks"
-        else:
-            receipt[field] = {
-                "worker_pid": worker + 1,
-                "started_ns": receipt["finished_ns"] + 1,
-                "finished_ns": 0,
-            }[field]
-            altered = json.dumps(receipt, indent=2).encode() + b"\n"
-            expected = "load collection does not cover native execution"
+        altered, expected = _alter(field, original, receipt)
         receipt_file.write_bytes(altered)
         assert hashlib.sha256(original).digest() != hashlib.sha256(altered).digest()
         stdout, stderr = trace.process.communicate(timeout=scaled(12))
@@ -163,6 +162,75 @@ def test_actual_completed_receipt_corruption(native_run: Path, tmp_path: Path, f
         assert receipt_file.read_bytes() == altered
         assert (tmp_path / "events.bin").stat().st_size > 0
         assert "INJECTED" not in trace.log.read_text()
+
+
+def _idle_load_command(native_run: Path, config: Path, directory: Path) -> list[str]:
+    """Return the idle-load launcher command around one native run.
+
+    Parameters
+    ----------
+    native_run
+        Real production native controller and RTL plant executable.
+    config
+        Run configuration.
+    directory
+        Exclusive allocation for the journal, the workspace and the native outputs.
+
+    Returns
+    -------
+    list[str]
+        Launcher command.
+    """
+    return [
+        sys.executable,
+        str(REPOSITORY_ROOT / "tools/linux_load.py"),
+        "--profile",
+        "idle",
+        "--cpu",
+        str(min(os.sched_getaffinity(0))),
+        "--journal",
+        str(directory / "load.json"),
+        "--workspace",
+        str(directory / "worker"),
+        "--",
+        str(native_run.resolve()),
+        str(config),
+        str(directory / "events.bin"),
+        str(directory / "raw.csv"),
+    ]
+
+
+def _alter(field: str, original: bytes, receipt: dict[str, Any]) -> tuple[bytes, str]:
+    """Return the altered receipt bytes of one violation and the expected refusal.
+
+    Parameters
+    ----------
+    field
+        Duplicated member, or the identity or interval member to violate.
+    original
+        Original receipt bytes.
+    receipt
+        Decoded original receipt, changed in place for a member violation.
+
+    Returns
+    -------
+    tuple[bytes, str]
+        Altered receipt bytes and the text the launcher refuses with.
+    """
+    if field == "duplicate_worker_pid":
+        return original.replace(b"{", b'{"worker_pid":0,', 1), "duplicate JSON key: worker_pid"
+    if field == "duplicate_chunks":
+        altered = original.replace(b'"chunks":', b'"chunks":0,"chunks":', 1)
+        return altered, "duplicate JSON key: chunks"
+    receipt[field] = {
+        "worker_pid": receipt["worker_pid"] + 1,
+        "started_ns": receipt["finished_ns"] + 1,
+        "finished_ns": 0,
+    }[field]
+    return (
+        json.dumps(receipt, indent=2).encode() + b"\n",
+        "load collection does not cover native execution",
+    )
 
 
 def _wait_for_receipt(trace: OwnedTrace, receipt_file: Path) -> tuple[bytes, dict[str, Any]]:

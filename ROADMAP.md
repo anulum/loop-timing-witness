@@ -63,6 +63,14 @@ Software implementation does not qualify a board capability or advance measureme
   agreement, raw-sample pooling of valid repeats, spread between repeats and run-plan
   conformance. Exercised with RTL simulation repeats; no board campaign exists.
 
+- Native control-run and campaign analysis in the [standalone Rust crate](analysis/rust/README.md):
+  the run and campaign commands write the Python analysis's reports byte for byte, including runs
+  that bind an AMP capture, and refuse with Python's texts; a hosted gate requires every line and
+  branch of the crate. Closed-loop benchmark data from the production plant witness and a pinned
+  timing of both analyses are committed under `benchmarks/`. See
+  [native control-run loading](docs/HOST_ANALYSIS.md#native-control-run-loading) and
+  [control-run analysis timing](docs/HOST_ANALYSIS.md#control-run-analysis-timing).
+
 - Source-bound Python coverage publication and a daily download-history importer with
   actual HTTP/TLS transport tests, explicit missing-data handling and a dedicated
   `metrics` data branch. See [repository metrics](docs/METRICS.md).
@@ -71,9 +79,12 @@ Software implementation does not qualify a board capability or advance measureme
 
 Software publication includes the Python analysis package at version 0.2.0 and the standalone
 Rust controller crate at version 0.1.0, plus the public Python, C/C++ and Rust API references.
-Subsequent source verification is recorded with source release 0.1.0 in
-[CHANGELOG.md](CHANGELOG.md); it does not alter those immutable registry artifacts. The [versioned source archive](https://doi.org/10.5281/zenodo.23092361)
-and [GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0)
+Source releases are recorded in [CHANGELOG.md](CHANGELOG.md); they do not alter those immutable
+registry artifacts. The versioned source archives
+([0.1.0](https://doi.org/10.5281/zenodo.23092361), [0.2.0](https://doi.org/10.5281/zenodo.24222960))
+and GitHub releases
+([v0.1.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0),
+[v0.2.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.2.0))
 are published with verified hashes and explicit software-only evidence scope.
 
 The original-width RTL source-flow obligation is complete: 826 of 834 raw identities executed,

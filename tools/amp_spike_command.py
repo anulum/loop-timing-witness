@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from amp_platform import AmpPlatform
     from device_tree_blob import DeviceTree
     from device_tree_resources import Region
+    from device_tree_structure import Node
 
 ISA = "rv64imac_zicsr_zifencei"
 MAX_HART = 4
@@ -71,6 +72,111 @@ class SpikePaths:
     output: Path
 
 
+def _cpu_identifier(tree: DeviceTree, cpu: Node, controllers: dict[int, int]) -> int:
+    """Return an enabled, compatible CPU's hart identifier, refusing a repeat.
+
+    Parameters
+    ----------
+    tree
+        Original Spike topology.
+    cpu
+        CPU node.
+    controllers
+        Interrupt controller of each hart admitted so far.
+
+    Returns
+    -------
+    int
+        The hart identifier from ``reg``.
+
+    Raises
+    ------
+    ValueError
+        If the identifier geometry is invalid, or the hart is out of range,
+        repeated, disabled or of another ISA.
+    """
+    parent = tree.nodes[cpu.path.rpartition("/")[0] or "/"]
+    cells = property_cells(cpu.properties.get("reg", b""))
+    count = single_cell(parent, "#address-cells")
+    if count not in (1, 2) or len(cells) != count or single_cell(parent, "#size-cells") != 0:
+        message = "Spike original CPU identifier geometry is invalid"
+        raise ValueError(message)
+    identifier = int.from_bytes(cpu.properties["reg"], "big")
+    if (
+        identifier > MAX_HART
+        or identifier in controllers
+        or cpu.properties.get("status", b"okay\0") not in (b"okay\0", b"ok\0")
+        or cpu.properties.get("riscv,isa") != ISA.encode("ascii") + b"\0"
+    ):
+        message = "Spike original CPU identity, status or ISA is incompatible"
+        raise ValueError(message)
+    return identifier
+
+
+def _cpu_controller(handles: dict[int, Node], cpu: Node) -> int:
+    """Return the phandle of the CPU's one local interrupt controller.
+
+    Parameters
+    ----------
+    handles
+        Nodes by phandle.
+    cpu
+        CPU node.
+
+    Returns
+    -------
+    int
+        Phandle of its ``riscv,cpu-intc`` child.
+
+    Raises
+    ------
+    ValueError
+        If the CPU does not have exactly one such controller.
+    """
+    matches = [
+        handle
+        for handle, node in handles.items()
+        if node.path.rpartition("/")[0] == cpu.path
+        and "riscv,cpu-intc" in string_list(node, "compatible")
+        and node.properties.get("interrupt-controller") == b""
+        and single_cell(node, "#interrupt-cells") == 1
+    ]
+    if len(matches) != 1:
+        message = "Spike CPU requires one original referenced interrupt controller"
+        raise ValueError(message)
+    return matches[0]
+
+
+def _check_plic_contexts(
+    tree: DeviceTree, plic_path: str, harts: tuple[int, ...], controllers: dict[int, int]
+) -> None:
+    """Require the PLIC contexts to be each sorted hart's M then S interrupt.
+
+    Parameters
+    ----------
+    tree
+        Original Spike topology.
+    plic_path
+        Selected PLIC node path.
+    harts
+        Sorted hart identifiers.
+    controllers
+        Local interrupt controller phandle of each hart.
+
+    Raises
+    ------
+    ValueError
+        If the PLIC is missing or its ``interrupts-extended`` differs.
+    """
+    expected = tuple(
+        cell for hart in harts for cell in (controllers[hart], 11, controllers[hart], 9)
+    )
+    plic = tree.nodes.get(plic_path)
+    if plic is None or property_cells(plic.properties.get("interrupts-extended", b"")) != expected:
+        message = "Spike original PLIC contexts differ from actual sorted M/S allocation"
+        raise ValueError(message)
+
+
 def original_harts(tree: DeviceTree, plic_path: str) -> tuple[int, ...]:
     """Require original Spike machine/supervisor contexts to match every sorted original CPU.
 
@@ -95,48 +201,17 @@ def original_harts(tree: DeviceTree, plic_path: str) -> tuple[int, ...]:
         message = "Spike execution requires the original simulator model declaration"
         raise ValueError(message)
     handles = phandle_nodes(tree)
-    controllers = {}
+    controllers: dict[int, int] = {}
     for cpu in tree.nodes.values():
         if cpu.properties.get("device_type") != b"cpu\0":
             continue
-        parent = tree.nodes[cpu.path.rpartition("/")[0] or "/"]
-        cells = property_cells(cpu.properties.get("reg", b""))
-        count = single_cell(parent, "#address-cells")
-        if count not in (1, 2) or len(cells) != count or single_cell(parent, "#size-cells") != 0:
-            message = "Spike original CPU identifier geometry is invalid"
-            raise ValueError(message)
-        identifier = int.from_bytes(cpu.properties["reg"], "big")
-        if (
-            identifier > MAX_HART
-            or identifier in controllers
-            or cpu.properties.get("status", b"okay\0") not in (b"okay\0", b"ok\0")
-            or cpu.properties.get("riscv,isa") != ISA.encode("ascii") + b"\0"
-        ):
-            message = "Spike original CPU identity, status or ISA is incompatible"
-            raise ValueError(message)
-        matches = [
-            handle
-            for handle, node in handles.items()
-            if node.path.rpartition("/")[0] == cpu.path
-            and "riscv,cpu-intc" in string_list(node, "compatible")
-            and node.properties.get("interrupt-controller") == b""
-            and single_cell(node, "#interrupt-cells") == 1
-        ]
-        if len(matches) != 1:
-            message = "Spike CPU requires one original referenced interrupt controller"
-            raise ValueError(message)
-        controllers[identifier] = matches[0]
+        identifier = _cpu_identifier(tree, cpu, controllers)
+        controllers[identifier] = _cpu_controller(handles, cpu)
     if not controllers:
         message = "Spike topology has no original enabled CPUs"
         raise ValueError(message)
     harts = tuple(sorted(controllers))
-    expected = tuple(
-        cell for hart in harts for cell in (controllers[hart], 11, controllers[hart], 9)
-    )
-    plic = tree.nodes.get(plic_path)
-    if plic is None or property_cells(plic.properties.get("interrupts-extended", b"")) != expected:
-        message = "Spike original PLIC contexts differ from actual sorted M/S allocation"
-        raise ValueError(message)
+    _check_plic_contexts(tree, plic_path, harts, controllers)
     return harts
 
 
@@ -179,6 +254,107 @@ def original_ram(tree: DeviceTree) -> tuple[Region, ...]:
     return tuple(regions)
 
 
+def _check_tools(tools: SpikeTools) -> None:
+    """Require actual absolute simulator and plugin files and bounded clock settings.
+
+    Parameters
+    ----------
+    tools
+        Installed simulator and plugin with the clock bounds.
+
+    Raises
+    ------
+    ValueError
+        If a file is not absolute, present or executable, or a clock setting is
+        out of bounds.
+    """
+    if (
+        not tools.executable.is_absolute()
+        or not tools.executable.is_file()
+        or not os.access(tools.executable, os.X_OK)
+        or not tools.plugin.is_absolute()
+        or not tools.plugin.is_file()
+    ):
+        message = "Spike simulator and plugin require explicit actual absolute files"
+        raise ValueError(message)
+    if (
+        type(tools.rtc_nanoseconds) is not int
+        or not 1 <= tools.rtc_nanoseconds <= MAX_RTC_NANOSECONDS
+        or type(tools.time_limit) is not int
+        or not MIN_TIME_LIMIT <= tools.time_limit <= UINT64_MAX
+    ):
+        message = "Spike functional clock and time limit are outside bounds"
+        raise ValueError(message)
+
+
+def _harts(tree: DeviceTree, plic_path: str, platform: AmpPlatform) -> tuple[int, ...]:
+    """Return the topology's harts, requiring the firmware's dedicated hart among them.
+
+    Parameters
+    ----------
+    tree
+        Original Spike topology.
+    plic_path
+        Selected PLIC node path.
+    platform
+        Admitted resources with the dedicated hart.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Sorted hart identifiers.
+
+    Raises
+    ------
+    ValueError
+        If the dedicated hart is absent.
+    """
+    harts = original_harts(tree, plic_path)
+    if platform.hart not in harts:
+        message = "dedicated firmware hart is absent from actual Spike topology"
+        raise ValueError(message)
+    return harts
+
+
+def _plugin_fields(platform: AmpPlatform, tools: SpikeTools, paths: SpikePaths) -> list[str]:
+    """Return the plugin device arguments, refusing a delimiter inside a field.
+
+    Parameters
+    ----------
+    platform
+        Admitted topology resources.
+    tools
+        Simulator clock settings.
+    paths
+        Image and output directories.
+
+    Returns
+    -------
+    list[str]
+        Aperture, source, clock, time limit, shared memory and the absolute
+        configuration, events and tracking paths.
+
+    Raises
+    ------
+    ValueError
+        If a field contains a comma or a line break.
+    """
+    fields = [
+        str(platform.device.aperture.address),
+        str(platform.source),
+        str(tools.rtc_nanoseconds),
+        str(tools.time_limit),
+        str(platform.memory.shared.address),
+        str((paths.image / "configuration.txt").resolve()),
+        str((paths.output / "events.bin").resolve()),
+        str((paths.output / "tracking_raw.csv").resolve()),
+    ]
+    if any("," in field or "\n" in field or "\r" in field for field in fields):
+        message = "Spike plugin argument paths contain an unsupported delimiter"
+        raise ValueError(message)
+    return fields
+
+
 def spike_command(
     tools: SpikeTools,
     tree: DeviceTree,
@@ -212,41 +388,9 @@ def spike_command(
     ValueError
         If actual files, clock/time bounds, topology or plugin path delimiters are invalid.
     """
-    if (
-        not tools.executable.is_absolute()
-        or not tools.executable.is_file()
-        or not os.access(tools.executable, os.X_OK)
-        or not tools.plugin.is_absolute()
-        or not tools.plugin.is_file()
-    ):
-        message = "Spike simulator and plugin require explicit actual absolute files"
-        raise ValueError(message)
-    if (
-        type(tools.rtc_nanoseconds) is not int
-        or not 1 <= tools.rtc_nanoseconds <= MAX_RTC_NANOSECONDS
-        or type(tools.time_limit) is not int
-        or not MIN_TIME_LIMIT <= tools.time_limit <= UINT64_MAX
-    ):
-        message = "Spike functional clock and time limit are outside bounds"
-        raise ValueError(message)
-    image, output = paths.image, paths.output
-    harts = original_harts(tree, plic_path)
-    if platform.hart not in harts:
-        message = "dedicated firmware hart is absent from actual Spike topology"
-        raise ValueError(message)
-    fields = [
-        str(platform.device.aperture.address),
-        str(platform.source),
-        str(tools.rtc_nanoseconds),
-        str(tools.time_limit),
-        str(platform.memory.shared.address),
-        str((image / "configuration.txt").resolve()),
-        str((output / "events.bin").resolve()),
-        str((output / "tracking_raw.csv").resolve()),
-    ]
-    if any("," in field or "\n" in field or "\r" in field for field in fields):
-        message = "Spike plugin argument paths contain an unsupported delimiter"
-        raise ValueError(message)
+    _check_tools(tools)
+    harts = _harts(tree, plic_path, platform)
+    fields = _plugin_fields(platform, tools, paths)
     return [
         str(tools.executable),
         f"-p{len(harts)}",
@@ -255,8 +399,8 @@ def spike_command(
         "--priv=msu",
         "--isa=RV64IMAC_Zicsr_Zifencei",
         "--pcs=" + ",".join(f"{hart}:{platform.memory.firmware.address}" for hart in harts),
-        "--dtb=" + str((image / "platform.dtb").resolve()),
+        "--dtb=" + str((paths.image / "platform.dtb").resolve()),
         "--extlib=" + str(tools.plugin),
         "--device=witness_axi," + ",".join(fields),
-        str((image / "firmware.elf").resolve()),
+        str((paths.image / "firmware.elf").resolve()),
     ]

@@ -195,18 +195,19 @@ def test_loaded_package_origin_wins_over_a_same_named_checkout_file(tmp_path: Pa
     assert (output / name).read_bytes() != shadow.read_bytes()
 
 
-@pytest.mark.parametrize("member", ["origin", "frozen", "context"])
-def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, member: str) -> None:
-    """Retain real completed native output but refuse a changed producer context.
+def _copy_producer(copied: Path) -> Path:
+    """Snapshot the native sources with the host-load tools, package and domain.
 
     Parameters
     ----------
-    tmp_path
-        Exclusive source copy, actual native build, and retained failure logs.
-    member
-        Whether original code, frozen code, or context metadata changes during capture.
+    copied
+        Directory to create.
+
+    Returns
+    -------
+    Path
+        Copied source root holding ``tools``, ``src`` and ``measurement-domain.json``.
     """
-    copied = tmp_path / "copy"
     copied.mkdir()
     snapshot_native_sources(REPOSITORY_ROOT, copied, host_load=True)
     root = copied / "source"
@@ -218,6 +219,39 @@ def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, m
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
     shutil.copyfile(REPOSITORY_ROOT / "measurement-domain.json", root / "measurement-domain.json")
+    return root
+
+
+def _await_build_log(process: subprocess.Popen[bytes], output: Path) -> None:
+    """Wait at most 30 scaled seconds for the running capture to start its build log.
+
+    Parameters
+    ----------
+    process
+        Running capture.
+    output
+        Capture output directory.
+    """
+    limit = time.monotonic() + scaled(30)
+    while (
+        not (output / "build.log").exists() and process.poll() is None and time.monotonic() < limit
+    ):
+        time.sleep(0.01)
+    assert (output / "build.log").exists()
+
+
+@pytest.mark.parametrize("member", ["origin", "frozen", "context"])
+def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, member: str) -> None:
+    """Retain real completed native output but refuse a changed producer context.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive source copy, actual native build, and retained failure logs.
+    member
+        Whether original code, frozen code, or context metadata changes during capture.
+    """
+    root = _copy_producer(tmp_path / "copy")
     config = tmp_path / "configuration.txt"
     config.write_text(configuration("pid", "none"), encoding="utf-8")
     output = tmp_path / "capture"
@@ -240,14 +274,7 @@ def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, m
             start_new_session=True,
         ) as process,
     ):
-        limit = time.monotonic() + scaled(30)
-        while (
-            not (output / "build.log").exists()
-            and process.poll() is None
-            and time.monotonic() < limit
-        ):
-            time.sleep(0.01)
-        assert (output / "build.log").exists()
+        _await_build_log(process, output)
         targets = {
             "origin": root / "src/loop_timing_witness/manifest_io.py",
             "frozen": output / "source/parent_package/loop_timing_witness/manifest_io.py",
@@ -256,7 +283,19 @@ def test_actual_capture_refuses_source_drift_before_acceptance(tmp_path: Path, m
         target = targets[member]
         target.write_bytes(target.read_bytes() + b"\n")
         assert process.wait(timeout=scaled(120)) == 1
-    diagnostic = (tmp_path / "capture.log").read_text()
+    _check_retained(output, (tmp_path / "capture.log").read_text())
+
+
+def _check_retained(output: Path, diagnostic: str) -> None:
+    """Require the drift refusal to keep the completed native output without accepting it.
+
+    Parameters
+    ----------
+    output
+        Capture output directory.
+    diagnostic
+        Capture log.
+    """
     assert "capture producer" in diagnostic
     assert "changed" in diagnostic
     metadata = json.loads((output / "native_metadata.json").read_bytes())

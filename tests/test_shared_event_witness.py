@@ -42,8 +42,78 @@ def test_parallel_capture_shared_ticks_and_independent_loss(
     count
         Four sparse records or a whole 1,000-record continuous capture before drain.
     """
+    records = _capture(tmp_path, overflow, counter_bits, drain_period, count)
+    if not overflow:
+        assert records[0] == records[1] == records[2]
+        spacing = 1 if count == 1000 else 3
+        assert records[0] == [
+            (17, 0, 0, 0, 10),
+            *((14, 0, 0, index, 20 + spacing * index) for index in range(count)),
+            (17, 0, 0, 1, 1030 if count == 1000 else 40),
+        ]
+    else:
+        _check_overflow(records)
+
+
+def _capture(
+    directory: Path, overflow: int, counter_bits: int, drain_period: int, count: int
+) -> list[list[tuple[int, ...]]]:
+    """Compile and run the shared witness testbench and read each channel's records.
+
+    Parameters
+    ----------
+    directory
+        Isolated compiler and raw-stream allocation.
+    overflow, counter_bits, drain_period, count
+        Testbench parameters of the case.
+
+    Returns
+    -------
+    list[list[tuple[int, ...]]]
+        Records of channels 0, 1 and 2.
+    """
+    binary = _compile(
+        directory,
+        {
+            "OVERFLOW_RUN": overflow,
+            "OVERFLOW_COUNTER_BITS": counter_bits,
+            "DRAIN_HALF_PERIOD": drain_period,
+            "NORMAL_COUNT": count,
+            "ADDRESS_BITS": 10 if count == 1000 else 3,
+        },
+    )
+    result = subprocess.run(
+        ["vvp", str(binary), f"+EVENT_DIRECTORY={directory}"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(30),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "SHARED_CAPTURE_PASS reset_pass=1" in result.stdout
+    return [
+        list(struct.iter_unpack("<BBHIQ", (directory / f"channel-{channel}.bin").read_bytes()))
+        for channel in range(3)
+    ]
+
+
+def _compile(directory: Path, parameters: dict[str, int]) -> Path:
+    """Compile the shared witness testbench with Icarus Verilog.
+
+    Parameters
+    ----------
+    directory
+        Isolated compiler allocation.
+    parameters
+        Testbench parameter overrides, in command order.
+
+    Returns
+    -------
+    Path
+        Compiled simulation.
+    """
     repository = Path(__file__).resolve().parents[1]
-    binary = tmp_path / "shared-event-witness.vvp"
+    binary = directory / "shared-event-witness.vvp"
     sources = [
         "rtl/clock_reset_release.sv",
         "rtl/event_record_fifo.sv",
@@ -58,11 +128,7 @@ def test_parallel_capture_shared_ticks_and_independent_loss(
             "shared_event_witness_tb",
             "-o",
             str(binary),
-            f"-Pshared_event_witness_tb.OVERFLOW_RUN={overflow}",
-            f"-Pshared_event_witness_tb.OVERFLOW_COUNTER_BITS={counter_bits}",
-            f"-Pshared_event_witness_tb.DRAIN_HALF_PERIOD={drain_period}",
-            f"-Pshared_event_witness_tb.NORMAL_COUNT={count}",
-            f"-Pshared_event_witness_tb.ADDRESS_BITS={10 if count == 1000 else 3}",
+            *(f"-Pshared_event_witness_tb.{name}={value}" for name, value in parameters.items()),
             *(str(repository / source) for source in sources),
         ],
         capture_output=True,
@@ -70,36 +136,25 @@ def test_parallel_capture_shared_ticks_and_independent_loss(
         check=True,
         timeout=scaled(30),
     )
-    result = subprocess.run(
-        ["vvp", str(binary), f"+EVENT_DIRECTORY={tmp_path}"],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=scaled(30),
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "SHARED_CAPTURE_PASS reset_pass=1" in result.stdout
-    records = [
-        list(struct.iter_unpack("<BBHIQ", (tmp_path / f"channel-{channel}.bin").read_bytes()))
-        for channel in range(3)
-    ]
-    if not overflow:
-        assert records[0] == records[1] == records[2]
-        spacing = 1 if count == 1000 else 3
-        assert records[0] == [
-            (17, 0, 0, 0, 10),
-            *((14, 0, 0, index, 20 + spacing * index) for index in range(count)),
-            (17, 0, 0, 1, 1030 if count == 1000 else 40),
-        ]
-    else:
-        assert len(records[0]) == 8
-        assert len(records[1]) == 25
-        assert records[2] == []
-        assert [record[3] for record in records[0]] == list(range(8))
-        assert [record[3] for record in records[1]] == list(range(25))
-        assert [record[4] for record in records[0]] == [record[4] for record in records[1][:8]]
-        assert all(record[0] == 14 and record[1:3] == (0, 0) for record in records[0])
-        assert all(record[0] == 15 and record[1:3] == (0, 0) for record in records[1])
+    return binary
+
+
+def _check_overflow(records: list[list[tuple[int, ...]]]) -> None:
+    """Require independent loss: eight records in channel 0, 25 in channel 1, none in 2.
+
+    Parameters
+    ----------
+    records
+        Records of channels 0, 1 and 2 of the full-buffer case.
+    """
+    assert len(records[0]) == 8
+    assert len(records[1]) == 25
+    assert records[2] == []
+    assert [record[3] for record in records[0]] == list(range(8))
+    assert [record[3] for record in records[1]] == list(range(25))
+    assert [record[4] for record in records[0]] == [record[4] for record in records[1][:8]]
+    assert all(record[0] == 14 and record[1:3] == (0, 0) for record in records[0])
+    assert all(record[0] == 15 and record[1:3] == (0, 0) for record in records[1])
 
 
 @pytest.mark.parametrize(

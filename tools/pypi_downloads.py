@@ -258,7 +258,9 @@ def fetch(url: str = SOURCE_URL) -> bytes | None:
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
-        connection.request("GET", target, headers={"Accept": "application/json"})
+        # Registry APIs such as crates.io and GitHub refuse requests without a client name.
+        headers = {"Accept": "application/json", "User-Agent": "loop-timing-witness-tools"}
+        connection.request("GET", target, headers=headers)
         return _body(connection.getresponse())
     finally:
         connection.close()

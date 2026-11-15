@@ -128,6 +128,8 @@ ignore = [
 # Native SBOM verification uses a resolved Cargo executable and fixed offline metadata argv.
 "tools/check_native_analysis_sbom.py" = ["S603"]
 "tools/repository_files.py" = ["S603", "S607"]
+# The release provenance builder runs Git with fixed argument vectors and no shell.
+"tools/release_provenance.py" = ["S603", "S607"]
 
 [tool.ruff.lint.flake8-copyright]
 # The mandated provenance header states both copyright lines this way.

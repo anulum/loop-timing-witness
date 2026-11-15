@@ -99,6 +99,30 @@ decimal string `"4202006"`; the 0.1.0 record uses a JSON integer. The value is
 correct, and the hash-bound record is not rewritten. Read the size as an
 integer from either form.
 
+## Building the release assets
+
+`tools/release_provenance.py` makes both assets from the tagged commit. A
+release specification (schema
+`loop-timing-witness.source-release-specification.v1`) holds the members a
+person declares: the version, the version DOI, the boundary text, the
+physical evidence maturity, the unqualified items, the registry artifacts and
+the software verification. `collect` fills the PyPI distributions of the
+version, the listed crate publications and the hosted workflow runs of the
+commit from the public APIs:
+
+```sh
+python tools/release_provenance.py collect --commit <commit> \
+  --specification release-specification.json --output release-specification.json
+python tools/release_provenance.py build --commit <commit> \
+  --specification release-specification.json --output <asset directory>
+```
+
+`build` is offline. It writes `loop-timing-witness-<version>.zip` with
+`git archive` in the Europe/Zurich time zone, and `release-provenance.json`
+with the archive's size, SHA-256 and MD5 and the SHA-256 of every file of the
+commit's tree computed, not declared. The tests rebuild both published records
+and ZIPs from their commits; the 0.1.0 record is rebuilt byte for byte.
+
 ## Subsequent versions
 
 Each release is registered separately after its publication: its source

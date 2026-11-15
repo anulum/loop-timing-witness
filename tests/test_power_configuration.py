@@ -24,6 +24,43 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 __all__ = ["native_uio"]
+# An absent UIO device, then its name, version, map index and physical address (run_uio).
+UIO_DEVICE = ("uio4294967295", "witness", "devicetree", "0", "0")
+
+
+def _changed_tokens(index: int, replacement: str) -> list[str]:
+    """Return a valid four-rail PAC1934 configuration with one change.
+
+    Parameters
+    ----------
+    index
+        Token to replace, 22 to append, or 23 to truncate the configuration.
+    replacement
+        Replacement or appended token, or the retained token count.
+
+    Returns
+    -------
+    list[str]
+        Configuration tokens.
+    """
+    tokens = [
+        "pac1934-iio-mchp-v1",
+        "iio:device4294967295",
+        os.uname().release,
+        "60000000",
+        "50000000",
+        str(min(os.sched_getaffinity(0))),
+        "1024",
+    ]
+    for channel, rail in enumerate(("VDD", "VDD25", "VDDA25", "VDDA"), 1):
+        tokens.extend([rail, str(channel), "10000", f"rail{channel}"])
+    if index == 22:
+        tokens.append(replacement)
+    elif index == 23:
+        tokens = tokens[: int(replacement)]
+    else:
+        tokens[index] = replacement
+    return tokens
 
 
 @pytest.mark.parametrize(
@@ -83,39 +120,8 @@ def test_refused_power_configuration(
     error
         Expected acquisition refusal.
     """
-    tokens = [
-        "pac1934-iio-mchp-v1",
-        "iio:device4294967295",
-        os.uname().release,
-        "60000000",
-        "50000000",
-        str(min(os.sched_getaffinity(0))),
-        "1024",
-        "VDD",
-        "1",
-        "10000",
-        "rail1",
-        "VDD25",
-        "2",
-        "10000",
-        "rail2",
-        "VDDA25",
-        "3",
-        "10000",
-        "rail3",
-        "VDDA",
-        "4",
-        "10000",
-        "rail4",
-    ]
-    if index == 22:
-        tokens.append(replacement)
-    elif index == 23:
-        tokens = tokens[: int(replacement)]
-    else:
-        tokens[index] = replacement
     power = tmp_path / "power.conf"
-    power.write_text(" ".join(tokens), encoding="utf-8")
+    power.write_text(" ".join(_changed_tokens(index, replacement)), encoding="utf-8")
     config = tmp_path / "run.conf"
     config.write_text(configuration("pid", "none"), encoding="utf-8")
     events, raw, journal = (tmp_path / name for name in ("events.bin", "raw.csv", "power.csv"))
@@ -125,11 +131,7 @@ def test_refused_power_configuration(
             str(config),
             str(events),
             str(raw),
-            "uio4294967295",
-            "witness",
-            "devicetree",
-            "0",
-            "0",
+            *UIO_DEVICE,
             "--metadata",
             str(tmp_path / "metadata.json"),
             "--power-config",

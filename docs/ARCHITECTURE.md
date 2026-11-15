@@ -46,9 +46,10 @@ interconnect that selects the planned 256-byte register range at `0x60020000` th
 `0x600200ff`. It passes the low eight address bits to `axi_control_witness` and exposes its
 retained interrupt level. This boundary is exercised in simulation; the Libero interconnect,
 capture clock, interrupt route and physical timing are not yet qualified.
-The pinned Icicle reference source configures the FIC0 bus clock at 125 MHz from CCC GL0_0
-and the witness capture clock at 100 MHz from CCC GL0_1. Those source settings do not
-establish implemented clock rates or CDC timing closure.
+The pinned Icicle reference source configures the FIC0 bus clock at 125 MHz from CCC GL0_0;
+the derived design adds a separate CCC that derives the witness capture clock at 100 MHz from
+the 50 MHz reference clock. Those settings do not establish implemented clock rates or CDC
+timing closure.
 
 ## Block structure
 

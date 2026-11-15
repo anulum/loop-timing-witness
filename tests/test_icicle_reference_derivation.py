@@ -185,7 +185,7 @@ def test_public_derivation_and_vendor_preflight(derived_tree: Path) -> None:
     ("relative", "expected"),
     [
         ("witness_rtl/icicle_witness.sv", "derived RTL changed"),
-        ("script_support/components/MSS_WRAPPER.tcl", "derived vendor Tcl changed"),
+        ("script_support/components/FIC0_INITIATOR.tcl", "derived vendor Tcl changed"),
         (
             "script_support/constraints/fic_clocks.sdc",
             "derived reference remainder differs from pinned commit",
@@ -464,12 +464,14 @@ def test_public_python_derivation_refuses_changed_reference(
     """
     source = tmp_path / "changed-reference"
     shutil.copytree(official_reference, source, symlinks=True)
-    vendor = source / "script_support/components/MSS_WRAPPER.tcl"
+    vendor = source / "script_support/components/FIC0_INITIATOR.tcl"
     vendor.write_bytes(vendor.read_bytes() + b"\n# changed in owned test source\n")
     output = tmp_path / "must-not-exist"
     refusal = invoke(str(PYTHON), str(VERIFY), str(source), str(output))
     assert refusal.returncode != 0
-    assert "reference source mismatch: script_support/components/MSS_WRAPPER.tcl" in refusal.stderr
+    assert (
+        "reference source mismatch: script_support/components/FIC0_INITIATOR.tcl" in refusal.stderr
+    )
     assert not output.exists()
 
 
@@ -525,14 +527,14 @@ def test_public_python_derivation_refuses_source_directory_alias(
     "race",
     [
         (
-            "/output/script_support/components/MSS_WRAPPER.tcl",
+            "/output/script_support/components/FIC0_INITIATOR.tcl",
             1,
             "expected one occurrence",
         ),
         (
-            "/output/script_support/components/MSS_WRAPPER.tcl",
+            "/output/script_support/components/FIC0_INITIATOR.tcl",
             2,
-            "derived source mismatch: script_support/components/MSS_WRAPPER.tcl",
+            "derived source mismatch: script_support/components/FIC0_INITIATOR.tcl",
         ),
         (
             "/output/witness_rtl/icicle_witness.sv",

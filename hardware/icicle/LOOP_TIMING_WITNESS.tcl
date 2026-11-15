@@ -31,8 +31,8 @@ foreach witness_source [lsort [glob -directory $witness_rtl_dir *.sv]] {
     }
 }
 build_design_hierarchy
-create_hdl_core -file $witness_top -module {icicle_witness} -library {work} -package {}
-hdl_core_add_bif -hdl_core_name {icicle_witness} -bif_definition {AXI4:AMBA:AMBA4:mirroredMaster} -bif_name {AXI4_LITE_TARGET} -signal_map {\
+create_hdl_core -file {hdl/icicle_witness.sv} -module {icicle_witness} -library {work} -package {}
+hdl_core_add_bif -hdl_core_name {icicle_witness} -bif_definition {AXI4:AMBA:AMBA4:slave} -bif_name {AXI4_LITE_TARGET} -signal_map {\
 "AWADDR:awaddr" \
 "AWVALID:awvalid" \
 "AWREADY:awready" \
@@ -51,7 +51,8 @@ hdl_core_add_bif -hdl_core_name {icicle_witness} -bif_definition {AXI4:AMBA:AMBA
 "RVALID:rvalid" \
 "RREADY:rready" }
 
-sd_instantiate_component -sd_name {FIC_0_PERIPHERALS} -component_name {icicle_witness} -instance_name {icicle_witness_0}
+open_smartdesign -sd_name {FIC_0_PERIPHERALS}
+sd_instantiate_hdl_core -sd_name {FIC_0_PERIPHERALS} -hdl_core_name {icicle_witness} -instance_name {icicle_witness_0}
 sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"FIC0_INITIATOR:AXI4mslave2" "icicle_witness_0:AXI4_LITE_TARGET"}
 sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"ACLK" "icicle_witness_0:bus_clock"}
 sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"ARESETN" "icicle_witness_0:run_reset_n"}
@@ -59,6 +60,42 @@ sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:interrupt_line} -port_name {WITNESS_IRQ}
 generate_component -component_name {FIC_0_PERIPHERALS} -recursive 0
 sd_update_instance -sd_name ${top_level_name} -instance_name {FIC_0_PERIPHERALS_1}
+# The base design ties MSS fabric-to-processor interrupts 11 to 58 low; bit 11 becomes the witness interrupt
+# input only now, after the base design has generated with every MSS input connected.
+open_smartdesign -sd_name {MSS_WRAPPER}
+sd_clear_pin_attributes -sd_name {MSS_WRAPPER} -pin_names {ICICLE_MSS:MSS_INT_F2M[58:11]}
+sd_delete_pin_slices -sd_name {MSS_WRAPPER} -pin_name {ICICLE_MSS:MSS_INT_F2M} -pin_slices {[58:11]}
+sd_create_pin_slices -sd_name {MSS_WRAPPER} -pin_name {ICICLE_MSS:MSS_INT_F2M} -pin_slices {[11:11]}
+sd_create_pin_slices -sd_name {MSS_WRAPPER} -pin_name {ICICLE_MSS:MSS_INT_F2M} -pin_slices {[58:12]}
+sd_connect_pins_to_constant -sd_name {MSS_WRAPPER} -pin_names {ICICLE_MSS:MSS_INT_F2M[58:12]} -value {GND}
+sd_create_scalar_port -sd_name {MSS_WRAPPER} -port_name {MSS_INT_F2M_11} -port_direction {IN}
+sd_connect_pins -sd_name {MSS_WRAPPER} -pin_names {"ICICLE_MSS:MSS_INT_F2M[11:11]" "MSS_INT_F2M_11"}
+save_smartdesign -sd_name {MSS_WRAPPER}
+generate_component -component_name {MSS_WRAPPER} -recursive 0
+sd_update_instance -sd_name ${top_level_name} -instance_name {MSS_WRAPPER_1}
+
+# The reference CCC uses all four PLL0 outputs (125, 125, 125 and 50 MHz) and has no PLL1, so the
+# witness capture clock comes from its own CCC: 100 MHz from the same 50 MHz reference clock.
+create_and_configure_core -download_core -core_vlnv {Actel:SgCore:PF_CCC:*} -component_name {WITNESS_CCC} -params {\
+"GL0_0_IS_USED:true" \
+"GL0_0_OUT_FREQ:100" \
+"GL0_0_FABCLK_USED:true" \
+"GL1_0_IS_USED:false" \
+"GL2_0_IS_USED:false" \
+"GL3_0_IS_USED:false" \
+"PLL_IN_FREQ_0:50" \
+"PLL_REF_CLK_SEL_0:false" \
+"PLL_EXPORT_PWRDWN:false" }
+open_smartdesign -sd_name {CLOCKS_AND_RESETS}
+sd_instantiate_component -sd_name {CLOCKS_AND_RESETS} -component_name {WITNESS_CCC} -instance_name {WITNESS_CCC_0}
+sd_create_scalar_port -sd_name {CLOCKS_AND_RESETS} -port_name {WITNESS_CAPTURE_CLK} -port_direction {OUT}
+sd_connect_pins -sd_name {CLOCKS_AND_RESETS} -pin_names {"CLKINT_REF_CLK_50MHz:Y" "WITNESS_CCC_0:REF_CLK_0"}
+sd_connect_pins -sd_name {CLOCKS_AND_RESETS} -pin_names {"WITNESS_CCC_0:OUT0_FABCLK_0" "WITNESS_CAPTURE_CLK"}
+sd_mark_pins_unused -sd_name {CLOCKS_AND_RESETS} -pin_names {WITNESS_CCC_0:PLL_LOCK_0}
+save_smartdesign -sd_name {CLOCKS_AND_RESETS}
+generate_component -component_name {CLOCKS_AND_RESETS} -recursive 0
+sd_update_instance -sd_name ${top_level_name} -instance_name {CLOCKS_AND_RESETS}
+
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_CLK"     "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_CLK"}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"FIC_0_PERIPHERALS_1:WITNESS_IRQ" "MSS_WRAPPER_1:MSS_INT_F2M_11"}
 generate_component -component_name ${top_level_name} -recursive 0

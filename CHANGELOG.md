@@ -58,6 +58,12 @@ Loop Timing Witness — changelog
   longer evaluates. The native run simulator writes byte-identical outputs for both plants, PID
   and LQR, every reference and every injected fault; a 60-cycle PID run at the compiled period
   takes 2.11 s instead of 3.61 s (median of six alternating runs on ML350).
+- The derived Icicle project generates in Libero SoC 2026.1 for MPFS250T. The first Libero run
+  refused the derived design, so the witness script now adds the witness HDL core as an AXI4
+  target on FIC0 slot 2, MSS interrupt bit 11 and a separate 100 MHz CCC after the base design
+  has generated. The derivation edits only the reference script and FIC0's interconnect and
+  keeps the reference's design-rule settings. The reference CCC has no free output, and a
+  SmartDesign input left for later is refused when the base design generates.
 
 ## [0.2.0] - 2026-11-14
 

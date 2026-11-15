@@ -13,7 +13,7 @@ Loop Timing Witness — Icicle reference derivation
 The reference source is fetched separately and is never committed here. Use an official
 `polarfire-soc/icicle-kit-reference-design` checkout at commit
 `9c34320f91e8e8a144c7d87bf299527fc5f02081`. The derivation command requires that
-checkout to be clean and verifies the five vendor source files it changes by SHA-256.
+checkout to be clean and verifies the two vendor source files it changes by SHA-256.
 It also verifies a path-and-content digest of every reference source file outside Git
 metadata, including the timing constraints and MSS configuration. It writes a new output
 tree on the repository's filesystem and refuses an existing path.
@@ -49,7 +49,7 @@ cannot silently change an already-derived design. Keep the source repository and
 with the derived tree; the manifest is provenance for source preparation, not a Libero result.
 The pre-Libero verifier also checks the complete unmodified reference-file inventory against
 the pinned commit and rejects extra files; changes to a constraint or MSS input cannot pass
-through merely because the five edited Tcl files still match.
+through merely because the two edited Tcl files still match.
 It rejects repeated JSON member names in the derivation manifest, including a repeated
 member whose final value matches the expected receipt.
 The witness connection requires the derived RTL snapshot and the reference Linux baseline;
@@ -83,20 +83,38 @@ and inspected reports are required before claiming timing closure.
 The source keeps the reference's Linux MSS configuration, so processor I²C remains
 available for PAC1934 access. No I²C loopback variant is selected.
 
-The source-level connection presents the reference FIC0's 38-bit address and 32-bit data
-at slot 2, covering the 256-byte AXI4-Lite aperture at
-`0x60020000`, routes the retained witness interrupt to MSS fabric-to-processor bit 11,
-and attempts to expose the CCC's configured 100 MHz GL0_1 output to fabric. Libero must
-still validate the bus-interface role and width, pin names, memory map, clock/reset
-connectivity, constraints, synthesis, place-and-route and timing. The original board
-support package must establish the interrupt's PLIC and device-tree identity before a
-processor may consume it. Source derivation and RTL simulation do not qualify a board.
+The derivation changes two vendor Tcl files. The reference script sources the witness
+script once the base design has generated, and FIC0's interconnect gains target slot 2,
+ending at `0x600200ff`. The witness script adds the rest to the generated design:
+
+- the witness HDL core as an AXI4 target on FIC0 slot 2, with the reference FIC0's 38-bit
+  address and 32-bit data, covering the 256-byte AXI4-Lite aperture at `0x60020000`;
+- MSS fabric-to-processor interrupt bit 11 for the retained witness interrupt, split out of
+  the range 11–58 that the reference ties low;
+- a separate CCC, `WITNESS_CCC`, that derives the 100 MHz capture clock from the 50 MHz
+  reference clock. The reference CCC uses all four PLL0 outputs (125, 125, 125 and 50 MHz)
+  and does not instantiate PLL1, so no reference output is free for the witness.
+
+Each change runs after the base design has generated with every input connected, because
+SmartDesign refuses an unconnected input when it generates a component. The reference's
+own bus interfaces differ in data and ID widths, and the reference project downgrades those
+design-rule findings to warnings; the derivation keeps that setting, and the witness
+target's widths are checked from the generation messages instead.
+
+Libero SoC 2026.1 generates this project for MPFS250T. Its core generators need a display:
+on a host without one, pass a wrapper that runs Libero under `xvfb-run` as the runner's
+Libero executable. A host without internet access sets Libero's vault to the MegaVault of
+the release (`change_vault_location`); it holds every core the reference requests. The
+witness CCC's lock output is not used. Synthesis, place-and-route, timing and the CDC
+review remain to be qualified. The original board support package must establish the
+interrupt's PLIC and device-tree identity before a processor may consume it. Source
+derivation and RTL simulation do not qualify a board.
 
 In the pinned reference source, `FIC_0_PERIPHERALS_1:ACLK` takes
-`CLOCKS_AND_RESETS:FIC_0_CLK` from the CCC's GL0_0 output configured for 125 MHz.
-The witness `capture_clock` takes the separate GL0_1 output configured for 100 MHz.
-These source settings identify the intended clock domains; only the generated Libero
-design and timing reports can confirm their implemented frequencies and paths.
+`CLOCKS_AND_RESETS:FIC_0_CLK` from the reference CCC's GL0_0 output configured for 125 MHz.
+The witness `capture_clock` takes `WITNESS_CCC` output 0, configured for 100 MHz.
+These settings identify the intended clock domains; only the timing reports can confirm
+their implemented frequencies and paths.
 
 The pinned reference imports `script_support/constraints/fic_clocks.sdc` for synthesis,
 place-and-route and timing verification. That file groups the four FIC clocks as

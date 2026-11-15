@@ -22,46 +22,27 @@ from manifest_io import load_json_object
 
 REFERENCE_COMMIT = "9c34320f91e8e8a144c7d87bf299527fc5f02081"
 SOURCE_TREE_SHA256 = "1f720db72fd65fa25a93ffcf6a445b581926a02a6a8f64b6b8d9d415088c109b"
-REFERENCE_REMAINDER_SHA256 = "dd589c9bbbd526ee37aaecd3ccfef7e841c8fa5990c313b3d4885eacd58665ca"
+REFERENCE_REMAINDER_SHA256 = "f2a6315e2dcd1ca2ee741298f2c4814a2181b4ba722f255c7d18ed07ecf18430"
 SOURCE_HASHES = {
     "MPFS_ICICLE_KIT_REFERENCE_DESIGN.tcl": (
         "28aa2cc9263c8e8bf410ee2a31ee7fc6def82e112c3badb34f2186c51cc06b9d"
     ),
-    "script_support/components/CLOCKS_AND_RESETS.tcl": (
-        "f9a8ddf551e9b93eab4de55f0a5cac763ad69ebb234216d1f780b85263d44c56"
-    ),
     "script_support/components/FIC0_INITIATOR.tcl": (
         "30add476ef4d02e0b03245ab1730395c4576abcf985f35cd483ca89de90d8b99"
-    ),
-    "script_support/components/MSS_WRAPPER.tcl": (
-        "f396a6fe58cf4059a447bbbe19cff21db7e3019206a6c78407fb508f24b61475"
-    ),
-    "script_support/components/PF_CCC_C0.tcl": (
-        "fd5403d96639bdce38d0236f7948a595ccda6a3e0fc84889b29f63a148cca17b"
     ),
 }
 DERIVED_HASHES = {
     "MPFS_ICICLE_KIT_REFERENCE_DESIGN.tcl": (
-        "7ee70f5e29d6bcdc4c1a2d418a990ab814df0688d6e021bcd8962bdd7e43ee77"
-    ),
-    "script_support/components/CLOCKS_AND_RESETS.tcl": (
-        "ccf5a9656c56bad8adf937174df7263ea396f379174544367be05a63b53f18f7"
+        "921f889ef648fc4e09b09789fe87385bf0857596a105f95b508b240531f7e1de"
     ),
     "script_support/components/FIC0_INITIATOR.tcl": (
         "2ac5577bfdb84f1ec262011076fb20a9ed727de2d562f85bc0e2e8780ef0610d"
-    ),
-    "script_support/components/MSS_WRAPPER.tcl": (
-        "ade0d8a635e1f70c8aa5276a77b50b4aad00abafb28456a975ff7b67cc77eb2e"
-    ),
-    "script_support/components/PF_CCC_C0.tcl": (
-        "6efd2d48b6431ca75715b75f2891f0d4e42aa51368e95e26ed9a83fa67c16b98"
     ),
 }
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 WITNESS_SCRIPT = REPOSITORY_ROOT / "hardware/icicle/LOOP_TIMING_WITNESS.tcl"
 DERIVED_SCRIPT = "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl"
 RTL_SNAPSHOT = "witness_rtl"
-SD_NAME = "$" + "{sd_name}"
 
 
 class ReferenceDerivationRefusedError(ValueError):
@@ -96,7 +77,7 @@ def tree_sha256(
     root
         Official source or derived tree.
     excluded_files
-        Files checked independently after the five vendor edits and witness additions.
+        Files checked independently after the vendor edits and witness additions.
     excluded_dirs
         Root-level witness snapshot directories checked independently.
 
@@ -165,45 +146,17 @@ def replace_once(source: str, old: str, new: str, path: str) -> str:
 def edits() -> dict[str, tuple[tuple[str, str], ...]]:
     """Return the exact transformations for the pinned reference source.
 
+    The witness script, sourced after the base design has generated, adds the
+    witness clock, interrupt and bus target itself; the vendor sources only
+    source it and open the third FIC0 target slot.
+
     Returns
     -------
     dict[str, tuple[tuple[str, str], ...]]
         Ordered old/new replacements per upstream file.
     """
-    clock_port = (
-        f"sd_create_scalar_port -sd_name {SD_NAME} "
-        "-port_name {WITNESS_CAPTURE_CLK} -port_direction {OUT}\n"
-    )
-    clock_pin = (
-        f"sd_connect_pins -sd_name {SD_NAME} -pin_names "
-        '{"CCC_FIC_x_CLK:OUT0_FABCLK_1" "WITNESS_CAPTURE_CLK" }\n'
-    )
-    irq_port = (
-        f"sd_create_scalar_port -sd_name {SD_NAME} "
-        "-port_name {MSS_INT_F2M_11} -port_direction {IN}\n"
-    )
-    irq_slice = (
-        f"sd_create_pin_slices -sd_name {SD_NAME} -pin_name "
-        "{ICICLE_MSS:MSS_INT_F2M} -pin_slices {[58:12]}"
-    )
-    irq_pin = (
-        f"sd_connect_pins -sd_name {SD_NAME} -pin_names "
-        '{"ICICLE_MSS:MSS_INT_F2M[11:11]" "MSS_INT_F2M_11" }\n'
-    )
     return {
         "MPFS_ICICLE_KIT_REFERENCE_DESIGN.tcl": (
-            (
-                "-memory_map_drc_change_error_to_warning 1",
-                "-memory_map_drc_change_error_to_warning 0",
-            ),
-            (
-                "-bus_interface_data_width_drc_change_error_to_warning 1",
-                "-bus_interface_data_width_drc_change_error_to_warning 0",
-            ),
-            (
-                "-bus_interface_id_width_drc_change_error_to_warning 1 ",
-                "-bus_interface_id_width_drc_change_error_to_warning 0",
-            ),
             (
                 "    if {[info exists MSS_BAREMETAL]} {",
                 (
@@ -213,42 +166,9 @@ def edits() -> dict[str, tuple[tuple[str, str], ...]]:
                 ),
             ),
         ),
-        "script_support/components/CLOCKS_AND_RESETS.tcl": (
-            (
-                f"sd_create_scalar_port -sd_name {SD_NAME} -port_name {{FIC_1_CLK}}",
-                clock_port + f"sd_create_scalar_port -sd_name {SD_NAME} -port_name {{FIC_1_CLK}}",
-            ),
-            (
-                f'sd_connect_pins -sd_name {SD_NAME} -pin_names {{"CCC_FIC_x_CLK:OUT1_FABCLK_0"',
-                clock_pin + f"sd_connect_pins -sd_name {SD_NAME} -pin_names "
-                '{"CCC_FIC_x_CLK:OUT1_FABCLK_0"',
-            ),
-        ),
         "script_support/components/FIC0_INITIATOR.tcl": (
             ('"NUM_SLAVES:2"', '"NUM_SLAVES:3"'),
             ('"SLAVE2_END_ADDR:0x60020470"', '"SLAVE2_END_ADDR:0x600200ff"'),
-        ),
-        "script_support/components/MSS_WRAPPER.tcl": (
-            (
-                f"sd_create_scalar_port -sd_name {SD_NAME} -port_name {{MSS_INT_F2M_3}}",
-                irq_port + f"sd_create_scalar_port -sd_name {SD_NAME} -port_name {{MSS_INT_F2M_3}}",
-            ),
-            (
-                "-pin_slices {[58:11]}",
-                "-pin_slices {[11:11]}\n" + irq_slice,
-            ),
-            (
-                "-pin_names {ICICLE_MSS:MSS_INT_F2M[58:11]}",
-                "-pin_names {ICICLE_MSS:MSS_INT_F2M[58:12]}",
-            ),
-            (
-                f'sd_connect_pins -sd_name {SD_NAME} -pin_names {{"ICICLE_MSS:MSS_INT_F2M[3:3]"',
-                irq_pin + f"sd_connect_pins -sd_name {SD_NAME} -pin_names "
-                '{"ICICLE_MSS:MSS_INT_F2M[3:3]"',
-            ),
-        ),
-        "script_support/components/PF_CCC_C0.tcl": (
-            ('"GL0_1_FABCLK_USED:false"', '"GL0_1_FABCLK_USED:true"'),
         ),
     }
 

@@ -92,6 +92,25 @@ def locked_pins(lock_text: str) -> dict[str, str]:
     return pins
 
 
+def _check_characters(expression: str) -> None:
+    """Refuse characters outside licence tokens and whitespace.
+
+    Parameters
+    ----------
+    expression
+        SPDX licence expression.
+
+    Raises
+    ------
+    ValueError
+        If anything but tokens and whitespace remains.
+    """
+    stripped = re.sub(r"\s+", "", EXPRESSION_TOKEN.sub("", expression))
+    if stripped:
+        message = f"unexpected characters {stripped!r} in {expression!r}"
+        raise ValueError(message)
+
+
 def expression_identifiers(expression: str) -> list[str]:
     """Parse one SPDX licence expression and return its licence identifiers.
 
@@ -115,10 +134,7 @@ def expression_identifiers(expression: str) -> list[str]:
         If the text contains characters outside the grammar or the token
         sequence does not match it.
     """
-    stripped = re.sub(r"\s+", "", EXPRESSION_TOKEN.sub("", expression))
-    if stripped:
-        message = f"unexpected characters {stripped!r} in {expression!r}"
-        raise ValueError(message)
+    _check_characters(expression)
     symbols = EXPRESSION_TOKEN.findall(expression)
     malformed = f"malformed licence expression {expression!r}"
     identifiers: list[str] = []
@@ -215,6 +231,69 @@ def _policy_shape(policy: dict[str, Any]) -> list[str]:
     return findings
 
 
+def _locked(policy_path: Path, lock_files: list[str]) -> tuple[dict[str, str], list[str]] | str:
+    """Read every lock file's pins and find packages pinned at two versions.
+
+    Parameters
+    ----------
+    policy_path
+        Licence policy, beside which the lock files lie.
+    lock_files
+        Lock file names from the policy.
+
+    Returns
+    -------
+    tuple[dict[str, str], list[str]] | str
+        The first pin of each package and the conflicting-pin findings, or the
+        refusal of the first unreadable lock file.
+    """
+    pins: dict[str, str] = {}
+    findings = []
+    for lock_file in lock_files:
+        try:
+            lock_pins = locked_pins((policy_path.parent / lock_file).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            return f"lock unreadable: {exc}"
+        for name, version in sorted(lock_pins.items()):
+            pinned = pins.setdefault(name, version)
+            if pinned != version:
+                findings.append(f"{name}: locks pin both {pinned} and {version}")
+    return pins, findings
+
+
+def _record_findings(name: str, record: dict[str, str], pin: str, allowed: set[str]) -> list[str]:
+    """Check one pinned package's licence record against its pin and the allow-list.
+
+    Parameters
+    ----------
+    name
+        Normalised package name.
+    record
+        The package's licence record.
+    pin
+        The locked version.
+    allowed
+        Allowed SPDX licence identifiers.
+
+    Returns
+    -------
+    list[str]
+        Version and expression findings, then one per identifier not allowed.
+    """
+    findings = []
+    if record["version"] != pin:
+        findings.append(f"{name}: record version {record['version']} differs from pin {pin}")
+    try:
+        identifiers = expression_identifiers(record["licence"])
+    except ValueError as exc:
+        return [*findings, f"{name}: {exc}"]
+    return findings + [
+        f"{name}: licence {identifier!r} is not in allowed_licences"
+        for identifier in identifiers
+        if identifier not in allowed
+    ]
+
+
 def audit(policy_path: Path) -> list[str]:
     """Compare the licence record with its locks and licence allow-list.
 
@@ -237,16 +316,10 @@ def audit(policy_path: Path) -> list[str]:
     findings = _policy_shape(policy)
     if findings:
         return findings
-    pins: dict[str, str] = {}
-    for lock_file in policy["lock_files"]:
-        try:
-            lock_pins = locked_pins((policy_path.parent / lock_file).read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, ValueError) as exc:
-            return [f"lock unreadable: {exc}"]
-        for name, version in sorted(lock_pins.items()):
-            pinned = pins.setdefault(name, version)
-            if pinned != version:
-                findings.append(f"{name}: locks pin both {pinned} and {version}")
+    loaded = _locked(policy_path, policy["lock_files"])
+    if isinstance(loaded, str):
+        return [loaded]
+    pins, findings = loaded
     packages: dict[str, dict[str, str]] = policy["packages"]
     findings.extend(
         f"{name}: record name must be written in normalised form {normalise_name(name)!r}"
@@ -262,21 +335,7 @@ def audit(policy_path: Path) -> list[str]:
         f"{name}: licence record without a pin" for name in sorted(set(recorded) - set(pins))
     )
     for name in sorted(set(pins) & set(recorded)):
-        record = recorded[name]
-        if record["version"] != pins[name]:
-            findings.append(
-                f"{name}: record version {record['version']} differs from pin {pins[name]}"
-            )
-        try:
-            identifiers = expression_identifiers(record["licence"])
-        except ValueError as exc:
-            findings.append(f"{name}: {exc}")
-            continue
-        findings.extend(
-            f"{name}: licence {identifier!r} is not in allowed_licences"
-            for identifier in identifiers
-            if identifier not in allowed
-        )
+        findings.extend(_record_findings(name, recorded[name], pins[name], allowed))
     return findings
 
 

@@ -99,6 +99,164 @@ def make_git_tree(tmp_path: Path) -> MakeGitTree:
     return make
 
 
+_RTL_SOURCES = (
+    "rtl/event_codes_pkg.sv",
+    "rtl/event_record_capture.sv",
+    "tests/rtl/event_capture_tb.sv",
+)
+
+
+_RTL_PLANT = {
+    "name": "second_order_mechanical",
+    "fixed_point_format": "Q16.16",
+    "tracking_unit": "dimensionless",
+}
+_RTL_INSTRUMENT = {
+    "fifo_overflow_count": 0,
+    "floor_ticks": None,
+    "known_period_pass": False,
+    "injected_delay_pass": False,
+    "overflow_pass": False,
+    "bus_offset_pass": False,
+}
+
+
+def _reference(run: Path, relative: str) -> dict[str, str]:
+    """Return the path and digest reference of one run file.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    relative
+        File path relative to the run.
+
+    Returns
+    -------
+    dict[str, str]
+        ``path`` and ``sha256`` of the file.
+    """
+    return {"path": relative, "sha256": hashlib.sha256((run / relative).read_bytes()).hexdigest()}
+
+
+def _simulate_events(run: Path, profile: str) -> str:
+    """Copy the capture RTL, simulate one profile with Icarus Verilog and keep its events.
+
+    Parameters
+    ----------
+    run
+        New run directory.
+    profile
+        Event profile passed to the testbench.
+
+    Returns
+    -------
+    str
+        First line of the simulator's version report.
+    """
+    for relative in _RTL_SOURCES:
+        destination = run / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPOSITORY_ROOT / relative, destination)
+    shutil.copyfile(REPOSITORY_ROOT / "measurement-domain.json", run / "measurement-domain.json")
+    simulation = run / "event_capture.vvp"
+    subprocess.run(
+        [
+            "iverilog",
+            "-g2012",
+            "-s",
+            "event_capture_tb",
+            "-o",
+            str(simulation),
+            *(str(run / relative) for relative in _RTL_SOURCES),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["vvp", str(simulation), f"+EVENT_FILE={run / 'events.bin'}", f"+PROFILE={profile}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return subprocess.run(
+        ["iverilog", "-V"], check=True, capture_output=True, text=True
+    ).stdout.splitlines()[0]
+
+
+def _write_series(run: Path) -> None:
+    """Write the simulated tracking and four-rail power series of the run.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    """
+    (run / "tracking.csv").write_text(
+        "cycle,reference,output\n0,1,0.9\n1,2,1.8\n2,3,2.7\n", encoding="utf-8"
+    )
+    (run / "power.csv").write_text(
+        "timebase_ticks,rail,voltage_v,current_a,energy_j\n"
+        "0,VDD,1,0.1,0\n0,VDD25,2.5,0.1,0\n0,VDDA25,2.5,0.1,0\n0,VDDA,1,0.1,0\n"
+        "15021,VDD,1,0.1,0.3\n15021,VDD25,2.5,0.1,0.6\n"
+        "15021,VDDA25,2.5,0.1,0.9\n15021,VDDA,1,0.1,1.2\n",
+        encoding="utf-8",
+    )
+
+
+def _rtl_manifest(run: Path, profile: str, simulator_version: str) -> dict[str, Any]:
+    """Return the run manifest of a simulated capture, in its written field order.
+
+    Parameters
+    ----------
+    run
+        Run directory holding every referenced file.
+    profile
+        Event profile; ``CONTROL`` adds the control declarations.
+    simulator_version
+        Simulator version line.
+
+    Returns
+    -------
+    dict[str, Any]
+        Manifest with the digest of every referenced file.
+    """
+    control = profile == "CONTROL"
+    return {
+        "schema": "loop-timing-witness.run-manifest.v1",
+        "run_id": "rtl-capture-test",
+        "started_utc": "2026-09-26T00:00:00Z",
+        "source": {
+            "kind": "rtl_simulation",
+            "tool": "Icarus Verilog",
+            "version": simulator_version,
+            "files": [
+                _reference(run, relative) for relative in (*_RTL_SOURCES, "event_capture.vvp")
+            ],
+        },
+        "measurement_domain": _reference(run, "measurement-domain.json"),
+        "profile": profile,
+        "placement": "fabric_logic",
+        "sample_period_ticks": 5000 if control else None,
+        "cycle_count": 3 if control else 2,
+        "warmup_cycles": 0,
+        "load_case": "idle",
+        "controller": {"name": "pid_anti_windup", "coefficients": {"kp": 1}} if control else None,
+        "plant": dict(_RTL_PLANT) if control else None,
+        "fault_schedule": [{"cycle": 2, "kind": "delay", "delay_periods": 1}] if control else [],
+        "files": {
+            "events": _reference(run, "events.bin"),
+            "tracking": _reference(run, "tracking.csv") if control else None,
+            "power": _reference(run, "power.csv"),
+        },
+        "hardware_artifacts": None,
+        "instrument": dict(_RTL_INSTRUMENT),
+        "environment": {"room_temperature_c": None, "board_supply_only": False},
+        "operator_notes": "RTL simulation only",
+    }
+
+
 @pytest.fixture
 def make_rtl_run(tmp_path: Path) -> MakeRtlRun:
     """Produce real binary events with Icarus Verilog and a simulation manifest.
@@ -119,106 +277,9 @@ def make_rtl_run(tmp_path: Path) -> MakeRtlRun:
     def make(profile: str = "CONTROL") -> tuple[Path, dict[str, Any]]:
         run = tmp_path / "rtl-run"
         run.mkdir()
-        sources = (
-            "rtl/event_codes_pkg.sv",
-            "rtl/event_record_capture.sv",
-            "tests/rtl/event_capture_tb.sv",
-        )
-        for relative in sources:
-            destination = run / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(REPOSITORY_ROOT / relative, destination)
-        shutil.copyfile(
-            REPOSITORY_ROOT / "measurement-domain.json", run / "measurement-domain.json"
-        )
-        simulation = run / "event_capture.vvp"
-        subprocess.run(
-            [
-                "iverilog",
-                "-g2012",
-                "-s",
-                "event_capture_tb",
-                "-o",
-                str(simulation),
-                *(str(run / relative) for relative in sources),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        subprocess.run(
-            ["vvp", str(simulation), f"+EVENT_FILE={run / 'events.bin'}", f"+PROFILE={profile}"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        simulator_version = subprocess.run(
-            ["iverilog", "-V"], check=True, capture_output=True, text=True
-        ).stdout.splitlines()[0]
-        (run / "tracking.csv").write_text(
-            "cycle,reference,output\n0,1,0.9\n1,2,1.8\n2,3,2.7\n", encoding="utf-8"
-        )
-        (run / "power.csv").write_text(
-            "timebase_ticks,rail,voltage_v,current_a,energy_j\n"
-            "0,VDD,1,0.1,0\n0,VDD25,2.5,0.1,0\n0,VDDA25,2.5,0.1,0\n0,VDDA,1,0.1,0\n"
-            "15021,VDD,1,0.1,0.3\n15021,VDD25,2.5,0.1,0.6\n"
-            "15021,VDDA25,2.5,0.1,0.9\n15021,VDDA,1,0.1,1.2\n",
-            encoding="utf-8",
-        )
-
-        def reference(relative: str) -> dict[str, str]:
-            return {
-                "path": relative,
-                "sha256": hashlib.sha256((run / relative).read_bytes()).hexdigest(),
-            }
-
-        manifest: dict[str, Any] = {
-            "schema": "loop-timing-witness.run-manifest.v1",
-            "run_id": "rtl-capture-test",
-            "started_utc": "2026-09-26T00:00:00Z",
-            "source": {
-                "kind": "rtl_simulation",
-                "tool": "Icarus Verilog",
-                "version": simulator_version,
-                "files": [reference(relative) for relative in (*sources, "event_capture.vvp")],
-            },
-            "measurement_domain": reference("measurement-domain.json"),
-            "profile": profile,
-            "placement": "fabric_logic",
-            "sample_period_ticks": 5000 if profile == "CONTROL" else None,
-            "cycle_count": 3 if profile == "CONTROL" else 2,
-            "warmup_cycles": 0,
-            "load_case": "idle",
-            "controller": {"name": "pid_anti_windup", "coefficients": {"kp": 1}}
-            if profile == "CONTROL"
-            else None,
-            "plant": {
-                "name": "second_order_mechanical",
-                "fixed_point_format": "Q16.16",
-                "tracking_unit": "dimensionless",
-            }
-            if profile == "CONTROL"
-            else None,
-            "fault_schedule": [{"cycle": 2, "kind": "delay", "delay_periods": 1}]
-            if profile == "CONTROL"
-            else [],
-            "files": {
-                "events": reference("events.bin"),
-                "tracking": reference("tracking.csv") if profile == "CONTROL" else None,
-                "power": reference("power.csv"),
-            },
-            "hardware_artifacts": None,
-            "instrument": {
-                "fifo_overflow_count": 0,
-                "floor_ticks": None,
-                "known_period_pass": False,
-                "injected_delay_pass": False,
-                "overflow_pass": False,
-                "bus_offset_pass": False,
-            },
-            "environment": {"room_temperature_c": None, "board_supply_only": False},
-            "operator_notes": "RTL simulation only",
-        }
+        simulator_version = _simulate_events(run, profile)
+        _write_series(run)
+        manifest = _rtl_manifest(run, profile, simulator_version)
         (run / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return run, manifest
 

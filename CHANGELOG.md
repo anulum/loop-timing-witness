@@ -25,7 +25,8 @@ Loop Timing Witness — changelog
   It uses one warm-up and five measured passes, requires byte-identical reports in every pass, and
   records percentiles, peak memory and provenance. The dispatched `control-run-benchmark.yml`
   workflow regenerates the data on the fixed runner, holds them to the committed digests and
-  uploads its measurement. The local result is `benchmarks/control_run_analysis.local.json`.
+  uploads its measurement. The hosted result is `benchmarks/control_run_analysis.json` and the
+  local result `benchmarks/control_run_analysis.local.json`.
 
 ### Changed
 

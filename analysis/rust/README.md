@@ -25,9 +25,9 @@ loop-timing-witness-analyze-native run.json --output-dir new-report
 ```
 
 Measured against the Python commands on a deterministic closed-loop campaign, the native run
-command was 3.4 times faster per 2·10⁵-cycle repeat and the native campaign command 13.1 times
-faster per 10⁶-cycle campaign, on a shared, non-isolated workstation. The native run command used
-about 2.1 times Python's peak memory. Method, host attribution and the hosted measurement are in
+command was 4.2 times faster per 2·10⁵-cycle repeat and the native campaign command 20.8 times
+faster per 10⁶-cycle campaign on the GitHub-hosted runner, and 3.4 and 13.1 times faster on a
+shared, non-isolated workstation. The native run command used about 2.1 times Python's peak memory. Method, host attribution and the hosted measurement are in
 [`HOST_ANALYSIS.md`](../../docs/HOST_ANALYSIS.md#control-run-analysis-timing).
 
 The `loop-timing-witness-campaign-native` command analyses a repeat campaign

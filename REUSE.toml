@@ -22,6 +22,7 @@ path = [
     "benchmarks/controller_regression.json",
     "benchmarks/controller_comparison.local.json",
     "benchmarks/control_run_analysis.local.json",
+    "benchmarks/control_run_analysis.json",
     "benchmarks/controller_coverage.json",
     "capability-inventory.json",
     "development-dependency-licences.json",

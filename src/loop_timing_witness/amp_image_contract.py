@@ -26,6 +26,17 @@ FUNCTION_KIND = 2
 OBJECT_KIND = 1
 STACK_ALIGNMENT = 16
 BSS_ALIGNMENT = 8
+_REQUIRED_SYMBOLS = (
+    "_start",
+    "witness_amp_main",
+    "witness_amp_trap",
+    "witness_amp_exit",
+    "witness_amp_platform",
+    "witness_amp_run",
+    "__bss_start",
+    "__bss_end",
+    "__stack_top",
+)
 
 
 def _constant(
@@ -93,23 +104,39 @@ def admit_image_contract(
     """
     segments = admit_elf(content, platform.memory.firmware)
     symbols = read_symbols(content)
-    required = (
-        "_start",
-        "witness_amp_main",
-        "witness_amp_trap",
-        "witness_amp_exit",
-        "witness_amp_platform",
-        "witness_amp_run",
-        "__bss_start",
-        "__bss_end",
-        "__stack_top",
-    )
     if (
-        any(name not in symbols for name in required)
+        any(name not in symbols for name in _REQUIRED_SYMBOLS)
         or symbols["_start"].address != platform.memory.firmware.address
     ):
         message = "firmware original required entry/resource symbols are absent or misplaced"
         raise ValueError(message)
+    _check_entry_points(symbols, segments)
+    expected_platform = _platform_bytes(platform)
+    expected_run = RUN_BYTES.pack(
+        run.cycles, run.period_ticks, run.lqr, run.overload_iterations, *run.coefficients
+    )
+    _constant(content, segments, symbols["witness_amp_platform"], expected_platform)
+    _constant(content, segments, symbols["witness_amp_run"], expected_run)
+    _check_stack(stack_bytes, symbols, segments)
+    return segments
+
+
+def _check_entry_points(symbols: dict[str, ElfSymbol], segments: tuple[LoadSegment, ...]) -> None:
+    """Require each controller entry point to be a sized function in executable bytes.
+
+    Parameters
+    ----------
+    symbols
+        Original firmware symbols by name.
+    segments
+        Admitted load segments.
+
+    Raises
+    ------
+    ValueError
+        If an entry point is not a function, has no size or lies outside every
+        read-execute segment's file bytes.
+    """
     for name in ("witness_amp_main", "witness_amp_trap", "witness_amp_exit"):
         symbol = symbols[name]
         if (
@@ -124,8 +151,23 @@ def admit_image_contract(
         ):
             message = "firmware controller entry point lacks original executable bytes"
             raise ValueError(message)
+
+
+def _platform_bytes(platform: AmpPlatform) -> bytes:
+    """Return the platform constant the firmware must hold for this topology.
+
+    Parameters
+    ----------
+    platform
+        Original admitted topology resources.
+
+    Returns
+    -------
+    bytes
+        Hart, interrupt source, device aperture, PLIC registers and shared memory.
+    """
     device = platform.device
-    expected_platform = PLATFORM_BYTES.pack(
+    return PLATFORM_BYTES.pack(
         platform.hart,
         platform.source,
         device.aperture.address,
@@ -135,11 +177,28 @@ def admit_image_contract(
         device.plic.claim,
         platform.memory.shared.address,
     )
-    expected_run = RUN_BYTES.pack(
-        run.cycles, run.period_ticks, run.lqr, run.overload_iterations, *run.coefficients
-    )
-    _constant(content, segments, symbols["witness_amp_platform"], expected_platform)
-    _constant(content, segments, symbols["witness_amp_run"], expected_run)
+
+
+def _check_stack(
+    stack_bytes: int, symbols: dict[str, ElfSymbol], segments: tuple[LoadSegment, ...]
+) -> None:
+    """Require the BSS and stack to be aligned, sized as reserved and writable.
+
+    Parameters
+    ----------
+    stack_bytes
+        Explicit original stack allocation passed to the production linker.
+    symbols
+        Original firmware symbols by name.
+    segments
+        Admitted load segments.
+
+    Raises
+    ------
+    ValueError
+        If the stack allocation or the BSS and stack bounds differ from the
+        reservation, or lie outside a read-write segment.
+    """
     start = symbols["__bss_start"].address
     end = symbols["__bss_end"].address
     top = symbols["__stack_top"].address
@@ -160,4 +219,3 @@ def admit_image_contract(
     ):
         message = "firmware original BSS and integer stack geometry differs from the reservation"
         raise ValueError(message)
-    return segments

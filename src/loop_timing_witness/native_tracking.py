@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 import io
 from decimal import Context, Decimal, localcontext
-from typing import Final
+from typing import Any, Final
 
 FIELDS: Final = (
     "cycle",
@@ -79,6 +79,79 @@ def _integer(text: object, low: int, high: int) -> int:
     raise ValueError(message)
 
 
+def _row_values(row: dict[str | Any, str | Any], cycles: int) -> dict[str, int]:
+    """Decode one complete raw tracking row within its ABI bounds.
+
+    Parameters
+    ----------
+    row
+        One CSV row keyed by header name.
+    cycles
+        Validated native configured cycle count.
+
+    Returns
+    -------
+    dict[str, int]
+        Exact integer value of every ABI column.
+
+    Raises
+    ------
+    ValueError
+        If the row is incomplete or a value is not an integer within its bounds.
+    """
+    if None in row:
+        message = "native tracking contains an incomplete row"
+        raise ValueError(message)
+    return {
+        name: _integer(row[name], *((0, cycles - 1) if name == "cycle" else BOUNDS[name]))
+        for name in FIELDS
+    }
+
+
+def _converted_rows(reader: csv.DictReader[str], cycles: int) -> list[list[int | Decimal]]:
+    """Convert every raw row in cycle order to exact Q8.24-derived values.
+
+    Parameters
+    ----------
+    reader
+        Strict CSV reader over the decoded tracking text, inside a 32-digit context.
+    cycles
+        Validated native configured cycle count.
+
+    Returns
+    -------
+    list of list of int or Decimal
+        Exact cycle, reference and output of every row.
+
+    Raises
+    ------
+    ValueError
+        If the header is not the raw ABI, a row is invalid or cycles do not increase.
+    csv.Error
+        If the CSV text is malformed.
+    """
+    if reader.fieldnames != list(FIELDS):
+        message = "native tracking header does not match the raw controller ABI"
+        raise ValueError(message)
+    converted: list[list[int | Decimal]] = []
+    previous = -1
+    for row in reader:
+        values = _row_values(row, cycles)
+        cycle = values["cycle"]
+        if cycle <= previous:
+            message = "native tracking cycles must be unique and increasing"
+            raise ValueError(message)
+        previous = cycle
+        converted.append(
+            [
+                cycle,
+                Decimal(values["reference_raw"]) / (1 << 24),
+                Decimal(values["output_raw"]) / (1 << 24),
+            ]
+        )
+    return converted
+
+
 def decode_tracking(content: bytes, cycles: int, sample_count: int) -> list[list[int | Decimal]]:
     """Validate every raw ABI column and preserve only actual ordered observations.
 
@@ -102,39 +175,12 @@ def decode_tracking(content: bytes, cycles: int, sample_count: int) -> list[list
         If the bytes are not UTF-8, or header, rows, integers, cycle ordering or completion
         counts disagree.
     """
-    converted: list[list[int | Decimal]] = []
-    previous = -1
     try:
         with (
             localcontext(Context(prec=32)),
             io.StringIO(content.decode("utf-8"), newline="") as stream,
         ):
-            reader = csv.DictReader(stream, strict=True)
-            if reader.fieldnames != list(FIELDS):
-                message = "native tracking header does not match the raw controller ABI"
-                raise ValueError(message)
-            for row in reader:
-                if None in row:
-                    message = "native tracking contains an incomplete row"
-                    raise ValueError(message)
-                values = {
-                    name: _integer(
-                        row[name], *((0, cycles - 1) if name == "cycle" else BOUNDS[name])
-                    )
-                    for name in FIELDS
-                }
-                cycle = values["cycle"]
-                if cycle <= previous:
-                    message = "native tracking cycles must be unique and increasing"
-                    raise ValueError(message)
-                previous = cycle
-                converted.append(
-                    [
-                        cycle,
-                        Decimal(values["reference_raw"]) / (1 << 24),
-                        Decimal(values["output_raw"]) / (1 << 24),
-                    ]
-                )
+            converted = _converted_rows(csv.DictReader(stream, strict=True), cycles)
     except UnicodeDecodeError as error:
         message = "native tracking is not UTF-8"
         raise ValueError(message) from error

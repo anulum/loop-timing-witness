@@ -43,6 +43,42 @@ NATIVE_FILE = {
 }
 
 
+def _closed(fields: dict[str, Any]) -> dict[str, Any]:
+    """Return the schema of an object holding exactly the given fields.
+
+    Parameters
+    ----------
+    fields
+        Field schemas keyed by field name.
+
+    Returns
+    -------
+    dict[str, Any]
+        Object schema requiring every field and admitting no other.
+    """
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": fields,
+        "required": list(fields),
+    }
+
+
+_COMMON = {
+    "kind": TEXT,
+    "command": {"type": "array", "minItems": 1, "items": TEXT},
+    "returncode": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647},
+}
+_LOG_JOB = _closed({**_COMMON, "log": NATIVE_FILE})
+_EXECUTION_JOB = _closed({**_COMMON, "stdout": NATIVE_FILE, "stderr": NATIVE_FILE})
+_JOBS = {
+    "type": "array",
+    "minItems": 5,
+    "maxItems": 5,
+    "prefixItems": [*[_LOG_JOB] * 4, _EXECUTION_JOB],
+}
+
+
 def _runtime(run: BoundNeuralRun) -> dict[str, Any]:
     """Decode the complete closed native receipt and every typed job variant.
 
@@ -61,23 +97,6 @@ def _runtime(run: BoundNeuralRun) -> dict[str, Any]:
     ValueError
         If any receipt field, job variant or integer encoding is unsupported.
     """
-    common = {
-        "kind": TEXT,
-        "command": {"type": "array", "minItems": 1, "items": TEXT},
-        "returncode": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647},
-    }
-    jobs = [
-        {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": fields,
-            "required": list(fields),
-        }
-        for fields in (
-            {**common, "log": NATIVE_FILE},
-            {**common, "stdout": NATIVE_FILE, "stderr": NATIVE_FILE},
-        )
-    ]
     policy = run.contract.policy
     source_count = len(policy["sources"])
     artifact_names = next(iter(policy["compiled_artifacts"].values()))
@@ -90,18 +109,8 @@ def _runtime(run: BoundNeuralRun) -> dict[str, Any]:
             "dialect": TEXT,
             "epoch": UNSIGNED,
             "steps": UNSIGNED,
-            "parameters": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": dict.fromkeys(PARAMETERS, UNSIGNED),
-                "required": list(PARAMETERS),
-            },
-            "tool_versions": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {"verilator": TEXT, "g++": TEXT},
-                "required": ["verilator", "g++"],
-            },
+            "parameters": _closed(dict.fromkeys(PARAMETERS, UNSIGNED)),
+            "tool_versions": _closed({"verilator": TEXT, "g++": TEXT}),
             "source_files": {
                 "type": "array",
                 "minItems": source_count,
@@ -109,21 +118,62 @@ def _runtime(run: BoundNeuralRun) -> dict[str, Any]:
                 "items": NATIVE_FILE,
             },
             "actual_source_paths": {"type": "object", "additionalProperties": TEXT},
-            "jobs": {
-                "type": "array",
-                "minItems": 5,
-                "maxItems": 5,
-                "prefixItems": [jobs[0], jobs[0], jobs[0], jobs[0], jobs[1]],
-            },
-            "compiled_artifacts": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": dict.fromkeys(artifact_names, NATIVE_FILE),
-                "required": list(artifact_names),
-            },
+            "jobs": _JOBS,
+            "compiled_artifacts": _closed(dict.fromkeys(artifact_names, NATIVE_FILE)),
             "runtime_object_source_scope": TEXT,
         },
     )
+
+
+def _bind_artifacts(run: BoundNeuralRun, runtime: dict[str, Any]) -> None:
+    """Admit the declared compiled cohort and bind every compiled object's bytes.
+
+    Parameters
+    ----------
+    run
+        Complete native acquisition receiving the bound object bytes.
+    runtime
+        Decoded native receipt.
+
+    Raises
+    ------
+    ValueError
+        If the parameters and epoch select no admitted cohort, the declared
+        objects differ from it, or an object cannot be bound.
+    """
+    params = runtime["parameters"]
+    key = ",".join(str(params[name]) for name in PARAMETERS) + f":{runtime['epoch']}"
+    expected = run.contract.policy["compiled_artifacts"].get(key)
+    if expected is None or runtime["compiled_artifacts"] != expected:
+        message = "Unsupported actual native compiled artifact cohort."
+        raise NeuralCaptureRefusalError(message)
+    for name, reference in runtime["compiled_artifacts"].items():
+        run.files[f"native_{name}"] = read_neural_bound_file(
+            run.directory, reference, ARTIFACT_LIMIT
+        )
+
+
+def _bind_job_logs(run: BoundNeuralRun, jobs: list[dict[str, Any]]) -> None:
+    """Bind the log of every compile job and both streams of the execution job.
+
+    Parameters
+    ----------
+    run
+        Complete native acquisition receiving the bound log bytes.
+    jobs
+        Decoded jobs in their admitted kind sequence.
+
+    Raises
+    ------
+    ValueError
+        If a log cannot be bound.
+    """
+    for index, job in enumerate(jobs):
+        names = ("stdout", "stderr") if index == EXECUTION_INDEX else ("log",)
+        for name in names:
+            run.files[f"native_job_{index}_{name}"] = read_neural_bound_file(
+                run.directory, job[name], 1048576
+            )
 
 
 def analyze_native_runtime(run: BoundNeuralRun) -> tuple[str, ...]:
@@ -148,32 +198,16 @@ def analyze_native_runtime(run: BoundNeuralRun) -> tuple[str, ...]:
     if runtime["backend"] != "verilator-native-cpp" or runtime["dialect"] != "1800-2012":
         message = "Unsupported actual native backend or dialect."
         raise NeuralCaptureRefusalError(message)
-    params = runtime["parameters"]
-    key = ",".join(str(params[name]) for name in PARAMETERS) + f":{runtime['epoch']}"
-    policy = run.contract.policy
-    expected = policy["compiled_artifacts"].get(key)
-    if expected is None or runtime["compiled_artifacts"] != expected:
-        message = "Unsupported actual native compiled artifact cohort."
-        raise NeuralCaptureRefusalError(message)
-    for name, reference in runtime["compiled_artifacts"].items():
-        run.files[f"native_{name}"] = read_neural_bound_file(
-            run.directory, reference, ARTIFACT_LIMIT
-        )
+    _bind_artifacts(run, runtime)
     if runtime["source_files"] != run.manifest["source_files"]:
         message = "Native runtime source references differ from root."
         raise NeuralCaptureRefusalError(message)
     paths = runtime["actual_source_paths"]
-    if len(paths) != len(policy["sources"]) or set(paths.values()) != set(run.sources):
+    if len(paths) != len(run.contract.policy["sources"]) or set(paths.values()) != set(run.sources):
         message = "Native recorded source path population differs."
         raise NeuralCaptureRefusalError(message)
-    jobs = runtime["jobs"]
-    if tuple(job["kind"] for job in jobs) != JOB_KINDS:
+    if tuple(job["kind"] for job in runtime["jobs"]) != JOB_KINDS:
         message = "Actual native command sequence differs."
         raise NeuralCaptureRefusalError(message)
-    for index, job in enumerate(jobs):
-        names = ("stdout", "stderr") if index == EXECUTION_INDEX else ("log",)
-        for name in names:
-            run.files[f"native_job_{index}_{name}"] = read_neural_bound_file(
-                run.directory, job[name], 1048576
-            )
+    _bind_job_logs(run, runtime["jobs"])
     return native_command_findings(run, runtime)

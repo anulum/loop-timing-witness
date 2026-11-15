@@ -21,6 +21,39 @@ if TYPE_CHECKING:
     from .neural_capture import NeuralCaptureBundle
 
 
+def _original_allocations(
+    manifest: dict[str, Any], tool: dict[str, Any], configuration: NeuralCaptureConfiguration
+) -> list[tuple[Any, int]]:
+    """List every capture file reference with its byte allocation.
+
+    Parameters
+    ----------
+    manifest, tool
+        Closed public declarations and complete actual tool references.
+    configuration
+        Requested step and service-ordinal populations.
+
+    Returns
+    -------
+    list[tuple[Any, int]]
+        The counter receipt, then each channel's capture, payload and marker
+        references, with the largest byte length each may have.
+    """
+    originals: list[tuple[Any, int]] = [(tool["counter_receipt"], 4096)]
+    for item in manifest["channels"]:
+        population = (
+            configuration.service_packets if item["role"] == "service" else configuration.step_count
+        )
+        originals.extend(
+            [
+                (item["capture"], (population + 2) * 16),
+                (item["payload"], population * 16),
+                (item["markers"], 32),
+            ]
+        )
+    return originals
+
+
 def bind_neural_capture(
     directory: Path, manifest: dict[str, Any], tool: dict[str, Any]
 ) -> NeuralCaptureBundle:
@@ -48,18 +81,7 @@ def bind_neural_capture(
         NeuralChannelFiles(item["role"], item["capture"], item["payload"], item["markers"])
         for item in manifest["channels"]
     ]
-    originals = [(tool["counter_receipt"], 4096)]
-    for item in manifest["channels"]:
-        population = (
-            configuration.service_packets if item["role"] == "service" else configuration.step_count
-        )
-        originals.extend(
-            [
-                (item["capture"], (population + 2) * 16),
-                (item["payload"], population * 16),
-                (item["markers"], 32),
-            ]
-        )
+    originals = _original_allocations(manifest, tool, configuration)
     with tempfile.TemporaryDirectory(prefix="neural-capture-") as name:
         root = Path(name)
         for reference, allocation in originals:

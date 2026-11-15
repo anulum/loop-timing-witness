@@ -90,25 +90,7 @@ def test_buffered_stream_reaches_host_reports(
         "event_witness_tb", {"OVERFLOW_RUN": overflow}, [f"+EVENT_FILE={run / 'events.bin'}"]
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    sources = [
-        "rtl/event_codes_pkg.sv",
-        "rtl/clock_reset_release.sv",
-        "rtl/event_record_capture.sv",
-        "rtl/event_record_fifo.sv",
-        "rtl/event_witness.sv",
-        "tests/rtl/event_witness_tb.sv",
-    ]
-    repository = Path(__file__).resolve().parents[1]
-    for relative in sources:
-        destination = run / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(repository / relative, destination)
-    shutil.copyfile(tmp_path / "event_witness_tb.vvp", run / "event_witness_tb.vvp")
-    references = [
-        {"path": relative, "sha256": hashlib.sha256((run / relative).read_bytes()).hexdigest()}
-        for relative in [*sources, "event_witness_tb.vvp"]
-    ]
-    manifest["source"]["files"] = references
+    manifest["source"]["files"] = _bind_sources(run, tmp_path / "event_witness_tb.vvp")
     manifest["fault_schedule"] = []
     manifest["files"]["events"]["sha256"] = hashlib.sha256(
         (run / "events.bin").read_bytes()
@@ -126,6 +108,56 @@ def test_buffered_stream_reaches_host_reports(
     analysis = run_tool("analyze_run", str(run / "manifest.json"), "--output-dir", str(output))
     assert analysis.returncode == 0, analysis.stderr
     report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    _check_buffered_report(report, overflow, (run / "events.bin").read_bytes())
+
+
+def _bind_sources(run: Path, simulation: Path) -> list[dict[str, str]]:
+    """Copy the buffered witness sources and its simulation into the run and bind them.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    simulation
+        Compiled testbench.
+
+    Returns
+    -------
+    list[dict[str, str]]
+        Source references in declaration order.
+    """
+    sources = [
+        "rtl/event_codes_pkg.sv",
+        "rtl/clock_reset_release.sv",
+        "rtl/event_record_capture.sv",
+        "rtl/event_record_fifo.sv",
+        "rtl/event_witness.sv",
+        "tests/rtl/event_witness_tb.sv",
+    ]
+    repository = Path(__file__).resolve().parents[1]
+    for relative in sources:
+        destination = run / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(repository / relative, destination)
+    shutil.copyfile(simulation, run / "event_witness_tb.vvp")
+    return [
+        {"path": relative, "sha256": hashlib.sha256((run / relative).read_bytes()).hexdigest()}
+        for relative in [*sources, "event_witness_tb.vvp"]
+    ]
+
+
+def _check_buffered_report(report: dict[str, Any], overflow: int, raw: bytes) -> None:
+    """Require a valid drained report, or an overflow one refused as evidence.
+
+    Parameters
+    ----------
+    report
+        Published analysis report.
+    overflow
+        Whether the overflow simulation ran.
+    raw
+        Drained event stream.
+    """
     assert report["evidence_status"] == "simulation_only"
     assert report["events"]["event_count"] == 12
     assert report["fifo_overflow_count"] == (17 if overflow else 0)
@@ -135,7 +167,6 @@ def test_buffered_stream_reaches_host_reports(
     else:
         assert report["events"]["intervals"]["loop_latency"]["maximum_ticks"] == 20
         assert report["events"]["control"]["deadline_misses"] == 0
-        raw = (run / "events.bin").read_bytes()
         deadlines = [
             int.from_bytes(raw[offset + 8 : offset + 16], "little")
             for offset in range(0, len(raw), 16)

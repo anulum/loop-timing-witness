@@ -157,49 +157,8 @@ pub(crate) fn invoke(
     directory: &Path,
 ) -> Result<Invocation, String> {
     installation.verify()?;
-    let interpreter = path_text(installation.interpreter()?)?;
-    let tracer = path_text(installation.tracer()?)?;
-    let cache = format!("pycache_prefix={}", path_text(&directory.join("bytecode"))?);
     let trace_path = directory.join("checker-open.log");
-    let mut argv: Vec<String> = [
-        interpreter,
-        "-X",
-        &cache,
-        "-I",
-        "-B",
-        "-S",
-        "-c",
-        LIMIT_BOOTSTRAP,
-        tracer,
-        "--kill-on-exit",
-        "-f",
-        "-qq",
-        "-xx",
-        "-yy",
-        "-s",
-        "8192",
-        "-e",
-        "trace=openat,openat2,execve",
-        "-o",
-        path_text(&trace_path)?,
-        interpreter,
-        "-X",
-        &cache,
-        "-I",
-        "-B",
-        "-S",
-        "-c",
-        WORKER_BOOTSTRAP,
-        path_text(installation.worker_import_root())?,
-        path_text(script)?,
-        operation,
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
-    for root in &installation.import_roots {
-        argv.push(path_text(root)?.into());
-    }
+    let argv = checker_argv(installation, script, operation, directory, &trace_path)?;
     let completed = run_group(
         &argv,
         directory,
@@ -217,6 +176,51 @@ pub(crate) fn invoke(
     };
     installation.verify()?;
     Ok(completed.into_invocation(argv, trace))
+}
+
+/// The traced, limited worker command of one checker operation.
+fn checker_argv(
+    installation: &Installation,
+    script: &Path,
+    operation: &str,
+    directory: &Path,
+    trace_path: &Path,
+) -> Result<Vec<String>, String> {
+    let interpreter = path_text(installation.interpreter()?)?;
+    let tracer = path_text(installation.tracer()?)?;
+    let cache = format!("pycache_prefix={}", path_text(&directory.join("bytecode"))?);
+    let python = [interpreter, "-X", &cache, "-I", "-B", "-S", "-c"];
+    let strace = [
+        "--kill-on-exit",
+        "-f",
+        "-qq",
+        "-xx",
+        "-yy",
+        "-s",
+        "8192",
+        "-e",
+        "trace=openat,openat2,execve",
+        "-o",
+        path_text(trace_path)?,
+    ];
+    let worker = [
+        WORKER_BOOTSTRAP,
+        path_text(installation.worker_import_root())?,
+        path_text(script)?,
+        operation,
+    ];
+    let mut argv: Vec<String> = python
+        .iter()
+        .chain(&[LIMIT_BOOTSTRAP, tracer])
+        .chain(&strace)
+        .chain(&python)
+        .chain(&worker)
+        .map(|text| (*text).to_owned())
+        .collect();
+    for root in &installation.import_roots {
+        argv.push(path_text(root)?.into());
+    }
+    Ok(argv)
 }
 
 /// Finite observations of one completed and reaped checker process group.

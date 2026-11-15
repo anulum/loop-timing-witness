@@ -12,7 +12,7 @@ use crate::files::{FileRef, decode, digest, read_expected};
 use crate::native_policy::{Artifacts, Pin, Policy};
 use crate::public_image::NeuralExecutor;
 use crate::public_manifest_fields::PublicManifest;
-use crate::public_registry::NeuralRegistry;
+use crate::public_registry::{NeuralEntry, NeuralRegistry};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -74,30 +74,8 @@ pub(crate) fn admit(
     manifest: &PublicManifest,
     registry: &NeuralRegistry,
 ) -> Result<Contract, String> {
-    let key = (
-        manifest.schema_id.clone(),
-        crate::public_manifest::SCHEMA_SHA256.to_owned(),
-        manifest.native_source_cohort.clone(),
-        manifest.source_contract_ref.sha256.clone(),
-    );
-    let factory = registry
-        .get(&key)
-        .ok_or("No reviewed source contract is admitted for this neural run.")?;
-    let entry = factory()?;
-    if digest(&entry.policy) != key.3 {
-        return Err(
-            "Selected neural source registration differs from its reviewed identity.".into(),
-        );
-    }
-    let policy: PublicPolicy = decode(&entry.policy, "consumer public source policy")?;
-    if policy.schema_id != ID
-        || policy.schema_sha256 != crate::public_manifest::SCHEMA_SHA256
-        || policy.cohort != COHORT
-        || policy.sources.is_empty()
-        || policy.compiled_artifacts.is_empty()
-    {
-        return Err("Consumer public source policy does not implement its closed contract.".into());
-    }
+    let entry = registered(manifest, registry)?;
+    let policy = source_policy(&entry.policy)?;
     read_expected(
         root,
         &manifest.source_contract_ref,
@@ -112,20 +90,7 @@ pub(crate) fn admit(
         &entry.checker,
         "Acquired checker policy differs from its reviewed consumer binding.",
     )?;
-    let checker: CheckerPolicy = decode(&entry.checker, "consumer checker policy")?;
-    let expected_generate = ["--generate", "--steps", "1000", "--seed", "42"];
-    let expected_check = ["--check", "--steps", "1000", "--seed", "42"];
-    if checker.schema_id != "loop-timing-witness.sc-checker-policy.v1"
-        || checker.generate_arguments != expected_generate
-        || checker.check_arguments != expected_check
-        || checker.source_files.is_empty()
-        || !checker
-            .source_files
-            .iter()
-            .any(|reference| same(reference, &checker.entry_point))
-    {
-        return Err("Selected checker requires its complete closed fixed-operation policy.".into());
-    }
+    let checker = checker_policy(&entry.checker)?;
     let installation = entry.executor;
     installation.verify()?;
     read_expected(
@@ -147,6 +112,59 @@ pub(crate) fn admit(
         checker,
         installation,
     })
+}
+
+/// The reviewed registration of the manifest's schema, cohort and source contract.
+fn registered(manifest: &PublicManifest, registry: &NeuralRegistry) -> Result<NeuralEntry, String> {
+    let key = (
+        manifest.schema_id.clone(),
+        crate::public_manifest::SCHEMA_SHA256.to_owned(),
+        manifest.native_source_cohort.clone(),
+        manifest.source_contract_ref.sha256.clone(),
+    );
+    let factory = registry
+        .get(&key)
+        .ok_or("No reviewed source contract is admitted for this neural run.")?;
+    let entry = factory()?;
+    if digest(&entry.policy) != key.3 {
+        return Err(
+            "Selected neural source registration differs from its reviewed identity.".into(),
+        );
+    }
+    Ok(entry)
+}
+
+/// Decode the consumer source policy and require its closed contract.
+fn source_policy(raw: &[u8]) -> Result<PublicPolicy, String> {
+    let policy: PublicPolicy = decode(raw, "consumer public source policy")?;
+    if policy.schema_id != ID
+        || policy.schema_sha256 != crate::public_manifest::SCHEMA_SHA256
+        || policy.cohort != COHORT
+        || policy.sources.is_empty()
+        || policy.compiled_artifacts.is_empty()
+    {
+        return Err("Consumer public source policy does not implement its closed contract.".into());
+    }
+    Ok(policy)
+}
+
+/// Decode the checker policy and require its fixed operations and entry point.
+fn checker_policy(raw: &[u8]) -> Result<CheckerPolicy, String> {
+    let checker: CheckerPolicy = decode(raw, "consumer checker policy")?;
+    let expected_generate = ["--generate", "--steps", "1000", "--seed", "42"];
+    let expected_check = ["--check", "--steps", "1000", "--seed", "42"];
+    if checker.schema_id != "loop-timing-witness.sc-checker-policy.v1"
+        || checker.generate_arguments != expected_generate
+        || checker.check_arguments != expected_check
+        || checker.source_files.is_empty()
+        || !checker
+            .source_files
+            .iter()
+            .any(|reference| same(reference, &checker.entry_point))
+    {
+        return Err("Selected checker requires its complete closed fixed-operation policy.".into());
+    }
+    Ok(checker)
 }
 
 /// Compare complete references without relying on a digest alone.

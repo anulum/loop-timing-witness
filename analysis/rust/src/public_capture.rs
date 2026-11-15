@@ -9,6 +9,7 @@
 //! Preserve the Python capture contract over the same complete native decoded bytes.
 
 use crate::binding::BoundRun;
+use crate::capture::Counts;
 use crate::files::digest;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -31,17 +32,7 @@ fn accounting(run: &BoundRun, index: usize) -> Vec<String> {
     let saturated = counts.dropped == (1_u64 << run.counts.drop_counter_bits) - 1;
     let observed = channel.events.len() + channel.markers.len() / 16;
     let mut refusals = Vec::new();
-    if counts
-        .attempts
-        .checked_sub(counts.accepted)
-        .is_none_or(|difference| {
-            if saturated {
-                counts.dropped > difference
-            } else {
-                counts.dropped != difference
-            }
-        })
-    {
+    if counts_disagree(counts, saturated) {
         refusals.push(format!(
             "{}: attempted, accepted and dropped counts disagree",
             channel.role
@@ -77,8 +68,33 @@ fn accounting(run: &BoundRun, index: usize) -> Vec<String> {
     refusals
 }
 
+/// Whether the attempted, accepted and dropped counts disagree.
+///
+/// At saturation the drop counter is a lower bound of the difference.
+fn counts_disagree(counts: &Counts, saturated: bool) -> bool {
+    counts
+        .attempts
+        .checked_sub(counts.accepted)
+        .is_none_or(|difference| {
+            if saturated {
+                counts.dropped > difference
+            } else {
+                counts.dropped != difference
+            }
+        })
+}
+
 /// Correlate every available same-identity pair without repairing losses or phases.
 fn timing(run: &BoundRun) -> (Vec<Value>, Vec<String>) {
+    let mut refusals = marker_refusals(run);
+    refusals.extend(population_refusals(run));
+    let (intervals, step_refusals) = step_intervals(run);
+    refusals.extend(step_refusals);
+    (intervals, refusals)
+}
+
+/// Require both alignment markers of every channel inside the horizon and at equal ticks.
+fn marker_refusals(run: &BoundRun) -> Vec<String> {
     let mut refusals = Vec::new();
     let mut markers = BTreeSet::new();
     for channel in &run.channels {
@@ -98,6 +114,12 @@ fn timing(run: &BoundRun) -> (Vec<Value>, Vec<String>) {
     if markers.len() != 1 {
         refusals.push("channels: alignment marker ticks differ".into());
     }
+    refusals
+}
+
+/// Require the requested step identities on the input and state channels.
+fn population_refusals(run: &BoundRun) -> Vec<String> {
+    let mut refusals = Vec::new();
     for channel in &run.channels[..2] {
         if channel
             .events
@@ -112,6 +134,12 @@ fn timing(run: &BoundRun) -> (Vec<Value>, Vec<String>) {
             ));
         }
     }
+    refusals
+}
+
+/// Each step's application-to-observation interval, with cadence and phase refusals.
+fn step_intervals(run: &BoundRun) -> (Vec<Value>, Vec<String>) {
+    let mut refusals = Vec::new();
     let states: BTreeMap<_, _> = run.channels[1]
         .events
         .iter()
@@ -144,59 +172,73 @@ fn timing(run: &BoundRun) -> (Vec<Value>, Vec<String>) {
     (intervals, refusals)
 }
 
+/// Require the original payload and marker projections and the requested attempt count.
+fn projection_refusals(run: &BoundRun, index: usize) -> Vec<String> {
+    let channel = &run.channels[index];
+    let mut refusals = Vec::new();
+    if run.files[&format!("{}_payload", channel.role)] != channel.payload {
+        refusals.push(format!(
+            "{}: payload file differs from original capture projection",
+            channel.role
+        ));
+    }
+    if run.files[&format!("{}_markers", channel.role)] != channel.markers {
+        refusals.push(format!(
+            "{}: marker file differs from original capture projection",
+            channel.role
+        ));
+    }
+    let population = if index == 2 {
+        run.manifest.completion.observed_service_packets
+    } else {
+        u64::from(run.manifest.step_count)
+    };
+    if run.counts.channels[index].attempts != population + 2 {
+        refusals.push(format!(
+            "{}: attempts differ from requested data and alignment markers",
+            channel.role
+        ));
+    }
+    refusals
+}
+
+/// One channel's sources, projections, markers, counts, events and accounting refusals.
+fn channel_report(run: &BoundRun, index: usize, account: Vec<String>) -> Value {
+    let channel = &run.channels[index];
+    let counts = &run.counts.channels[index];
+    let original_capture = &run.files[&format!("{}_capture", channel.role)];
+    let original_payload = &run.files[&format!("{}_payload", channel.role)];
+    let original_markers = &run.files[&format!("{}_markers", channel.role)];
+    let events: Vec<_> = channel.events.iter().map(|event| json!({
+        "identity":event.identity,"ticks":event.ticks,"record_byte_offset":event.byte_offset,
+    })).collect();
+    json!({
+        "role":channel.role,
+        "sources":{
+            "capture":identity(original_capture),"payload":identity(original_payload),
+            "markers":identity(original_markers),
+        },
+        "derived_projections":{"payload":identity(&channel.payload),"markers":identity(&channel.markers)},
+        "start_marker_tick":channel.start,"end_marker_tick":channel.end,
+        "observed_data_records":channel.events.len(),
+        "observed_total_records":channel.events.len()+channel.markers.len()/16,
+        "attempts":counts.attempts,"accepted":counts.accepted,"drained":counts.drained,
+        "overflowed":counts.overflowed,
+        "drop_counter":{"bits":run.counts.drop_counter_bits,"value":counts.dropped,
+            "lower_bound":counts.dropped,"exact":counts.dropped!=(1_u64<<run.counts.drop_counter_bits)-1},
+        "events":events,"accounting_refusals":account,
+    })
+}
+
 /// Report complete original projections, actual drop bounds and located timing findings.
 pub(crate) fn analyze(run: &BoundRun) -> Analysis {
     let mut refusals = Vec::new();
     let mut channels = Vec::new();
-    for (index, channel) in run.channels.iter().enumerate() {
-        let counts = &run.counts.channels[index];
+    for index in 0..run.channels.len() {
         let account = accounting(run, index);
         refusals.extend(account.iter().cloned());
-        let original_capture = &run.files[&format!("{}_capture", channel.role)];
-        let original_payload = &run.files[&format!("{}_payload", channel.role)];
-        let original_markers = &run.files[&format!("{}_markers", channel.role)];
-        if original_payload != &channel.payload {
-            refusals.push(format!(
-                "{}: payload file differs from original capture projection",
-                channel.role
-            ));
-        }
-        if original_markers != &channel.markers {
-            refusals.push(format!(
-                "{}: marker file differs from original capture projection",
-                channel.role
-            ));
-        }
-        let population = if index == 2 {
-            run.manifest.completion.observed_service_packets
-        } else {
-            u64::from(run.manifest.step_count)
-        };
-        if counts.attempts != population + 2 {
-            refusals.push(format!(
-                "{}: attempts differ from requested data and alignment markers",
-                channel.role
-            ));
-        }
-        let events: Vec<_> = channel.events.iter().map(|event| json!({
-            "identity":event.identity,"ticks":event.ticks,"record_byte_offset":event.byte_offset,
-        })).collect();
-        channels.push(json!({
-            "role":channel.role,
-            "sources":{
-                "capture":identity(original_capture),"payload":identity(original_payload),
-                "markers":identity(original_markers),
-            },
-            "derived_projections":{"payload":identity(&channel.payload),"markers":identity(&channel.markers)},
-            "start_marker_tick":channel.start,"end_marker_tick":channel.end,
-            "observed_data_records":channel.events.len(),
-            "observed_total_records":channel.events.len()+channel.markers.len()/16,
-            "attempts":counts.attempts,"accepted":counts.accepted,"drained":counts.drained,
-            "overflowed":counts.overflowed,
-            "drop_counter":{"bits":run.counts.drop_counter_bits,"value":counts.dropped,
-                "lower_bound":counts.dropped,"exact":counts.dropped!=(1_u64<<run.counts.drop_counter_bits)-1},
-            "events":events,"accounting_refusals":account,
-        }));
+        refusals.extend(projection_refusals(run, index));
+        channels.push(channel_report(run, index, account));
     }
     let (intervals, step_refusals) = timing(run);
     refusals.extend(step_refusals.iter().cloned());

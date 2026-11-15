@@ -263,10 +263,22 @@ impl Installation {
 
     /// Reverify the entire selected process boundary before and after execution.
     pub fn verify(&self) -> Result<(), String> {
-        let runtime = &self.runtime;
-        let platform = &runtime.platform_baseline;
         let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease")
             .map_err(|_| "Selected checker kernel baseline is unavailable.".to_owned())?;
+        if self.baseline_differs(&kernel) {
+            return Err("Selected checker runtime inventory or platform baseline differs.".into());
+        }
+        let (mut names, mut paths) = self.verify_files()?;
+        self.interpreter()?;
+        self.tracer()?;
+        self.verify_import_roots()?;
+        self.verify_workers(&mut names, &mut paths)
+    }
+
+    /// Whether the descriptor, platform, limits or inventory sizes differ from the baseline.
+    fn baseline_differs(&self, kernel: &str) -> bool {
+        let runtime = &self.runtime;
+        let platform = &runtime.platform_baseline;
         let expected_namespaces: Vec<_> = (0..self.import_roots.len())
             .map(|index| format!("imports/{index}"))
             .collect();
@@ -276,7 +288,7 @@ impl Installation {
             .iter()
             .map(|item| item.path.as_str())
             .collect();
-        if runtime.schema_id != "loop-timing-witness.sc-checker-runtime.v1"
+        runtime.schema_id != "loop-timing-witness.sc-checker-runtime.v1"
             || platform.id.is_empty()
             || cfg!(not(all(target_os = "linux", target_arch = "x86_64")))
             || platform.system != "Linux"
@@ -290,15 +302,19 @@ impl Installation {
             || runtime.import_namespaces != expected_namespaces
             || workers != expected_workers
             || runtime.worker_sources.len() != 3
-        {
-            return Err("Selected checker runtime inventory or platform baseline differs.".into());
-        }
+    }
+
+    /// Verify every installed file once against its descriptor reference.
+    ///
+    /// Returns the installed role names and paths.
+    fn verify_files(&self) -> Result<(BTreeSet<String>, BTreeSet<PathBuf>), String> {
         let mut names = BTreeSet::new();
         let mut paths = BTreeSet::new();
         for item in &self.files {
             if !names.insert(item.name.clone())
                 || !paths.insert(item.path.clone())
-                || !runtime
+                || !self
+                    .runtime
                     .files
                     .iter()
                     .any(|reference| same(reference, &item.reference()))
@@ -309,8 +325,11 @@ impl Installation {
             }
             item.verify()?;
         }
-        self.interpreter()?;
-        self.tracer()?;
+        Ok((names, paths))
+    }
+
+    /// Require every import root and the worker root to be real directories.
+    fn verify_import_roots(&self) -> Result<(), String> {
         for directory in self
             .import_roots
             .iter()
@@ -324,7 +343,16 @@ impl Installation {
                 return Err("Selected checker runtime import roots are unavailable.".into());
             }
         }
-        for reference in &runtime.worker_sources {
+        Ok(())
+    }
+
+    /// Verify every worker source under the worker root, distinct from every runtime role.
+    fn verify_workers(
+        &self,
+        names: &mut BTreeSet<String>,
+        paths: &mut BTreeSet<PathBuf>,
+    ) -> Result<(), String> {
+        for reference in &self.runtime.worker_sources {
             let path = self.worker_import_root().join(&reference.path);
             if !names.insert(reference.path.clone()) || !paths.insert(path.clone()) {
                 return Err("Selected checker worker/runtime roles contain an alias.".into());

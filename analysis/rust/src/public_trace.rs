@@ -176,20 +176,7 @@ pub(crate) fn findings(
         ]);
     };
     let observed = opened(&actual.trace, directory)?;
-    let runtime: BTreeSet<_> = installation
-        .observed_roles()
-        .into_iter()
-        .map(|(_, path)| path.canonicalize().unwrap_or(path))
-        .collect();
-    let data: BTreeSet<_> = [
-        "stimuli.txt",
-        "results_expected.txt",
-        "results_verilog.txt",
-        "checker-observation.json",
-    ]
-    .into_iter()
-    .map(|name| directory.join(name))
-    .collect();
+    let (runtime, data) = bound_paths(directory, installation);
     let mut result = Vec::new();
     if !source_files.is_subset(&observed) {
         result.push(
@@ -210,6 +197,28 @@ pub(crate) fn findings(
         result.push("Actual source checker imported a live or unbound SC source fallback.".into());
     }
     Ok(result)
+}
+
+/// The resolved runtime role paths and the operation's own data paths.
+fn bound_paths(
+    directory: &Path,
+    installation: &Installation,
+) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>) {
+    let runtime: BTreeSet<_> = installation
+        .observed_roles()
+        .into_iter()
+        .map(|(_, path)| path.canonicalize().unwrap_or(path))
+        .collect();
+    let data: BTreeSet<_> = [
+        "stimuli.txt",
+        "results_expected.txt",
+        "results_verilog.txt",
+        "checker-observation.json",
+    ]
+    .into_iter()
+    .map(|name| directory.join(name))
+    .collect();
+    (runtime, data)
 }
 
 #[cfg(test)]

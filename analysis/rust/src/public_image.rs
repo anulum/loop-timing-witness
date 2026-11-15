@@ -14,7 +14,7 @@
 //! operation are substituted into the source owner's launcher command.
 
 use crate::files::{FileRef, decode, digest};
-use crate::public_execution::{Invocation, run_group};
+use crate::public_execution::{FileObservation, Invocation, run_group};
 use crate::public_runtime::{ExecutionContract, Installation, InstalledFile, Runtime};
 use serde::Deserialize;
 use serde_json::json;
@@ -315,28 +315,7 @@ impl ImageExecutor {
         if image_digests != admitted {
             failures.push("Checker image source closure differs from the admitted sources.".into());
         }
-        let mut observed = BTreeSet::new();
-        let mut outside = false;
-        for record in &observation.files {
-            let path = Path::new(&record.path);
-            if path.parent() == Some(Path::new("/work"))
-                && path
-                    .file_name()
-                    .and_then(|value| value.to_str())
-                    .is_some_and(|value| WORK_DATA.contains(&value))
-            {
-                continue;
-            }
-            let relative = record.path.strip_prefix('/').unwrap_or(&record.path);
-            if !path.is_absolute()
-                || files.get(relative).is_none_or(|item| {
-                    item.sha256 != record.sha256 || item.byte_length != record.byte_length
-                })
-            {
-                outside = true;
-            }
-            observed.insert(relative);
-        }
+        let (observed, outside) = opened(&observation.files, &files);
         if !sources.is_subset(&observed) {
             failures.push(
                 "Actual source checker did not open its complete admitted source closure.".into(),
@@ -357,6 +336,37 @@ impl ImageExecutor {
         }
         failures
     }
+}
+
+/// The image-relative paths the checker opened outside its work data, and whether any
+/// opened file is relative or differs from the image inventory.
+fn opened<'a>(
+    records: &'a [FileObservation],
+    files: &BTreeMap<&str, &ImageFile>,
+) -> (BTreeSet<&'a str>, bool) {
+    let mut observed = BTreeSet::new();
+    let mut outside = false;
+    for record in records {
+        let path = Path::new(&record.path);
+        if path.parent() == Some(Path::new("/work"))
+            && path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| WORK_DATA.contains(&value))
+        {
+            continue;
+        }
+        let relative = record.path.strip_prefix('/').unwrap_or(&record.path);
+        if !path.is_absolute()
+            || files.get(relative).is_none_or(|item| {
+                item.sha256 != record.sha256 || item.byte_length != record.byte_length
+            })
+        {
+            outside = true;
+        }
+        observed.insert(relative);
+    }
+    (observed, outside)
 }
 
 /// The refusal of an image tree whose entries differ from the bound inventory.

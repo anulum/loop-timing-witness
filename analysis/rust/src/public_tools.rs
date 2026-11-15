@@ -151,43 +151,9 @@ pub(crate) fn bind(
     let raw = files["tool_receipt"].clone();
     shape(&raw, epoch)?;
     let checker = if epoch == 0 {
-        let tool: PublicTool = decode(&raw, "public neural tool receipt")?;
-        binding::tool_files(
-            files,
-            root,
-            Tool {
-                scope: tool.scope,
-                compiler_simulator_runtime: tool.compiler_simulator_runtime,
-                source_owned_public_model_checker: tool.source_owned_public_model_checker,
-                counter_receipt: tool.counter_receipt,
-                raw_spike_trace: tool.raw_spike_trace,
-                original_stimulus: tool.original_stimulus,
-                actual_completion: tool.actual_completion,
-                existing_trial_analysis: tool.existing_trial_analysis,
-                declared_clock_schedule: tool.declared_clock_schedule,
-            },
-        )?;
-        tool.checker_receipts
+        bind_tool(&raw, root, files)?
     } else {
-        let tool: PublicResetTool = decode(&raw, "public neural tool receipt")?;
-        binding::reset_files(
-            files,
-            root,
-            ResetTool {
-                scope: tool.scope,
-                compiler_simulator_runtime: tool.compiler_simulator_runtime,
-                source_owned_public_model_checker: tool.source_owned_public_model_checker,
-                counter_receipt: tool.counter_receipt,
-                raw_spike_trace: tool.raw_spike_trace,
-                original_stimulus: tool.original_stimulus,
-                actual_completion: tool.actual_completion,
-                existing_trial_analysis: tool.existing_trial_analysis,
-                declared_clock_schedule: tool.declared_clock_schedule,
-                reset_epoch_receipt: tool.reset_epoch_receipt,
-                abandoned_prefix_traces: tool.abandoned_prefix_traces,
-            },
-        )?;
-        tool.checker_receipts
+        bind_reset_tool(&raw, root, files)?
     };
     binding::role(
         files,
@@ -198,4 +164,56 @@ pub(crate) fn bind(
     )?;
     binding::role(files, root, "checker_check_receipt", &checker.check, 65536)?;
     decode(&raw, "complete public tool receipt")
+}
+
+/// Bind the files an original epoch's tool receipt names and return its checker receipts.
+fn bind_tool(
+    raw: &[u8],
+    root: &Path,
+    files: &mut BTreeMap<String, Vec<u8>>,
+) -> Result<CheckerReceipts, String> {
+    let tool: PublicTool = decode(raw, "public neural tool receipt")?;
+    binding::tool_files(
+        files,
+        root,
+        Tool {
+            scope: tool.scope,
+            compiler_simulator_runtime: tool.compiler_simulator_runtime,
+            source_owned_public_model_checker: tool.source_owned_public_model_checker,
+            counter_receipt: tool.counter_receipt,
+            raw_spike_trace: tool.raw_spike_trace,
+            original_stimulus: tool.original_stimulus,
+            actual_completion: tool.actual_completion,
+            existing_trial_analysis: tool.existing_trial_analysis,
+            declared_clock_schedule: tool.declared_clock_schedule,
+        },
+    )?;
+    Ok(tool.checker_receipts)
+}
+
+/// Bind the files a reset epoch's tool receipt names and return its checker receipts.
+fn bind_reset_tool(
+    raw: &[u8],
+    root: &Path,
+    files: &mut BTreeMap<String, Vec<u8>>,
+) -> Result<CheckerReceipts, String> {
+    let tool: PublicResetTool = decode(raw, "public neural tool receipt")?;
+    binding::reset_files(
+        files,
+        root,
+        ResetTool {
+            scope: tool.scope,
+            compiler_simulator_runtime: tool.compiler_simulator_runtime,
+            source_owned_public_model_checker: tool.source_owned_public_model_checker,
+            counter_receipt: tool.counter_receipt,
+            raw_spike_trace: tool.raw_spike_trace,
+            original_stimulus: tool.original_stimulus,
+            actual_completion: tool.actual_completion,
+            existing_trial_analysis: tool.existing_trial_analysis,
+            declared_clock_schedule: tool.declared_clock_schedule,
+            reset_epoch_receipt: tool.reset_epoch_receipt,
+            abandoned_prefix_traces: tool.abandoned_prefix_traces,
+        },
+    )?;
+    Ok(tool.checker_receipts)
 }

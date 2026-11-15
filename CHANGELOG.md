@@ -12,7 +12,7 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-11-15
+## [0.3.0] - 2026-11-16
 
 ### Added
 

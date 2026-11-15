@@ -12,7 +12,7 @@ message: >-
 type: software
 title: Loop Timing Witness
 version: 0.3.0
-date-released: 2026-11-15
+date-released: 2026-11-16
 doi: 10.5281/zenodo.24263979
 repository-code: https://github.com/anulum/loop-timing-witness
 url: https://anulum.github.io/loop-timing-witness/

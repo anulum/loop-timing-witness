@@ -63,7 +63,16 @@ fn invalid_configuration_leaves_pid_state_unchanged() {
     let mut state = PidState::default();
     state.step(&valid, 0, SCALE, 0).expect("valid coefficients");
     let before = state;
-    let invalid = [
+    for coefficients in invalid(valid) {
+        assert!(state.step(&coefficients, 1, SCALE, 0).is_err());
+        assert!(lqr_step(&coefficients, 1, SCALE, 0, 0).is_err());
+        assert_eq!(state, before);
+    }
+}
+
+/// Coefficients each violating one ordering or range rule of the valid configuration.
+fn invalid(valid: Coefficients) -> [Coefficients; 11] {
+    [
         Coefficients {
             output_min: 1,
             ..valid
@@ -107,10 +116,5 @@ fn invalid_configuration_leaves_pid_state_unchanged() {
             derivative_gain: -1,
             ..valid
         },
-    ];
-    for coefficients in invalid {
-        assert!(state.step(&coefficients, 1, SCALE, 0).is_err());
-        assert!(lqr_step(&coefficients, 1, SCALE, 0, 0).is_err());
-        assert_eq!(state, before);
-    }
+    ]
 }

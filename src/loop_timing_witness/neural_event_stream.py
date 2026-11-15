@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
 NEURAL_RECORD: Final = struct.Struct("<BBHIQ")
@@ -105,6 +105,97 @@ def _validate_channel_arguments(content: bytes, role: str, identity_limit: int) 
     return {"input": 14, "state": 15, "service": 16}[role]
 
 
+@dataclass(slots=True)
+class _ChannelDecoder:
+    """Running decode of one channel's records, in capture order.
+
+    Attributes
+    ----------
+    content
+        Original raw channel bytes.
+    data_code, identity_limit
+        The role's data-record code and its exclusive identity bound.
+    events, payload, markers
+        Observations, data records and marker records decoded so far.
+    start_tick, end_tick
+        Alignment-marker ticks, or ``None`` while absent.
+    previous_tick, previous_identity
+        Last accepted tick and data identity; ``-1`` before the first.
+    """
+
+    content: bytes
+    data_code: int
+    identity_limit: int
+    events: list[NeuralEvent] = field(default_factory=list)
+    payload: list[bytes] = field(default_factory=list)
+    markers: list[bytes] = field(default_factory=list)
+    start_tick: int | None = None
+    end_tick: int | None = None
+    previous_tick: int = -1
+    previous_identity: int = -1
+
+    def record(self, offset: int) -> None:
+        """Decode the record at one offset and keep its original bytes.
+
+        Parameters
+        ----------
+        offset
+            Byte offset of a whole record.
+
+        Raises
+        ------
+        NeuralCaptureRefusalError
+            If reserved bits are set, the tick does not advance within the
+            horizon, or the record is a misplaced marker or an unordered or
+            foreign data record.
+        """
+        code, reserved_byte, reserved_word, identity, ticks = NEURAL_RECORD.unpack_from(
+            self.content, offset
+        )
+        if reserved_byte or reserved_word:
+            message = "Neural capture reserved bits must be zero."
+            raise NeuralCaptureRefusalError(message)
+        if ticks >= ENCODER_TICK_LIMIT or ticks <= self.previous_tick:
+            message = "Neural capture ticks regress, repeat or exceed the no-wrap horizon."
+            raise NeuralCaptureRefusalError(message)
+        self.previous_tick = ticks
+        original = self.content[offset : offset + NEURAL_RECORD.size]
+        if code == ALIGNMENT_MARKER_CODE:
+            self._marker(identity, offset, ticks)
+            self.markers.append(original)
+            return
+        if code != self.data_code:
+            message = "Neural capture contains a code from another channel or profile."
+            raise NeuralCaptureRefusalError(message)
+        if identity >= self.identity_limit or identity <= self.previous_identity:
+            message = "Neural capture identities repeat, regress or exceed the population."
+            raise NeuralCaptureRefusalError(message)
+        self.previous_identity = identity
+        self.events.append(NeuralEvent(identity, ticks))
+        self.payload.append(original)
+
+    def _marker(self, identity: int, offset: int, ticks: int) -> None:
+        """Accept a start marker as the first record or an end marker as the last.
+
+        Parameters
+        ----------
+        identity, offset, ticks
+            Marker identity, byte offset and tick.
+
+        Raises
+        ------
+        NeuralCaptureRefusalError
+            If the marker has another identity or position.
+        """
+        if identity == 0 and offset == 0:
+            self.start_tick = ticks
+        elif identity == 1 and offset + NEURAL_RECORD.size == len(self.content):
+            self.end_tick = ticks
+        else:
+            message = "Neural alignment marker has an invalid identity or position."
+            raise NeuralCaptureRefusalError(message)
+
+
 def decode_neural_channel(content: bytes, role: str, identity_limit: int) -> NeuralChannel:
     """Validate a neural channel and preserve its original records and gaps.
 
@@ -132,50 +223,16 @@ def decode_neural_channel(content: bytes, role: str, identity_limit: int) -> Neu
         If the role, population, byte layout, code, reserved bits, marker
         position, identity order or tick order contradict the channel contract.
     """
-    data_code = _validate_channel_arguments(content, role, identity_limit)
-    events: list[NeuralEvent] = []
-    payload: list[bytes] = []
-    markers: list[bytes] = []
-    start_tick: int | None = None
-    end_tick: int | None = None
-    previous_tick = -1
-    previous_identity = -1
+    decoder = _ChannelDecoder(
+        content, _validate_channel_arguments(content, role, identity_limit), identity_limit
+    )
     for offset in range(0, len(content), NEURAL_RECORD.size):
-        code, reserved_byte, reserved_word, identity, ticks = NEURAL_RECORD.unpack_from(
-            content, offset
-        )
-        if reserved_byte or reserved_word:
-            message = "Neural capture reserved bits must be zero."
-            raise NeuralCaptureRefusalError(message)
-        if ticks >= ENCODER_TICK_LIMIT or ticks <= previous_tick:
-            message = "Neural capture ticks regress, repeat or exceed the no-wrap horizon."
-            raise NeuralCaptureRefusalError(message)
-        previous_tick = ticks
-        original = content[offset : offset + NEURAL_RECORD.size]
-        if code == ALIGNMENT_MARKER_CODE:
-            if identity == 0 and offset == 0:
-                start_tick = ticks
-            elif identity == 1 and offset + NEURAL_RECORD.size == len(content):
-                end_tick = ticks
-            else:
-                message = "Neural alignment marker has an invalid identity or position."
-                raise NeuralCaptureRefusalError(message)
-            markers.append(original)
-        else:
-            if code != data_code:
-                message = "Neural capture contains a code from another channel or profile."
-                raise NeuralCaptureRefusalError(message)
-            if identity >= identity_limit or identity <= previous_identity:
-                message = "Neural capture identities repeat, regress or exceed the population."
-                raise NeuralCaptureRefusalError(message)
-            previous_identity = identity
-            events.append(NeuralEvent(identity, ticks))
-            payload.append(original)
+        decoder.record(offset)
     return NeuralChannel(
         role,
-        tuple(events),
-        start_tick,
-        end_tick,
-        b"".join(payload),
-        b"".join(markers),
+        tuple(decoder.events),
+        decoder.start_tick,
+        decoder.end_tick,
+        b"".join(decoder.payload),
+        b"".join(decoder.markers),
     )

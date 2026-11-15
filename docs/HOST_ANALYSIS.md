@@ -354,8 +354,8 @@ artefact, measures with `--label ci` and uploads the result with a runner receip
 Recorded measurements, side by side:
 
 - hosted: [`control_run_analysis.json`](../benchmarks/control_run_analysis.json), workflow run
-  43658874895 at base commit `5d67140`, on the GitHub-hosted `ubuntu-24.04` runner (Intel Xeon 6975P-C,
-  4 logical CPUs, load average 1.0–2.7);
+  43685058071 at base commit `c0936da` (the local measurement's analysis code), on the GitHub-hosted
+  `ubuntu-24.04` runner (AMD EPYC 9V45, 4 logical CPUs, load average 1.2–2.6);
 - local: [`control_run_analysis.local.json`](../benchmarks/control_run_analysis.local.json), base commit
   `87fd048` (behaviour-identical analysis code, with the long analysis functions split), Intel Core
   i5-11600K, shared workstation, `powersave` governor, child pinned to CPU 11, load average 6.1–7.8,
@@ -363,15 +363,15 @@ Recorded measurements, side by side:
 
 | Command | Cycles | Backend | Hosted P50 | Hosted P95 | Hosted mean | Local P50 | Local P95 | Local mean | Peak resident memory |
 |---|---|---|---|---|---|---|---|---|---|
-| run | 2·10⁵ | Python | 12.13 s | 12.58 s | 12.19 s | 11.53 s | 13.29 s | 11.70 s | 764 MiB |
-| run | 2·10⁵ | native | 2.91 s | 3.00 s | 2.91 s | 3.33 s | 3.80 s | 3.40 s | 1.60 GiB |
-| campaign | 10⁶ | Python | 40.78 s | 41.70 s | 40.89 s | 32.43 s | 32.99 s | 31.73 s | 980–986 MiB |
-| campaign | 10⁶ | native | 1.96 s | 1.99 s | 1.96 s | 2.35 s | 2.56 s | 2.39 s | 397 MiB |
+| run | 2·10⁵ | Python | 11.40 s | 11.62 s | 11.42 s | 11.53 s | 13.29 s | 11.70 s | 764–765 MiB |
+| run | 2·10⁵ | native | 2.92 s | 3.02 s | 2.93 s | 3.33 s | 3.80 s | 3.40 s | 1.60 GiB |
+| campaign | 10⁶ | Python | 41.74 s | 41.86 s | 41.53 s | 32.43 s | 32.99 s | 31.73 s | 980–986 MiB |
+| campaign | 10⁶ | native | 1.59 s | 1.66 s | 1.60 s | 2.35 s | 2.56 s | 2.39 s | 397 MiB |
 
-The native speed-up of the mean is 4.2× hosted and 3.4× local for a run, and 20.8× hosted and 13.3× local
-for a campaign. Hosted runners are assigned per job and their processors differ between runs; an
-earlier dispatch at `2d5cd26` ran on an AMD EPYC 9V74 runner and measured 4.0× and 24.5×. Compare
-figures only with the host each artefact records.
+The native speed-up of the mean is 3.9× hosted and 3.4× local for a run, and 25.9× hosted and 13.3× local
+for a campaign. Hosted runners are assigned per job and their processors differ between runs; earlier
+dispatches ran on an AMD EPYC 9V74 runner at `2d5cd26` (4.0× and 24.5×) and an Intel Xeon 6975P-C
+runner at `5d67140` (4.2× and 20.8×). Compare figures only with the host each artefact records.
 
 The run command publishes per-cycle interval and jitter tables, 37.7 MB and 75.2 MB for one
 repeat. The native run command reaches a peak memory about 2.1 times Python's, which is a known

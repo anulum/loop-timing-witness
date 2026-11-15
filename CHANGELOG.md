@@ -27,6 +27,13 @@ Loop Timing Witness — changelog
   workflow regenerates the data on the fixed runner, holds them to the committed digests and
   uploads its measurement. The hosted result is `benchmarks/control_run_analysis.json` and the
   local result `benchmarks/control_run_analysis.local.json`.
+- Release asset builder: `tools/release_provenance.py collect` reads a version's PyPI
+  distributions, the listed crate publications and the commit's hosted workflow runs into a
+  release specification; `build` writes the source ZIP and `release-provenance.json` from the
+  tagged commit offline, computing the archive size, digests and per-file SHA-256 from the
+  commit's tree. The tests rebuild both published records and ZIPs; the 0.1.0 record is rebuilt
+  byte for byte. See
+  [building the release assets](docs/SOURCE_RELEASE_SIGNATURES.md#building-the-release-assets).
 
 ### Changed
 

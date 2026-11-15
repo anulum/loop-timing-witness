@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -159,6 +159,25 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     for marker in UNEARNED_BADGE_MARKERS:
         assert marker not in readme, marker
     changelog = publishable_text("CHANGELOG.md")
+    zenodo = _check_release_metadata(readme, changelog)
+    _check_badges(readme, zenodo["doi"])
+
+
+def _check_release_metadata(readme: str, changelog: str) -> dict[str, Any]:
+    """Require one version, release date and DOI across the package, crate and citation.
+
+    Parameters
+    ----------
+    readme
+        Published README text.
+    changelog
+        Published changelog text.
+
+    Returns
+    -------
+    dict[str, Any]
+        Zenodo metadata.
+    """
     project = tomllib.loads(publishable_text("pyproject.toml"))["project"]
     crate = tomllib.loads(publishable_text("controllers/rust/Cargo.toml"))["package"]
     version = project["version"]
@@ -182,12 +201,25 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     assert "https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0" in readme
     assert "No registry release" not in citation
     assert f"| `{version}` | yes" in publishable_text("SECURITY.md")
+    return zenodo
+
+
+def _check_badges(readme: str, doi: str) -> None:
+    """Require the README badges, their targets and their image sources.
+
+    Parameters
+    ----------
+    readme
+        Published README text.
+    doi
+        Zenodo DOI of the release.
+    """
     badges = re.findall(r"\[!\[([^]]+)\]\(([^)]+)\)\]\(([^)]+)\)", readme)
     assert [(label, target) for label, _, target in badges] == [
         ("Sponsor", "https://github.com/sponsors/anulum"),
         ("PyPI", "https://pypi.org/project/loop-timing-witness/"),
         ("crates.io", "https://crates.io/crates/witness-controller"),
-        ("DOI", f"https://doi.org/{zenodo['doi']}"),
+        ("DOI", f"https://doi.org/{doi}"),
         ("CI", "https://github.com/anulum/loop-timing-witness/actions/workflows/ci.yml"),
         ("Docs", "https://anulum.github.io/loop-timing-witness/"),
         ("CodeQL", "https://github.com/anulum/loop-timing-witness/actions/workflows/codeql.yml"),
@@ -208,7 +240,7 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     ]
     assert "https://img.shields.io/pypi/v/loop-timing-witness.svg" in readme
     assert "https://img.shields.io/crates/v/witness-controller.svg" in readme
-    assert f"https://zenodo.org/badge/doi/{zenodo['doi'].replace('/', '%2F')}.svg" in readme
+    assert f"https://zenodo.org/badge/doi/{doi.replace('/', '%2F')}.svg" in readme
     assert (
         "https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge" in readme
     )

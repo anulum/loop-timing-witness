@@ -152,6 +152,81 @@ def _write_receipt(
         stream.write("\n")
 
 
+def _check_request(
+    command: list[str], configuration: LoadConfiguration, execution: LoadExecution
+) -> None:
+    """Refuse an invalid load, command, timeout or an existing journal.
+
+    Parameters
+    ----------
+    command
+        Native command vector.
+    configuration
+        Load profile, CPU and working set.
+    execution
+        Timeout, journal and workspace of the run.
+
+    Raises
+    ------
+    ValueError
+        If the configuration, command, timeout or executable is invalid.
+    FileExistsError
+        If the load journal already exists.
+    """
+    configuration.validate()
+    if not command or not 1 <= execution.timeout <= MAX_TIMEOUT_SECONDS:
+        message = "native command and bounded load timeout are required"
+        raise ValueError(message)
+    program = Path(command[0])
+    if not program.is_absolute() or not program.is_file() or not os.access(program, os.X_OK):
+        message = "native executable must be an executable absolute file path"
+        raise ValueError(message)
+    if execution.journal.exists() or execution.journal.is_symlink():
+        message = "load journal already exists"
+        raise FileExistsError(message)
+
+
+def _start_worker(
+    configuration: LoadConfiguration,
+    execution: LoadExecution,
+    channels: WorkerChannels,
+    log: BinaryIO,
+) -> subprocess.Popen[bytes]:
+    """Start the load worker in its own session on the worker channels.
+
+    Parameters
+    ----------
+    configuration
+        Load profile, CPU and working set.
+    execution
+        Workspace and optional worker source of the run.
+    channels
+        Pipes the worker reads from and reports on.
+    log
+        Exclusive worker log receiving its standard error.
+
+    Returns
+    -------
+    subprocess.Popen[bytes]
+        The started worker.
+    """
+    source = execution.worker_path or Path(__file__).with_name("linux_load_worker.py")
+    return subprocess.Popen(
+        [
+            sys.executable,
+            str(source),
+            configuration.profile,
+            str(configuration.cpu),
+            str(configuration.working_set_bytes),
+            str(execution.workspace.resolve()),
+        ],
+        stdin=channels.child_input,
+        stdout=channels.child_output,
+        stderr=log,
+        start_new_session=True,
+    )
+
+
 def execute_with_load(
     command: list[str], configuration: LoadConfiguration, execution: LoadExecution, stdout: BinaryIO
 ) -> subprocess.CompletedProcess[bytes]:
@@ -182,38 +257,14 @@ def execute_with_load(
     subprocess.SubprocessError
         If execution exceeds its lifetime or the worker exits prematurely.
     """
-    configuration.validate()
-    if not command or not 1 <= execution.timeout <= MAX_TIMEOUT_SECONDS:
-        message = "native command and bounded load timeout are required"
-        raise ValueError(message)
-    program = Path(command[0])
-    if not program.is_absolute() or not program.is_file() or not os.access(program, os.X_OK):
-        message = "native executable must be an executable absolute file path"
-        raise ValueError(message)
-    if execution.journal.exists() or execution.journal.is_symlink():
-        message = "load journal already exists"
-        raise FileExistsError(message)
+    _check_request(command, configuration, execution)
     execution.workspace.mkdir(mode=0o700)
-    source = execution.worker_path or Path(__file__).with_name("linux_load_worker.py")
     with (
         (execution.workspace / "worker.log").open("xb") as log,
         worker_channels() as channels,
         ExitStack() as processes,
     ):
-        worker = subprocess.Popen(
-            [
-                sys.executable,
-                str(source),
-                configuration.profile,
-                str(configuration.cpu),
-                str(configuration.working_set_bytes),
-                str(execution.workspace.resolve()),
-            ],
-            stdin=channels.child_input,
-            stdout=channels.child_output,
-            stderr=log,
-            start_new_session=True,
-        )
+        worker = _start_worker(configuration, execution, channels, log)
         processes.callback(_reap, worker)
         channels.release_child_ends()
         _await_ready(worker, channels)

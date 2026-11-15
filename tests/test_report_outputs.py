@@ -114,22 +114,7 @@ def test_concurrent_destination_is_preserved(
     target = tmp_path / "racing-report"
     log = tmp_path / "publication.trace"
     process = subprocess.Popen(
-        [
-            "strace",
-            "-f",
-            "--kill-on-exit",
-            "-o",
-            str(log),
-            "-e",
-            "trace=rename,renameat,renameat2",
-            "-e",
-            "inject=renameat2:delay_enter=2s:when=2",
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/analyze_run.py"),
-            str(run / "manifest.json"),
-            "--output-dir",
-            str(target),
-        ],
+        _racing_command(run, target, log),
         cwd=REPOSITORY_ROOT,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -139,53 +124,134 @@ def test_concurrent_destination_is_preserved(
     )
     owned = OwnedTrace(process, log, {process.pid: os.pidfd_open(process.pid)})
     try:
-        deadline = time.monotonic() + scaled(10)
-        staging = None
-        while True:
-            assert time.monotonic() < deadline, "actual completed staging was not observed in 10s"
-            owned.observe()
-            candidates = [
-                path for path in tmp_path.glob(".racing-report.*") if str(path) in log.read_text()
-            ]
-            if candidates:
-                staging = candidates[0]
-                break
-            assert process.poll() is None, "actual analyzer exited before staging observation"
-            time.sleep(0.01)
-        assert staging is not None, "actual completed staging was not observed"
+        staging = _await_staging(owned, process, tmp_path)
         if kind == "absent":
-            assert not target.exists()
-            expected = {path.name: path.read_bytes() for path in staging.iterdir()}
-            assert set(expected) == {
-                "report.json",
-                "interval_summary.csv",
-                "jitter_summary.csv",
-                "cycle_intervals.csv",
-                "cycle_jitter.csv",
-                "interval_p99.svg",
-                "jitter_p99.svg",
-                "energy_per_cycle.svg",
-            }
-            stdout, stderr = process.communicate(timeout=scaled(10))
-            assert process.returncode == 0, stdout + stderr
-            assert {path.name: path.read_bytes() for path in target.iterdir()} == expected
-            assert not list(tmp_path.glob(".racing-report.*"))
-            assert "(DELAYED)" in log.read_text()
-            return
-        original_inode = create_concurrent_destination(target, kind)
-        stdout, stderr = process.communicate(timeout=scaled(10))
-        assert process.returncode == 1, stdout + stderr
-        assert target.lstat().st_ino == original_inode
-        if kind == "file":
-            assert target.read_bytes() == b"preserve"
-        elif kind in {"nonempty", "symlink"}:
-            assert (target / "sentinel").read_bytes() == b"preserve"
+            _check_published(process, staging, target)
         else:
-            assert not list(target.iterdir())
+            _check_preserved(process, target, kind)
         assert not list(tmp_path.glob(".racing-report.*"))
         assert "(DELAYED)" in log.read_text()
     finally:
         owned.close()
+
+
+def _racing_command(run: Path, target: Path, log: Path) -> list[str]:
+    """Return the analyser command whose second rename a tracer delays by two seconds.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    target
+        Report destination.
+    log
+        Trace file of the renames.
+
+    Returns
+    -------
+    list[str]
+        Traced command.
+    """
+    return [
+        "strace",
+        "-f",
+        "--kill-on-exit",
+        "-o",
+        str(log),
+        "-e",
+        "trace=rename,renameat,renameat2",
+        "-e",
+        "inject=renameat2:delay_enter=2s:when=2",
+        sys.executable,
+        str(REPOSITORY_ROOT / "tools/analyze_run.py"),
+        str(run / "manifest.json"),
+        "--output-dir",
+        str(target),
+    ]
+
+
+def _await_staging(owned: OwnedTrace, process: subprocess.Popen[str], parent: Path) -> Path:
+    """Wait at most ten scaled seconds for the traced analyser to rename its completed staging.
+
+    Parameters
+    ----------
+    owned
+        Owned trace of the analyser.
+    process
+        Running analyser.
+    parent
+        Report parent directory.
+
+    Returns
+    -------
+    Path
+        Staging directory the trace names.
+    """
+    log = owned.log
+    deadline = time.monotonic() + scaled(10)
+    while True:
+        assert time.monotonic() < deadline, "actual completed staging was not observed in 10s"
+        owned.observe()
+        candidates = [
+            path for path in parent.glob(".racing-report.*") if str(path) in log.read_text()
+        ]
+        if candidates:
+            return candidates[0]
+        assert process.poll() is None, "actual analyzer exited before staging observation"
+        time.sleep(0.01)
+
+
+def _check_published(process: subprocess.Popen[str], staging: Path, target: Path) -> None:
+    """Require the complete staging to become the absent destination unchanged.
+
+    Parameters
+    ----------
+    process
+        Running analyser, past its staging.
+    staging
+        Completed staging directory.
+    target
+        Absent report destination.
+    """
+    assert not target.exists()
+    expected = {path.name: path.read_bytes() for path in staging.iterdir()}
+    assert set(expected) == {
+        "report.json",
+        "interval_summary.csv",
+        "jitter_summary.csv",
+        "cycle_intervals.csv",
+        "cycle_jitter.csv",
+        "interval_p99.svg",
+        "jitter_p99.svg",
+        "energy_per_cycle.svg",
+    }
+    stdout, stderr = process.communicate(timeout=scaled(10))
+    assert process.returncode == 0, stdout + stderr
+    assert {path.name: path.read_bytes() for path in target.iterdir()} == expected
+
+
+def _check_preserved(process: subprocess.Popen[str], target: Path, kind: str) -> None:
+    """Create a destination during the delay and require the analyser to leave it intact.
+
+    Parameters
+    ----------
+    process
+        Running analyser, past its staging.
+    target
+        Report destination.
+    kind
+        Destination the concurrent actor creates.
+    """
+    original_inode = create_concurrent_destination(target, kind)
+    stdout, stderr = process.communicate(timeout=scaled(10))
+    assert process.returncode == 1, stdout + stderr
+    assert target.lstat().st_ino == original_inode
+    if kind == "file":
+        assert target.read_bytes() == b"preserve"
+    elif kind in {"nonempty", "symlink"}:
+        assert (target / "sentinel").read_bytes() == b"preserve"
+    else:
+        assert not list(target.iterdir())
 
 
 def test_missing_output_parent_is_refused(

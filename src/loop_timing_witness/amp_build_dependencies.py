@@ -16,6 +16,49 @@ from pathlib import Path
 from .manifest_io import sha256_of_file
 
 
+def _record_names(record: Path) -> list[str]:
+    """Return the dependency names one compiler record lists after its target.
+
+    Parameters
+    ----------
+    record
+        Original compiler dependency record.
+
+    Returns
+    -------
+    list[str]
+        Nonempty list of dependency names, with line continuations joined.
+
+    Raises
+    ------
+    OSError
+        If the record is unavailable.
+    ValueError
+        If the record is not UTF-8, lacks its target or dependencies, or leaves a
+        quotation or an escape unbalanced.
+    """
+    try:
+        text = record.read_text(encoding="utf-8").replace("\\\n", "")
+    except UnicodeDecodeError as error:
+        message = "AMP original compiler dependency record is not UTF-8"
+        raise ValueError(message) from error
+    target, separator, words = text.partition(":")
+    if not target.strip() or not separator:
+        message = "AMP original compiler dependency record is malformed: missing target"
+        raise ValueError(message)
+    try:
+        names = shlex.split(words)
+    except ValueError as error:
+        message = (
+            "AMP original compiler dependency record is malformed: unbalanced quotation or escape"
+        )
+        raise ValueError(message) from error
+    if not names:
+        message = "AMP original compiler dependency record is empty"
+        raise ValueError(message)
+    return names
+
+
 def dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[str, str]:
     """Hash the complete actual source/header closure recorded by native compilers.
 
@@ -44,27 +87,7 @@ def dependency_hashes(records: tuple[Path, ...], directory: Path) -> dict[str, s
         raise ValueError(message)
     result: dict[str, str] = {}
     for record in records:
-        try:
-            text = record.read_text(encoding="utf-8").replace("\\\n", "")
-        except UnicodeDecodeError as error:
-            message = "AMP original compiler dependency record is not UTF-8"
-            raise ValueError(message) from error
-        target, separator, words = text.partition(":")
-        if not target.strip() or not separator:
-            message = "AMP original compiler dependency record is malformed: missing target"
-            raise ValueError(message)
-        try:
-            names = shlex.split(words)
-        except ValueError as error:
-            message = (
-                "AMP original compiler dependency record is malformed: "
-                "unbalanced quotation or escape"
-            )
-            raise ValueError(message) from error
-        if not names:
-            message = "AMP original compiler dependency record is empty"
-            raise ValueError(message)
-        for name in names:
+        for name in _record_names(record):
             path = Path(name.replace("$$", "$"))
             original = path if path.is_absolute() else directory / path
             resolved = original.resolve()

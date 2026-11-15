@@ -23,6 +23,64 @@ if TYPE_CHECKING:
     from conftest import RunRtl
 
 
+def _closed_loop_rows(run_rtl: RunRtl, path: Path, thermal: int, lqr: int) -> list[dict[str, str]]:
+    """Settle the fabric's closed loop for 64,000 samples and read its trajectory.
+
+    Parameters
+    ----------
+    run_rtl
+        Public fabric simulator.
+    path
+        Trajectory file.
+    thermal, lqr
+        Plant model and controller mode.
+
+    Returns
+    -------
+    list[dict[str, str]]
+        Trajectory rows.
+    """
+    simulation = run_rtl(
+        "controller_closed_loop_tb", {"THERMAL": thermal, "LQR": lqr}, [f"+TRACK_FILE={path}"]
+    )
+    assert simulation.returncode == 0, simulation.stdout + simulation.stderr
+    assert "CLOSED_LOOP_PASS samples=64000" in simulation.stdout
+    with path.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(rows) == 64000
+    return rows
+
+
+def _streams(configuration: tuple[int, ...], rows: list[dict[str, str]]) -> tuple[str, str]:
+    """Return the native input stream of a trajectory and the commands the fabric issued.
+
+    Parameters
+    ----------
+    configuration
+        Raw coefficient row.
+    rows
+        Trajectory rows.
+
+    Returns
+    -------
+    tuple[str, str]
+        Coefficients and sample rows, and the fabric's six-field command stream.
+    """
+    payload = (
+        ",".join(map(str, configuration))
+        + "\n"
+        + "".join(
+            f"{row['cycle']},{row['reference']},{row['output']},{row['velocity']}\n" for row in rows
+        )
+    )
+    expected = "".join(
+        f"{row['cycle']},{row['command']},{row['integral']},{row['derivative']},"
+        f"{row['clipped']},{row['held']}\n"
+        for row in rows
+    )
+    return payload, expected
+
+
 @pytest.mark.parametrize("scenario", [(thermal, lqr) for thermal in [0, 1] for lqr in [0, 1]])
 def test_long_quantized_feedback(
     scenario: tuple[int, int],
@@ -44,29 +102,10 @@ def test_long_quantized_feedback(
         Managed trajectory files.
     """
     thermal, lqr = scenario
-    path = tmp_path / "closed-loop.csv"
-    simulation = run_rtl(
-        "controller_closed_loop_tb", {"THERMAL": thermal, "LQR": lqr}, [f"+TRACK_FILE={path}"]
-    )
-    assert simulation.returncode == 0, simulation.stdout + simulation.stderr
-    assert "CLOSED_LOOP_PASS samples=64000" in simulation.stdout
-    with path.open(encoding="utf-8", newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    assert len(rows) == 64000
+    rows = _closed_loop_rows(run_rtl, tmp_path / "closed-loop.csv", thermal, lqr)
     gains = (6944437, 0, 23721653) if thermal else (38822697, 26419076, 55599913)
     configuration = (DEFAULT[0], 16777, *DEFAULT[2:4], *gains, *DEFAULT[7:])
-    payload = (
-        ",".join(map(str, configuration))
-        + "\n"
-        + "".join(
-            f"{row['cycle']},{row['reference']},{row['output']},{row['velocity']}\n" for row in rows
-        )
-    )
-    expected = "".join(
-        f"{row['cycle']},{row['command']},{row['integral']},{row['derivative']},"
-        f"{row['clipped']},{row['held']}\n"
-        for row in rows
-    )
+    payload, expected = _streams(configuration, rows)
     for binary in native_controllers:
         native = subprocess.run(
             [str(binary), "lqr" if lqr else "pid"],

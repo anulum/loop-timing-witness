@@ -244,6 +244,45 @@ def _canonical(value: Decimal) -> list[Any]:
     return [bool(sign) and value != 0, "".join(map(str, digits)), int(exponent)]
 
 
+# Measurement cells at every form, bound and refusal of ``measurement``.
+_FIXED_CELLS: Final = (
+    "0",
+    "-0",
+    "+0.000e-900",
+    "00012.5000",
+    ".5",
+    "5.",
+    "1e99",
+    "9.999e99",
+    "1e100",
+    "1e-99",
+    "0.99e-99",
+    "9" * 28,
+    "9" * 29,
+    "1" + "0" * 60 + "e-60",
+    "1.5e+0000005",
+    "1e1000000",
+    "1e12345678901234567890",
+    "0." + "0" * 99999 + "1e100000",
+    "1e-0999999",
+    "-1E-5",
+    "NaN",
+    "-sNaN7",
+    "+Infinity",
+    "inf",
+    "nan0x",
+    " 1",
+    "1_0",
+    "1e",
+    ".",
+    "e1",
+    "+",
+    "1.2.3",
+    "1e+-1",
+    chr(0x661),
+)
+
+
 def _cells(generator: _Values) -> list[str]:
     """Return measurement cells covering every form, bound and refusal.
 
@@ -255,44 +294,8 @@ def _cells(generator: _Values) -> list[str]:
     Returns
     -------
     list[str]
-        Cells.
+        The fixed cells, then 60 random decimal cells.
     """
-    fixed = [
-        "0",
-        "-0",
-        "+0.000e-900",
-        "00012.5000",
-        ".5",
-        "5.",
-        "1e99",
-        "9.999e99",
-        "1e100",
-        "1e-99",
-        "0.99e-99",
-        "9" * 28,
-        "9" * 29,
-        "1" + "0" * 60 + "e-60",
-        "1.5e+0000005",
-        "1e1000000",
-        "1e12345678901234567890",
-        "0." + "0" * 99999 + "1e100000",
-        "1e-0999999",
-        "-1E-5",
-        "NaN",
-        "-sNaN7",
-        "+Infinity",
-        "inf",
-        "nan0x",
-        " 1",
-        "1_0",
-        "1e",
-        ".",
-        "e1",
-        "+",
-        "1.2.3",
-        "1e+-1",
-        chr(0x661),
-    ]
     digits = "0123456789"
     produced = []
     for _ in range(60):
@@ -302,11 +305,11 @@ def _cells(generator: _Values) -> list[str]:
         if generator.random() < 0.5:
             text += f"e{generator.randint(-110, 110)}"
         produced.append(text)
-    return fixed + produced
+    return [*_FIXED_CELLS, *produced]
 
 
-def _decimal_cases(generator: _Values) -> dict[str, Any]:
-    """Return measurement, count and arithmetic cases.
+def _measurements(generator: _Values) -> tuple[list[dict[str, Any]], list[Decimal]]:
+    """Return each measurement cell with its value or refusal, and the values.
 
     Parameters
     ----------
@@ -315,8 +318,8 @@ def _decimal_cases(generator: _Values) -> dict[str, Any]:
 
     Returns
     -------
-    dict[str, Any]
-        Cells with values or refusals, counts, and operations with results.
+    tuple[list[dict[str, Any]], list[Decimal]]
+        Cases in cell order, and the admitted values in the same order.
     """
     measurements: list[dict[str, Any]] = []
     values: list[Decimal] = []
@@ -328,12 +331,24 @@ def _decimal_cases(generator: _Values) -> dict[str, Any]:
         else:
             measurements.append({"cell": _packed(cell), "value": _canonical(value)})
             values.append(value)
-    counts: list[dict[str, Any]] = []
-    for cell in ["0", "007", "18446744073709551615", "18446744073709551616", "1" * 21, "-1", ""]:
-        try:
-            counts.append({"cell": cell, "value": count(cell, "cycle")})
-        except ValueError as error:
-            counts.append({"cell": cell, "refusal": str(error)})
+    return measurements, values
+
+
+def _operations(generator: _Values, values: list[Decimal]) -> list[dict[str, Any]]:
+    """Return the exact sum, difference, product and quotient of value pairs.
+
+    Parameters
+    ----------
+    generator
+        Seeded random source, drawing 40 random pairs and then each divisor.
+    values
+        Admitted measurement values.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        The rounding-tie pairs, then the random pairs, with their results.
+    """
     ties = [
         (Decimal(1234567890123456789012345678), Decimal("0.5")),
         (Decimal(1234567890123456789012345677), Decimal("0.5")),
@@ -359,6 +374,30 @@ def _decimal_cases(generator: _Values) -> dict[str, Any]:
                 "float": float(abs(left) / divisor),
             }
         )
+    return operations
+
+
+def _decimal_cases(generator: _Values) -> dict[str, Any]:
+    """Return measurement, count and arithmetic cases.
+
+    Parameters
+    ----------
+    generator
+        Seeded random source.
+
+    Returns
+    -------
+    dict[str, Any]
+        Cells with values or refusals, counts, and operations with results.
+    """
+    measurements, values = _measurements(generator)
+    counts: list[dict[str, Any]] = []
+    for cell in ["0", "007", "18446744073709551615", "18446744073709551616", "1" * 21, "-1", ""]:
+        try:
+            counts.append({"cell": cell, "value": count(cell, "cycle")})
+        except ValueError as error:
+            counts.append({"cell": cell, "refusal": str(error)})
+    operations = _operations(generator, values)
     divisions = []
     for value, divisor in (
         (Decimal(5), 63),
@@ -646,6 +685,38 @@ def _energy_cases(generator: _Values) -> list[dict[str, Any]]:
     list[dict[str, Any]]
         Power content, events, profile and warm-up of each case.
     """
+    cases = [
+        _energy_entry(name, text, warmup, profile)
+        for name, (text, warmup) in _power_texts(generator).items()
+        for profile in ("CONTROL", "COMPUTE")
+    ]
+    cases.append(
+        {
+            "kind": "energy",
+            "name": "absent",
+            "content": None,
+            "profile": "CONTROL",
+            "warmup_cycles": 0,
+            "events": [],
+            "result": energy_per_cycle(None, (), "CONTROL", 0, RAILS),
+        }
+    )
+    return cases
+
+
+def _power_texts(generator: _Values) -> dict[str, tuple[str, int]]:
+    """Return named power tables with their warm-up cycle counts.
+
+    Parameters
+    ----------
+    generator
+        Seeded random source for the noisy cumulative energies.
+
+    Returns
+    -------
+    dict[str, tuple[str, int]]
+        Power CSV text and warm-up of each case, by case name.
+    """
     rails = len(RAILS)
     steady = [
         (tick, [0.001 * tick * (rail + 1) for rail in range(rails)]) for tick in (0, 250, 500)
@@ -656,7 +727,7 @@ def _energy_cases(generator: _Values) -> list[dict[str, Any]]:
         energies = [energy + generator.uniform(0, 1e-3) for energy in energies]
         noisy.append((tick, [round(energy, 15) for energy in energies]))
     header = "timebase_ticks,rail,voltage_v,current_a,energy_j\n"
-    texts = {
+    return {
         "steady": (_power_text(steady), 0),
         "noisy": (_power_text(noisy), 0),
         "noisy warm-up": (_power_text(noisy), 1),
@@ -678,41 +749,43 @@ def _energy_cases(generator: _Values) -> list[dict[str, Any]]:
             0,
         ),
     }
-    cases: list[dict[str, Any]] = []
-    for name, (text, warmup) in texts.items():
-        for profile in ("CONTROL", "COMPUTE"):
-            events = [] if name == "no anchors" else _events(10, 100)
-            entry: dict[str, Any] = {
-                "kind": "energy",
-                "name": name,
-                "content": text,
-                "profile": profile,
-                "warmup_cycles": warmup,
-                "events": events,
-            }
-            try:
-                entry["result"] = energy_per_cycle(
-                    _encoded(text),
-                    tuple(Event(*event) for event in events),
-                    profile,
-                    warmup,
-                    RAILS,
-                )
-            except ValueError as error:
-                entry["refusal"] = str(error)
-            cases.append(entry)
-    cases.append(
-        {
-            "kind": "energy",
-            "name": "absent",
-            "content": None,
-            "profile": "CONTROL",
-            "warmup_cycles": 0,
-            "events": [],
-            "result": energy_per_cycle(None, (), "CONTROL", 0, RAILS),
-        }
-    )
-    return cases
+
+
+def _energy_entry(name: str, text: str, warmup: int, profile: str) -> dict[str, Any]:
+    """Return one energy case with Python's result or refusal.
+
+    Parameters
+    ----------
+    name
+        Case name; ``no anchors`` has no events, every other case ten cycles.
+    text
+        Power CSV text.
+    warmup
+        Discarded warm-up cycles.
+    profile
+        Run profile.
+
+    Returns
+    -------
+    dict[str, Any]
+        The case with its events and result or refusal.
+    """
+    events = [] if name == "no anchors" else _events(10, 100)
+    entry: dict[str, Any] = {
+        "kind": "energy",
+        "name": name,
+        "content": text,
+        "profile": profile,
+        "warmup_cycles": warmup,
+        "events": events,
+    }
+    try:
+        entry["result"] = energy_per_cycle(
+            _encoded(text), tuple(Event(*event) for event in events), profile, warmup, RAILS
+        )
+    except ValueError as error:
+        entry["refusal"] = str(error)
+    return entry
 
 
 def _text(corpus: dict[str, Any]) -> str:

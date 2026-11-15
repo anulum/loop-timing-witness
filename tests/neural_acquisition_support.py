@@ -77,6 +77,38 @@ _RTL = (
     f"{_LTW}rtl/shared_event_witness.sv",
     f"{_LTW}rtl/event_record_fifo.sv",
 )
+# Kind and command of each native build job, in order.
+_NATIVE_BUILD: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "RTL_elaboration",
+        (
+            "verilator",
+            "--cc",
+            "--Wall",
+            "--assert",
+            "--language",
+            "1800-2012",
+            "+1800-2012ext+v",
+            "+1800-2012ext+sv",
+            *(f"/build/{name}" for name in _RTL),
+        ),
+    ),
+    ("generated_model_archive", ("make", "archive")),
+    (
+        "native_CPP_compile",
+        (
+            "g++",
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wconversion",
+            "-Wshadow",
+            "/build/native/native_trial.cpp",
+        ),
+    ),
+    ("native_CPP_link", ("g++", "-o", "native_trial")),
+)
 _ARTIFACTS = (
     "native_executable",
     "generated_model_archive",
@@ -86,6 +118,8 @@ _ARTIFACTS = (
 )
 _GENERATE = ["--generate", "--steps", "1000", "--seed", "42"]
 _CHECK = ["--check", "--steps", "1000", "--seed", "42"]
+# Acquisition paths of the checker closure, in role order.
+_CHECKER_SOURCES = (ENTRY, REFERENCE, "stimuli.txt")
 _EXECUTION_CONTRACT = {
     "profile": "test-image-namespace.v1",
     "address_space_bytes": 805306368,
@@ -355,15 +389,7 @@ def _image(root: Path, sources: dict[str, bytes], checker_sources: tuple[str, ..
     """
     contents = {"checker/worker.py": _WORKER.encode()}
     contents.update({name: sources[name] for name in checker_sources})
-    files = []
-    directories: set[str] = set()
-    for name, raw in sorted(contents.items()):
-        path = root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(raw)
-        path.chmod(0o444)
-        files.append({"path": name, "sha256": sha(raw), "byte_length": len(raw), "mode": 0o444})
-        directories.update(parent.as_posix() for parent in Path(name).parents if parent.parts)
+    files, directories = _write_image_files(root, contents)
     binding = {
         "schema_id": IMAGE_EXECUTOR_SCHEMA,
         "supplier": {"name": "test image"},
@@ -394,6 +420,36 @@ def _image(root: Path, sources: dict[str, bytes], checker_sources: tuple[str, ..
         "worker_files": ["checker/worker.py"],
     }
     return canonical_json_bytes(binding)
+
+
+def _write_image_files(
+    root: Path, contents: dict[str, bytes]
+) -> tuple[list[dict[str, Any]], set[str]]:
+    """Write read-only image files and return their records and parent directories.
+
+    Parameters
+    ----------
+    root
+        Image root.
+    contents
+        File bytes by image path.
+
+    Returns
+    -------
+    tuple[list[dict[str, Any]], set[str]]
+        Path, digest, length and mode of each file in path order, and every parent
+        directory.
+    """
+    files = []
+    directories: set[str] = set()
+    for name, raw in sorted(contents.items()):
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        path.chmod(0o444)
+        files.append({"path": name, "sha256": sha(raw), "byte_length": len(raw), "mode": 0o444})
+        directories.update(parent.as_posix() for parent in Path(name).parents if parent.parts)
+    return files, directories
 
 
 def _runtime(image: Path) -> bytes:
@@ -478,13 +534,7 @@ def _checker_receipt(
         Invocation receipt reference.
     """
     base = f"checker/{operation}/"
-    data = {
-        "stimuli": writer.put(base + "stimuli.txt", simulation_file("stimuli.txt")),
-        "reference": writer.put(
-            base + "results_expected.txt", simulation_file("results_expected.txt")
-        ),
-    }
-    observed = writer.put(base + "results_verilog.txt", simulation_file("observed-projection.txt"))
+    data, observed = _checker_files(writer, base)
     environment = {**checker_environment(writer.root.resolve()), "TMPDIR": "/work"}
     receipt = {
         "schema_id": "loop-timing-witness.sc-checker-execution.v1",
@@ -512,6 +562,32 @@ def _checker_receipt(
     return writer.json(base + "execution.json", receipt)
 
 
+def _checker_files(writer: _Writer, base: str) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Write one invocation's stimuli, reference and observed projection.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    base
+        Invocation directory within the run.
+
+    Returns
+    -------
+    tuple[dict[str, dict[str, Any]], dict[str, Any]]
+        Stimuli and reference references, and the observed projection reference.
+    """
+    data = {
+        "stimuli": writer.put(base + "stimuli.txt", simulation_file("stimuli.txt")),
+        "reference": writer.put(
+            base + "results_expected.txt", simulation_file("results_expected.txt")
+        ),
+    }
+    return data, writer.put(
+        base + "results_verilog.txt", simulation_file("observed-projection.txt")
+    )
+
+
 def _native_runtime(
     writer: _Writer, epoch: int, source_files: list[dict[str, Any]], artifacts: dict[str, Any]
 ) -> dict[str, Any]:
@@ -534,47 +610,7 @@ def _native_runtime(
         Native runtime receipt reference.
     """
     actual = {f"/build/{item['path']}": item["path"] for item in source_files}
-    verilator = [
-        "verilator",
-        "--cc",
-        "--Wall",
-        "--assert",
-        "--language",
-        "1800-2012",
-        "+1800-2012ext+v",
-        "+1800-2012ext+sv",
-        *(f"/build/{name}" for name in _RTL),
-    ]
-    compile_cpp = [
-        "g++",
-        "-std=c++17",
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-        "-Wconversion",
-        "-Wshadow",
-        "/build/native/native_trial.cpp",
-    ]
-    commands = (verilator, ["make", "archive"], compile_cpp, ["g++", "-o", "native_trial"])
-    kinds = ("RTL_elaboration", "generated_model_archive", "native_CPP_compile", "native_CPP_link")
-    jobs: list[dict[str, Any]] = [
-        {
-            "kind": kind,
-            "command": command,
-            "returncode": 0,
-            "log": writer.put(f"build-logs/job-{index}.log", b""),
-        }
-        for index, (kind, command) in enumerate(zip(kinds, commands, strict=True))
-    ]
-    jobs.append(
-        {
-            "kind": "native_execution",
-            "command": ["native_trial", "original" if epoch == 0 else "reset"],
-            "returncode": 0,
-            "stdout": writer.put("stdout.log", b"NATIVE_JOINT_EXPORT_COMPLETE\n"),
-            "stderr": writer.put("stderr.log", b""),
-        }
-    )
+    jobs = _native_jobs(writer, epoch)
     return writer.json(
         "native-runtime.json",
         {
@@ -597,6 +633,42 @@ def _native_runtime(
             "runtime_object_source_scope": "test-owned objects",
         },
     )
+
+
+def _native_jobs(writer: _Writer, epoch: int) -> list[dict[str, Any]]:
+    """Write the build and execution logs and return the native jobs.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    epoch
+        Declared epoch, selecting the original or reset execution.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Elaboration, archive, compile and link jobs, then the execution.
+    """
+    jobs: list[dict[str, Any]] = [
+        {
+            "kind": kind,
+            "command": list(command),
+            "returncode": 0,
+            "log": writer.put(f"build-logs/job-{index}.log", b""),
+        }
+        for index, (kind, command) in enumerate(_NATIVE_BUILD)
+    ]
+    jobs.append(
+        {
+            "kind": "native_execution",
+            "command": ["native_trial", "original" if epoch == 0 else "reset"],
+            "returncode": 0,
+            "stdout": writer.put("stdout.log", b"NATIVE_JOINT_EXPORT_COMPLETE\n"),
+            "stderr": writer.put("stderr.log", b""),
+        }
+    )
+    return jobs
 
 
 def _reset(writer: _Writer) -> dict[str, Any]:
@@ -681,17 +753,111 @@ def build_neural_acquisition(
     if program is not None:
         sources[ENTRY] = program
     source_files = [writer.put(name, raw) for name, raw in sorted(sources.items())]
-    checker_sources = (ENTRY, REFERENCE, "stimuli.txt")
-    binding = _image(image_root, sources, checker_sources)
+    binding = _image(image_root, sources, _CHECKER_SOURCES)
     runtime = _runtime(image_root) if installation is None else installation.contract_bytes()
+    by_path = {item["path"]: item for item in source_files}
+    checker_ref, checker_policy = _write_checker_policy(writer, by_path, runtime)
+    compiled = _write_compiled(writer)
+    contract_ref, policy = _write_source_contract(writer, source_files, compiled, checker_ref)
+    executor = (
+        ImageCheckerExecutor(image_root, binding, runtime) if installation is None else installation
+    )
+    context = _checker_context(contract_ref, checker_ref, by_path, executor)
+    clock_ref = _write_clock(writer, sources)
+    traces = _write_traces(writer, epoch, clock_ref)
+    written = _Written(source_files, by_path, compiled, contract_ref, context, clock_ref, traces)
+    tool = _write_tool_receipt(writer, epoch, sources, written)
+    path = _write_manifest(writer, epoch, sources, written, tool)
+    return NeuralAcquisition(path, writer.root, image_root, (policy, checker_policy, executor))
+
+
+def _checker_context(
+    contract_ref: dict[str, Any],
+    checker_ref: dict[str, Any],
+    by_path: dict[str, dict[str, Any]],
+    executor: ImageCheckerExecutor | NeuralCheckerInstallation,
+) -> dict[str, Any]:
+    """Return the references both checker invocations share.
+
+    Parameters
+    ----------
+    contract_ref, checker_ref
+        Source contract and checker policy references.
+    by_path
+        Root source references by path.
+    executor
+        Image executor or reviewed host installation, naming its runtime roles.
+
+    Returns
+    -------
+    dict[str, Any]
+        Contract and policy references with the source and runtime roles.
+    """
+    return {
+        "source_contract_ref": contract_ref,
+        "checker_policy_ref": checker_ref,
+        "source_roles": {name: by_path[name] for name in _CHECKER_SOURCES},
+        "runtime_roles": executor.runtime_references(),
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class _Written:
+    """References of the acquisition files written before the tool receipt.
+
+    Attributes
+    ----------
+    source_files
+        Root source references in path order.
+    by_path
+        The same references by path.
+    compiled
+        Compiled artifact references of both epochs.
+    contract_ref
+        Source contract reference.
+    context
+        References both checker invocations share.
+    clock_ref
+        Clock schedule reference.
+    traces
+        Trace and projection references with the clock schedule.
+    """
+
+    source_files: list[dict[str, Any]]
+    by_path: dict[str, dict[str, Any]]
+    compiled: dict[str, Any]
+    contract_ref: dict[str, Any]
+    context: dict[str, Any]
+    clock_ref: dict[str, Any]
+    traces: dict[str, Any]
+
+
+def _write_checker_policy(
+    writer: _Writer, by_path: dict[str, dict[str, Any]], runtime: bytes
+) -> tuple[dict[str, Any], bytes]:
+    """Write the checker runtime contract and the checker policy that binds it.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    by_path
+        Root source references by path.
+    runtime
+        Checker runtime contract bytes.
+
+    Returns
+    -------
+    tuple[dict[str, Any], bytes]
+        Checker policy reference and the policy bytes as written.
+    """
     execution = json.loads(runtime)["execution_contract"]
     runtime_ref = writer.put("checker-runtime.json", runtime)
-    by_path = {item["path"]: item for item in source_files}
     checker_policy = canonical_json_bytes(
         {
             "schema_id": "loop-timing-witness.sc-checker-policy.v1",
             "entry_point": by_path[ENTRY],
-            "source_files": [by_path[name] for name in checker_sources],
+            "source_files": [by_path[name] for name in _CHECKER_SOURCES],
             "runtime_contract_ref": runtime_ref,
             "generate_arguments": _GENERATE,
             "check_arguments": _CHECK,
@@ -699,14 +865,55 @@ def build_neural_acquisition(
         }
     )
     checker_ref = writer.put("checker-policy.json", checker_policy)
-    checker_policy = (writer.root / "checker-policy.json").read_bytes()
-    compiled = {
+    return checker_ref, (writer.root / "checker-policy.json").read_bytes()
+
+
+def _write_compiled(writer: _Writer) -> dict[str, Any]:
+    """Write the compiled artifacts of both epochs.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+
+    Returns
+    -------
+    dict[str, Any]
+        Artifact references by build key and name.
+    """
+    return {
         f"0,0,0,10:{index}": {
             name: writer.put(f"compiled/{index}/{name}", f"{name} {index}\n".encode())
             for name in _ARTIFACTS
         }
         for index in (0, 1)
     }
+
+
+def _write_source_contract(
+    writer: _Writer,
+    source_files: list[dict[str, Any]],
+    compiled: dict[str, Any],
+    checker_ref: dict[str, Any],
+) -> tuple[dict[str, Any], bytes]:
+    """Write the source contract over the sources, compiled artifacts and checker policy.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    source_files
+        Root source references.
+    compiled
+        Compiled artifact references.
+    checker_ref
+        Checker policy reference.
+
+    Returns
+    -------
+    tuple[dict[str, Any], bytes]
+        Source contract reference and the contract bytes as written.
+    """
     policy = canonical_json_bytes(
         {
             "schema_id": NEURAL_SCHEMA_ID,
@@ -722,17 +929,24 @@ def build_neural_acquisition(
         }
     )
     contract_ref = writer.put("source-contract.json", policy)
-    policy = (writer.root / "source-contract.json").read_bytes()
-    executor = (
-        ImageCheckerExecutor(image_root, binding, runtime) if installation is None else installation
-    )
-    context = {
-        "source_contract_ref": contract_ref,
-        "checker_policy_ref": checker_ref,
-        "source_roles": {name: by_path[name] for name in checker_sources},
-        "runtime_roles": executor.runtime_references(),
-    }
-    completion = simulation_file("completion.json")
+    return contract_ref, (writer.root / "source-contract.json").read_bytes()
+
+
+def _write_clock(writer: _Writer, sources: dict[str, bytes]) -> dict[str, Any]:
+    """Write the test-owned clock schedule, bound to the native producer source.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    sources
+        Complete source population.
+
+    Returns
+    -------
+    dict[str, Any]
+        Clock schedule reference.
+    """
     native = sources["native/native_trial.cpp"]
     clock = {
         "capture_half_period_units": 5,
@@ -743,7 +957,7 @@ def build_neural_acquisition(
         "driver_half_period_precision_ticks": 5000,
         "expected_state_observation_offset_ticks": 1,
         "first_input_tick": 20,
-        "observed_final_counter": json.loads(completion)["final_counter"],
+        "observed_final_counter": json.loads(simulation_file("completion.json"))["final_counter"],
         "requested_contiguous_steps": 1000,
         "scope": "test-owned clock schedule",
         "simulation_time_precision": "1ps",
@@ -755,8 +969,27 @@ def build_neural_acquisition(
         },
         "tail_checked_after_edge_tick": 1023,
     }
-    clock_ref = writer.json("clock-schedule.json", clock)
-    traces = {
+    return writer.json("clock-schedule.json", clock)
+
+
+def _write_traces(writer: _Writer, epoch: int, clock_ref: dict[str, Any]) -> dict[str, Any]:
+    """Write the epoch's input, numerical and service traces and both projections.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    epoch
+        Declared epoch.
+    clock_ref
+        Clock schedule reference.
+
+    Returns
+    -------
+    dict[str, Any]
+        Manifest trace fields.
+    """
+    return {
         "input_trace": writer.put("input.txt", _epoch(simulation_file("input.txt"), epoch)),
         "numerical_trace": writer.put(
             "numerical.txt", _epoch(simulation_file("numerical.txt"), epoch)
@@ -770,7 +1003,22 @@ def build_neural_acquisition(
         ),
         "clock_schedule_ref": clock_ref,
     }
-    model_checker = {
+
+
+def _model_checker(sources: dict[str, bytes]) -> dict[str, Any]:
+    """Return the source-owned public model checker record.
+
+    Parameters
+    ----------
+    sources
+        Complete source population.
+
+    Returns
+    -------
+    dict[str, Any]
+        Rows, spikes and the digests of its inputs, model and constants.
+    """
+    return {
         "rows": 1000,
         "spikes": 54,
         "original_input_sha256": sha(simulation_file("stimuli.txt")),
@@ -782,18 +1030,41 @@ def build_neural_acquisition(
         "constants_sha256": sha(sources[f"{_SC}src/sc_neurocore/constants.py"]),
         "source_owned_public_checker_pass": True,
     }
-    tool = {
+
+
+def _write_tool_receipt(
+    writer: _Writer, epoch: int, sources: dict[str, bytes], written: _Written
+) -> dict[str, Any]:
+    """Write the checker, native, model, counter, spike and completion receipts.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    epoch
+        Declared epoch; epoch one adds the reset receipt and prefix traces.
+    sources
+        Complete source population.
+    written
+        References written before the tool receipt.
+
+    Returns
+    -------
+    dict[str, Any]
+        Tool receipt, written later with the manifest.
+    """
+    return {
         "schema_id": "loop-timing-witness.neural-tool-receipt.v1",
         "scope": "test-owned acquisition",
         "checker_receipts": {
-            "generation": _checker_receipt(writer, "generate", context),
-            "check": _checker_receipt(writer, "check", context),
+            "generation": _checker_receipt(writer, "generate", written.context),
+            "check": _checker_receipt(writer, "check", written.context),
         },
         "compiler_simulator_runtime": _native_runtime(
-            writer, epoch, source_files, compiled[f"0,0,0,10:{epoch}"]
+            writer, epoch, written.source_files, written.compiled[f"0,0,0,10:{epoch}"]
         ),
         "source_owned_public_model_checker": writer.json(
-            "original-model-checker.json", model_checker
+            "original-model-checker.json", _model_checker(sources)
         ),
         "counter_receipt": writer.put(
             "capture-counts.json", simulation_file("capture-counts.json")
@@ -801,15 +1072,75 @@ def build_neural_acquisition(
         "raw_spike_trace": writer.put(
             "raw-spikes.txt", _epoch(simulation_file("raw-spikes.txt"), epoch)
         ),
-        "original_stimulus": by_path["stimuli.txt"],
-        "actual_completion": writer.put("completion.json", completion),
+        "original_stimulus": written.by_path["stimuli.txt"],
+        "actual_completion": writer.put("completion.json", simulation_file("completion.json")),
         "existing_trial_analysis": writer.json("export-verification.json", {"test": True}),
-        "declared_clock_schedule": clock_ref,
+        "declared_clock_schedule": written.clock_ref,
         **(_reset(writer) if epoch else {}),
     }
+
+
+def _write_manifest(
+    writer: _Writer,
+    epoch: int,
+    sources: dict[str, bytes],
+    written: _Written,
+    tool: dict[str, Any],
+) -> Path:
+    """Write the channel captures, the tool receipt and the run manifest.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    epoch
+        Declared epoch.
+    sources
+        Complete source population.
+    written
+        References written before the tool receipt.
+    tool
+        Tool receipt.
+
+    Returns
+    -------
+    Path
+        Written ``run.json``.
+    """
     template = json.loads((_DATA / "neural-selected-original.run.json").read_text(encoding="utf-8"))
+    channels = _write_channels(writer, template["channels"])
+    manifest = {
+        **template,
+        "run_id": f"test-epoch-{epoch}",
+        "epoch": epoch,
+        "source_files": written.source_files,
+        "sc_body_pins": {name: sha(sources[_SC + name]) for name in BODY_PINS},
+        "tool_receipt": writer.json("tool-receipt.json", tool),
+        **written.traces,
+        "channels": channels,
+        "source_contract_ref": written.contract_ref,
+    }
+    writer.json("run.json", manifest)
+    return writer.root / "run.json"
+
+
+def _write_channels(writer: _Writer, declarations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Write each channel's capture, payload and markers and add them to its declaration.
+
+    Parameters
+    ----------
+    writer
+        Acquisition writer.
+    declarations
+        Channel declarations of the template, in order.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Declarations with their capture, payload and marker references.
+    """
     channels = []
-    for index, declaration in enumerate(template["channels"]):
+    for index, declaration in enumerate(declarations):
         channels.append(
             {
                 **declaration,
@@ -823,20 +1154,7 @@ def build_neural_acquisition(
                 },
             }
         )
-    manifest = {
-        **template,
-        "run_id": f"test-epoch-{epoch}",
-        "epoch": epoch,
-        "source_files": source_files,
-        "sc_body_pins": {name: sha(sources[_SC + name]) for name in BODY_PINS},
-        "tool_receipt": writer.json("tool-receipt.json", tool),
-        **traces,
-        "channels": channels,
-        "source_contract_ref": contract_ref,
-    }
-    writer.json("run.json", manifest)
-    path = writer.root / "run.json"
-    return NeuralAcquisition(path, writer.root, image_root, (policy, checker_policy, executor))
+    return channels
 
 
 def _installed(name: str, path: Path) -> CheckerInstalledFile:

@@ -97,47 +97,13 @@ def test_real_startup_refusal(native_run: Path, tmp_path: Path, violation: str) 
     config.write_text(configuration("pid", "none"), encoding="utf-8")
     workspace = tmp_path / "worker"
     with trace_command(
-        [
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/linux_load.py"),
-            "--profile",
-            "cpu",
-            "--cpu",
-            str(min(os.sched_getaffinity(0))),
-            "--journal",
-            str(tmp_path / "load.json"),
-            "--workspace",
-            str(workspace),
-            "--",
-            str(native_run.resolve()),
-            str(config),
-            str(tmp_path / "events.bin"),
-            str(tmp_path / "raw.csv"),
-        ],
+        _cpu_load_command(native_run, config, tmp_path),
         "sched_getscheduler:delay_enter=2s:when=1",
         tmp_path / "readiness.strace",
     ) as trace:
         worker, descriptor = _actual_worker(trace)
         signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
-        frame = json.dumps({"ready": True, "pid": worker}).encode()
-        if violation == "partial":
-            payload, expected = frame[:1], "timed out"
-        elif violation == "oversized":
-            payload, expected = b" " * MAX_READINESS_BYTES + b"\n", "frame limit"
-        elif violation == "numeric_ready":
-            payload = (json.dumps({"ready": 1, "pid": worker}) + "\n").encode()
-            expected = "Boolean ready"
-        elif violation == "float_pid":
-            payload = (json.dumps({"ready": True, "pid": float(worker)}) + "\n").encode()
-            expected = "positive integer"
-        elif violation in {"duplicate_ready", "duplicate_pid"}:
-            shadow = b'"ready":false,' if violation == "duplicate_ready" else b'"pid":0,'
-            payload = frame.replace(b"{", b"{" + shadow, 1) + b"\n"
-            expected = "duplicate JSON key"
-        elif violation == "eof":
-            payload, expected = frame, "readiness ended"
-        else:
-            payload, expected = frame + b"\n{}\n", "worker readiness: invalid JSON"
+        payload, expected = _readiness_frame(violation, worker)
         with Path(f"/proc/{worker}/fd/1").open("wb", buffering=0) as pipe:
             assert pipe.write(payload) == len(payload)
         if violation == "eof":
@@ -154,3 +120,76 @@ def test_real_startup_refusal(native_run: Path, tmp_path: Path, violation: str) 
         assert not (tmp_path / "events.bin").exists()
         assert not (tmp_path / "raw.csv").exists()
         assert "INJECTED" not in trace.log.read_text()
+
+
+def _cpu_load_command(native_run: Path, config: Path, directory: Path) -> list[str]:
+    """Return the CPU-load launcher command around one native run.
+
+    Parameters
+    ----------
+    native_run
+        Production controller and RTL plant executable.
+    config
+        Run configuration.
+    directory
+        Exclusive allocation for the journal, the workspace and the native outputs.
+
+    Returns
+    -------
+    list[str]
+        Launcher command.
+    """
+    return [
+        sys.executable,
+        str(REPOSITORY_ROOT / "tools/linux_load.py"),
+        "--profile",
+        "cpu",
+        "--cpu",
+        str(min(os.sched_getaffinity(0))),
+        "--journal",
+        str(directory / "load.json"),
+        "--workspace",
+        str(directory / "worker"),
+        "--",
+        str(native_run.resolve()),
+        str(config),
+        str(directory / "events.bin"),
+        str(directory / "raw.csv"),
+    ]
+
+
+def _readiness_frame(violation: str, worker: int) -> tuple[bytes, str]:
+    """Return the readiness bytes of one violation and the expected refusal.
+
+    Parameters
+    ----------
+    violation
+        Pipe framing or field-type requirement to violate.
+    worker
+        Stopped worker process ID.
+
+    Returns
+    -------
+    tuple[bytes, str]
+        Bytes to write to the worker's readiness pipe, and the refusal text.
+    """
+    frame = json.dumps({"ready": True, "pid": worker}).encode()
+    fixed = {
+        "partial": (frame[:1], "timed out"),
+        "oversized": (b" " * MAX_READINESS_BYTES + b"\n", "frame limit"),
+        "numeric_ready": (
+            (json.dumps({"ready": 1, "pid": worker}) + "\n").encode(),
+            "Boolean ready",
+        ),
+        "float_pid": (
+            (json.dumps({"ready": True, "pid": float(worker)}) + "\n").encode(),
+            "positive integer",
+        ),
+        "eof": (frame, "readiness ended"),
+    }
+    if violation in fixed:
+        return fixed[violation]
+    if violation in {"duplicate_ready", "duplicate_pid"}:
+        shadow = b'"ready":false,' if violation == "duplicate_ready" else b'"pid":0,'
+        return frame.replace(b"{", b"{" + shadow, 1) + b"\n", "duplicate JSON key"
+    return frame + b"\n{}\n", "worker readiness: invalid JSON"

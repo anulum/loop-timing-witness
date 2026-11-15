@@ -93,14 +93,37 @@ def _correspondence(
         First authored identity, population or graph contradiction, or no findings.
     """
     packages = {item["id"]: item for item in metadata["packages"]}
-    owner = packages[metadata["resolve"]["root"]]
+    root = metadata["resolve"]["root"]
+    finding = (
+        _root_finding(bom, packages[root])
+        or _package_finding(bom, lock, packages, root)
+        or _graph_finding(bom, metadata, packages)
+    )
+    return [] if finding is None else [finding]
+
+
+def _root_finding(bom: dict[str, Any], owner: dict[str, Any]) -> str | None:
+    """Compare the root component and its targets with the owning package.
+
+    Parameters
+    ----------
+    bom
+        Schema-validated generated document.
+    owner
+        Cargo metadata of the root package.
+
+    Returns
+    -------
+    str | None
+        The first root identity or target inventory contradiction, if any.
+    """
     component = bom["metadata"]["component"]
     if (
         (component["name"], component["version"]) != (owner["name"], owner["version"])
         or component["licenses"] != [{"expression": owner["license"]}]
         or bom["metadata"]["tools"] != _TOOL
     ):
-        return ["root package, licence or generator identity differs"]
+        return "root package, licence or generator identity differs"
     targets = {
         ("application" if target["kind"] == ["bin"] else "library", target["name"])
         for target in owner["targets"]
@@ -112,16 +135,39 @@ def _correspondence(
         or len(observed_targets) != len(component["components"])
         or any(item["version"] != owner["version"] for item in component["components"])
     ):
-        return ["native library and executable target inventory differs"]
+        return "native library and executable target inventory differs"
+    return None
+
+
+def _package_finding(
+    bom: dict[str, Any], lock: dict[str, Any], packages: dict[str, Any], root: str
+) -> str | None:
+    """Compare every registry component with the lock and the package metadata.
+
+    Parameters
+    ----------
+    bom
+        Schema-validated generated document.
+    lock
+        Complete maintained Cargo lock.
+    packages
+        Cargo metadata packages by identifier.
+    root
+        Identifier of the root package.
+
+    Returns
+    -------
+    str | None
+        The first population, archive, package URL or licence contradiction, if any.
+    """
     expected = {
         (item["name"], item["version"]): item for item in lock["package"] if "source" in item
     }
     observed = {(item["name"], item["version"]): item for item in bom["components"]}
     if len(observed) != len(bom["components"]) or observed.keys() != expected.keys():
-        return ["complete unique registry package population differs"]
-    ids = {metadata["resolve"]["root"]: component["bom-ref"]}
+        return "complete unique registry package population differs"
     for package_id, package in packages.items():
-        if package_id == metadata["resolve"]["root"]:
+        if package_id == root:
             continue
         key = (package["name"], package["version"])
         item = observed[key]
@@ -131,16 +177,40 @@ def _correspondence(
             or item["hashes"] != [{"alg": "SHA-256", "content": expected[key]["checksum"]}]
             or item["licenses"] != [{"expression": package["license"].replace("/", " OR ")}]
         ):
-            return ["registry archive, package URL or declared licence differs"]
-        ids[package_id] = package_id
+            return "registry archive, package URL or declared licence differs"
+    return None
+
+
+def _graph_finding(
+    bom: dict[str, Any], metadata: dict[str, Any], packages: dict[str, Any]
+) -> str | None:
+    """Compare the declared dependency graph with the locked resolution.
+
+    Parameters
+    ----------
+    bom
+        Schema-validated generated document.
+    metadata
+        Fresh Cargo resolution.
+    packages
+        Cargo metadata packages by identifier.
+
+    Returns
+    -------
+    str | None
+        The graph contradiction, if any. Registry packages are referenced by their
+        identifier and the root by the component's reference.
+    """
+    ids = {package_id: package_id for package_id in packages}
+    ids[metadata["resolve"]["root"]] = bom["metadata"]["component"]["bom-ref"]
     graph = {
         ids[node["id"]]: {ids[dependency] for dependency in node["dependencies"]}
         for node in metadata["resolve"]["nodes"]
     }
     actual = {node["ref"]: set(node.get("dependsOn", [])) for node in bom["dependencies"]}
     if len(actual) != len(bom["dependencies"]) or actual != graph:
-        return ["complete locked dependency graph differs"]
-    return []
+        return "complete locked dependency graph differs"
+    return None
 
 
 def audit(root: Path, sbom: Path) -> list[str]:

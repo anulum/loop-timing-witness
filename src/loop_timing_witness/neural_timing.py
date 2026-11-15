@@ -135,6 +135,36 @@ def correlate_neural_steps(
     NeuralCaptureRefusalError
         If channel roles, population or horizon declarations are unsupported.
     """
+    _check_declarations(channels, step_count, capture_horizon_edges)
+    applied, observed, _ = channels
+    refusals = _alignment_refusals(channels, capture_horizon_edges)
+    refusals.extend(_population_refusals(applied, step_count))
+    refusals.extend(_population_refusals(observed, step_count))
+    intervals, step_refusals = _step_intervals(applied, observed)
+    return NeuralStepTiming(tuple(intervals), (*refusals, *step_refusals))
+
+
+def _check_declarations(
+    channels: tuple[NeuralChannel, NeuralChannel, NeuralChannel],
+    step_count: int,
+    capture_horizon_edges: int,
+) -> None:
+    """Refuse unsupported channel roles, step populations and horizons.
+
+    Parameters
+    ----------
+    channels
+        Decoded channels, required in input, state, service order.
+    step_count
+        Requested population, between one and 1,000 inclusive.
+    capture_horizon_edges
+        Exclusive common-counter horizon, below the 16-bit encoder wrap limit.
+
+    Raises
+    ------
+    NeuralCaptureRefusalError
+        If the role order, the population or the horizon is unsupported.
+    """
     if tuple(channel.role for channel in channels) != ("input", "state", "service"):
         message = "Neural timing requires input, state, service channels in that order."
         raise NeuralCaptureRefusalError(message)
@@ -144,12 +174,27 @@ def correlate_neural_steps(
     if type(capture_horizon_edges) is not int or not 0 < capture_horizon_edges < ENCODER_TICK_LIMIT:
         message = "Invalid neural timing no-wrap horizon."
         raise NeuralCaptureRefusalError(message)
-    applied, observed, _ = channels
-    refusals = _alignment_refusals(channels, capture_horizon_edges)
-    refusals.extend(_population_refusals(applied, step_count))
-    refusals.extend(_population_refusals(observed, step_count))
+
+
+def _step_intervals(
+    applied: NeuralChannel, observed: NeuralChannel
+) -> tuple[list[NeuralStepInterval], list[str]]:
+    """Pair input and state observations by identity and check cadence and phase.
+
+    Parameters
+    ----------
+    applied, observed
+        Input and state channels.
+
+    Returns
+    -------
+    tuple[list[NeuralStepInterval], list[str]]
+        Every same-identity interval, and the cadence and phase refusals in
+        input order. Missing pairs stay absent.
+    """
     state_by_identity = {event.identity: event.ticks for event in observed.events}
     intervals = []
+    refusals: list[str] = []
     previous_tick: int | None = None
     for event in applied.events:
         if previous_tick is not None and event.ticks != previous_tick + 1:
@@ -164,4 +209,4 @@ def correlate_neural_steps(
         intervals.append(NeuralStepInterval(event.identity, event.ticks, observed_tick, ticks))
         if ticks != 1:
             refusals.append(f"state step {event.identity}: observation phase differs from one tick")
-    return NeuralStepTiming(tuple(intervals), tuple(refusals))
+    return intervals, refusals

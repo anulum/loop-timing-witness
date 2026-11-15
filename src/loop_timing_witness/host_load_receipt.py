@@ -23,6 +23,39 @@ ROOT = Path(__file__).resolve().parent / "data"
 MAX_DATAGRAM_BYTES = 60000
 
 
+def _expected_counters(profile: str, counters: dict[str, int], size: int) -> dict[str, int]:
+    """Return the counters a complete run of the profile's chunks must report.
+
+    Parameters
+    ----------
+    profile
+        Workload profile.
+    counters
+        Reported counters, whose names and chunk count are kept.
+    size
+        Working-set bytes per chunk.
+
+    Returns
+    -------
+    dict[str, int]
+        Zero for every counter except the chunk count and the profile's own work.
+    """
+    chunks = counters["chunks"]
+    expected = dict.fromkeys(counters, 0)
+    expected["chunks"] = chunks
+    if profile == "cpu":
+        expected["arithmetic_operations"] = chunks * 4096
+    elif profile == "memory":
+        expected["memory_touches"] = chunks * ((size + 63) // 64)
+    elif profile == "network":
+        expected.update(datagrams=chunks, bytes_sent=chunks * size, bytes_received=chunks * size)
+    elif profile == "storage":
+        expected.update(fsyncs=chunks, bytes_written=chunks * size, bytes_read=chunks * size)
+    else:
+        expected["idle_waits"] = chunks
+    return expected
+
+
 def validate_host_load(content: bytes) -> dict[str, Any]:
     """Validate a completed worker receipt and its actual native execution bracket.
 
@@ -62,20 +95,7 @@ def validate_host_load(content: bytes) -> dict[str, Any]:
         message = "host load policy, scope or native time bracket differs"
         raise ValueError(message)
     counters = receipt["counters"]
-    chunks = counters["chunks"]
-    expected = dict.fromkeys(counters, 0)
-    expected["chunks"] = chunks
-    if profile == "cpu":
-        expected["arithmetic_operations"] = chunks * 4096
-    elif profile == "memory":
-        expected["memory_touches"] = chunks * ((size + 63) // 64)
-    elif profile == "network":
-        expected.update(datagrams=chunks, bytes_sent=chunks * size, bytes_received=chunks * size)
-    elif profile == "storage":
-        expected.update(fsyncs=chunks, bytes_written=chunks * size, bytes_read=chunks * size)
-    else:
-        expected["idle_waits"] = chunks
-    if counters != expected:
+    if counters != _expected_counters(profile, counters, size):
         message = "host load counters differ from complete workload chunks"
         raise ValueError(message)
     return receipt

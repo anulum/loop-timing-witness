@@ -275,6 +275,121 @@ def verify_reference(source: Path) -> None:
         raise ReferenceDerivationRefusedError(msg)
 
 
+def _derivation_manifest(
+    witness_tcl_sha256: str, witness_hashes: dict[str, str]
+) -> dict[str, object]:
+    """Return the derivation manifest of the pinned reference and the witness inputs.
+
+    Parameters
+    ----------
+    witness_tcl_sha256
+        Digest of the witness connection script.
+    witness_hashes
+        Digest of every witness RTL source by file name.
+
+    Returns
+    -------
+    dict[str, object]
+        Reference commit and tree, remainder, source and derived file digests,
+        witness script and RTL digests, and the validation scope.
+    """
+    return {
+        "source_commit": REFERENCE_COMMIT,
+        "source_tree_sha256": SOURCE_TREE_SHA256,
+        "reference_remainder_sha256": REFERENCE_REMAINDER_SHA256,
+        "source_files_sha256": SOURCE_HASHES,
+        "derived_files_sha256": DERIVED_HASHES,
+        "witness_tcl_sha256": witness_tcl_sha256,
+        "witness_rtl_dir": RTL_SNAPSHOT,
+        "witness_rtl_sha256": witness_hashes,
+        "validation_scope": "source derivation only; Libero DRC and timing are unverified",
+    }
+
+
+def _apply_edits(output: Path) -> None:
+    """Apply every reviewed edit to the staged copy and require the derived digests.
+
+    Parameters
+    ----------
+    output
+        Staged copy of the reference.
+
+    Raises
+    ------
+    ReferenceDerivationRefusedError
+        If an edit does not apply exactly once or a derived file has another digest.
+    """
+    for relative, replacements in edits().items():
+        path = output / relative
+        content = path.read_text(encoding="utf-8")
+        for old, new in replacements:
+            content = replace_once(content, old, new, relative)
+        path.write_text(content, encoding="utf-8")
+        if sha256(path) != DERIVED_HASHES[relative]:
+            msg = f"derived source mismatch: {relative}"
+            raise ReferenceDerivationRefusedError(msg)
+
+
+def _snapshot_rtl(snapshot: Path) -> dict[str, str]:
+    """Copy every witness RTL source into the snapshot and return their digests.
+
+    Parameters
+    ----------
+    snapshot
+        New snapshot directory in the staged copy.
+
+    Returns
+    -------
+    dict[str, str]
+        Digest of every RTL source by file name.
+
+    Raises
+    ------
+    ReferenceDerivationRefusedError
+        If a source or its copy changes while it is copied.
+    """
+    rtl_sources = sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
+    witness_hashes = {path.name: sha256(path) for path in rtl_sources}
+    snapshot.mkdir()
+    for path in rtl_sources:
+        copied = snapshot / path.name
+        shutil.copyfile(path, copied)
+        if sha256(path) != witness_hashes[path.name] or sha256(copied) != witness_hashes[path.name]:
+            msg = f"RTL source changed while deriving: {path.name}"
+            raise ReferenceDerivationRefusedError(msg)
+    return witness_hashes
+
+
+def _verify_rtl_snapshot(snapshot: Path, witness_hashes: dict[str, str]) -> None:
+    """Require the derived RTL snapshot to hold exactly the current witness sources.
+
+    Parameters
+    ----------
+    snapshot
+        Snapshot directory of the derived source.
+    witness_hashes
+        Digest of every current witness RTL source by file name.
+
+    Raises
+    ------
+    ReferenceDerivationRefusedError
+        If the snapshot is a link, not a directory, has another file set, or a
+        file is a link, missing or changed.
+    """
+    if (
+        snapshot.is_symlink()
+        or not snapshot.is_dir()
+        or {path.name for path in snapshot.iterdir()} != set(witness_hashes)
+    ):
+        msg = "derived RTL source set changed"
+        raise ReferenceDerivationRefusedError(msg)
+    for name, digest in witness_hashes.items():
+        path = snapshot / name
+        if path.is_symlink() or not path.is_file() or sha256(path) != digest:
+            msg = f"derived RTL changed: {name}"
+            raise ReferenceDerivationRefusedError(msg)
+
+
 def derive(source: Path, destination: Path) -> None:
     """Copy and transform one pinned reference without modifying its source.
 
@@ -298,31 +413,10 @@ def derive(source: Path, destination: Path) -> None:
     with tempfile.TemporaryDirectory(prefix=".icicle-derive-", dir=destination.parent) as staging:
         staged_output = Path(staging) / "output"
         shutil.copytree(source, staged_output, symlinks=True)
-        for relative, replacements in edits().items():
-            path = staged_output / relative
-            content = path.read_text(encoding="utf-8")
-            for old, new in replacements:
-                content = replace_once(content, old, new, relative)
-            path.write_text(content, encoding="utf-8")
-            if sha256(path) != DERIVED_HASHES[relative]:
-                msg = f"derived source mismatch: {relative}"
-                raise ReferenceDerivationRefusedError(msg)
+        _apply_edits(staged_output)
         script_destination = staged_output / DERIVED_SCRIPT
         shutil.copyfile(WITNESS_SCRIPT, script_destination)
-        source_rtl = REPOSITORY_ROOT / "rtl"
-        rtl_sources = sorted(source_rtl.glob("*.sv"))
-        witness_hashes = {path.name: sha256(path) for path in rtl_sources}
-        snapshot = staged_output / RTL_SNAPSHOT
-        snapshot.mkdir()
-        for path in rtl_sources:
-            copied = snapshot / path.name
-            shutil.copyfile(path, copied)
-            if (
-                sha256(path) != witness_hashes[path.name]
-                or sha256(copied) != witness_hashes[path.name]
-            ):
-                msg = f"RTL source changed while deriving: {path.name}"
-                raise ReferenceDerivationRefusedError(msg)
+        witness_hashes = _snapshot_rtl(staged_output / RTL_SNAPSHOT)
         excluded = frozenset({*DERIVED_HASHES, DERIVED_SCRIPT, "witness_derivation.json"})
         if (
             tree_sha256(staged_output, excluded, frozenset({RTL_SNAPSHOT}))
@@ -330,17 +424,7 @@ def derive(source: Path, destination: Path) -> None:
         ):
             msg = "derived reference remainder differs from pinned commit"
             raise ReferenceDerivationRefusedError(msg)
-        manifest = {
-            "source_commit": REFERENCE_COMMIT,
-            "source_tree_sha256": SOURCE_TREE_SHA256,
-            "reference_remainder_sha256": REFERENCE_REMAINDER_SHA256,
-            "source_files_sha256": SOURCE_HASHES,
-            "derived_files_sha256": DERIVED_HASHES,
-            "witness_tcl_sha256": sha256(script_destination),
-            "witness_rtl_dir": RTL_SNAPSHOT,
-            "witness_rtl_sha256": witness_hashes,
-            "validation_scope": "source derivation only; Libero DRC and timing are unverified",
-        }
+        manifest = _derivation_manifest(sha256(script_destination), witness_hashes)
         (staged_output / "witness_derivation.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
@@ -364,17 +448,7 @@ def verify_derived(destination: Path) -> None:
     """
     rtl_sources = sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
     witness_hashes = {path.name: sha256(path) for path in rtl_sources}
-    expected = {
-        "source_commit": REFERENCE_COMMIT,
-        "source_tree_sha256": SOURCE_TREE_SHA256,
-        "reference_remainder_sha256": REFERENCE_REMAINDER_SHA256,
-        "source_files_sha256": SOURCE_HASHES,
-        "derived_files_sha256": DERIVED_HASHES,
-        "witness_tcl_sha256": sha256(WITNESS_SCRIPT),
-        "witness_rtl_dir": RTL_SNAPSHOT,
-        "witness_rtl_sha256": witness_hashes,
-        "validation_scope": "source derivation only; Libero DRC and timing are unverified",
-    }
+    expected = _derivation_manifest(sha256(WITNESS_SCRIPT), witness_hashes)
     manifest_path = destination / "witness_derivation.json"
     if manifest_path.is_symlink():
         msg = "derived manifest must be a local file"
@@ -396,19 +470,7 @@ def verify_derived(destination: Path) -> None:
     if connection.is_symlink() or sha256(connection) != expected["witness_tcl_sha256"]:
         msg = "derived witness connection Tcl changed"
         raise ReferenceDerivationRefusedError(msg)
-    snapshot = destination / RTL_SNAPSHOT
-    if (
-        snapshot.is_symlink()
-        or not snapshot.is_dir()
-        or {path.name for path in snapshot.iterdir()} != set(witness_hashes)
-    ):
-        msg = "derived RTL source set changed"
-        raise ReferenceDerivationRefusedError(msg)
-    for name, digest in witness_hashes.items():
-        path = snapshot / name
-        if path.is_symlink() or not path.is_file() or sha256(path) != digest:
-            msg = f"derived RTL changed: {name}"
-            raise ReferenceDerivationRefusedError(msg)
+    _verify_rtl_snapshot(destination / RTL_SNAPSHOT, witness_hashes)
 
 
 def main() -> int:

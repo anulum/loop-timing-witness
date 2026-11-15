@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from conftest import MakeRtlRun, RunTool
 
 
@@ -86,6 +88,30 @@ def test_missing_captured_samples_remain_explicit(
     """
     run, manifest = make_rtl_run()
     observed_cycles = {0, 2} if coverage == "partial" else set()
+    _keep_observed(run, manifest, observed_cycles)
+    (run / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    result = run_tool(
+        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "report")
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads((run / "report/report.json").read_text())
+    assert report["valid"] is False
+    assert report["evidence_status"] == "simulation_only"
+    _check_metric(report["tracking_error"], observed_cycles)
+
+
+def _keep_observed(run: Path, manifest: dict[str, Any], observed_cycles: set[int]) -> None:
+    """Keep the sample reads and tracking rows of the observed cycles only, and rebind them.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    manifest
+        Declaration changed in place to observed sampling; the caller writes it.
+    observed_cycles
+        Cycles whose sample read and tracking row remain.
+    """
     events = run / "events.bin"
     original = events.read_bytes()
     records = [original[offset : offset + 16] for offset in range(0, len(original), 16)]
@@ -103,15 +129,18 @@ def test_missing_captured_samples_remain_explicit(
     manifest["tracking_sampling"] = "observed"
     for name, path in {"events": events, "tracking": tracking}.items():
         manifest["files"][name]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
-    (run / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    result = run_tool(
-        "analyze_run", str(run / "manifest.json"), "--output-dir", str(run / "report")
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    report = json.loads((run / "report/report.json").read_text())
-    metric = report["tracking_error"]
-    assert report["valid"] is False
-    assert report["evidence_status"] == "simulation_only"
+
+
+def _check_metric(metric: dict[str, Any], observed_cycles: set[int]) -> None:
+    """Require an observed tracking metric that reports only the observed cycles.
+
+    Parameters
+    ----------
+    metric
+        Reported tracking error.
+    observed_cycles
+        Cycles whose samples were captured.
+    """
     assert metric["sampling"] == "observed"
     assert metric["status"] == ("partial" if observed_cycles else "unavailable")
     assert metric["sample_count"] == len(observed_cycles)

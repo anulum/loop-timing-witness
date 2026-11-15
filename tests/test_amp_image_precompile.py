@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from amp_image_dependencies import snapshot_image_dependencies
@@ -130,47 +131,7 @@ def test_public_precompile_refusal(original_preparation: Path, fault: str) -> No
     """
     receipt = original_preparation / "preparation.json"
     data = json.loads(receipt.read_bytes())
-    index_path = original_preparation / "compiler_source_index.json"
-    index = json.loads(index_path.read_bytes())
-    name, item = next(iter(index.items()))
-    changed = original_preparation / item["path"]
-    finding = "dependency"
-    if fault == "record":
-        changed = original_preparation / "precompile/input_0.d"
-        with changed.open("ab") as stream:
-            stream.write(b"\n")
-        data["inputs"][str(changed.relative_to(original_preparation))] = sha256_of_file(changed)
-        finding = "preprocessing records changed"
-    elif fault == "dependencies":
-        removed = next(reversed(index))
-        data["compiler_dependencies"].pop(removed)
-        index.pop(removed)
-        index_path.write_bytes(canonical_json_bytes(index))
-        data["inputs"]["compiler_source_index.json"] = sha256_of_file(index_path)
-        finding = "preprocessing dependencies changed"
-    elif fault == "index":
-        index.pop(name)
-        index_path.write_bytes(canonical_json_bytes(index))
-        data["inputs"]["compiler_source_index.json"] = sha256_of_file(index_path)
-        finding = "snapshot index disagrees"
-    elif fault == "source":
-        with changed.open("ab") as stream:
-            stream.write(b"changed captured real header")
-        data["inputs"][str(changed.relative_to(original_preparation))] = sha256_of_file(changed)
-        finding = "dependency bytes or paths changed"
-    elif fault == "escape":
-        changed.unlink()
-        original = Path(name) if Path(name).is_absolute() else original_preparation / name
-        changed.symlink_to(original)
-        finding = "source/input bytes or paths changed"
-    elif fault == "identity":
-        data["compiler_dependencies"] = []
-        finding = "dependency identities are invalid"
-    else:
-        data["compiler_dependencies"]["source/../contract.c"] = data["compiler_dependencies"][
-            "contract.c"
-        ]
-        finding = "dependency paths escape"
+    finding = _damage_preparation(original_preparation, data, fault)
     receipt.write_bytes(canonical_json_bytes(data))
     assert preparation_main(["--directory", str(original_preparation)]) == 1
     result = subprocess.run(
@@ -185,6 +146,103 @@ def test_public_precompile_refusal(original_preparation: Path, fault: str) -> No
     assert not tuple(original_preparation.rglob("*.o"))
     assert not (original_preparation / "firmware.elf").exists()
     assert not (original_preparation / "image.json").exists()
+
+
+def _damage_preparation(directory: Path, data: dict[str, Any], fault: str) -> str:
+    """Corrupt one preprocessing input, index entry or receipt identity.
+
+    Parameters
+    ----------
+    directory
+        Real original compiler preparation.
+    data
+        Its preparation receipt, changed in place.
+    fault
+        Specific corruption.
+
+    Returns
+    -------
+    str
+        Required refusal text.
+    """
+    if fault in {"record", "source", "escape"}:
+        return _damage_input(directory, data, fault)
+    if fault in {"dependencies", "index"}:
+        return _damage_index(directory, data, fault)
+    if fault == "identity":
+        data["compiler_dependencies"] = []
+        return "dependency identities are invalid"
+    data["compiler_dependencies"]["source/../contract.c"] = data["compiler_dependencies"][
+        "contract.c"
+    ]
+    return "dependency paths escape"
+
+
+def _damage_input(directory: Path, data: dict[str, Any], fault: str) -> str:
+    """Change a preprocessing record or captured source, or alias the source outside.
+
+    Parameters
+    ----------
+    directory
+        Real original compiler preparation.
+    data
+        Its preparation receipt, rebound to changed bytes.
+    fault
+        ``record``, ``source`` or ``escape``.
+
+    Returns
+    -------
+    str
+        Required refusal text.
+    """
+    name, item = next(
+        iter(json.loads((directory / "compiler_source_index.json").read_bytes()).items())
+    )
+    changed = directory / item["path"]
+    if fault == "escape":
+        changed.unlink()
+        changed.symlink_to(Path(name) if Path(name).is_absolute() else directory / name)
+        return "source/input bytes or paths changed"
+    if fault == "record":
+        changed = directory / "precompile/input_0.d"
+    with changed.open("ab") as stream:
+        stream.write(b"\n" if fault == "record" else b"changed captured real header")
+    data["inputs"][str(changed.relative_to(directory))] = sha256_of_file(changed)
+    if fault == "record":
+        return "preprocessing records changed"
+    return "dependency bytes or paths changed"
+
+
+def _damage_index(directory: Path, data: dict[str, Any], fault: str) -> str:
+    """Remove one source from the snapshot index, alone or with its dependency identity.
+
+    Parameters
+    ----------
+    directory
+        Real original compiler preparation.
+    data
+        Its preparation receipt, rebound to the changed index.
+    fault
+        ``dependencies`` or ``index``.
+
+    Returns
+    -------
+    str
+        Required refusal text.
+    """
+    index_path = directory / "compiler_source_index.json"
+    index = json.loads(index_path.read_bytes())
+    if fault == "dependencies":
+        removed = next(reversed(index))
+        data["compiler_dependencies"].pop(removed)
+        index.pop(removed)
+    else:
+        index.pop(next(iter(index)))
+    index_path.write_bytes(canonical_json_bytes(index))
+    data["inputs"]["compiler_source_index.json"] = sha256_of_file(index_path)
+    if fault == "dependencies":
+        return "preprocessing dependencies changed"
+    return "snapshot index disagrees"
 
 
 @pytest.mark.parametrize("backend", ["other", "rust"])

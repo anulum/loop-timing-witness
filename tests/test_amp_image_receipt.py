@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from amp_elf import admit_elf
@@ -186,6 +187,20 @@ def test_public_original_image_declarations(
     assert not (tmp_path / "reanalysis").exists()
 
 
+_ARGUMENT_FAULTS: dict[str, tuple[int, str | None]] = {
+    "type": (0, None),
+    "relative-python": (0, "python"),
+    "script": (1, "other.py"),
+    "option": (4, "--other"),
+    "dtb": (5, "different.dtb"),
+    "integer": (23, "02"),
+    "plus-sign": (23, "+2"),
+    "separator": (23, "1_0"),
+    "other-digit": (23, "\u0662"),
+    "word": (23, "two"),
+    "many-digits": (23, "1" + "0" * 5000),
+    "beyond-64-bit": (25, str(1 << 63)),
+}
 INTEGER_FAULTS = frozenset(
     {"integer", "plus-sign", "separator", "other-digit", "word", "many-digits", "beyond-64-bit"}
 )
@@ -233,21 +248,31 @@ def test_public_original_verification_vector(
     elif fault == "short":
         commands["verify"].pop()
     else:
-        index, value = {
-            "type": (0, None),
-            "relative-python": (0, "python"),
-            "script": (1, "other.py"),
-            "option": (4, "--other"),
-            "dtb": (5, "different.dtb"),
-            "integer": (23, "02"),
-            "plus-sign": (23, "+2"),
-            "separator": (23, "1_0"),
-            "other-digit": (23, "\u0662"),
-            "word": (23, "two"),
-            "many-digits": (23, "1" + "0" * 5000),
-            "beyond-64-bit": (25, str(1 << 63)),
-        }[fault]
+        index, value = _ARGUMENT_FAULTS[fault]
         commands["verify"][index] = value
+    _rebind_build_commands(directory, commands)
+    result = analyze_copy(directory)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "AMP original image verification" in result.stderr
+    if fault in INTEGER_FAULTS:
+        assert result.stderr.rstrip().endswith(
+            "AMP original image verification arguments disagree"
+        ), result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "reanalysis").exists()
+
+
+def _rebind_build_commands(directory: Path, commands: dict[str, Any]) -> None:
+    """Write changed build commands and rebind every hash that names them.
+
+    Parameters
+    ----------
+    directory
+        Complete capture copy.
+    commands
+        Changed ``build_commands.json`` content.
+    """
+    commands_path = directory / "image/build_commands.json"
     commands_path.write_text(json.dumps(commands), encoding="ascii")
     preparation_path = directory / "image/preparation.json"
     preparation = json.loads(preparation_path.read_bytes())
@@ -259,15 +284,6 @@ def test_public_original_verification_vector(
     image["preparation_sha256"] = sha256_of_file(preparation_path)
     image_path.write_text(json.dumps(image), encoding="ascii")
     retain_revised_outer_hashes(directory)
-    result = analyze_copy(directory)
-    assert result.returncode == 1, result.stdout + result.stderr
-    assert "AMP original image verification" in result.stderr
-    if fault in INTEGER_FAULTS:
-        assert result.stderr.rstrip().endswith(
-            "AMP original image verification arguments disagree"
-        ), result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "reanalysis").exists()
 
 
 def test_public_actual_firmware_contract_bytes(original_capture: Path, tmp_path: Path) -> None:

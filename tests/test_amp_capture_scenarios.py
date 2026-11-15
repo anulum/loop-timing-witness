@@ -67,35 +67,8 @@ def scenario_capture(
     """
     controller, thermal, fault, periods = request.param
     original = Path(capture_arguments[capture_arguments.index("--image") + 1])
-    words = (original / "configuration.txt").read_text().split()
-    words[0] = controller
-    words[19:24] = [fault, "3", str(periods), "100" if fault == "overload" else "0", "0"]
-    if fault == "none":
-        words[20:22] = ["0", "0"]
-    configuration = original.parent / "scenario.txt"
-    configuration.write_text(" ".join(words) + "\n", encoding="ascii")
-    compiler = Path(json.loads((original / "preparation.json").read_bytes())["compiler"])
-    image = original.parent / "scenario-image"
-    prepare_image(
-        BuildInputs(
-            ROOT,
-            original / "platform.dtb",
-            configuration,
-            compiler,
-            isa=True,
-            rust_compiler=arithmetic_compiler,
-        ),
-        image,
-        REQUEST,
-    )
-    result = subprocess.run(
-        ["make", "-C", str(image), f"-j{build_jobs()}"],
-        capture_output=True,
-        text=True,
-        timeout=scaled(60),
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+    configuration = _scenario_configuration(original, controller, fault, periods)
+    image = _built_scenario_image(original, configuration, arithmetic_compiler)
     for name, value in (
         ("--image", image),
         ("--dtb", image / "platform.dtb"),
@@ -108,6 +81,76 @@ def scenario_capture(
         capture_arguments[capture_arguments.index("--plugin") + 1] = plugin
     assert capture_main(capture_arguments) == 0
     return Path(capture_arguments[capture_arguments.index("--output") + 1])
+
+
+def _scenario_configuration(original: Path, controller: str, fault: str, periods: int) -> Path:
+    """Write the original configuration with one controller and fault scenario.
+
+    Parameters
+    ----------
+    original
+        Original image directory.
+    controller
+        Controller name in the first configuration word.
+    fault
+        Plant fault kind, or ``none``.
+    periods
+        Fault duration in control periods.
+
+    Returns
+    -------
+    Path
+        ``scenario.txt`` beside the original image.
+    """
+    words = (original / "configuration.txt").read_text().split()
+    words[0] = controller
+    words[19:24] = [fault, "3", str(periods), "100" if fault == "overload" else "0", "0"]
+    if fault == "none":
+        words[20:22] = ["0", "0"]
+    configuration = original.parent / "scenario.txt"
+    configuration.write_text(" ".join(words) + "\n", encoding="ascii")
+    return configuration
+
+
+def _built_scenario_image(
+    original: Path, configuration: Path, arithmetic_compiler: str | None
+) -> Path:
+    """Prepare and build a new image of the scenario with the original compiler.
+
+    Parameters
+    ----------
+    original
+        Original image directory with its device tree and preparation receipt.
+    configuration
+        Scenario configuration.
+    arithmetic_compiler
+        Rust compiler for the firmware arithmetic, or ``None`` for C.
+
+    Returns
+    -------
+    Path
+        Built ``scenario-image`` beside the original image.
+    """
+    compiler = Path(json.loads((original / "preparation.json").read_bytes())["compiler"])
+    image = original.parent / "scenario-image"
+    inputs = BuildInputs(
+        ROOT,
+        original / "platform.dtb",
+        configuration,
+        compiler,
+        isa=True,
+        rust_compiler=arithmetic_compiler,
+    )
+    prepare_image(inputs, image, REQUEST)
+    result = subprocess.run(
+        ["make", "-C", str(image), f"-j{build_jobs()}"],
+        capture_output=True,
+        text=True,
+        timeout=scaled(60),
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return image
 
 
 @pytest.mark.parametrize(

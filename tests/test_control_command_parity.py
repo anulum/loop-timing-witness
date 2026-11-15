@@ -41,6 +41,22 @@ PLOT_LABELS = {
     "energy formats": ("123456", "1.5e+07", "2.5e-07", "0.4"),
     "energy rounding": ("1e+06", "99999.5", "0.000123457", "0.4"),
 }
+# Manifest argument and output arguments of the refused inputs that change them.
+REFUSED_ARGUMENTS = {
+    "absent manifest": "absent.json",
+    "symlink manifest": "link.json",
+    "directory manifest": ".",
+    "fifo manifest": "fifo.json",
+    "fifo parent": "fifo.json/manifest.json",
+}
+REFUSED_OUTPUTS = {
+    "existing output": ("taken", "taken"),
+    "missing parent": ("absent/python-report", "absent/rust-report"),
+    "dot output": (".", "."),
+    "parent output": ("..", ".."),
+    "root output": ("/", "/"),
+    "up output": ("sub/..", "sub/.."),
+}
 
 
 def _write(run: Path, manifest: dict[str, Any]) -> Path:
@@ -126,42 +142,81 @@ def _variant(variant: str, run: Path, manifest: dict[str, Any]) -> None:
     if variant == "no power":
         manifest["files"]["power"] = None
     elif variant == "gapped samples":
-        manifest["tracking_sampling"] = "observed"
-        _edit_events(
-            run,
-            manifest,
-            lambda records: [
-                record
-                for record in records
-                if not (record[0] == CODES["SAMPLE_READ"] and _cycle(record) == 1)
-            ],
-        )
-        rows = (run / "tracking.csv").read_text(encoding="utf-8").splitlines()
-        kept = [row for row in rows if not row.startswith("1,")]
-        _bind(run, manifest, "tracking", ("\n".join(kept) + "\n").encode())
+        _gap_samples(run, manifest)
     elif variant == "receipts":
         _bind_receipts(run, manifest, 0, "idle")
     elif variant == "extreme ticks":
         manifest["files"]["power"] = None
-
-        def saturate(records: list[bytearray]) -> list[bytearray]:
-            """Hold every record from cycle 0's last onwards at the top of the 64-bit counter."""
-            last = max(index for index, record in enumerate(records) if _cycle(record) == 0)
-            for record in records[last:]:
-                record[8:16] = (2**64 - 1).to_bytes(8, "little")
-            return records
-
-        _edit_events(run, manifest, saturate)
+        _edit_events(run, manifest, _saturate)
     elif energies is not None:
-        power = (run / "power.csv").read_text(encoding="utf-8")
-        for rail, energy in energies.items():
-            power = re.sub(
-                rf"^15021,{rail},(.*),[^,]*$",
-                rf"15021,{rail},\g<1>,{energy}",
-                power,
-                flags=re.MULTILINE,
-            )
-        _bind(run, manifest, "power", power.encode())
+        _set_energies(run, manifest, energies)
+
+
+def _gap_samples(run: Path, manifest: dict[str, Any]) -> None:
+    """Remove cycle 1's sample read and tracking row from an observed-sampling capture.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    manifest
+        Declaration changed in place.
+    """
+    manifest["tracking_sampling"] = "observed"
+    _edit_events(
+        run,
+        manifest,
+        lambda records: [
+            record
+            for record in records
+            if not (record[0] == CODES["SAMPLE_READ"] and _cycle(record) == 1)
+        ],
+    )
+    rows = (run / "tracking.csv").read_text(encoding="utf-8").splitlines()
+    kept = [row for row in rows if not row.startswith("1,")]
+    _bind(run, manifest, "tracking", ("\n".join(kept) + "\n").encode())
+
+
+def _saturate(records: list[bytearray]) -> list[bytearray]:
+    """Hold every record from cycle 0's last onwards at the top of the 64-bit counter.
+
+    Parameters
+    ----------
+    records
+        Event records in capture order, changed in place.
+
+    Returns
+    -------
+    list[bytearray]
+        The same records.
+    """
+    last = max(index for index, record in enumerate(records) if _cycle(record) == 0)
+    for record in records[last:]:
+        record[8:16] = (2**64 - 1).to_bytes(8, "little")
+    return records
+
+
+def _set_energies(run: Path, manifest: dict[str, Any], energies: dict[str, str]) -> None:
+    """Replace the final cumulative energy of each named rail and rebind the series.
+
+    Parameters
+    ----------
+    run
+        Run directory.
+    manifest
+        Declaration changed in place.
+    energies
+        Final energy text by rail.
+    """
+    power = (run / "power.csv").read_text(encoding="utf-8")
+    for rail, energy in energies.items():
+        power = re.sub(
+            rf"^15021,{rail},(.*),[^,]*$",
+            rf"15021,{rail},\g<1>,{energy}",
+            power,
+            flags=re.MULTILINE,
+        )
+    _bind(run, manifest, "power", power.encode())
 
 
 @pytest.mark.parametrize(
@@ -220,22 +275,33 @@ def test_reports_are_byte_equal(
         "stderr": "",
     }
     python_files = _files(run / outputs[0])
-    assert ("energy_per_cycle.svg" in python_files) is (
-        variant not in {"no power", "extreme ticks"}
-    )
-    if variant in PLOT_LABELS:
-        plot = python_files["energy_per_cycle.svg"].decode()
-        assert all(f">{label}<" in plot for label in PLOT_LABELS[variant]), plot
-    if variant == "line-feed run id":
-        cells = python_files["cycle_intervals.csv"].decode()
-        assert '\r\n"rtl-capture-test\n",simulation_only,' in cells, cells
-    if variant == "extreme ticks":
-        changes = python_files["cycle_jitter.csv"].decode()
-        assert ",-18446744073709551" in changes, changes
-    assert len(python_files) >= 7
+    _check_variant_files(variant, python_files)
     assert _files(run / outputs[1]) == python_files
     mode = (run / outputs[0]).stat().st_mode & 0o777
     assert (run / outputs[1]).stat().st_mode & 0o777 == mode
+
+
+def _check_variant_files(variant: str, files: dict[str, bytes]) -> None:
+    """Require what each report variant must show in Python's report files.
+
+    Parameters
+    ----------
+    variant
+        Report variant.
+    files
+        Python's published report files by name.
+    """
+    assert ("energy_per_cycle.svg" in files) is (variant not in {"no power", "extreme ticks"})
+    if variant in PLOT_LABELS:
+        plot = files["energy_per_cycle.svg"].decode()
+        assert all(f">{label}<" in plot for label in PLOT_LABELS[variant]), plot
+    if variant == "line-feed run id":
+        cells = files["cycle_intervals.csv"].decode()
+        assert '\r\n"rtl-capture-test\n",simulation_only,' in cells, cells
+    if variant == "extreme ticks":
+        changes = files["cycle_jitter.csv"].decode()
+        assert ",-18446744073709551" in changes, changes
+    assert len(files) >= 7
 
 
 def _refused_input(change: str, run: Path, manifest: dict[str, Any]) -> tuple[str, tuple[str, str]]:
@@ -256,21 +322,6 @@ def _refused_input(change: str, run: Path, manifest: dict[str, Any]) -> tuple[st
         Manifest argument and the output arguments of the two commands.
     """
     path = run / "manifest.json"
-    arguments = {
-        "absent manifest": "absent.json",
-        "symlink manifest": "link.json",
-        "directory manifest": ".",
-        "fifo manifest": "fifo.json",
-        "fifo parent": "fifo.json/manifest.json",
-    }
-    outputs = {
-        "existing output": ("taken", "taken"),
-        "missing parent": ("absent/python-report", "absent/rust-report"),
-        "dot output": (".", "."),
-        "parent output": ("..", ".."),
-        "root output": ("/", "/"),
-        "up output": ("sub/..", "sub/.."),
-    }
     if change == "existing output":
         (run / "taken").mkdir()
     elif change == "up output":
@@ -291,7 +342,9 @@ def _refused_input(change: str, run: Path, manifest: dict[str, Any]) -> tuple[st
         (run / "tracking.csv").write_bytes(content)
         manifest["files"]["tracking"]["sha256"] = hashlib.sha256(content).hexdigest()
         _write(run, manifest)
-    return arguments.get(change, "manifest.json"), outputs.get(change, DEFAULT_OUTPUTS)
+    return REFUSED_ARGUMENTS.get(change, "manifest.json"), REFUSED_OUTPUTS.get(
+        change, DEFAULT_OUTPUTS
+    )
 
 
 EXISTING_OUTPUTS = {"existing output", "dot output", "parent output", "root output", "up output"}
@@ -405,6 +458,36 @@ def test_output_paths_resolve_alike(output: str, make_rtl_run: MakeRtlRun, tmp_p
     )
 
 
+def _readlink_failure(link: Path, trace: Path) -> list[str]:
+    """Return a tracer that fails every readlink of one link.
+
+    Parameters
+    ----------
+    link
+        Traced link.
+    trace
+        Trace file.
+
+    Returns
+    -------
+    list[str]
+        Argument vector prefix.
+    """
+    return [
+        "strace",
+        "-f",
+        "-qq",
+        "-P",
+        str(link),
+        "-e",
+        "trace=readlink",
+        "-e",
+        "inject=readlink:error=EIO",
+        "-o",
+        str(trace),
+    ]
+
+
 def test_unreadable_output_link_is_kept_as_written(
     make_rtl_run: MakeRtlRun, tmp_path: Path
 ) -> None:
@@ -421,43 +504,17 @@ def test_unreadable_output_link_is_kept_as_written(
     _write(run, manifest)
     _paths(run)
     trace = tmp_path / "trace"
-
-    def wrapper(name: str) -> list[str]:
-        """Return a tracer that fails every readlink of the output link.
-
-        Parameters
-        ----------
-        name
-            Trace file suffix.
-
-        Returns
-        -------
-        list[str]
-            Argument vector prefix.
-        """
-        link = str(run / "relative-link")
-        return [
-            "strace",
-            "-f",
-            "-qq",
-            "-P",
-            link,
-            "-e",
-            "trace=readlink",
-            "-e",
-            "inject=readlink:error=EIO",
-            "-o",
-            f"{trace}-{name}",
-        ]
-
+    link = run / "relative-link"
     python = python_command(
-        ["manifest.json", "--output-dir", "relative-link/python-report"], run, wrapper("python")
+        ["manifest.json", "--output-dir", "relative-link/python-report"],
+        run,
+        _readlink_failure(link, Path(f"{trace}-python")),
     )
     rust = rust_command(
         ["manifest.json", "--output-dir", "relative-link/rust-report"],
         run,
         tmp_path,
-        wrapper("rust"),
+        _readlink_failure(link, Path(f"{trace}-rust")),
     )
     assert "INJECTED" in Path(f"{trace}-python").read_text(encoding="utf-8")
     assert "INJECTED" in Path(f"{trace}-rust").read_text(encoding="utf-8")
@@ -661,6 +718,35 @@ FAULTS = {
 }
 
 
+def _fault_wrapper(fault: str, side: str, trace: Path) -> tuple[list[str], int | None]:
+    """Return the argument vector prefix and file-size limit that cause one publication fault.
+
+    Parameters
+    ----------
+    fault
+        Publication fault name.
+    side
+        ``python`` or ``rust``.
+    trace
+        Trace file of an injected system call failure.
+
+    Returns
+    -------
+    tuple[list[str], int | None]
+        Wrapper and the native file-size limit in bytes, if any. The Python
+        side keeps no bytecode, except under its own file-size limit.
+    """
+    injected = FAULTS[fault]
+    wrapper: list[str] = [] if injected is None else _traced(*injected, trace)
+    if fault == "file size":
+        if side == "rust":
+            return IGNORE_XFSZ, 512
+        return [*IGNORE_XFSZ[:2], "trap '' XFSZ; ulimit -f 1; exec \"$@\"", "sh"], 512
+    if side == "python":
+        return [*wrapper, "env", "PYTHONDONTWRITEBYTECODE=1"], None
+    return wrapper, None
+
+
 @pytest.mark.parametrize("fault", list(FAULTS))
 def test_publication_faults_are_refused_alike(
     fault: str, make_rtl_run: MakeRtlRun, tmp_path: Path
@@ -685,17 +771,7 @@ def test_publication_faults_are_refused_alike(
     for side in ("python", "rust"):
         trace = tmp_path / f"{side}.trace"
         injected = FAULTS[fault]
-        wrapper: list[str] = [] if injected is None else _traced(*injected, trace)
-        limit = None
-        if fault == "file size":
-            wrapper = (
-                IGNORE_XFSZ
-                if side == "rust"
-                else [*IGNORE_XFSZ[:2], "trap '' XFSZ; ulimit -f 1; exec \"$@\"", "sh"]
-            )
-            limit = 512
-        elif side == "python":
-            wrapper = [*wrapper, "env", "PYTHONDONTWRITEBYTECODE=1"]
+        wrapper, limit = _fault_wrapper(fault, side, trace)
         arguments = ["manifest.json", "--output-dir", f"reports/{side}-report"]
         if fault == "unwritable parent":
             parent.chmod(0o500)

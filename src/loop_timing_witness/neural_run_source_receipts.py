@@ -21,6 +21,24 @@ if TYPE_CHECKING:
     from .neural_run_traces import NeuralTraceAnalysis
 
 
+_HISTORICAL_CHECKER_FIELDS = {
+    **dict.fromkeys(("rows", "spikes"), UNSIGNED),
+    **dict.fromkeys(
+        (
+            "original_input_sha256",
+            "reference_sha256",
+            "actual_projection_sha256",
+            "model_module",
+            "model_sha256",
+            "constants_module",
+            "constants_sha256",
+        ),
+        TEXT,
+    ),
+    "source_owned_public_checker_pass": FLAG,
+}
+
+
 def _checker_findings(run: BoundNeuralRun, traces: NeuralTraceAnalysis) -> tuple[str, ...]:
     """Reconcile recorded historical checker fields without treating them as execution.
 
@@ -44,22 +62,7 @@ def _checker_findings(run: BoundNeuralRun, traces: NeuralTraceAnalysis) -> tuple
     checker = decode_actual_receipt(
         run.files["source_owned_public_model_checker"],
         "historical source checker",
-        {
-            **dict.fromkeys(("rows", "spikes"), UNSIGNED),
-            **dict.fromkeys(
-                (
-                    "original_input_sha256",
-                    "reference_sha256",
-                    "actual_projection_sha256",
-                    "model_module",
-                    "model_sha256",
-                    "constants_module",
-                    "constants_sha256",
-                ),
-                TEXT,
-            ),
-            "source_owned_public_checker_pass": FLAG,
-        },
+        _HISTORICAL_CHECKER_FIELDS,
     )
     expected = {
         "rows": run.manifest["step_count"],

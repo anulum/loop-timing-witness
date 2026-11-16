@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The Rust crate publishing workflow packages the verified crate after its dry-run publish. Under
+  Cargo 1.100 a dry-run publish leaves the crate only under `target/package/tmp-crate`, so the
+  workflow's digest and retained artifact found no file and nothing was published; the added
+  `cargo package --locked --no-verify` writes the same bytes to the retained path.
 - Every hosted workflow step that installs the pinned Rust 1.100.0 toolchain uninstalls it first, so a
   partial toolchain already on the runner cannot conflict with the component install. One PR run
   failed so ("failed to install component: 'clippy-preview-x86_64-unknown-linux-gnu', detected

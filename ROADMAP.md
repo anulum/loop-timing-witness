@@ -96,7 +96,8 @@ operation, privileged scheduling and board timing require their actual resources
 
 1. Vendor tool project generation scripts and constraints. The generation scripts produce a Libero
    project for MPFS250T and a [recorded timing run](hardware/icicle/README.md#recorded-libero-run);
-   the witness misses its 100 MHz capture clock there, and its CDC constraints are not written yet.
+   its static timing meets every clock there, including the 100 MHz witness capture clock, with
+   the witness clock-domain crossings constrained. Board timing belongs to item 3.
 2. Bare-metal controller on a dedicated application core.
 3. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.

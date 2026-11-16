@@ -122,43 +122,46 @@ derivation and RTL simulation do not qualify a board.
 
 ## Recorded Libero run
 
-On 2026-11-15, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T (FCVG484 package,
-STD speed grade, production timing data) on the tree derived at commit `f4bd98f`, whose
+On 2026-11-16, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T (FCVG484 package,
+STD speed grade, production timing data) on the tree derived at commit `bf159fa`, whose
 `witness_derivation.json` has SHA-256
-`94785d6b7f20a9f71dbb94ce57a8271b1aee528b326c5c0fef5f5a5297f7991f`. Synthesis,
+`cd896f688b6feba137f615862dd4d8053b0bb8d7b04ab332b4ee235a98734b01`. Synthesis,
 place-and-route and timing verification ran in the slow_lv_lt, fast_hv_lt and slow_lv_ht
-corners. The run exited 0 after 35 minutes and reports that the timing constraints are not met.
+corners. The run exited 0 after 27 minutes and reports that the timing constraints are met.
 
 | Clock | Period | Worst setup slack | Worst hold slack |
 | --- | --- | --- | --- |
-| FIC0 bus clock, reference CCC output 0 | 8 ns | +1.491 ns | +0.037 ns |
-| FIC1 clock, reference CCC output 1 | 8 ns | +1.736 ns | +0.058 ns |
-| FIC3 clock, reference CCC output 3 | 20 ns | +2.027 ns | +0.060 ns |
-| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | **−2.419 ns** | +0.068 ns |
+| FIC0 bus clock, reference CCC output 0 | 8 ns | +1.632 ns | +0.034 ns |
+| FIC1 clock, reference CCC output 1 | 8 ns | +1.718 ns | +0.064 ns |
+| FIC3 clock, reference CCC output 3 | 20 ns | +1.983 ns | +0.059 ns |
+| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +0.425 ns | +0.069 ns |
 
-The failing setup paths lie in the witness plant model, the reference generator and the paths
-from the configuration registers to the reference generator. Each computes a 32×32-bit product,
-a wide sum and a saturation in one capture cycle. The documented 100 MHz capture clock is
-therefore not met on this part and speed grade; closing it is open work. Timing constraint
-coverage is 99.97 %.
+The witness clock's worst setup path is a constrained crossing, from the transaction bridge's
+held request data to a plant actuator product, inside its 8 ns bound; within the capture clock
+the worst path has +1.038 ns. The run at `f4bd98f` missed the capture clock by 2.419 ns in the
+plant model and the reference generator, where a 32×32-bit product took most of the cycle. The
+plant and the reference now register four half products one edge ahead, and the capture queue
+selects its records from a register copy of the head
+([plant witness](../../docs/PLANT_WITNESS.md#fixed-point-plant)). Timing constraint coverage is
+99.97 %.
 
-The synthesis CDC check lists 50 witness crossings. Two are safe and two are FIFO RAM reads
-that it does not analyse. It flags 46, mostly the transaction bridge's handshake-held data and
-the Gray-pointer synchronisers. The reference constraint file makes the FIC0 clock asynchronous
-to every other clock, so these crossings carry no timing constraint yet; witness-specific CDC
-constraints are open work too. The whole design uses 26 515 4LUT (10.4 %), 19 846 DFF (7.8 %),
-104 uSRAM, 127 LSRAM and 20 math blocks.
+The synthesis CDC check lists 55 witness crossings. Two are safe and two are FIFO RAM reads
+that it does not analyse. It flags 51, mostly the transaction bridge's handshake-held data,
+including the held actuator and its products, and the Gray-pointer synchronisers. Its flags
+are structural; the timing of each crossing is bounded by the derived constraints above, and
+the report meets them. The whole design uses 27 390 4LUT (10.8 %), 20 656 DFF (8.1 %), 104 uSRAM,
+127 LSRAM and 20 math blocks.
 
 The reports stay with the run; their SHA-256 values are:
 
 | Report | SHA-256 |
 | --- | --- |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `6906d4d1ac4d08ce41aa0d7b47373c39cc116e10b8fbc19150dabaf4353318ce` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `8c762208be63be501246562a1d95fc7c18a0314db997d86522ac271f5702609f` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `45db8c4e68f61a3a3cde4a515deae88e3eb4183e783ddc8058e6381a3d7a0c45` |
-| `designer/…/max_report.json` | `89752023994ebe2a510154f7ba9cebb5fe179ffa9886488be4bcae6be3d720b1` |
-| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `482785d3e6991414bf08ed7df48548c9c3b79c6aaead10163d69d417c23bdb1f` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `0cf8ee7616c63fc8c680fde4da571b6f773b522daf0f22fdd75f1a6e356c1a7d` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `c98970e0f34e474a2f323c77539b85d9409d4a334f7f0c50ce7e6a7aa93b7db0` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `50acdd52073ff3e3220aa0bc7c7f3a45bea5d16035613cbe1472cb2e34bc4576` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `8ec437f62f24ba20f0e439a9bc82d6f461ccb9ca4af8b4f8de0dc8a0b3d5be0a` |
+| `designer/…/max_report.json` | `e79ea4d8bf2766f1831f37083eb73873ad313e14cd34a42646f57ecfc6a4268b` |
+| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `76b64f2664a5f86dbfbba599f6a9250a9b18e8d5cd0f8a21d93c714730244750` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `0d333e1212c9549f4fd340128b26b6f69b7808dfab64e0fb0011629adb058130` |
 
 A vendor timing report is not board evidence: no bitstream was programmed and no board was
 measured.
@@ -171,9 +174,10 @@ their implemented frequencies and paths.
 
 The pinned reference imports `script_support/constraints/fic_clocks.sdc` for synthesis,
 place-and-route and timing verification. That file groups the four FIC clocks as
-asynchronous; it does not name the witness's Gray-pointer FIFO, request/acknowledge
-bridge, reset-release or retained-interrupt crossings. Review the generated clock and
+asynchronous; the derivation adds the witness capture clock to the FIC0 group and bounds the
+paths between the two clocks, which cover the witness's Gray-pointer FIFO, request/acknowledge
+bridge, reset-release and retained-interrupt crossings. Review the generated clock and
 [SmartTime constraint-coverage and CDC reports](https://onlinedocs.microchip.com/oxy/GUID-AFCB5DCC-964F-4BE7-AA46-C756FA87ED7B-en-US-15/GUID-194FFBC5-DFC3-4718-9972-687F3B8B5982.html),
 constrain the actual implemented CDC paths and check
-placement-dependent skew before claiming timing closure. No witness-specific physical
-constraint or timing report has been validated yet.
+placement-dependent skew on a programmed board before relying on them. The recorded run is
+static timing analysis of one placement; no physical timing has been validated yet.

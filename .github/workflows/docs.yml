@@ -39,7 +39,9 @@ jobs:
       - name: Rendered Markdown starts with content
         run: python tools/check_provenance_headers.py
       - name: Install the exact documentation toolchains
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
           rustup default 1.100.0
           python -m venv .venv

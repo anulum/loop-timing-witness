@@ -58,7 +58,9 @@ jobs:
               print(f"Verified {name}: {latest['html_url']}")
           PY
       - name: Install the exact native and package-consumer toolchains
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component clippy --component rustfmt
           rustup default 1.100.0
           rustup target add --toolchain 1.100.0 wasm32-unknown-unknown riscv64imac-unknown-none-elf

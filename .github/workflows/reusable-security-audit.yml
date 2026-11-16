@@ -45,7 +45,9 @@ jobs:
       - name: Secret scan of the complete history
         run: '"$(go env GOPATH)/bin/gitleaks" git --no-banner --redact .'
       - name: Install the pinned Rust toolchain and advisory auditor
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
           rustup default 1.100.0
           cargo install cargo-audit --version 0.23.0 --locked

@@ -44,7 +44,9 @@ jobs:
           .venv/bin/cyclonedx-py requirements requirements-dev.txt --output-file sbom.cdx.json
           .venv/bin/cyclonedx-py requirements requirements-runtime.txt --output-file runtime-sbom.cdx.json
       - name: Install the pinned native inventory generator
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal
           rustup default 1.100.0
           cargo install cargo-cyclonedx --version 0.5.10 --locked

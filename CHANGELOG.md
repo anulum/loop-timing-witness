@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Every hosted workflow step that installs the pinned Rust 1.100.0 toolchain uninstalls it first, so a
+  partial toolchain already on the runner cannot conflict with the component install. One PR run
+  failed so ("failed to install component: 'clippy-preview-x86_64-unknown-linux-gnu', detected
+  conflict: 'bin/cargo-clippy'"), while another runner logged "recovering from a partially installed
+  toolchain".
 - `capture_quiescent` (in `control_plant_witness`) and the run-bank reset permission (in
   `axi_control_witness`) are capture-clock registers, one capture edge behind their terms, before
   their bus-clock synchronisers. At a run's end the event strobes clear on the edge a record

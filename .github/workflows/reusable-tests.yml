@@ -60,7 +60,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install the pinned Rust toolchain with its LLVM tools
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component llvm-tools-preview
           rustup default 1.100.0
       - name: Fetch exact native analysis dependencies
@@ -157,7 +159,9 @@ jobs:
           dtc --version
           "$WITNESS_RV64_CC" --version
       - name: Install the pinned Rust toolchain
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy --component llvm-tools-preview --target wasm32-unknown-unknown --target riscv64imac-unknown-none-elf
           rustup default 1.100.0
       - name: Native toolchain versions
@@ -345,7 +349,9 @@ jobs:
           mkdir -p build/coverage
           .venv/bin/python tools/export_python_coverage.py build/coverage/coverage.xml
       - name: Install the pinned Rust toolchain with its LLVM tools
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component llvm-tools-preview
           rustup default 1.100.0
       - name: Download the instrumented native analysis tests and their profiles

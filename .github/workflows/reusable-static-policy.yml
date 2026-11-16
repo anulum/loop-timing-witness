@@ -28,7 +28,9 @@ jobs:
         with:
           python-version: "3.15.2"
       - name: Install the pinned Rust toolchain
+        # Runners can carry a partial 1.100.0 that conflicts with a component install.
         run: |
+          rustup toolchain uninstall 1.100.0
           rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
           rustup default 1.100.0
       - name: Install the pinned native formatter

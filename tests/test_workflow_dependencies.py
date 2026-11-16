@@ -93,6 +93,7 @@ def test_weakened_lock_command_fails_the_public_guard(
             "          cargo install cargo-audit --version 0.23.0 --locked\n",
             "          cargo install cargo-audit\n",
         ),
+        ("          rustup toolchain uninstall 1.100.0\n", ""),
     ],
 )
 def test_skipped_audit_steps_and_inherited_overrides_are_refused(

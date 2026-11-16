@@ -25,6 +25,9 @@ UNSUPPORTED_LOCK_NAMES: Final = frozenset(
 CARGO_AUDIT_INSTALL: Final = "cargo install cargo-audit --version 0.23.0 --locked"
 # The components named by rust-toolchain.toml are installed with the toolchain;
 # adding them to a minimal toolchain on first use has failed on hosted runners.
+# A runner can carry a partial 1.100.0 toolchain that conflicts with a component install, so the
+# install starts after removing it (rustup succeeds when the toolchain is absent).
+RUST_TOOLCHAIN_UNINSTALL: Final = "rustup toolchain uninstall 1.100.0"
 RUST_TOOLCHAIN_INSTALL: Final = (
     "rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy"
 )
@@ -94,6 +97,7 @@ def _step_findings(steps: list[Any], commands: list[str]) -> list[str]:
         or set(installation_steps[0]) != {"name", "run"}
         or str(installation_steps[0]["run"]).splitlines()
         != [
+            RUST_TOOLCHAIN_UNINSTALL,
             RUST_TOOLCHAIN_INSTALL,
             "rustup default 1.100.0",
             CARGO_AUDIT_INSTALL,

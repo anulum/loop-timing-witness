@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `clock_request_bridge` registers the held request in the capture domain: `capture_data` follows
+  the bus-held payload while `capture_valid` is low and holds it while high, so it loads on the
+  edge that completes the request toggle's synchronisation. Every port keeps its cycle-by-cycle
+  behaviour while `capture_valid` is high. Destination decode now starts from a capture-clock
+  register instead of crossing the bounded clock-domain path; the Libero run of the tree with the
+  capture lock reset had missed that path's 8 ns bound by 0.051 ns.
 - `icicle_witness` takes `capture_clock_locked`, the lock of the capture clock's PLL, and holds
   both witness clock domains in reset while it is low, as a low `run_reset_n` does; losing the
   lock resets the run. The Icicle witness script routes `WITNESS_CCC`'s `PLL_LOCK_0` there

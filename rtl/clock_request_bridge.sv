@@ -8,6 +8,11 @@
 
 // One request is outstanding. Source payload remains held until its response;
 // capture_response is latched on the edge where capture_valid is observed.
+// capture_data is a destination register: it follows the held payload while
+// capture_valid is low and holds it while high, so destination logic starts
+// from a capture-clock register; it loads the payload on the edge that
+// completes the request toggle's synchronisation, one destination period
+// after the toggle's first sample, when the payload is stable.
 // The source consumes response_data only when response_valid && response_ready.
 // Common asynchronous reset abandons the transaction in both domains; separate
 // reset release is synchronised locally. No independent-domain reset is allowed.
@@ -32,6 +37,7 @@ module clock_request_bridge #(
     (* ASYNC_REG = "TRUE" *) logic request_sync_first, request_sync_second;
     (* ASYNC_REG = "TRUE" *) logic acknowledge_sync_first, acknowledge_sync_second;
     logic [RESPONSE_BITS-1:0] held_response;
+    logic [REQUEST_BITS-1:0] request_held;
     if (REQUEST_BITS < 1 || RESPONSE_BITS < 1) begin : invalid_width
         initial $fatal(1, "bridge payload widths must be positive");
     end
@@ -49,7 +55,7 @@ module clock_request_bridge #(
             acknowledge_sync_first <= 1'b0;
             acknowledge_sync_second <= 1'b0;
             busy <= 1'b0;
-            capture_data <= '0;
+            request_held <= '0;
             response_valid <= 1'b0;
             response_data <= '0;
         end else begin
@@ -57,7 +63,7 @@ module clock_request_bridge #(
             acknowledge_sync_second <= acknowledge_sync_first;
             if (response_valid && response_ready) response_valid <= 1'b0;
             if (request_valid && request_ready) begin
-                capture_data <= request_data;
+                request_held <= request_data;
                 request_toggle <= !request_toggle;
                 busy <= 1'b1;
             end
@@ -74,9 +80,11 @@ module clock_request_bridge #(
             request_sync_second <= 1'b0;
             acknowledge_toggle <= 1'b0;
             held_response <= '0;
+            capture_data <= '0;
         end else begin
             request_sync_first <= request_toggle;
             request_sync_second <= request_sync_first;
+            if (!capture_valid) capture_data <= request_held;
             if (capture_valid) begin
                 held_response <= capture_response;
                 acknowledge_toggle <= request_sync_second;

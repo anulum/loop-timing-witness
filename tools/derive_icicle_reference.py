@@ -48,11 +48,13 @@ DERIVED_HASHES = {
 FIC0_CLOCK = "CLOCKS_AND_RESETS_inst_0/CCC_FIC_x_CLK/PF_CCC_C0_0/pll_inst_0/OUT0"
 FIC3_CLOCK = "CLOCKS_AND_RESETS_inst_0/CCC_FIC_x_CLK/PF_CCC_C0_0/pll_inst_0/OUT3"
 WITNESS_CLOCK = "CLOCKS_AND_RESETS_inst_0/WITNESS_CCC_0/WITNESS_CCC_0/pll_inst_0/OUT0"
-# Every crossing settles within one period of the faster clock: handshake-held transaction data
-# is read two destination edges after its request, Gray pointer bits keep their skew below one
-# source period, and synchroniser inputs and FIFO RAM reads have no tighter requirement. Hold has
-# no meaning between the two asynchronous clocks; a minimum delay of minus one FIC0 period
-# releases the phase-derived hold check that the shared group would otherwise apply.
+# Every crossing settles within one period of the faster clock: the capture clock registers
+# handshake-held request data one period after first sampling its request toggle, the bus clock
+# reads the held response two edges after its acknowledge toggle, Gray pointer bits keep their
+# skew below one source period, and synchroniser inputs and FIFO RAM reads have no tighter
+# requirement. Hold has no meaning between the two asynchronous clocks; a minimum delay of
+# minus one FIC0 period releases the phase-derived hold check that the shared group would
+# otherwise apply.
 _FIC0_CLOCKS = f"[ get_clocks {{ {FIC0_CLOCK} }} ]"
 _WITNESS_CLOCKS = f"[ get_clocks {{ {WITNESS_CLOCK} }} ]"
 WITNESS_CROSSING_CONSTRAINTS = (

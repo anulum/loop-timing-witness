@@ -17,7 +17,7 @@ module clock_request_bridge_tb #(
     logic request_valid = 0, request_ready, response_valid, response_ready = 0;
     logic capture_clock_enabled = 1;
     logic bus_clock_enabled = 1;
-    logic [64:0] request_data = 0, capture_data;
+    logic [64:0] request_data = 0, capture_data, accepted_request = 0;
     logic [255:0] response_data, capture_response, expected_response, stalled_response;
     logic capture_valid, capture_active, sample_valid, safe_interrupt;
     logic [31:0] cycle_number, total_misses, overflow_count;
@@ -54,8 +54,11 @@ module clock_request_bridge_tb #(
         .delayed_cycle(), .plant_clipped(), .reference_clipped(), .fault_ready(),
         .freeze_actuator(), .overload_request(), .consecutive_misses(), .late_commands(), .drain_empty()
     );
+    always @(posedge bus_clock) if (request_valid && request_ready) accepted_request <= request_data;
     always @(posedge capture_clock) begin
         if (capture_valid) begin
+            // The destination register holds the accepted request for the whole valid window.
+            if (capture_data !== accepted_request) $fatal(1, "destination register differs from accepted request");
             captures = captures + 1;
             expected_response = capture_response;
             if (!capture_data[64] && enable) read_ticks[cycle_number] = counter_ticks;

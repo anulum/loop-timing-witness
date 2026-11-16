@@ -89,10 +89,11 @@ interconnect gains target slot 2, ending at `0x600200ff`. In
 `script_support/constraints/fic_clocks.sdc`, the FIC0 clock group also holds the witness
 capture clock, so the paths between the two clocks are analysed instead of being cut as
 asynchronous, and two appended `set_max_delay 8` lines bound every path between them, in each
-direction, by the 8 ns FIC0 period. That bound covers each crossing: handshake-held
-transaction data is read two destination edges after its request toggle, a Gray pointer's
-bits keep their skew below one source period, and synchroniser inputs and FIFO RAM reads
-have no tighter requirement. Two `set_min_delay -8` lines release the hold check that the
+direction, by the 8 ns FIC0 period. That bound covers each crossing: the capture clock
+registers handshake-held request data one period after first sampling its request toggle,
+the bus clock reads the held response two edges after its acknowledge toggle, a Gray
+pointer's bits keep their skew below one source period, and synchroniser inputs and FIFO
+RAM reads have no tighter requirement. Two `set_min_delay -8` lines release the hold check that the
 shared group would derive from the two clocks' phases; hold has no meaning between them, and
 the synchronisers resolve metastability. Both clocks stay asynchronous to every other clock,
 as before.

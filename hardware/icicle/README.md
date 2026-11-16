@@ -13,7 +13,7 @@ Loop Timing Witness — Icicle reference derivation
 The reference source is fetched separately and is never committed here. Use an official
 `polarfire-soc/icicle-kit-reference-design` checkout at commit
 `9c34320f91e8e8a144c7d87bf299527fc5f02081`. The derivation command requires that
-checkout to be clean and verifies the two vendor source files it changes by SHA-256.
+checkout to be clean and verifies the three vendor source files it changes by SHA-256.
 It also verifies a path-and-content digest of every reference source file outside Git
 metadata, including the timing constraints and MSS configuration. It writes a new output
 tree on the repository's filesystem and refuses an existing path.
@@ -36,11 +36,11 @@ WITNESS_ICICLE_REFERENCE=/path/to/clean/icicle-kit-reference-design \
 ```
 
 The integration test also changes test-owned staging bytes at the actual filesystem
-read boundaries for edited vendor Tcl, copied RTL and the unmodified reference remainder.
+read boundaries for edited vendor files, copied RTL and the unmodified reference remainder.
 Each change must abort publication. A separate filesystem race creates the requested
 destination immediately before publication; derivation must preserve that competing tree.
 
-The derived tree contains the official reference plus narrowly changed Tcl sources, this
+The derived tree contains the official reference plus narrowly changed vendor sources, this
 repository's [`LOOP_TIMING_WITNESS.tcl`](LOOP_TIMING_WITNESS.tcl), and
 `witness_derivation.json`. It also contains `witness_rtl/`, an exact copy of the current
 production SystemVerilog sources. The manifest hashes the derived vendor files, the connection
@@ -83,9 +83,20 @@ and inspected reports are required before claiming timing closure.
 The source keeps the reference's Linux MSS configuration, so processor I²C remains
 available for PAC1934 access. No I²C loopback variant is selected.
 
-The derivation changes two vendor Tcl files. The reference script sources the witness
-script once the base design has generated, and FIC0's interconnect gains target slot 2,
-ending at `0x600200ff`. The witness script adds the rest to the generated design:
+The derivation changes two vendor Tcl files and the reference clock constraints. The
+reference script sources the witness script once the base design has generated, and FIC0's
+interconnect gains target slot 2, ending at `0x600200ff`. In
+`script_support/constraints/fic_clocks.sdc`, the FIC0 clock group also holds the witness
+capture clock, so the paths between the two clocks are analysed instead of being cut as
+asynchronous, and two appended `set_max_delay 8` lines bound every path between them, in each
+direction, by the 8 ns FIC0 period. That bound covers each crossing: handshake-held
+transaction data is read two destination edges after its request toggle, a Gray pointer's
+bits keep their skew below one source period, and synchroniser inputs and FIFO RAM reads
+have no tighter requirement. Two `set_min_delay -8` lines release the hold check that the
+shared group would derive from the two clocks' phases; hold has no meaning between them, and
+the synchronisers resolve metastability. Both clocks stay asynchronous to every other clock,
+as before.
+The witness script adds the rest to the generated design:
 
 - the witness HDL core as an AXI4 target on FIC0 slot 2, with the reference FIC0's 38-bit
   address and 32-bit data, covering the 256-byte AXI4-Lite aperture at `0x60020000`;

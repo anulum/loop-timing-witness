@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The Icicle derivation constrains the witness clock-domain crossings. It edits the reference
+  `fic_clocks.sdc` as a third pinned vendor file: the FIC0 clock group also holds the witness
+  capture clock, so the paths between the two are analysed instead of cut as asynchronous;
+  `set_max_delay 8` bounds every such path in each direction, and `set_min_delay -8` releases the
+  hold check derived from the two clocks' phases. Both clocks stay asynchronous to every other
+  clock. The refusal for a changed derived file now reads "derived vendor file changed".
 - The plant and the reference form each 32 × 32 product one capture edge before it is used.
   `rtl/split_multiplier.sv` registers four 17 × 17 half products, whose shifted sum is exact;
   the sampling cycle keeps the sum, floor, offset and saturation. Every output of

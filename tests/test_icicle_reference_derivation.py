@@ -171,6 +171,17 @@ def test_public_derivation_and_vendor_preflight(derived_tree: Path) -> None:
     assert set(manifest["witness_rtl_sha256"]) == {
         path.name for path in (ROOT / "rtl").glob("*.sv")
     }
+    constraints = (derived_tree / "script_support/constraints/fic_clocks.sdc").read_text()
+    fic0 = "CLOCKS_AND_RESETS_inst_0/CCC_FIC_x_CLK/PF_CCC_C0_0/pll_inst_0/OUT0"
+    witness = "CLOCKS_AND_RESETS_inst_0/WITNESS_CCC_0/WITNESS_CCC_0/pll_inst_0/OUT0"
+    assert constraints.splitlines()[0].endswith(f"{{ {fic0} {witness} }} ]")
+    assert constraints.count("set_clock_groups") == 4
+    for bound in ("set_max_delay 8", "set_min_delay -8"):
+        for source, target in ((fic0, witness), (witness, fic0)):
+            assert (
+                f"{bound} -from [ get_clocks {{ {source} }} ] -to [ get_clocks {{ {target} }} ]"
+                in constraints.splitlines()
+            )
     missing_libero = derived_tree / "not-installed-libero"
     for device in ("MPFS250T", "MPFS250T_ES"):
         refusal = invoke(str(RUN), str(derived_tree), str(missing_libero), device)
@@ -185,11 +196,8 @@ def test_public_derivation_and_vendor_preflight(derived_tree: Path) -> None:
     ("relative", "expected"),
     [
         ("witness_rtl/icicle_witness.sv", "derived RTL changed"),
-        ("script_support/components/FIC0_INITIATOR.tcl", "derived vendor Tcl changed"),
-        (
-            "script_support/constraints/fic_clocks.sdc",
-            "derived reference remainder differs from pinned commit",
-        ),
+        ("script_support/components/FIC0_INITIATOR.tcl", "derived vendor file changed"),
+        ("script_support/constraints/fic_clocks.sdc", "derived vendor file changed"),
         (
             "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl",
             "derived witness connection Tcl changed",
@@ -253,24 +261,25 @@ def test_public_verifier_refuses_extra_reference_input(derived_tree: Path, tmp_p
 def test_public_verifier_refuses_aliased_reference_constraint(
     derived_tree: Path, tmp_path: Path
 ) -> None:
-    """Reject a symlinked SDC even when it resolves to unchanged bytes.
+    """Reject a symlinked derived SDC even when it resolves to the derived bytes.
 
     Parameters
     ----------
     derived_tree
         Actual successful source derivation.
     tmp_path
-        Test-owned derived tree with a symlinked original constraint.
+        Test-owned derived tree whose constraint links to a copy outside it.
     """
     changed = tmp_path / "aliased"
     shutil.copytree(derived_tree, changed, symlinks=True)
     constraint = changed / "script_support/constraints/fic_clocks.sdc"
-    original = constraint.with_name("fic_clocks.original.sdc")
-    constraint.rename(original)
-    constraint.symlink_to(original.name)
+    outside = tmp_path / "fic_clocks.derived.sdc"
+    constraint.rename(outside)
+    constraint.symlink_to(outside)
     refusal = invoke(str(PYTHON), str(VERIFY), "--verify", str(changed))
     assert refusal.returncode != 0
-    assert "reference source is not a regular file" in refusal.stderr
+    expected = "derived vendor file changed: script_support/constraints/fic_clocks.sdc"
+    assert expected in refusal.stderr
 
 
 def test_public_verifier_refuses_live_rtl_alias(derived_tree: Path, tmp_path: Path) -> None:
@@ -494,7 +503,7 @@ def test_public_python_derivation_refuses_changed_reference_constraint(
     output = tmp_path / "must-not-exist"
     refusal = invoke(str(PYTHON), str(VERIFY), str(source), str(output))
     assert refusal.returncode != 0
-    assert "reference source tree differs from pinned commit" in refusal.stderr
+    assert "reference source mismatch: script_support/constraints/fic_clocks.sdc" in refusal.stderr
     assert not output.exists()
 
 

@@ -22,13 +22,16 @@ from manifest_io import load_json_object
 
 REFERENCE_COMMIT = "9c34320f91e8e8a144c7d87bf299527fc5f02081"
 SOURCE_TREE_SHA256 = "1f720db72fd65fa25a93ffcf6a445b581926a02a6a8f64b6b8d9d415088c109b"
-REFERENCE_REMAINDER_SHA256 = "f2a6315e2dcd1ca2ee741298f2c4814a2181b4ba722f255c7d18ed07ecf18430"
+REFERENCE_REMAINDER_SHA256 = "76713ec878387d5e297eb2403cea7298f4497cc990d4dc6ae5025a0f9204c04a"
 SOURCE_HASHES = {
     "MPFS_ICICLE_KIT_REFERENCE_DESIGN.tcl": (
         "28aa2cc9263c8e8bf410ee2a31ee7fc6def82e112c3badb34f2186c51cc06b9d"
     ),
     "script_support/components/FIC0_INITIATOR.tcl": (
         "30add476ef4d02e0b03245ab1730395c4576abcf985f35cd483ca89de90d8b99"
+    ),
+    "script_support/constraints/fic_clocks.sdc": (
+        "1e98f58821a3dbbf36b1f49d1d6304e301acd89771a74519e13a4586e4bbf14e"
     ),
 }
 DERIVED_HASHES = {
@@ -38,7 +41,29 @@ DERIVED_HASHES = {
     "script_support/components/FIC0_INITIATOR.tcl": (
         "2ac5577bfdb84f1ec262011076fb20a9ed727de2d562f85bc0e2e8780ef0610d"
     ),
+    "script_support/constraints/fic_clocks.sdc": (
+        "024f7782db1d5ad0735f1c3d6d52dab52e11e5d798818120687b0dd32c27b900"
+    ),
 }
+FIC0_CLOCK = "CLOCKS_AND_RESETS_inst_0/CCC_FIC_x_CLK/PF_CCC_C0_0/pll_inst_0/OUT0"
+FIC3_CLOCK = "CLOCKS_AND_RESETS_inst_0/CCC_FIC_x_CLK/PF_CCC_C0_0/pll_inst_0/OUT3"
+WITNESS_CLOCK = "CLOCKS_AND_RESETS_inst_0/WITNESS_CCC_0/WITNESS_CCC_0/pll_inst_0/OUT0"
+# Every crossing settles within one period of the faster clock: handshake-held transaction data
+# is read two destination edges after its request, Gray pointer bits keep their skew below one
+# source period, and synchroniser inputs and FIFO RAM reads have no tighter requirement. Hold has
+# no meaning between the two asynchronous clocks; a minimum delay of minus one FIC0 period
+# releases the phase-derived hold check that the shared group would otherwise apply.
+_FIC0_CLOCKS = f"[ get_clocks {{ {FIC0_CLOCK} }} ]"
+_WITNESS_CLOCKS = f"[ get_clocks {{ {WITNESS_CLOCK} }} ]"
+WITNESS_CROSSING_CONSTRAINTS = (
+    "# Loop Timing Witness: one group for the FIC0 bus clock and the witness capture clock,\n"
+    "# so their crossings are analysed; each direction is bounded by the 8 ns FIC0 period,\n"
+    "# and no hold requirement applies between the two asynchronous clocks.\n"
+    f"set_max_delay 8 -from {_FIC0_CLOCKS} -to {_WITNESS_CLOCKS}\n"
+    f"set_max_delay 8 -from {_WITNESS_CLOCKS} -to {_FIC0_CLOCKS}\n"
+    f"set_min_delay -8 -from {_FIC0_CLOCKS} -to {_WITNESS_CLOCKS}\n"
+    f"set_min_delay -8 -from {_WITNESS_CLOCKS} -to {_FIC0_CLOCKS}\n"
+)
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 WITNESS_SCRIPT = REPOSITORY_ROOT / "hardware/icicle/LOOP_TIMING_WITNESS.tcl"
 DERIVED_SCRIPT = "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl"
@@ -148,7 +173,10 @@ def edits() -> dict[str, tuple[tuple[str, str], ...]]:
 
     The witness script, sourced after the base design has generated, adds the
     witness clock, interrupt and bus target itself; the vendor sources only
-    source it and open the third FIC0 target slot.
+    source it and open the third FIC0 target slot. The reference clock
+    constraints put the witness capture clock into the FIC0 clock group, so the
+    witness crossings are analysed, and bound every path between the two clocks
+    by the 8 ns FIC0 period.
 
     Returns
     -------
@@ -169,6 +197,10 @@ def edits() -> dict[str, tuple[tuple[str, str], ...]]:
         "script_support/components/FIC0_INITIATOR.tcl": (
             ('"NUM_SLAVES:2"', '"NUM_SLAVES:3"'),
             ('"SLAVE2_END_ADDR:0x60020470"', '"SLAVE2_END_ADDR:0x600200ff"'),
+        ),
+        "script_support/constraints/fic_clocks.sdc": (
+            (f"{{ {FIC0_CLOCK} }}", f"{{ {FIC0_CLOCK} {WITNESS_CLOCK} }}"),
+            (f"{FIC3_CLOCK} }} ]", f"{FIC3_CLOCK} }} ]\n{WITNESS_CROSSING_CONSTRAINTS}"),
         ),
     }
 
@@ -384,7 +416,7 @@ def verify_derived(destination: Path) -> None:
     for relative, digest in DERIVED_HASHES.items():
         path = destination / relative
         if path.is_symlink() or sha256(path) != digest:
-            msg = f"derived vendor Tcl changed: {relative}"
+            msg = f"derived vendor file changed: {relative}"
             raise ReferenceDerivationRefusedError(msg)
     connection = destination / DERIVED_SCRIPT
     if connection.is_symlink() or sha256(connection) != expected["witness_tcl_sha256"]:

@@ -10,6 +10,7 @@
 // Pack cycles in 32-bit slices indexed by code: 1..7 and ACT_LATE=13.
 // Bounded group queue drops whole newest groups, counting every lost event.
 // Serialization orders cycle first, then code; downstream rejection drops one.
+// current is a register copy of the head slot, so the selection starts from a register.
 module control_event_capture #(
     parameter int GROUP_ADDRESS_BITS = 6
 ) (
@@ -28,7 +29,7 @@ module control_event_capture #(
     logic [GROUP_ADDRESS_BITS:0] count;
     logic [7:0] remaining_mask;
     logic [7:0] head_mask, after_mask;
-    logic [319:0] current;
+    logic [319:0] current, incoming;
     logic [2:0] chosen;
     logic [31:0] chosen_cycle;
     // Selection candidates {pending, code index, cycle}, 36 bits each, reduced pairwise.
@@ -42,7 +43,7 @@ module control_event_capture #(
     if (GROUP_ADDRESS_BITS < 1 || GROUP_ADDRESS_BITS > 8) begin : invalid_capacity
         initial $fatal(1, "GROUP_ADDRESS_BITS must be in [1,8]");
     end
-    assign current = groups[head][319:0];
+    assign incoming = {event_cycles, counter_ticks};
     assign next_head = head + 1'b1;
     // The pending candidate with the earlier cycle wins; on equal cycles the lower code index,
     // passed as low, wins. The serialization order equals a scan that keeps the last minimum
@@ -92,16 +93,23 @@ module control_event_capture #(
             count <= '0;
             remaining_mask <= '0;
             overflow_count <= '0;
+            current <= '0;
         end else begin
             counter_ticks <= counter_ticks + 1'b1;
             overflow_count <= loss_total[32] ? 32'hffffffff : loss_total[31:0];
             if (record_valid) remaining_mask <= after_mask;
+            // current follows groups[head]: the next slot after a pop, written through when the
+            // pushed group becomes the head in the same edge.
             if (pop_group) begin
                 head <= head + 1'b1;
+                current <= count == 1 && push_group ? incoming : groups[next_head][319:0];
                 if (count > 1) remaining_mask <= groups[next_head][327:320];
                 else if (push_group) remaining_mask <= event_mask;
                 else remaining_mask <= '0;
-            end else if (count == 0 && push_group) remaining_mask <= event_mask;
+            end else if (count == 0 && push_group) begin
+                remaining_mask <= event_mask;
+                current <= incoming;
+            end
             if (push_group) tail <= tail + 1'b1;
             case ({push_group, pop_group})
                 2'b10: count <= count + 1'b1;
@@ -111,6 +119,6 @@ module control_event_capture #(
         end
     end
     always_ff @(posedge clock) begin
-        if (push_group) groups[tail] <= {event_mask, event_cycles, counter_ticks};
+        if (push_group) groups[tail] <= {event_mask, incoming};
     end
 endmodule

@@ -430,6 +430,10 @@ elaboration that these corpora reach, the same block and sample counts and all f
 new points executed; and all three `split_multiplier.sv` points executed. The
 `fixed_point_math.sv` evaluation counts differ, as expected for a combinational block
 with other inputs; its clamp branches are not reached by these corpora in either tree.
+The register copy of the capture queue head in `control_event_capture.sv` adds no
+source-flow point: the same corpora on the final tree give the elaboration they reach
+(`GROUP_ADDRESS_BITS=4`) identical point sequences and counts, the other elaboration has
+the same statements, and the union stays 816 of 822.
 
 `tests/test_retained_interrupt.py` reads the real `0xa8` IRQ status register
 across three bus/capture clock ratios. It checks an older snapshot acknowledgement

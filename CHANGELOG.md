@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `control_event_capture` keeps a register copy of the head group's timestamps, loaded from the
+  next queue slot when a group leaves and written through when the pushed group becomes the head,
+  so record selection starts from a register instead of a queue read. Every output is the same in
+  every cycle, `record` while `record_valid` is high; `record` is defined only then.
 - The Icicle derivation constrains the witness clock-domain crossings. It edits the reference
   `fic_clocks.sdc` as a third pinned vendor file: the FIC0 clock group also holds the witness
   capture clock, so the paths between the two are analysed instead of cut as asynchronous;

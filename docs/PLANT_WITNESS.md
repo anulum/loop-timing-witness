@@ -303,7 +303,10 @@ archived snapshots and record format v1 remain unchanged.
 The default queue holds 64 groups. Each head emits one record per capture edge: a three-level
 comparison tree picks the earliest pending cycle tag, lower code first on equal tags, and the
 group leaves the queue with its last pending event, which the remaining-event mask shows without
-waiting for that choice. Queue-full rejects the newest complete group and counts its set bits; a
+waiting for that choice. The head group's timestamps sit in a register copy of the head slot,
+loaded from the next slot when a group leaves and written through when the pushed group becomes
+the head in the same edge, so the choice starts from a register rather than a queue read.
+`record` carries data only while `record_valid` is high. Queue-full rejects the newest complete group and counts its set bits; a
 full downstream FIFO drops and counts each serialized record. Both contribute once to a saturating 32-bit `overflow_count`.
 Any loss invalidates the host run. No source is stalled and no dropped event is recreated.
 The FIFO uses the existing common-reset CDC contract. Neither group serialization nor RAM

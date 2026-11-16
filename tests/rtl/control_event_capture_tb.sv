@@ -85,6 +85,18 @@ module control_event_capture_tb;
         @(negedge clock); reset_n = 1; record_ready = 1;
         group(8'h01, 0);
         wait (read_count == 1);
+        // One-event groups on consecutive edges: each head leaves in the edge that pushes the
+        // next group, which must become the head with its own timestamp and cycle.
+        @(negedge clock);
+        for (index = 0; index < 4; index = index + 1) begin
+            event_mask = 8'h01 << index;
+            event_cycles[index*32 +: 32] = 32'(100 + index);
+            expected[written] = {counter_ticks, 32'(100 + index), 24'd0, 8'(index + 1)};
+            written = written + 1;
+            @(negedge clock);
+        end
+        event_mask = 0;
+        wait (read_count == written);
         $display("GROUP_PASS wrapped=12 dropped=320");
         $finish;
     end

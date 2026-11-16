@@ -126,45 +126,51 @@ board.
 ## Recorded Libero run
 
 On 2026-11-16, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T (FCVG484 package,
-STD speed grade, production timing data) on the tree derived at commit `bf159fa`, whose
+STD speed grade, production timing data) on the tree derived at commit `bb5c673`, whose
 `witness_derivation.json` has SHA-256
-`cd896f688b6feba137f615862dd4d8053b0bb8d7b04ab332b4ee235a98734b01`. Synthesis,
+`ac6490268c64ae69a37b100016d3c4c95e7f51979002040479156d3eba4932e9`. Synthesis,
 place-and-route and timing verification ran in the slow_lv_lt, fast_hv_lt and slow_lv_ht
-corners. The run exited 0 after 27 minutes and reports that the timing constraints are met.
+corners. The run exited 0 after 31 minutes and reports that the timing constraints are met.
 
 | Clock | Period | Worst setup slack | Worst hold slack |
 | --- | --- | --- | --- |
-| FIC0 bus clock, reference CCC output 0 | 8 ns | +1.632 ns | +0.034 ns |
-| FIC1 clock, reference CCC output 1 | 8 ns | +1.718 ns | +0.064 ns |
-| FIC3 clock, reference CCC output 3 | 20 ns | +1.983 ns | +0.059 ns |
-| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +0.425 ns | +0.069 ns |
+| FIC0 bus clock, reference CCC output 0 | 8 ns | +2.870 ns | +0.022 ns |
+| FIC1 clock, reference CCC output 1 | 8 ns | +2.605 ns | +0.067 ns |
+| FIC3 clock, reference CCC output 3 | 20 ns | +2.995 ns | +0.061 ns |
+| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +2.360 ns | +0.070 ns |
 
-The witness clock's worst setup path is a constrained crossing, from the transaction bridge's
-held request data to a plant actuator product, inside its 8 ns bound; within the capture clock
-the worst path has +1.038 ns. The run at `f4bd98f` missed the capture clock by 2.419 ns in the
-plant model and the reference generator, where a 32×32-bit product took most of the cycle. The
-plant and the reference now register four half products one edge ahead, and the capture queue
-selects its records from a register copy of the head
-([plant witness](../../docs/PLANT_WITNESS.md#fixed-point-plant)). Timing constraint coverage is
-99.97 %.
+The witness clock's worst setup path lies inside the capture clock, from a plant velocity
+product to its register. No path from the bus clock into the capture clock is among the 1000
+worst setup paths, which end at +3.071 ns; the FIC0 figure is a crossing in the other
+direction, into a bus-clock synchroniser, inside its 8 ns bound. The run at `f4bd98f` missed
+the capture clock by 2.419 ns in the plant model and the reference generator, where a
+32×32-bit product took most of the cycle. The plant and the reference now register four half
+products one edge ahead, and the capture queue selects its records from a register copy of
+the head ([plant witness](../../docs/PLANT_WITNESS.md#fixed-point-plant)). The run of the
+previous commit, which added the capture lock reset, missed the 8 ns crossing bound by
+0.051 ns, from the bus-held request through the capture domain's register decode; the
+request bridge now registers the held request in the capture clock before any decode.
+Timing constraint coverage is 99.97 %.
 
-The synthesis CDC check lists 55 witness crossings. Two are safe and two are FIFO RAM reads
-that it does not analyse. It flags 51, mostly the transaction bridge's handshake-held data,
-including the held actuator and its products, and the Gray-pointer synchronisers. Its flags
-are structural; the timing of each crossing is bounded by the derived constraints above, and
-the report meets them. The whole design uses 27 390 4LUT (10.8 %), 20 656 DFF (8.1 %), 104 uSRAM,
-127 LSRAM and 20 math blocks.
+The synthesis CDC check lists 12 witness crossings. Two are safe and two are FIFO RAM reads
+that it does not analyse. It flags eight: the held request and the held response, each now a
+single register-to-register crossing whose enable the check does not trace to the handshake;
+the request and acknowledge toggles and the two Gray pointers, as divergent synchroniser
+inputs; and two synchronisers fed through logic, from the capture reset release and from the
+run-finished flag. Its flags are structural; the timing of each crossing is bounded by the
+derived constraints above, and the report meets them. The whole design uses 27 491 4LUT
+(10.8 %), 20 684 DFF (8.1 %), 104 uSRAM, 127 LSRAM and 20 math blocks.
 
 The reports stay with the run; their SHA-256 values are:
 
 | Report | SHA-256 |
 | --- | --- |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `c98970e0f34e474a2f323c77539b85d9409d4a334f7f0c50ce7e6a7aa93b7db0` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `50acdd52073ff3e3220aa0bc7c7f3a45bea5d16035613cbe1472cb2e34bc4576` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `8ec437f62f24ba20f0e439a9bc82d6f461ccb9ca4af8b4f8de0dc8a0b3d5be0a` |
-| `designer/…/max_report.json` | `e79ea4d8bf2766f1831f37083eb73873ad313e14cd34a42646f57ecfc6a4268b` |
-| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `76b64f2664a5f86dbfbba599f6a9250a9b18e8d5cd0f8a21d93c714730244750` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `0d333e1212c9549f4fd340128b26b6f69b7808dfab64e0fb0011629adb058130` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `756f378e2e088eca2fac6264c0ef4d87b383185d2ccf985d412a457580cbe729` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `e5329dc325725fc76dcca616dc59bc2a328f90c63590bbb8b4718ca889424bd5` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `a51b89223ce7c270149c35109db8bfa487a9810600c6e44fc225f2e86a2971bc` |
+| `designer/…/max_report.json` | `479143f40dfca1ebb99c530a77d92c65ecdc85329200eb8af9f3e7b7b94f89d2` |
+| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `87a2376d259b63e302290bf681367467af92210ebc71b299aa570c91d63838ee` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `c4785b49b34abef1996efaf9c3a962c0c5a02c96e34d23b8ad952a01d3371e33` |
 
 A vendor timing report is not board evidence: no bitstream was programmed and no board was
 measured.

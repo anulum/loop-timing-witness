@@ -395,7 +395,7 @@ identity, omitting only instance hierarchy when taking the union. It covers all
 contain continuous assignments and module wiring, and `event_codes_pkg.sv`
 contains constants. Those four files have no procedural counter in this scope.
 
-The completed union has **816 of 822 points executed**, with **6 remaining
+The completed union has **818 of 824 points executed**, with **6 remaining
 raw zero counters accepted as source invariants**. No point is excluded and no
 unexplained zero remains. The six proofs do not count as runtime hits. The
 union combines actual public-port testbench, native lifecycle and AXI process
@@ -434,6 +434,14 @@ The register copy of the capture queue head in `control_event_capture.sv` adds n
 source-flow point: the same corpora on the final tree give the elaboration they reach
 (`GROUP_ADDRESS_BITS=4`) identical point sequences and counts, the other elaboration has
 the same statements, and the union stays 816 of 822.
+
+`clock_request_bridge.sv` then gained a capture-clock register for the held request,
+loaded while `capture_valid` is low. Its one elaboration in the union (request 45 bits,
+response 34 bits) keeps its twelve branch points and two block points and gains the
+if/else pair of that load: 14 branch points, all executed. Every port behaves as before
+while `capture_valid` is high, and the lifecycle, configuration and AXI corpora on the
+previous and the current tree give every shared point of every other file the same
+executed status. The union therefore becomes 818 of 824 with the same six invariants.
 
 `tests/test_retained_interrupt.py` reads the real `0xa8` IRQ status register
 across three bus/capture clock ratios. It checks an older snapshot acknowledgement

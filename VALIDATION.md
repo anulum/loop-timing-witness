@@ -267,8 +267,8 @@ yosys -Q -T -q -p 'read_verilog -sv rtl/*.sv; hierarchy -check -top icicle_witne
 These checks establish source elaboration and obvious structural consistency. They do not
 replace the derived Libero project, device-specific DRC, physical CDC review or timing reports.
 The [recorded Libero run](hardware/icicle/README.md#recorded-libero-run) of the derived design
-for MPFS250T meets every clock, including the 100 MHz witness capture clock (setup +0.425 ns,
-hold +0.069 ns), with the witness clock-domain crossings bounded by derived constraints.
+for MPFS250T meets every clock, including the 100 MHz witness capture clock (setup +2.360 ns,
+hold +0.070 ns), with the witness clock-domain crossings bounded by derived constraints.
 
 ## Hooks
 

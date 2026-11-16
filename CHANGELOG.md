@@ -26,10 +26,10 @@ Loop Timing Witness — changelog
   instead of leaving it unused, so the capture domain no longer leaves reset on an unlocked
   clock.
 - The recorded Libero SoC 2026.1 run of the derived design for MPFS250T (STD), on the tree of
-  `bf159fa`, meets every clock: the 100 MHz witness capture clock with setup +0.425 ns and hold
-  +0.069 ns, the reference clocks with +1.632 ns or more; every witness crossing is constrained.
-  The Icicle README records the slack table, the CDC summary, the resources and six report
-  digests.
+  `bb5c673`, meets every clock: the 100 MHz witness capture clock with setup +2.360 ns and hold
+  +0.070 ns, the reference clocks with +2.605 ns or more; every witness crossing is constrained,
+  and the synthesis CDC check lists 12 witness crossings instead of 55. The Icicle README records
+  the slack table, the CDC summary, the resources and six report digests.
 - `control_event_capture` keeps a register copy of the head group's timestamps, loaded from the
   next queue slot when a group leaves and written through when the pushed group becomes the head,
   so record selection starts from a register instead of a queue read. Every output is the same in

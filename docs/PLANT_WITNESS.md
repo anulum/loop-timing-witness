@@ -69,6 +69,8 @@ the record window, `run_drained` and retained `interrupt_line` belong to `bus_cl
 [`icicle_witness.sv`](../rtl/icicle_witness.sv) is the board-facing AXI4-Lite boundary: it
 accepts the interconnect's 38-bit address and forwards the selected low eight bits to this
 peripheral. Its physical decode and retained interrupt route still require Libero validation.
+A low `capture_clock_locked`, the lock of the capture clock's PLL, acts as `run_reset_n`: the
+witness stays in reset until that PLL locks, and losing the lock resets both clock domains.
 The processor/kernel interrupt mapping remains unqualified. External `run_reset_n` aborts AXI transactions
 as well as the run; quiesce the master before asserting it. The software run-bank reset below
 retains the AXI transport and its accepted responses.

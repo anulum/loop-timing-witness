@@ -9,7 +9,7 @@
 `timescale 1ns/1ps
 module icicle_witness_tb #(parameter bit THERMAL = 0);
     localparam logic [37:0] BASE = 38'h0060020000;
-    logic bus_clock = 0, capture_clock = 0, run_reset_n = 0;
+    logic bus_clock = 0, capture_clock = 0, capture_clock_locked = 0, run_reset_n = 0;
     logic [37:0] awaddr = BASE, araddr = BASE;
     logic [31:0] wdata = 0, rdata, read_value;
     logic [3:0] wstrb = 4'hf;
@@ -22,7 +22,8 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
     always #5 capture_clock = ~capture_clock;
 
     icicle_witness #(.PERIOD_TICKS(32'd64), .THERMAL(THERMAL)) device (
-        .bus_clock(bus_clock), .capture_clock(capture_clock), .run_reset_n(run_reset_n),
+        .bus_clock(bus_clock), .capture_clock(capture_clock),
+        .capture_clock_locked(capture_clock_locked), .run_reset_n(run_reset_n),
         .awaddr(awaddr), .awvalid(awvalid), .awready(awready),
         .wdata(wdata), .wstrb(wstrb), .wvalid(wvalid), .wready(wready),
         .bresp(bresp), .bvalid(bvalid), .bready(bready),
@@ -70,9 +71,18 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
         $fatal(1, "board-facing witness timed out");
     end
 
+    task automatic expect_held_in_reset(input string reason);
+        if (awready || wready || arready || interrupt_line) $fatal(1, reason);
+    endtask
+
     initial begin
         repeat (6) @(negedge bus_clock);
         run_reset_n = 1;
+        repeat (40) begin
+            @(negedge bus_clock);
+            expect_held_in_reset("witness left reset before the capture clock locked");
+        end
+        capture_clock_locked = 1;
         wait (awready && wready && arready);
         read_register(8'h7c, read_value);
         if (read_value != 1) $fatal(1, "incorrect register identity through physical base");
@@ -92,6 +102,19 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
         write_register(8'ha4, 1);
         repeat (5) @(negedge bus_clock);
         if (interrupt_line) $fatal(1, "interrupt did not clear through physical base");
+        read_register(8'h38, read_value);
+        if (read_value != 1) $fatal(1, "run not enabled before the capture lock loss");
+        wait (interrupt_line);
+        @(negedge bus_clock);
+        capture_clock_locked = 0;
+        repeat (2) @(negedge bus_clock);
+        expect_held_in_reset("witness kept running after the capture lock dropped");
+        capture_clock_locked = 1;
+        wait (awready && wready && arready);
+        read_register(8'h7c, read_value);
+        if (read_value != 1) $fatal(1, "incorrect register identity after the capture lock returned");
+        read_register(8'h38, read_value);
+        if (read_value != 0) $fatal(1, "capture lock loss did not reset the run");
         $display("ICICLE_WITNESS_PASS thermal=%0d", THERMAL);
         $finish;
     end

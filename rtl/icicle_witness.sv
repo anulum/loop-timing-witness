@@ -8,11 +8,13 @@
 
 // The FIC0 interconnect must select this target at 0x60020000..0x600200ff.
 // The low eight address bits are the complete witness register aperture.
+// The witness stays in reset until the capture clock's PLL reports lock, and
+// returns to reset if the lock drops; both witness domains reset together.
 module icicle_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter bit THERMAL = 0
 ) (
-    input logic bus_clock, capture_clock, run_reset_n,
+    input logic bus_clock, capture_clock, capture_clock_locked, run_reset_n,
     input logic [37:0] awaddr,
     input logic awvalid,
     output logic awready,
@@ -41,6 +43,7 @@ module icicle_witness #(
     wire unused_reference_clipped, unused_safe_interrupt, unused_fault_ready;
     wire unused_freeze_actuator, unused_overload_request, unused_drain_valid;
     wire unused_drain_empty;
+    wire witness_reset_n = run_reset_n && capture_clock_locked;
     wire [31:0] unused_cycle_number, unused_delayed_cycle, unused_sample_value;
     wire [31:0] unused_velocity, unused_reference_value, unused_actuator_value;
     wire [31:0] unused_total_misses, unused_consecutive_misses, unused_late_commands;
@@ -48,7 +51,7 @@ module icicle_witness #(
     wire [63:0] unused_counter_ticks;
     wire [127:0] unused_drain_record;
     axi_control_witness #(.PERIOD_TICKS(PERIOD_TICKS), .THERMAL(THERMAL)) witness (
-        .bus_clock(bus_clock), .capture_clock(capture_clock), .run_reset_n(run_reset_n),
+        .bus_clock(bus_clock), .capture_clock(capture_clock), .run_reset_n(witness_reset_n),
         .awaddr(awaddr[7:0]), .awvalid(awvalid), .awready(awready),
         .wdata(wdata), .wstrb(wstrb), .wvalid(wvalid), .wready(wready),
         .bresp(bresp), .bvalid(bvalid), .bready(bready),

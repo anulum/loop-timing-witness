@@ -104,7 +104,9 @@ The witness script adds the rest to the generated design:
   the range 11–58 that the reference ties low;
 - a separate CCC, `WITNESS_CCC`, that derives the 100 MHz capture clock from the 50 MHz
   reference clock. The reference CCC uses all four PLL0 outputs (125, 125, 125 and 50 MHz)
-  and does not instantiate PLL1, so no reference output is free for the witness.
+  and does not instantiate PLL1, so no reference output is free for the witness. Its lock
+  output reaches the witness, which holds both of its clock domains in reset until that PLL
+  locks and returns to reset if the lock drops.
 
 Each change runs after the base design has generated with every input connected, because
 SmartDesign refuses an unconnected input when it generates a component. The reference's
@@ -116,9 +118,9 @@ Libero SoC 2026.1 generates this project for MPFS250T. Its core generators need 
 on a host without one, pass a wrapper that runs Libero under `xvfb-run` as the runner's
 Libero executable. A host without internet access sets Libero's vault to the MegaVault of
 the release (`change_vault_location`); it holds every core the reference requests. The
-witness CCC's lock output is not used. The original board support package must establish the
-interrupt's PLIC and device-tree identity before a processor may consume it. Source
-derivation and RTL simulation do not qualify a board.
+original board support package must establish the interrupt's PLIC and device-tree identity
+before a processor may consume it. Source derivation and RTL simulation do not qualify a
+board.
 
 ## Recorded Libero run
 

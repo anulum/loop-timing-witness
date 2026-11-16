@@ -57,6 +57,7 @@ sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"FIC0_INITIATOR:AXI4msl
 sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"ACLK" "icicle_witness_0:bus_clock"}
 sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"ARESETN" "icicle_witness_0:run_reset_n"}
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:capture_clock} -port_name {WITNESS_CAPTURE_CLK}
+sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:capture_clock_locked} -port_name {WITNESS_CAPTURE_LOCK}
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:interrupt_line} -port_name {WITNESS_IRQ}
 generate_component -component_name {FIC_0_PERIPHERALS} -recursive 0
 sd_update_instance -sd_name ${top_level_name} -instance_name {FIC_0_PERIPHERALS_1}
@@ -91,11 +92,14 @@ sd_instantiate_component -sd_name {CLOCKS_AND_RESETS} -component_name {WITNESS_C
 sd_create_scalar_port -sd_name {CLOCKS_AND_RESETS} -port_name {WITNESS_CAPTURE_CLK} -port_direction {OUT}
 sd_connect_pins -sd_name {CLOCKS_AND_RESETS} -pin_names {"CLKINT_REF_CLK_50MHz:Y" "WITNESS_CCC_0:REF_CLK_0"}
 sd_connect_pins -sd_name {CLOCKS_AND_RESETS} -pin_names {"WITNESS_CCC_0:OUT0_FABCLK_0" "WITNESS_CAPTURE_CLK"}
-sd_mark_pins_unused -sd_name {CLOCKS_AND_RESETS} -pin_names {WITNESS_CCC_0:PLL_LOCK_0}
+# The witness holds both of its domains in reset until this PLL locks.
+sd_create_scalar_port -sd_name {CLOCKS_AND_RESETS} -port_name {WITNESS_CAPTURE_LOCK} -port_direction {OUT}
+sd_connect_pins -sd_name {CLOCKS_AND_RESETS} -pin_names {"WITNESS_CCC_0:PLL_LOCK_0" "WITNESS_CAPTURE_LOCK"}
 save_smartdesign -sd_name {CLOCKS_AND_RESETS}
 generate_component -component_name {CLOCKS_AND_RESETS} -recursive 0
 sd_update_instance -sd_name ${top_level_name} -instance_name {CLOCKS_AND_RESETS}
 
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_CLK"     "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_CLK"}
+sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_LOCK"    "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_LOCK"}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"FIC_0_PERIPHERALS_1:WITNESS_IRQ" "MSS_WRAPPER_1:MSS_INT_F2M_11"}
 generate_component -component_name ${top_level_name} -recursive 0

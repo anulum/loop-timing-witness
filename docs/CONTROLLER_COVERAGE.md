@@ -390,14 +390,14 @@ source-inspected and compiled; invoking that constructor requires actual IIO and
 
 The completed Verilator 5.020 measurement retains every source and elaboration
 identity, omitting only instance hierarchy when taking the union. It covers all
-24 production RTL files: 20 contain measured procedural source-flow points;
+25 production RTL files: 21 contain measured procedural source-flow points;
 `control_plant_witness.sv`, `fabric_control_witness.sv` and `icicle_witness.sv`
 contain continuous assignments and module wiring, and `event_codes_pkg.sv`
 contains constants. Those four files have no procedural counter in this scope.
 
-The completed union has **822 of 830 points executed**, with **8 remaining
+The completed union has **816 of 822 points executed**, with **6 remaining
 raw zero counters accepted as source invariants**. No point is excluded and no
-unexplained zero remains. The eight proofs do not count as runtime hits. The
+unexplained zero remains. The six proofs do not count as runtime hits. The
 union combines actual public-port testbench, native lifecycle and AXI process
 profiles; it does not assert independent completeness for each plant.
 
@@ -409,6 +409,27 @@ Every output of the module is unchanged in every cycle, so every remaining point
 executes under the same stimulus. A re-measurement of the lifecycle,
 configuration and AXI corpora with the previous and the current file gives
 identical counts for every shared statement.
+
+The union was then 822 of 830 with eight invariants, before the plant and the
+reference registered their products one edge ahead (`split_multiplier.sv`). Every
+output of `control_plant_witness` is unchanged in every cycle, so the same resets,
+samples and clamps occur under the same stimulus. `sampled_plant.sv` keeps its five
+elaborations and replaces each one's four points (block, sample branch, reset
+if/else) by five (block, reset if/else, sample if/else). The sample's else arm runs in
+every non-reset cycle without a sample, which each elaboration's previous counts show
+(its reset-else count exceeds its sample count). `fixed_point_math.sv` lost its
+coefficient parameters, so its five elaborations of four points become one, which
+every plant step shares; the clamping instances keep the clamp branches executed, and
+the two invariants of the thermal velocity binding no longer apply. The new
+`split_multiplier.sv` has one elaboration of three points. The union therefore
+becomes 816 of 822 with six invariants. A re-measurement of the lifecycle,
+configuration and AXI corpora with the previous and the current tree (76 and 56 tests
+passed for each) gives identical point sequences and counts for
+`reference_generator.sv` and `control_cycle.sv`; for the one `sampled_plant.sv`
+elaboration that these corpora reach, the same block and sample counts and all five
+new points executed; and all three `split_multiplier.sv` points executed. The
+`fixed_point_math.sv` evaluation counts differ, as expected for a combinational block
+with other inputs; its clamp branches are not reached by these corpora in either tree.
 
 `tests/test_retained_interrupt.py` reads the real `0xa8` IRQ status register
 across three bus/capture clock ratios. It checks an older snapshot acknowledgement
@@ -446,10 +467,11 @@ bindings were executed, including an exact explicit-parameter FIFO run.
 | `run_configuration_registers.sv:111` | A successful public write can only select a listed sequential address; the default cannot follow an accepted write. The configuration proof runs six periods and both plant selectors. |
 | `control_io_registers.sv:83,127` | The nested read case has the same six addresses as its outer case; successful writes select the three sequential addresses. The public decoder assertions support this exact source inspection. |
 | `axi_lite_clock_bridge.sv:147,148` (three points) | The original `ENABLE_LOCAL=0` binding makes `local_valid=0`; the local response branches cannot execute. Enabled-local elaborations remain separate runtime points. |
-| `fixed_point_math.sv:28,29` (two points) | The original thermal velocity-step binding has `A=B=C=0`, so neither negative clamp nor clipping can occur. This applies only to that verified hierarchy and parameter binding. |
 
 `make rtl-invariants` runs 16 positive checks with Yosys: four default wrappers
-and 12 configuration variants. The recorded proof review also checked four
+and 12 configuration variants. The `fixed_point_math` wrapper now checks the plant
+step binding (split multipliers feeding the sum) with zero coefficients; it no longer
+backs a coverage invariant. The recorded proof review also checked four
 intentionally false assertions and retained their concrete counterexamples.
 The accepted argument uses two-state, one-step SAT and exact source/parameter
 binding with unconstrained initial states. It makes no reset-reachability,

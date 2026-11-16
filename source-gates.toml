@@ -141,11 +141,14 @@ paths = [
     "rtl/run_reset_control.sv",
     "rtl/sampled_plant.sv",
     "rtl/shared_event_witness.sv",
+    "rtl/split_multiplier.sv",
     "tests/formal/axi_lite_clock_bridge_proof.sv",
     "tests/formal/control_io_registers_proof.sv",
     "tests/formal/fixed_point_math_proof.sv",
+    "tests/formal/plant_timing_proof.sv",
     "tests/formal/run_configuration_registers_proof.sv",
     "tests/formal/runtime_commit_proof.sv",
+    "tests/formal/split_multiplier_proof.sv",
     "tests/rtl/axi_control_witness_tb.sv",
     "tests/rtl/axi_lite_clock_bridge_tb.sv",
     "tests/rtl/clock_request_bridge_tb.sv",
@@ -167,6 +170,7 @@ paths = [
     "tests/rtl/retained_interrupt_tb.sv",
     "tests/rtl/rtl_counter_saturation.sv",
     "tests/rtl/shared_event_witness_tb.sv",
+    "tests/rtl/split_multiplier_tb.sv",
 ]
 
 [profiles.rust]

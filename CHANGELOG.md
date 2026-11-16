@@ -14,6 +14,17 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The plant and the reference form each 32 × 32 product one capture edge before it is used.
+  `rtl/split_multiplier.sv` registers four 17 × 17 half products, whose shifted sum is exact;
+  the sampling cycle keeps the sum, floor, offset and saturation. Every output of
+  `control_plant_witness` is the same in every cycle. `sampled_plant` takes `actuator_load`,
+  `actuator_command` and `actuator_safe` in place of `actuator`, `control_cycle` reports
+  `actuator_accept` in place of `plant_actuator`, and `fixed_point_math` sums three exact
+  products. Module contract: no samples in consecutive cycles; the reference's mode and
+  amplitude unchanged over the edge before a sample. `make plant-timing-invariants` proves the
+  invariants behind this, with a counterexample to each negation. The RTL source-flow union
+  becomes 816 of 822 points with six invariants: `fixed_point_math` has one elaboration that
+  every plant step shares, so its two thermal-binding invariants no longer apply.
 - `tools/release_provenance.py collect` keeps the complete earlier registry artifacts a
   specification lists and reads PyPI only when none of them is a PyPI file, so a source release
   without a registry upload can be collected. It refuses, in its own words, while a hosted run of

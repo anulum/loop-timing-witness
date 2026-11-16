@@ -419,6 +419,7 @@ _PUBLIC_PORT_SOURCES = (
     "rtl/event_record_capture.sv",
     "rtl/event_record_fifo.sv",
     "rtl/event_witness.sv",
+    "rtl/split_multiplier.sv",
     "rtl/fixed_point_math.sv",
     "rtl/fixed_point_controller.sv",
     "rtl/sampled_plant.sv",

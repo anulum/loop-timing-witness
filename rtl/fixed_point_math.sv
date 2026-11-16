@@ -4,23 +4,16 @@
 // © Code 2020–2026 Miroslav Šotek. All rights reserved.
 // ORCID: 0009-0009-3560-0851
 // Contact: www.anulum.li | protoscience@anulum.li
-// Loop Timing Witness — saturating Q8.24 multiply-add
+// Loop Timing Witness — saturating Q8.24 sum of exact products
 
-// Q8.24: signed 32-bit values, arithmetic floor after a wide multiply-add.
-module fixed_point_math #(
-    parameter logic signed [31:0] A = 32'sd0,
-    parameter logic signed [31:0] B = 32'sd0,
-    parameter logic signed [31:0] C = 32'sd0
-) (
-    input logic signed [31:0] x, y, u,
+// Q8.24: signed 32-bit values; the three exact 64-bit products A*x, B*y and C*u are
+// summed wide, floored by an arithmetic shift and saturated.
+module fixed_point_math (
+    input logic signed [63:0] ax, by, cu,
     output logic signed [31:0] result,
     output logic clipped
 );
-    logic signed [63:0] ax, by, cu;
     logic signed [65:0] total, scaled;
-    assign ax = A * x;
-    assign by = B * y;
-    assign cu = C * u;
     assign total = {{2{ax[63]}}, ax} + {{2{by[63]}}, by} + {{2{cu[63]}}, cu};
     assign scaled = total >>> 24;
     always_comb begin

@@ -32,9 +32,11 @@ module controller_closed_loop_tb #(
         .command_cycle(command_cycle), .command(command), .integral_state(integral_state),
         .derivative_state(derivative_state), .clipped(clipped), .integral_held(integral_held)
     );
+    // The command is set six edges before the next sample; the plant loads it every edge.
     sampled_plant #(.THERMAL(THERMAL)) plant (
-        .clock(clock), .reset_n(reset_n), .sample_tick(sample_tick), .actuator(actuator),
-        .output_value(position), .velocity(velocity), .clipped(plant_clipped)
+        .clock(clock), .reset_n(reset_n), .sample_tick(sample_tick), .actuator_load(1'b1),
+        .actuator_safe(1'b0), .actuator_command(actuator), .output_value(position),
+        .velocity(velocity), .clipped(plant_clipped)
     );
     integer file, cycle;
     string path;

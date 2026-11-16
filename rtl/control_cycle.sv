@@ -19,7 +19,8 @@ module control_cycle #(
     input logic freeze_actuator, safe_interrupt, trip_now, injected,
     output logic finished, sample_tick, deadline, timely_write, sample_valid,
     output logic [31:0] cycle_number, sample_cycle, late_commands,
-    output logic signed [31:0] actuator_value, plant_actuator,
+    output logic signed [31:0] actuator_value,
+    output logic actuator_accept,
     output logic [7:0] event_mask,
     output logic [255:0] event_cycles
 );
@@ -36,7 +37,7 @@ module control_cycle #(
         && !safe_interrupt && !trip_now;
     assign timely_write = accepted_write && !deadline && command_cycle == cycle_number
         && !write_seen;
-    assign plant_actuator = (trip_now || safe_interrupt) ? SAFE_VALUE : actuator_value;
+    assign actuator_accept = accepted_write;
     always_comb begin
         event_mask = '0;
         event_cycles = '0;

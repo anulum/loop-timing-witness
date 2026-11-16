@@ -16,7 +16,8 @@ module rtl_counter_saturation #(parameter int OVERFLOW_COUNTER_BITS = 32) (
  input logic [31:0] event_cycle,
  output logic finished [6], sample_tick [6], deadline [6], timely_write [6], sample_valid [6],
  output logic [31:0] cycle_number [6], sample_cycle [6], late_commands [6],
- output logic signed [31:0] actuator_value [6], plant_actuator [6],
+ output logic signed [31:0] actuator_value [6],
+ output logic actuator_accept [6],
  output logic [7:0] event_mask [6],
  output logic [255:0] event_cycles [6],
  output logic monitor_trip [3], monitor_safe [3],
@@ -34,7 +35,7 @@ module rtl_counter_saturation #(parameter int OVERFLOW_COUNTER_BITS = 32) (
    .freeze_actuator(freeze_actuator),.safe_interrupt(safe_interrupt),.trip_now(trip_now),.injected(injected),
    .finished(finished[i]),.sample_tick(sample_tick[i]),.deadline(deadline[i]),.timely_write(timely_write[i]),.sample_valid(sample_valid[i]),
    .cycle_number(cycle_number[i]),.sample_cycle(sample_cycle[i]),.late_commands(late_commands[i]),
-   .actuator_value(actuator_value[i]),.plant_actuator(plant_actuator[i]),.event_mask(event_mask[i]),.event_cycles(event_cycles[i])
+   .actuator_value(actuator_value[i]),.actuator_accept(actuator_accept[i]),.event_mask(event_mask[i]),.event_cycles(event_cycles[i])
   );
  end
  for(genvar i=0;i<3;i=i+1) begin : monitors

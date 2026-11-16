@@ -8,6 +8,7 @@
 
 // Vendor-neutral fabric entry point. Register/bus adapters are separate work.
 // All command and fault inputs belong to capture_clock and hold through its edge.
+// reference_mode and reference_amplitude must be unchanged over the edge before a sample.
 // enable must stay high until stop_after_cycle closes the requested final cycle.
 module control_plant_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
@@ -56,7 +57,7 @@ module control_plant_witness #(
     logic [255:0] event_cycles;
     logic record_valid, record_ready;
     logic [127:0] record;
-    logic signed [31:0] plant_actuator;
+    logic actuator_accept;
     clock_reset_release capture_reset (
         .clock(capture_clock), .run_reset_n(run_reset_n), .local_reset_n(reset_n)
     );
@@ -74,7 +75,7 @@ module control_plant_witness #(
         .safe_interrupt(safe_interrupt), .trip_now(trip_now), .injected(injected), .finished(finished),
         .sample_tick(sample_tick), .deadline(deadline), .timely_write(timely_write),
         .sample_valid(sample_valid), .cycle_number(cycle_number), .sample_cycle(sample_cycle),
-        .late_commands(late_commands), .actuator_value(actuator_value), .plant_actuator(plant_actuator),
+        .late_commands(late_commands), .actuator_value(actuator_value), .actuator_accept(actuator_accept),
         .event_mask(event_mask), .event_cycles(event_cycles)
     );
     deadline_monitor #(.MISS_LIMIT(MISS_LIMIT)) monitor (
@@ -92,9 +93,11 @@ module control_plant_witness #(
         .freeze_actuator(freeze_actuator), .overload_request(overload_request)
     );
     sampled_plant #(.THERMAL(THERMAL), .A00(A00), .A01(A01), .A10(A10), .A11(A11),
-        .B0(B0), .B1(B1), .THERMAL_A(THERMAL_A), .THERMAL_B(THERMAL_B)) plant (
+        .B0(B0), .B1(B1), .THERMAL_A(THERMAL_A), .THERMAL_B(THERMAL_B),
+        .SAFE_VALUE(SAFE_VALUE)) plant (
         .clock(capture_clock), .reset_n(reset_n), .sample_tick(sample_tick),
-        .actuator(plant_actuator), .output_value(sample_value), .velocity(velocity),
+        .actuator_load(actuator_accept), .actuator_safe(trip_now || safe_interrupt),
+        .actuator_command(command_value), .output_value(sample_value), .velocity(velocity),
         .clipped(plant_clipped)
     );
     reference_generator reference_source (

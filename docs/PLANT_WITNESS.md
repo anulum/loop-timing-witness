@@ -25,7 +25,8 @@ All inputs except `drain_request` are synchronous to `capture_clock`; drain inpu
 belong to `drain_clock`. `run_reset_n` asynchronously asserts the common run reset; each domain
 releases it after two local edges. A reset flushes events, plant state, monitor and injection.
 `capture_active` marks local reset release. `control_cycle.sv` owns the sample period,
-actuator register, command classification and event strobes. Hold configuration stable for the run.
+actuator register, command classification and event strobes. Hold configuration stable for the run,
+and do not change `reference_mode` or `reference_amplitude` in the cycle that raises `enable`.
 
 | Inputs | Contract |
 |---|---|
@@ -33,7 +34,7 @@ actuator register, command classification and event strobes. Hold configuration 
 | `sample_read` | First sample read per cycle produces `SAMPLE_READ`. |
 | `actuator_write`, `command_cycle`, `command_value` | Synchronous actuator command, signed Q8.24. Matching current-cycle writes strictly before its deadline satisfy it. Only the first such write produces `ACT_WRITE`; later timely writes may replace the actuator. |
 | `fault_arm`, `fault_kind`, `fault_cycle`, `fault_periods` | Arm one injection before its target sample. Kinds 0/1/2/3 are drop/delay/freeze/overload request. Positive duration required, target cannot be past or beyond the final cycle. |
-| `reference_mode`, `reference_amplitude`, `reference_offset`, `ramp_increment`, `phase_increment` | Step/ramp/sine selection 0/1/2; signed Q8.24 values, modulo-16 phase increment. Mode 3 uses zero amplitude plus offset. |
+| `reference_mode`, `reference_amplitude`, `reference_offset`, `ramp_increment`, `phase_increment` | Step/ramp/sine selection 0/1/2; signed Q8.24 values, modulo-16 phase increment. Mode 3 uses zero amplitude plus offset. Mode and amplitude are read one capture edge before each sample. |
 | `drain_request` | Request next record; inspect data only with `drain_valid`. |
 
 | Outputs | Contract |
@@ -193,6 +194,23 @@ Signed Q8.24 means raw integer divided by 2^24, range [-128, 128−2^-24]. A pro
 64-bit; three products accumulate in signed 66-bit precision. Arithmetic right shift by 24
 rounds toward negative infinity. Saturation occurs once at the state/output boundary. Both
 mechanical states update from their old values together; intermediate states are not rounded.
+
+Each 32 × 32 product is formed one capture edge before it is used. `split_multiplier.sv` splits
+both operands into a signed high and an unsigned low 16-bit half and registers the four half
+products (17 × 17 bits, one math block each); their shifted sum is exact. The plant multiplies
+its state and its held actuator every edge; `control_cycle.sv` reports an accepted command with
+`actuator_accept`, and the plant loads it in that cycle, so a command accepted in the cycle
+before a sample reaches that sample. A trip or the safe latch applies `C * SAFE_VALUE` in the
+sampling cycle itself. The reference multiplies its waveform by the amplitude every edge, also
+in reset; the shift, offset, saturation and clip flag stay in the sampling cycle. The sum,
+floor and saturation remain in `fixed_point_math.sv`. Every output is the same in every cycle as
+with same-cycle products, because consecutive samples are at least two capture cycles apart
+(`PERIOD_TICKS ≥ 2`), the state, phase and ramp change only at samples, the configuration
+registers accept mode and amplitude only while the run is disabled, and the safe latch holds
+until reset. `make plant-timing-invariants` proves these three invariants and the product
+identity at reduced width, each with a counterexample to its negation. Module ports carry the
+same rule: `sampled_plant` and `reference_generator` must never sample in consecutive cycles,
+and `reference_generator` must see mode and amplitude unchanged over the edge before a sample.
 
 The mechanical model is `m*x'' + c*x' + k*x = u`, with state `[x, v]` and continuous matrix
 `Ac = [[0, 1], [-k/m, -c/m]]`, input vector `Bc = [0, 1/m]`. Zero-order hold gives
@@ -468,7 +486,9 @@ UIO qualification remain outstanding.
 ### Fabric and host report integration
 
 ```bash
-.venv/bin/pytest -q tests/test_control_plant_witness.py tests/test_control_faults.py
+.venv/bin/pytest -q tests/test_control_plant_witness.py tests/test_control_faults.py \
+  tests/test_plant_timing.py
+make plant-timing-invariants
 yosys -s rtl/check_control_equivalence.ys
 verilator --lint-only --Wall --top-module control_plant_witness rtl/*.sv
 ```

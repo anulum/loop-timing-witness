@@ -335,7 +335,8 @@ rtl-counter-saturation:
 
 RTL_INVARIANT_DIRECTORY ?= build/rtl-invariants
 RTL_INVARIANT_SOURCES := rtl/run_configuration_registers.sv rtl/control_io_registers.sv \
-	rtl/axi_lite_clock_bridge.sv rtl/clock_request_bridge.sv rtl/clock_reset_release.sv rtl/fixed_point_math.sv
+	rtl/axi_lite_clock_bridge.sv rtl/clock_request_bridge.sv rtl/clock_reset_release.sv rtl/split_multiplier.sv \
+	rtl/fixed_point_math.sv
 
 NATIVE_INVARIANT_DIRECTORY ?= build/native-invariants
 NATIVE_INVARIANT_SOURCES := rtl/run_configuration_registers.sv rtl/control_io_registers.sv \
@@ -355,6 +356,28 @@ native-runtime-invariants:
 		-dump_json $(NATIVE_INVARIANT_DIRECTORY)/$${module}-counterexample.json" \
 		> "$(NATIVE_INVARIANT_DIRECTORY)/$${module}-negative.log" 2>&1 || exit $$?; \
 		grep -Fq 'SAT proof finished - model found: FAIL!' "$(NATIVE_INVARIANT_DIRECTORY)/$${module}-negative.log" || exit 1; \
+	done
+
+PLANT_TIMING_DIRECTORY ?= build/plant-timing-invariants
+PLANT_TIMING_SOURCES := rtl/control_cycle.sv rtl/deadline_monitor.sv rtl/run_configuration_registers.sv \
+	rtl/split_multiplier.sv tests/formal/plant_timing_proof.sv tests/formal/split_multiplier_proof.sv
+
+# The invariants behind the one-edge plant and reference products; each negative
+# control must yield a counterexample.
+.PHONY: plant-timing-invariants
+plant-timing-invariants:
+	mkdir -p "$(PLANT_TIMING_DIRECTORY)"
+	for module in plant_spacing plant_actuator plant_configuration split_multiplier; do \
+		yosys -Q -T -p "read_verilog -formal -sv $(PLANT_TIMING_SOURCES); \
+		prep -top $${module}_proof; write_json $(PLANT_TIMING_DIRECTORY)/$${module}.json; \
+		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
+		> "$(PLANT_TIMING_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
+		yosys -Q -T -p "read_verilog -formal -sv $(PLANT_TIMING_SOURCES); \
+		chparam -set NEGATIVE_CONTROL 1 $${module}_proof; prep -top $${module}_proof; \
+		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -timeout $(SAT_TIMEOUT) -show-ports \
+		-dump_json $(PLANT_TIMING_DIRECTORY)/$${module}-counterexample.json" \
+		> "$(PLANT_TIMING_DIRECTORY)/$${module}-negative.log" 2>&1 || exit $$?; \
+		grep -Fq 'SAT proof finished - model found: FAIL!' "$(PLANT_TIMING_DIRECTORY)/$${module}-negative.log" || exit 1; \
 	done
 
 .PHONY: rtl-invariants

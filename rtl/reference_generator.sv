@@ -8,6 +8,9 @@
 
 // mode: 0 step, 1 ramp, 2 sine; unsupported modes report zero amplitude.
 // First sample uses phase zero / ramp zero, then advances once per sample.
+// waveform * amplitude is registered one edge ahead: mode and amplitude must be
+// unchanged over the edge before a sample_tick cycle, and sample_tick must never be
+// high in two consecutive cycles (phase and ramp change only at samples).
 module reference_generator (
     input logic clock, reset_n, sample_tick,
     input logic [1:0] mode,
@@ -47,10 +50,14 @@ module reference_generator (
             default: waveform = '0;
         endcase
     end
-    // Dynamic amplitude uses the same wide, floor-and-saturate convention.
+    // Dynamic amplitude uses the same wide, floor-and-saturate convention. The product
+    // follows its operands every edge, also in reset, so it has no reset value.
     logic signed [63:0] product;
     logic signed [64:0] product_scaled, shifted;
-    assign product = waveform * amplitude;
+    split_multiplier waveform_product (
+        .clock(clock), .reset_n(1'b1), .multiplicand(waveform),
+        .multiplier(amplitude), .product(product)
+    );
     assign product_scaled = $signed({product[63], product}) >>> 24;
     assign shifted = product_scaled + $signed({{33{offset[31]}}, offset});
     always_comb begin

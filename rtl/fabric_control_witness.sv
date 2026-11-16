@@ -8,6 +8,7 @@
 
 // Vendor-neutral fabric entry point. Register/bus adapters are separate work.
 // All command and fault inputs belong to capture_clock and hold through its edge.
+// reference_mode and reference_amplitude must be unchanged over the edge before a sample.
 // enable must stay high until stop_after_cycle closes the requested final cycle.
 module fabric_control_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,

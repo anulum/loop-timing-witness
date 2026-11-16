@@ -93,7 +93,8 @@ module runtime_finished_proof #(parameter bit NEGATIVE_CONTROL = 0) (
 );
     wire finished, sample_tick, deadline, timely_write, sample_valid;
     wire [31:0] cycle_number, sample_cycle, late_commands;
-    wire signed [31:0] actuator_value, plant_actuator;
+    wire signed [31:0] actuator_value;
+    wire actuator_accept;
     wire [7:0] event_mask;
     wire [255:0] event_cycles;
     logic observed = 0;

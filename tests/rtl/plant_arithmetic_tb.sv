@@ -10,7 +10,11 @@
 module plant_arithmetic_tb;
     logic clock = 0, reset_n = 0, sample_tick = 0;
     logic signed [31:0] x = 0, y = 0, u = 0, sum;
-    logic clipped;
+    logic clipped, actuator_safe = 0;
+    // The arithmetic module sums exact products; unit coefficients make them x, y, u * 2^24.
+    wire signed [63:0] ax = $signed({{32{x[31]}}, x}) <<< 24;
+    wire signed [63:0] by = $signed({{32{y[31]}}, y}) <<< 24;
+    wire signed [63:0] cu = $signed({{32{u[31]}}, u}) <<< 24;
     logic [1:0] mode = 0;
     logic signed [31:0] amplitude = 32'sd16777216, offset = 0, ramp_increment = 32'sd16777216;
     logic [3:0] phase_increment = 1;
@@ -19,14 +23,14 @@ module plant_arithmetic_tb;
     logic signed [31:0] saturated_output, saturated_velocity;
     logic plant_clip;
     sampled_plant #(.A00(32'sd16777216), .A01(32'sd0), .A10(32'sd0),
-        .A11(32'sd16777216), .B0(32'sd16777216), .B1(32'sd16777216)) clipping_plant (
-        .clock(clock), .reset_n(reset_n), .sample_tick(sample_tick), .actuator(u),
-        .output_value(saturated_output), .velocity(saturated_velocity), .clipped(plant_clip)
+        .A11(32'sd16777216), .B0(32'sd16777216), .B1(32'sd16777216),
+        .SAFE_VALUE(32'sd5)) clipping_plant (
+        .clock(clock), .reset_n(reset_n), .sample_tick(sample_tick), .actuator_load(1'b1),
+        .actuator_safe(actuator_safe), .actuator_command(u), .output_value(saturated_output),
+        .velocity(saturated_velocity), .clipped(plant_clip)
     );
     integer index;
-    fixed_point_math #(.A(32'sd16777216), .B(32'sd16777216), .C(32'sd16777216)) arithmetic (
-        .x(x), .y(y), .u(u), .result(sum), .clipped(clipped)
-    );
+    fixed_point_math arithmetic (.ax(ax), .by(by), .cu(cu), .result(sum), .clipped(clipped));
     reference_generator reference_source (
         .clock(clock), .reset_n(reset_n), .sample_tick(sample_tick), .mode(mode),
         .amplitude(amplitude), .offset(offset), .ramp_increment(ramp_increment),
@@ -38,6 +42,13 @@ module plant_arithmetic_tb;
             @(negedge clock); sample_tick = 1;
             @(negedge clock); sample_tick = 0;
             $display("REFERENCE mode=%0d value=%0d clipped=%0d", mode, reference_value, reference_clipped);
+        end
+    endtask
+    // A sampling cycle without the report line, for the timing-contract checks.
+    task automatic quiet_sample;
+        begin
+            @(negedge clock); sample_tick = 1;
+            @(negedge clock); sample_tick = 0;
         end
     endtask
     task automatic restart;
@@ -89,6 +100,25 @@ module plant_arithmetic_tb;
         if (reference_value != -32'sd3210182) $fatal(1, "negative fractional scaling");
         restart();
         if (reference_value != 0 || reference_clipped) $fatal(1, "reference reset failed");
+        // Timing contract: operands are registered one edge before a sample. Changes in
+        // the sampling cycle itself apply one sample later, as documented.
+        mode = 0; amplitude = 32'sd16777216; offset = 0; u = 0;
+        restart();
+        @(negedge clock); sample_tick = 1; amplitude = 32'sd33554432; u = 32'sd7;
+        @(negedge clock); sample_tick = 0;
+        if (reference_value != 32'sd16777216) $fatal(1, "reference used a sampling-cycle amplitude");
+        if (saturated_output != 0 || saturated_velocity != 0)
+            $fatal(1, "plant applied a sampling-cycle command");
+        quiet_sample();
+        if (reference_value != 32'sd33554432) $fatal(1, "reference missed the held amplitude");
+        if (saturated_output != 7 || saturated_velocity != 7) $fatal(1, "plant missed the held command");
+        // A safe cycle applies SAFE_VALUE instead of the loaded command.
+        actuator_safe = 1;
+        quiet_sample();
+        actuator_safe = 0;
+        if (saturated_output != 12 || saturated_velocity != 12) $fatal(1, "plant missed SAFE_VALUE");
+        quiet_sample();
+        if (saturated_output != 19 || saturated_velocity != 19) $fatal(1, "plant lost the loaded command");
         $display("ARITHMETIC_PASS");
         $finish;
     end

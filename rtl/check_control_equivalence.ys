@@ -10,8 +10,8 @@
 # The integrated wrapper is exercised by the public-port RTL-to-host tests.
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
-hierarchy -top fixed_point_math -chparam A 16777216 -chparam B 32'hff000000 -chparam C 16777216
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top fixed_point_math
 proc
 flatten
 memory_map
@@ -32,7 +32,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top sampled_plant
 proc
 flatten
@@ -54,7 +54,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top sampled_plant -chparam THERMAL 1
 proc
 flatten
@@ -76,7 +76,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top reference_generator
 proc
 flatten
@@ -98,7 +98,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top deadline_monitor
 proc
 flatten
@@ -120,7 +120,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top fault_injector
 proc
 flatten
@@ -142,7 +142,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top control_cycle
 proc
 flatten
@@ -164,7 +164,7 @@ equiv_induct -seq 8
 equiv_status -assert
 
 design -reset
-read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+read_verilog -sv rtl/clock_reset_release.sv rtl/event_record_fifo.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv rtl/sampled_plant.sv rtl/reference_generator.sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv rtl/control_cycle.sv rtl/control_plant_witness.sv
 hierarchy -top control_event_capture -chparam GROUP_ADDRESS_BITS 1
 proc
 flatten

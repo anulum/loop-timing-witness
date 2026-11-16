@@ -390,12 +390,12 @@ source-inspected and compiled; invoking that constructor requires actual IIO and
 
 The completed Verilator 5.020 measurement retains every source and elaboration
 identity, omitting only instance hierarchy when taking the union. It covers all
-25 production RTL files: 21 contain measured procedural source-flow points;
-`control_plant_witness.sv`, `fabric_control_witness.sv` and `icicle_witness.sv`
-contain continuous assignments and module wiring, and `event_codes_pkg.sv`
-contains constants. Those four files have no procedural counter in this scope.
+25 production RTL files: 22 contain measured procedural source-flow points;
+`fabric_control_witness.sv` and `icicle_witness.sv` contain continuous
+assignments and module wiring, and `event_codes_pkg.sv` contains constants.
+Those three files have no procedural counter in this scope.
 
-The completed union has **818 of 824 points executed**, with **6 remaining
+The completed union has **826 of 832 points executed**, with **6 remaining
 raw zero counters accepted as source invariants**. No point is excluded and no
 unexplained zero remains. The six proofs do not count as runtime hits. The
 union combines actual public-port testbench, native lifecycle and AXI process
@@ -436,12 +436,28 @@ source-flow point: the same corpora on the final tree give the elaboration they 
 the same statements, and the union stays 816 of 822.
 
 `clock_request_bridge.sv` then gained a capture-clock register for the held request,
-loaded while `capture_valid` is low. Its one elaboration in the union (request 45 bits,
-response 34 bits) keeps its twelve branch points and two block points and gains the
-if/else pair of that load: 14 branch points, all executed. Every port behaves as before
-while `capture_valid` is high, and the lifecycle, configuration and AXI corpora on the
-previous and the current tree give every shared point of every other file the same
-executed status. The union therefore becomes 818 of 824 with the same six invariants.
+loaded while `capture_valid` is low. The union holds two elaborations of it, the
+production binding (request 45 bits, response 34 bits) and the testbench default (65 and
+256 bits, from `clock_request_bridge_tb`); the retained source inventory lists 28 points,
+14 each. Each keeps its twelve branch points and two block points and gains the if/else
+pair of that load. Both pairs executed: the production one in the lifecycle,
+configuration and AXI corpora, the default one in a `clock_request_bridge_tb` run. Every
+port behaves as before while `capture_valid` is high, and those corpora on the previous
+and the current tree give every shared point of every other file the same executed
+status. The union therefore becomes 820 of 826 with the same six invariants. (An earlier
+revision of this paragraph counted only the production elaboration and gave 818 of 824.)
+
+`control_plant_witness.sv` and `axi_control_witness.sv` then registered capture
+quiescence and the reset permission before their bus synchronisers. The permission joins
+the existing capture-domain block of `axi_control_witness.sv`, whose points stay three per
+elaboration. `control_plant_witness.sv` gains its first procedural block: a block point
+and a reset if/else. Elaborating every testbench case of the union records with Verilator
+names two elaborations of it, `control_plant_witness__pi1` (from `axi_lite_clock_bridge_tb`
+and `clock_request_bridge_tb`) and `control_plant_witness__pi2` (from the other testbenches
+and the native corpora). All six points executed: `__pi2` in the lifecycle, configuration
+and AXI corpora, `__pi1` in a `clock_request_bridge_tb` run. The same corpora on the
+previous and the current tree give every shared point of every other file the same executed
+status. The union therefore becomes 826 of 832 with the same six invariants.
 
 `tests/test_retained_interrupt.py` reads the real `0xa8` IRQ status register
 across three bus/capture clock ratios. It checks an older snapshot acknowledgement

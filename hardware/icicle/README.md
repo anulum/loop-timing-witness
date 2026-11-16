@@ -126,51 +126,50 @@ board.
 ## Recorded Libero run
 
 On 2026-11-16, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T (FCVG484 package,
-STD speed grade, production timing data) on the tree derived at commit `bb5c673`, whose
+STD speed grade, production timing data) on the tree derived at commit `0fea6ea`, whose
 `witness_derivation.json` has SHA-256
-`ac6490268c64ae69a37b100016d3c4c95e7f51979002040479156d3eba4932e9`. Synthesis,
+`1be0dd1e55531a404c3c76adbda41ff43d9538bf96a68faef1c5ea66d0ebb129`. Synthesis,
 place-and-route and timing verification ran in the slow_lv_lt, fast_hv_lt and slow_lv_ht
-corners. The run exited 0 after 31 minutes and reports that the timing constraints are met.
+corners. The run exited 0 after 28 minutes and reports that the timing constraints are met.
 
 | Clock | Period | Worst setup slack | Worst hold slack |
 | --- | --- | --- | --- |
-| FIC0 bus clock, reference CCC output 0 | 8 ns | +2.870 ns | +0.022 ns |
-| FIC1 clock, reference CCC output 1 | 8 ns | +2.605 ns | +0.067 ns |
-| FIC3 clock, reference CCC output 3 | 20 ns | +2.995 ns | +0.061 ns |
-| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +2.360 ns | +0.070 ns |
+| FIC0 bus clock, reference CCC output 0 | 8 ns | +3.071 ns | +0.040 ns |
+| FIC1 clock, reference CCC output 1 | 8 ns | +2.508 ns | +0.068 ns |
+| FIC3 clock, reference CCC output 3 | 20 ns | +3.110 ns | +0.017 ns |
+| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +2.152 ns | +0.069 ns |
 
-The witness clock's worst setup path lies inside the capture clock, from a plant velocity
-product to its register. No path from the bus clock into the capture clock is among the 1000
-worst setup paths, which end at +3.071 ns; the FIC0 figure is a crossing in the other
-direction, into a bus-clock synchroniser, inside its 8 ns bound. The run at `f4bd98f` missed
-the capture clock by 2.419 ns in the plant model and the reference generator, where a
+The witness clock's worst setup path lies inside the capture clock, from the cycle state to a
+plant velocity product. No path between the bus clock and the capture clock, in either
+direction, is among the 1000 worst setup paths, which end at +3.138 ns. The run at `f4bd98f`
+missed the capture clock by 2.419 ns in the plant model and the reference generator, where a
 32×32-bit product took most of the cycle. The plant and the reference now register four half
 products one edge ahead, and the capture queue selects its records from a register copy of
-the head ([plant witness](../../docs/PLANT_WITNESS.md#fixed-point-plant)). The run of the
-previous commit, which added the capture lock reset, missed the 8 ns crossing bound by
-0.051 ns, from the bus-held request through the capture domain's register decode; the
-request bridge now registers the held request in the capture clock before any decode.
-Timing constraint coverage is 99.97 %.
+the head ([plant witness](../../docs/PLANT_WITNESS.md#fixed-point-plant)). A later run missed
+the 8 ns crossing bound by 0.051 ns, from the bus-held request through the capture domain's
+register decode; the request bridge now registers the held request in the capture clock
+before any decode. Timing constraint coverage is 99.97 %.
 
-The synthesis CDC check lists 12 witness crossings. Two are safe and two are FIFO RAM reads
-that it does not analyse. It flags eight: the held request and the held response, each now a
-single register-to-register crossing whose enable the check does not trace to the handshake;
-the request and acknowledge toggles and the two Gray pointers, as divergent synchroniser
-inputs; and two synchronisers fed through logic, from the capture reset release and from the
-run-finished flag. Its flags are structural; the timing of each crossing is bounded by the
-derived constraints above, and the report meets them. The whole design uses 27 491 4LUT
-(10.8 %), 20 684 DFF (8.1 %), 104 uSRAM, 127 LSRAM and 20 math blocks.
+The synthesis CDC check lists 12 witness crossings, none fed through logic. Three are safe:
+the bank-ready and reset-permission registers and the interrupt generation's Gray code. Two
+are FIFO RAM reads that it does not analyse. It flags seven: the held request and the held
+response, each a single register-to-register crossing whose enable the check does not trace
+to the handshake; and, as divergent synchroniser inputs, the request and acknowledge toggles,
+the two FIFO Gray pointers and the capture quiescence register. Its flags are structural; the
+timing of each crossing is bounded by the derived constraints above, and the report meets
+them. The whole design uses 27 502 4LUT (10.8 %), 20 700 DFF (8.1 %), 104 uSRAM, 127 LSRAM
+and 20 math blocks.
 
 The reports stay with the run; their SHA-256 values are:
 
 | Report | SHA-256 |
 | --- | --- |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `756f378e2e088eca2fac6264c0ef4d87b383185d2ccf985d412a457580cbe729` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `e5329dc325725fc76dcca616dc59bc2a328f90c63590bbb8b4718ca889424bd5` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `a51b89223ce7c270149c35109db8bfa487a9810600c6e44fc225f2e86a2971bc` |
-| `designer/…/max_report.json` | `479143f40dfca1ebb99c530a77d92c65ecdc85329200eb8af9f3e7b7b94f89d2` |
-| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `87a2376d259b63e302290bf681367467af92210ebc71b299aa570c91d63838ee` |
-| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `c4785b49b34abef1996efaf9c3a962c0c5a02c96e34d23b8ad952a01d3371e33` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_max_timing_multi_corner.xml` | `2ee7435f6a164c7f3f0b7ec517b93d68584e9d247eaa1f110939a60dd398ccc6` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_min_timing_multi_corner.xml` | `6e22d11f2e9c066f8ce8668c90afd19d10f10cae217b52d93e4db79eb864ed76` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_timing_constraints_coverage.xml` | `11043d1786af566f259a812b170298ce775c6b115187e29154cb20082e8f26d7` |
+| `designer/…/max_report.json` | `d43e0b72b52a16424eb7c0e4e611db6b68c96b58c3e530ad2f06e61d1561d7fa` |
+| `synthesis/BASE_DESIGN_9C34320F91E8E8A144_cdc.csv` | `dc98f763f79b40fb9a9f5c48dce57d39166177825e607b442bf87ec037124dff` |
+| `designer/…/BASE_DESIGN_9C34320F91E8E8A144_compile_netlist_resources.rpt` | `01045e7ee7692bf38541eaa6782ee0d642b0a6e68576ae40caed24f450798633` |
 
 A vendor timing report is not board evidence: no bitstream was programmed and no board was
 measured.

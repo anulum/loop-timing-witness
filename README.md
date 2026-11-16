@@ -200,15 +200,15 @@ loop-timing-witness-analyze path/to/manifest.json --output-dir report
 ```
 
 The standalone `no_std` Rust controller is published as
-[`witness-controller`](https://crates.io/crates/witness-controller); its library is unchanged since
-0.1.0, so the registry keeps version 0.1.0:
+[`witness-controller`](https://crates.io/crates/witness-controller). Version 0.3.0 follows the
+project version; its library is unchanged since 0.1.0:
 
 ```toml
 [dependencies]
-witness-controller = "=0.1.0"
+witness-controller = "=0.3.0"
 ```
 
-Its [versioned API reference](https://docs.rs/witness-controller/0.1.0/witness_controller/)
+Its [versioned API reference](https://docs.rs/witness-controller/0.3.0/witness_controller/)
 covers the PID state, coefficient validation and LQR step. Native execution and
 board adapters remain source tools; the AMP kernel is not a registry crate.
 
@@ -293,8 +293,9 @@ includes its source ZIP and provenance manifest.
 The [0.3.0 source archive](https://doi.org/10.5281/zenodo.24263979) is the next version of that
 record and binds the tagged 0.3.0 release commit; the
 [0.3.0 GitHub release](https://github.com/anulum/loop-timing-witness/releases/tag/v0.3.0)
-includes its source ZIP and provenance manifest. The registries keep the 0.2.0 analysis package
-and the 0.1.0 controller crate.
+includes its source ZIP and provenance manifest. PyPI keeps the 0.2.0 analysis package. The
+0.3.0 controller crate was published to crates.io on 2026-11-16 from commit `7ed2ce5`, whose
+crate sources equal those of the 0.3.0 tag.
 Cite the software version and the commit you inspected. Software version numbers
 do not establish physical board qualification or measured platform performance.
 

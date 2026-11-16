@@ -15,9 +15,9 @@ Loop Timing Witness — security policy
 | State | Supported |
 |---|---|
 | `main` at its current commit | yes — current development |
-| `0.3.0` | yes — source release; the analysis package stays 0.2.0 on PyPI |
+| `0.3.0` | yes — source release and the controller crate on crates.io; the analysis package stays 0.2.0 on PyPI |
 | `0.2.0` | yes — published analysis package |
-| `0.1.0` | yes — standalone controller crate and the earlier analysis package |
+| `0.1.0` | yes — the earlier controller crate and analysis package |
 
 The measurement-domain maturity remains `architecture_only`. Executable surfaces include
 validation and host analysis tools, C/Rust/RTL controllers, the simulated plants and event

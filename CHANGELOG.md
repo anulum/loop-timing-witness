@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `witness-controller` 0.3.0 is on crates.io, published on 2026-11-16 by `publish-rust.yml` from
+  `7ed2ce5` (crate checksum `9c9e0edc3fd35ff6db27ada3a95adda0c58e59b2abbb2a6a04230f473cc7b2bd`, equal
+  to the verified crate the workflow retained). Its sources equal those of the 0.3.0 tag, and its
+  library is unchanged since 0.1.0.
 - The Rust crate publishing workflow packages the verified crate after its dry-run publish. Under
   Cargo 1.100 a dry-run publish leaves the crate only under `target/package/tmp-crate`, so the
   workflow's digest and retained artifact found no file and nothing was published; the added

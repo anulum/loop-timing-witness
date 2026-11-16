@@ -78,7 +78,7 @@ Software implementation does not qualify a board capability or advance measureme
 ## Planned — in implementation order, without dates
 
 Software publication includes the Python analysis package at version 0.2.0 and the standalone
-Rust controller crate at version 0.1.0, plus the public Python, C/C++ and Rust API references.
+Rust controller crate at version 0.3.0, plus the public Python, C/C++ and Rust API references.
 Source releases are recorded in [CHANGELOG.md](CHANGELOG.md); they do not alter those immutable
 registry artifacts. The versioned source archives
 ([0.1.0](https://doi.org/10.5281/zenodo.23092361), [0.2.0](https://doi.org/10.5281/zenodo.24222960),

@@ -102,7 +102,12 @@ def test_real_startup_refusal(native_run: Path, tmp_path: Path, violation: str) 
         tmp_path / "readiness.strace",
     ) as trace:
         worker, descriptor = _actual_worker(trace)
-        signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
+        # The delayed scheduler query keeps the worker from reporting readiness itself. A
+        # group stop holds it longer for the cases the launcher refuses later; the eof case
+        # kills it at once instead, because a kill that follows a group stop can reach strace
+        # during its PTRACE_LISTEN, which then fails with EIO and ends the trace.
+        if violation != "eof":
+            signal.pidfd_send_signal(descriptor, signal.SIGSTOP)
         payload, expected = _readiness_frame(violation, worker)
         with Path(f"/proc/{worker}/fd/1").open("wb", buffering=0) as pipe:
             assert pipe.write(payload) == len(payload)
@@ -166,7 +171,7 @@ def _readiness_frame(violation: str, worker: int) -> tuple[bytes, str]:
     violation
         Pipe framing or field-type requirement to violate.
     worker
-        Stopped worker process ID.
+        Actual worker process ID.
 
     Returns
     -------

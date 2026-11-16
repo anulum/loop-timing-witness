@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — capture levels enter bus synchronisers from registers
+
+# A bus-clock synchroniser that samples a capture-clock level must read a register output.
+# Logic between them could pulse between capture edges, and the synchroniser could keep the pulse.
+read_verilog -sv rtl/event_codes_pkg.sv rtl/clock_reset_release.sv rtl/clock_request_bridge.sv
+read_verilog -sv rtl/axi_lite_clock_bridge.sv rtl/event_record_window.sv rtl/control_io_registers.sv
+read_verilog -sv rtl/run_configuration_registers.sv rtl/axi_control_witness.sv rtl/run_reset_control.sv
+read_verilog -sv rtl/retained_interrupt.sv rtl/event_record_capture.sv rtl/event_record_fifo.sv
+read_verilog -sv rtl/event_witness.sv rtl/split_multiplier.sv rtl/fixed_point_math.sv
+read_verilog -sv rtl/fixed_point_controller.sv rtl/sampled_plant.sv rtl/reference_generator.sv
+read_verilog -sv rtl/deadline_monitor.sv rtl/fault_injector.sv rtl/control_event_capture.sv
+read_verilog -sv rtl/control_cycle.sv rtl/control_plant_witness.sv
+hierarchy -top axi_control_witness
+proc
+flatten
+opt_clean
+check -assert
+# Capture quiescence into the event window's run-drained synchroniser.
+select -assert-count 1 w:window.capture_quiescent %ci2 t:* %i
+select -assert-count 1 w:window.capture_quiescent %ci2 t:$adff %i
+# Bank readiness and reset permission into the run reset control's synchronisers.
+select -assert-count 1 w:reset_control.capture_reset_ready %ci2 t:* %i
+select -assert-count 1 w:reset_control.capture_reset_ready %ci2 t:$adff %i
+select -assert-count 1 w:reset_control.capture_reset_allowed %ci2 t:* %i
+select -assert-count 1 w:reset_control.capture_reset_allowed %ci2 t:$adff %i

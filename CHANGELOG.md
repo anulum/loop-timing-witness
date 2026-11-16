@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `capture_quiescent` (in `control_plant_witness`) and the run-bank reset permission (in
+  `axi_control_witness`) are capture-clock registers, one capture edge behind their terms, before
+  their bus-clock synchronisers. At a run's end the event strobes clear on the edge a record
+  appears; the combinational quiescence could pulse high there and let `run_drained` report a
+  drained run before its last records. `rtl/check_synchroniser_inputs.ys` requires register
+  outputs at those synchroniser inputs.
 - `clock_request_bridge` registers the held request in the capture domain: `capture_data` follows
   the bus-held payload while `capture_valid` is low and holds it while high, so it loads on the
   edge that completes the request toggle's synchronisation. Every port keeps its cycle-by-cycle

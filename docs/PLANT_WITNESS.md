@@ -43,7 +43,7 @@ and do not change `reference_mode` or `reference_amplitude` in the cycle that ra
 | `actuator_value` | Latest accepted command; defined safe value wins on monitor trip and remains until reset. |
 | `sample_interrupt`, `delayed_interrupt`, `delayed_cycle` | Edge strobes; delayed origin survives coincident normal IRQ delivery. |
 | `safe_interrupt` | Latched trip indication, not a one-clock pulse. |
-| `run_finished`, `capture_quiescent` | Capture-domain final-deadline completion and completion with no remaining event group or event strobe. The latter does not imply the downstream FIFO or its receiver has drained. Both are also exposed by the fabric controller wrapper. |
+| `run_finished`, `capture_quiescent` | Capture-domain final-deadline completion and completion with no remaining event group or event strobe. The latter is a register one capture edge behind its terms, so a bus-domain synchroniser never samples a combinational hazard of them; it does not imply the downstream FIFO or its receiver has drained. Both are also exposed by the fabric controller wrapper. |
 | `fault_ready`, `freeze_actuator`, `overload_request` | Injection availability and synchronous action levels. Readiness falls after trip or run completion; invalid schedule data is refused. |
 | `total_misses`, `consecutive_misses`, `late_commands` | Saturating 32-bit capture-domain counters; not coherent processor snapshots. |
 | `plant_clipped`, `reference_clipped` | Saturation at the last sample; retain/sample these with `sample_valid`. These are flags, not cumulative clipping counters. |
@@ -156,6 +156,8 @@ an active run's deadlines cannot be erased by software reset. Invalid data, part
 and repeated release while already enabled return `SLVERR` without changing state.
 
 Read bits 0–3 for bank enabled, capture ready, bus ready and reset assertion permitted.
+The permission is a capture-clock register, one capture edge behind the run flags, before
+its bus synchroniser.
 Poll bits 0–2 until all three are set before configuring a fresh run. Capture readiness is
 registered after local reset release and then synchronised into the bus domain; a stopped
 capture clock cannot report ready. Holding bank reset makes run-register accesses invalid,

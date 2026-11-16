@@ -10,6 +10,9 @@
 // All command and fault inputs belong to capture_clock and hold through its edge.
 // reference_mode and reference_amplitude must be unchanged over the edge before a sample.
 // enable must stay high until stop_after_cycle closes the requested final cycle.
+// capture_quiescent is a register, one capture edge behind its terms, so the
+// synchroniser that reads it in another clock domain never sees a combinational
+// hazard: at a run's end the event strobes clear on the edge a record appears.
 module control_plant_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter logic [31:0] MISS_LIMIT = 32'd3,
@@ -66,7 +69,10 @@ module control_plant_witness #(
     );
     assign capture_active = reset_n;
     assign run_finished = finished;
-    assign capture_quiescent = reset_n && finished && !record_valid && event_mask == 0;
+    always_ff @(posedge capture_clock or negedge reset_n) begin
+        if (!reset_n) capture_quiescent <= 1'b0;
+        else capture_quiescent <= finished && !record_valid && event_mask == 0;
+    end
     assign fault_ready = injector_ready && !safe_interrupt && !trip_now && !finished;
     control_cycle #(.PERIOD_TICKS(PERIOD_TICKS), .SAFE_VALUE(SAFE_VALUE)) cycle_registers (
         .capture_clock(capture_clock), .reset_n(reset_n), .enable(enable),

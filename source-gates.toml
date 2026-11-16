@@ -207,6 +207,7 @@ roots = []
 paths = [
     "rtl/check_control_equivalence.ys",
     "rtl/check_controller_equivalence.ys",
+    "rtl/check_synchroniser_inputs.ys",
     "rtl/check_witness_equivalence.ys",
     "rtl/check_witness_memory.ys",
 ]

@@ -262,7 +262,13 @@ The board-facing `icicle_witness` top is also checked against every production R
 ```bash
 verilator --lint-only --Wall --top-module icicle_witness rtl/*.sv
 yosys -Q -T -q -p 'read_verilog -sv rtl/*.sv; hierarchy -check -top icicle_witness; proc; opt; check -assert'
+yosys -Q -T -q -s rtl/check_synchroniser_inputs.ys
 ```
+
+The last command requires that capture quiescence, bank readiness and the reset permission
+reach their bus-clock synchronisers straight from capture-clock registers;
+`tests/test_synchroniser_inputs.py` runs it and shows that it refuses the earlier
+combinational quiescence and permission.
 
 These checks establish source elaboration and obvious structural consistency. They do not
 replace the derived Libero project, device-specific DRC, physical CDC review or timing reports.

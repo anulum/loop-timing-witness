@@ -72,7 +72,7 @@ module axi_control_witness #(
     logic bank_reset_n, transport_reset_n;
     logic [31:0] window_read_data, reset_read_data;
     logic [1:0] window_response, reset_response;
-    logic capture_bank_ready;
+    logic capture_bank_ready, capture_reset_allowed;
     logic irq_selected;
     logic [31:0] irq_read_data;
     logic [1:0] irq_response;
@@ -85,9 +85,16 @@ module axi_control_witness #(
     clock_reset_release bus_reset (
         .clock(bus_clock), .run_reset_n(bank_reset_n), .local_reset_n(bus_reset_n)
     );
+    // Both cross into the bus domain through synchronisers, so each is a register:
+    // the reset permission would otherwise glitch when both run flags clear together.
     always_ff @(posedge capture_clock or negedge capture_reset_n) begin
-        if (!capture_reset_n) capture_bank_ready <= 0;
-        else capture_bank_ready <= 1;
+        if (!capture_reset_n) begin
+            capture_bank_ready <= 0;
+            capture_reset_allowed <= 1;
+        end else begin
+            capture_bank_ready <= 1;
+            capture_reset_allowed <= !run_enabled || run_finished;
+        end
     end
     assign irq_selected = local_address >= 8'h9c && local_address <= 8'ha8;
     assign local_read_data = local_address == 8'h98 ? reset_read_data :
@@ -108,7 +115,7 @@ module axi_control_witness #(
         .local_write_data(local_write_data), .local_write_strobes(local_write_strobes),
         .local_read_data(reset_read_data), .local_response(reset_response),
         .capture_reset_ready(capture_bank_ready), .bus_reset_ready(bus_reset_n),
-        .capture_reset_allowed(!run_enabled || run_finished), .bank_reset_n(bank_reset_n)
+        .capture_reset_allowed(capture_reset_allowed), .bank_reset_n(bank_reset_n)
     );
     axi_lite_clock_bridge #(.ENABLE_LOCAL(1)) transport (
         .bus_clock(bus_clock), .capture_clock(capture_clock), .run_reset_n(run_reset_n),

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 FLAGGED = {
     "0.1.0": ("controllers/rust/tests/controller_api.rs", 15),
     "0.2.0": ("analysis/rust/src/control_api.rs", 22),
+    "0.3.0": ("analysis/rust/src/control_api.rs", 22),
 }
 
 

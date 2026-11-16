@@ -66,3 +66,34 @@ regexes = [
     '''(?m)^\ \ \ \ "tests/test_power_configuration_api\.py":\ "876b75330837d9a9a3161833fa1d522e707639f447c6005a30903a65ace6ff65",$''',
     '''(?m)^\ \ \ \ "tests/test_source_release_secrets\.py":\ "b3e66a5b649981b9a04720b6f2c693821b1cc585001479684ea0a1e6d34916ee",$''',
 ]
+
+[[allowlists]]
+description = "Verified source-file SHA-256 lines in the immutable 0.3.0 release fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)tests/data/source-release-v0\.3\.0-provenance\.json$''']
+regexTarget = "line"
+regexes = [
+    '''(?m)^\ \ \ \ "analysis/rust/src/control_api\.rs":\ "bd0d793af0f12e5a9a5ab12914f4f3e4ad25656be14877b2fd73b8334c6aebb7",$''',
+    '''(?m)^\ \ \ \ "analysis/rust/src/public_api\.rs":\ "62d647a8d92111e9de13baa92285b7a2caf22876c7bf51bb60a09b858c34421f",$''',
+    '''(?m)^\ \ \ \ "analysis/rust/tests/public_api_consumer\.rs":\ "40a1d9f3fd19f1d8fd20057fc45b9ed8e89a6aba35871a6baf94ed73e52459a9",$''',
+    '''(?m)^\ \ \ \ "controllers/rust/tests/controller_api\.rs":\ "fd9d482b1d7458349ba96849616fb137e27995f1edc8fca41c894d334a46a949",$''',
+    '''(?m)^\ \ \ \ "src/loop_timing_witness/neural_run_api\.py":\ "33e878a87a05832a4d057aa8586ad7b758dbbc4773101ccaef3243e2e5fa8c16",$''',
+    '''(?m)^\ \ \ \ "tests/native/configuration_api\.h":\ "b4e2f8d67c9fbe04d1c82c9cce29261df2db68b7fbbfa865464c32bf2dcf6757",$''',
+    '''(?m)^\ \ \ \ "tests/native/controller_api_test\.c":\ "6a9ad32744472de5069635771168612be2ba9c13d6b05e5a0db4f1ceff0bd759",$''',
+    '''(?m)^\ \ \ \ "tests/native/metadata_api\.h":\ "b51eb4a4b8bd615fa1d82c1779fb9412b57bcf57e39a23f95daea7d4e8335811",$''',
+    '''(?m)^\ \ \ \ "tests/native/policy_api_test\.cpp":\ "23b5e1284130ddadb0a35b0145172df358945c5130820a30c63de5ee2ef1848b",$''',
+    '''(?m)^\ \ \ \ "tests/native/power_configuration_api_test\.cpp":\ "ab8b78566a35e1d530e8d6f9d91aabbf54a8c99eb9703857d730c5441cc6d55e",$''',
+    '''(?m)^\ \ \ \ "tests/test_amp_logger_api\.py":\ "6e1cbb96eca2bb128110527c6419b474ead500c1fa232b14fa3bda4f468a7dee",$''',
+    '''(?m)^\ \ \ \ "tests/test_device_tree_tokens\.py":\ "37b712d60fdfedba64f8048a463898d26f0b1bc0916afbedea44d2d6fedbd3cf",$''',
+    '''(?m)^\ \ \ \ "tests/test_legacy_analysis_api\.py":\ "515e9ae3a31dac731e786fd11c711426065f12e67ec7debe411b238ae892a5a8",$''',
+    '''(?m)^\ \ \ \ "tests/test_linux_load_api\.py":\ "be5e032ffde9f5caf7ca434ff8077bbab41235c2edba71720c38125844e38390",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_configuration_api\.py":\ "31975109b976b4b581fcf9b80034c8c4402ee24672e0bd1b3c4286df4cc77474",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_lifecycle_api\.py":\ "b348e27ef7320e974d0ef72997d45805c1c0ded669825f9098b1ead5b8e1db44",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_metadata_api\.py":\ "abfc891821776689e0d3ccf4b57c4e219f3bbe1cbbb0bd19f96e910d850cf5e7",$''',
+    '''(?m)^\ \ \ \ "tests/test_native_policy_api\.py":\ "d1f65c93910ecf8375aeb7a620574b29dc9a6b7d89f8b87b1367ebd220d595ec",$''',
+    '''(?m)^\ \ \ \ "tests/test_neural_run_api\.py":\ "635d9ba7c481d903676798d8828869252f34393bbe293fabeb9c2b01af6fe7b4",$''',
+    '''(?m)^\ \ \ \ "tests/test_package_api\.py":\ "d73941d0a85423fc8d047f4f61302a328d4a61ab3fe1b27b727a1e636b0bc005",$''',
+    '''(?m)^\ \ \ \ "tests/test_power_configuration_api\.py":\ "876b75330837d9a9a3161833fa1d522e707639f447c6005a30903a65ace6ff65",$''',
+    '''(?m)^\ \ \ \ "tests/test_source_release_secrets\.py":\ "4bd98e13ae489cdea431f934980ed2eff49ae9a686a379e7ea784f285b869ab0",$''',
+]

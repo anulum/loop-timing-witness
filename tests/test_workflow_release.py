@@ -128,4 +128,8 @@ def test_signature_dispatch_registry_is_the_committed_workflow_input() -> None:
     path = REPOSITORY_ROOT / ".github/workflows/source-release-signatures.yml"
     trigger = load_workflow(path.read_text())["on"]
     assert trigger == {"workflow_dispatch": {"inputs": {"release": DISPATCH_INPUT}}}
-    assert trigger["workflow_dispatch"]["inputs"]["release"]["options"] == ["0.1.0", "0.2.0"]
+    assert trigger["workflow_dispatch"]["inputs"]["release"]["options"] == [
+        "0.1.0",
+        "0.2.0",
+        "0.3.0",
+    ]

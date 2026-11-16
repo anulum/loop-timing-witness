@@ -66,7 +66,7 @@ def specification(record: dict[str, Any], version: str) -> dict[str, Any]:
     return {"schema": release_provenance.SPEC_SCHEMA, "version": version, **declared}
 
 
-@pytest.mark.parametrize("version", ["0.1.0", "0.2.0"])
+@pytest.mark.parametrize("version", ["0.1.0", "0.2.0", "0.3.0"])
 def test_published_records_rebuild_from_their_commits(tmp_path: Path, version: str) -> None:
     """Rebuild every computed member and the ZIP of both published releases.
 

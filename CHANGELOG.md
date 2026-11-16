@@ -18,6 +18,8 @@ Loop Timing Witness — changelog
   specification lists and reads PyPI only when none of them is a PyPI file, so a source release
   without a registry upload can be collected. It refuses, in its own words, while a hosted run of
   the commit is unfinished; it raised a `TypeError` before.
+- Source release signatures cover 0.3.0: the registry, the workflow's release choice, the byte-exact
+  provenance fixture and the exact public digest lines the secret scanner recognises in it.
 
 ## [0.3.0] - 2026-11-16
 

@@ -11,14 +11,16 @@
 from __future__ import annotations
 
 import os
+import select
 import signal
 import subprocess
 import sys
+import time
 from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
-from process_lifetime_support import finish_process, retain_process
+from process_lifetime_support import closed_control_pipe, finish_process, retain_process
 
 from loop_timing_witness.host_profile import scaled
 
@@ -114,3 +116,24 @@ print('actual EMFILE child cleanup verified')
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == "actual EMFILE child cleanup verified\n"
+
+
+def test_closed_control_pipe_is_at_end_of_file_for_a_late_owner() -> None:
+    """Give a child end of file at its first check while its owner is still paused."""
+    check = (
+        "import os, select, sys; ready = select.select([sys.stdin], [], [], 0)[0]; "
+        "print(ready == [sys.stdin], ready and os.read(0, 1) == b'')"
+    )
+    with (
+        closed_control_pipe() as control,
+        subprocess.Popen(
+            [sys.executable, "-c", check], stdin=control, stdout=subprocess.PIPE
+        ) as child,
+    ):
+        time.sleep(0.2)
+        output, _ = child.communicate(timeout=scaled(10))
+        assert child.returncode == 0
+        assert select.select([control], [], [], 0)[0] == [control]
+    assert output == b"True True\n"
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(control)

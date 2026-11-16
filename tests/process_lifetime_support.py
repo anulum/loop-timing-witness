@@ -12,13 +12,35 @@ from __future__ import annotations
 
 import os
 import signal
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from typing import TYPE_CHECKING
 
 from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
     import subprocess
+    from collections.abc import Iterator
+
+
+@contextmanager
+def closed_control_pipe() -> Iterator[int]:
+    """Yield the read end of a pipe whose only write end is already closed.
+
+    A child started with this descriptor as standard input finds end of file at
+    its first check, however long the owner takes after starting it. Closing the
+    write end through ``communicate`` instead races the child's first work chunk.
+
+    Yields
+    ------
+    int
+        Read end of the pipe, closed again when the context ends.
+    """
+    read_end, write_end = os.pipe()
+    os.close(write_end)
+    try:
+        yield read_end
+    finally:
+        os.close(read_end)
 
 
 def stop_pidfd(descriptor: int) -> None:

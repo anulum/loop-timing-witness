@@ -20,6 +20,7 @@ from threading import Event
 import pytest
 from linux_load_channels import worker_channels
 from linux_load_readiness import MAX_READINESS_BYTES, read_ready_pid
+from process_lifetime_support import closed_control_pipe
 
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled
@@ -40,20 +41,21 @@ def actual_ready_frame(tmp_path_factory: pytest.TempPathFactory) -> tuple[bytes,
         Actual complete stdout line and its producer's process ID.
     """
     workspace = tmp_path_factory.mktemp("readiness_producer")
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(REPOSITORY_ROOT / "tools/linux_load_worker.py"),
-            "idle",
-            str(min(os.sched_getaffinity(0))),
-            "4096",
-            str(workspace),
-        ],
-        input=b"",
-        capture_output=True,
-        check=False,
-        timeout=scaled(10),
-    )
+    with closed_control_pipe() as control:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(REPOSITORY_ROOT / "tools/linux_load_worker.py"),
+                "idle",
+                str(min(os.sched_getaffinity(0))),
+                "4096",
+                str(workspace),
+            ],
+            stdin=control,
+            capture_output=True,
+            check=False,
+            timeout=scaled(10),
+        )
     assert result.returncode == 0, result.stderr
     receipt = json.loads((workspace / "worker.json").read_bytes())
     assert receipt["counters"]["chunks"] == 1

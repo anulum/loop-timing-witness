@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 from linux_load_config import PROFILES
-from process_lifetime_support import finish_process, retain_process
+from process_lifetime_support import closed_control_pipe, finish_process, retain_process
 
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled
@@ -54,13 +54,14 @@ def test_actual_eof_chunk(tmp_path: Path, profile: str, size: int) -> None:
     affinity = os.sched_getaffinity(0)
     scheduler = os.sched_getscheduler(0)
     cpu = min(affinity)
-    result = subprocess.run(
-        _worker_command(profile, cpu, size, tmp_path),
-        input=b"",
-        capture_output=True,
-        check=False,
-        timeout=scaled(10),
-    )
+    with closed_control_pipe() as control:
+        result = subprocess.run(
+            _worker_command(profile, cpu, size, tmp_path),
+            stdin=control,
+            capture_output=True,
+            check=False,
+            timeout=scaled(10),
+        )
     assert result.returncode == 0, result.stderr
     ready = json.loads(result.stdout)
     receipt = json.loads((tmp_path / "worker.json").read_bytes())
@@ -130,22 +131,23 @@ def test_actual_worker_api(tmp_path: Path) -> None:
     tmp_path
         Exclusive actual worker receipt destination.
     """
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "from linux_load_worker import main; raise SystemExit(main())",
-            "idle",
-            str(min(os.sched_getaffinity(0))),
-            "4096",
-            str(tmp_path),
-        ],
-        cwd=REPOSITORY_ROOT / "tools",
-        input=b"",
-        capture_output=True,
-        check=False,
-        timeout=scaled(10),
-    )
+    with closed_control_pipe() as control:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from linux_load_worker import main; raise SystemExit(main())",
+                "idle",
+                str(min(os.sched_getaffinity(0))),
+                "4096",
+                str(tmp_path),
+            ],
+            cwd=REPOSITORY_ROOT / "tools",
+            stdin=control,
+            capture_output=True,
+            check=False,
+            timeout=scaled(10),
+        )
     assert result.returncode == 0, result.stderr
     ready = json.loads(result.stdout)
     receipt = json.loads((tmp_path / "worker.json").read_bytes())

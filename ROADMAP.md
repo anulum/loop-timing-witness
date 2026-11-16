@@ -98,7 +98,12 @@ operation, privileged scheduling and board timing require their actual resources
    project for MPFS250T and a [recorded timing run](hardware/icicle/README.md#recorded-libero-run);
    its static timing meets every clock there, including the 100 MHz witness capture clock, with
    the witness clock-domain crossings constrained. Board timing belongs to item 3.
-2. Bare-metal controller on a dedicated application core.
+2. Bare-metal controller on a dedicated application core. The C and Rust controller firmware
+   runs on a dedicated hart in [ISA simulation](docs/AMP_SIMULATION.md) against the production
+   RTL, and the [Linux AMP collector](docs/AMP_LINUX.md) builds. The deployment depends on the
+   board: its silicon selects the device trees, and the HSS payload, OpenSBI, PMP isolation and
+   shared-memory coherence must be shown on its boot artefacts.
+   Blocked: no physical board is available.
 3. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.
    Blocked: no physical board is available; simulation does not close this item.

@@ -6,7 +6,9 @@
       "outcome": 0,
       "condition": "sched_getcpu() < 0",
       "reason": "glibc answers sched_getcpu from the rseq area or the vDSO without a system call, so no kernel filter can make it fail; the check stays for libc builds that use the getcpu system call",
-      "lines": [56]
+      "lines": [
+        56
+      ]
     },
     {
       "file": "runtime/linux/run_policy.h",
@@ -14,7 +16,9 @@
       "outcome": 0,
       "condition": "CPU_ALLOC returned no mask for the inherited affinity",
       "reason": "one malloc of at most 128 KiB; failing that single allocation needs an allocator interposer, which the real-surface test policy excludes",
-      "lines": [62]
+      "lines": [
+        62
+      ]
     },
     {
       "file": "runtime/linux/run_policy.h",
@@ -38,7 +42,9 @@
       "outcome": 0,
       "condition": "CPU_ALLOC returned no mask for the requested CPU",
       "reason": "one malloc of a few bytes; failing that single allocation needs an allocator interposer, which the real-surface test policy excludes",
-      "lines": [96]
+      "lines": [
+        96
+      ]
     },
     {
       "file": "runtime/linux/run_policy.h",
@@ -54,6 +60,56 @@
       "outcome": 3,
       "condition": "one CPU reads back, but not the requested one",
       "reason": "the request lies inside the inherited affinity (checked above); the kernel applies it, refuses it with an errno, or, when the call is skipped, leaves the inherited set, which then holds the requested CPU or more than one CPU",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 132,
+      "outcome": 2,
+      "condition": "fprintf of one affinity CPU < 0",
+      "reason": "the metadata stream is buffered: this fprintf only fills the buffer unless the receipt crosses the 4 KiB stream buffer inside it, and the receipts are smaller, so the write and its failure happen at the fclose whose status write_run_metadata checks",
+      "lines": [
+        133
+      ]
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 134,
+      "outcome": 1,
+      "condition": "fprintf of the closing bracket < 0",
+      "reason": "the metadata stream is buffered: this fprintf only fills the buffer unless the receipt crosses the 4 KiB stream buffer inside it, and the receipts are smaller, so the write and its failure happen at the fclose whose status write_run_metadata checks",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 134,
+      "outcome": 2,
+      "condition": "an earlier host-policy fprintf failed",
+      "reason": "failed becomes true only through the buffered fprintf calls above, which do not fail before fclose for the reason given there",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_configuration.cpp",
+      "line": 101,
+      "outcome": 8,
+      "condition": "!input.eof() after a failed read of trailing text",
+      "reason": "the configuration is a regular file: a read after the last field either finds more text or reaches end of file; only a read error without EOF, which a regular file does not produce here, takes this outcome",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_output.h",
+      "line": 35,
+      "outcome": 1,
+      "condition": "fputs of the 158-byte trace header < 0",
+      "reason": "fputs only fills the stream buffer; the write and its failure happen at the fflush on the next line, which the header-limit scenarios fail",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_output.h",
+      "line": 70,
+      "outcome": 2,
+      "condition": "tracking output closed while the event output is open",
+      "reason": "both outputs are opened in the constructor and closed only together in finish(), which refuses a second call on the event output first",
       "lines": []
     }
   ]

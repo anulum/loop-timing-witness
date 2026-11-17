@@ -162,6 +162,7 @@ def lifecycle_program(
         "event_limit",
         "sample_limit",
         "finish_limit",
+        "event_finish_limit",
         "final_drain",
         "final_drain_no_hooks",
         "commit_boundary",
@@ -196,7 +197,12 @@ def test_actual_lifecycle_api(lifecycle_program: Path, tmp_path: Path, scenario:
             .replace("overload 0 3", "overload 0 256")
             .replace("1000 1100000", "1000 0")
         )
-    elif scenario in {"final_drain", "final_drain_no_hooks", "final_drain_timeout"}:
+    elif scenario in {
+        "final_drain",
+        "final_drain_no_hooks",
+        "final_drain_timeout",
+        "event_finish_limit",
+    }:
         text = (
             configuration("pid", "overload")
             .replace("pid 32", "pid 8")
@@ -262,6 +268,9 @@ def assert_retained_outputs(scenario: str, events: Path, raw: Path) -> None:
         assert 0 < raw.stat().st_size <= 512
     elif scenario == "finish_limit":
         assert events.stat().st_size == 64
+        assert raw.stat().st_size == 192
+    elif scenario == "event_finish_limit":
+        assert events.stat().st_size == 192
         assert raw.stat().st_size == 192
     else:
         assert not events.exists()

@@ -195,26 +195,52 @@ controller-coverage:
 	$(VENV)/python tools/c_coverage_gate.py --sources controllers/c \
 		"$(CONTROLLER_COVERAGE_DIRECTORY)"/reports/*.json
 
-# Every line and every reachable branch of the Linux run policy must run. Scenarios have the
-# kernel answer system calls through seccomp in the test's own child; the priority readback
-# scenario needs RLIMIT_RTPRIO of at least 1, which the hosted step raises with prlimit.
-# runtime/coverage-review.json lists, with reasons, the outcomes no real surface reaches.
-# C++ exception edges are reported, not required.
-RUNTIME_POLICY_COVERAGE_DIRECTORY ?= build/runtime-policy-coverage
+# Every line and every reachable branch outcome of the judged host C++ runtime sources must run.
+# The native test corpora build with counted runtime sources: GCC counters on files under runtime/
+# only, -O2 for the Verilator model and OPT_FAST=-O0 for the user sources, which the generated
+# makefile compiles after CFLAGS. The scheduling scenarios have the kernel answer system calls
+# through seccomp in the test's own child; the priority readback needs RLIMIT_RTPRIO of at least
+# 1, which the hosted step raises with prlimit. runtime/coverage-review.json lists, with reasons,
+# the outcomes no real surface reaches. C++ exception edges are reported, not required.
+RUNTIME_COVERAGE_DIRECTORY ?= build/runtime-coverage
+RUNTIME_COVERAGE_CFLAGS := -std=c++17 -Wall -Wextra -Werror -O2 --coverage -fprofile-abs-path \
+	-fprofile-filter-files=$(CURDIR)/runtime/
+RUNTIME_COVERAGE_SOURCES := runtime/exclusive_output.h runtime/run_configuration.cpp \
+	runtime/run_options.h runtime/run_output.h runtime/linux/run_policy.h
+RUNTIME_COVERAGE_TESTS := tests/test_axi_simulator.py tests/test_axi_transport_progress.py \
+	tests/test_host_load_receipt.py tests/test_legacy_analysis_api.py tests/test_linux_load.py \
+	tests/test_linux_load_api.py tests/test_linux_load_readiness_launch.py \
+	tests/test_linux_load_trace.py tests/test_native_completion.py \
+	tests/test_native_configuration.py tests/test_native_configuration_api.py \
+	tests/test_native_configuration_mutation.py tests/test_native_file_digest.py \
+	tests/test_native_final_drain.py tests/test_native_hash_mutation.py \
+	tests/test_native_late_command.py tests/test_native_lifecycle_api.py \
+	tests/test_native_metadata_api.py tests/test_native_policy_api.py tests/test_native_run.py \
+	tests/test_native_run_metadata.py tests/test_native_run_output.py \
+	tests/test_native_scheduling.py tests/test_native_simulation_manifest.py \
+	tests/test_native_tracking.py tests/test_power_configuration_api.py tests/test_power_journal.py
 
-.PHONY: runtime-policy-coverage
-runtime-policy-coverage:
-	@test "$$(ulimit -r)" != 0 || { echo "runtime-policy-coverage needs RLIMIT_RTPRIO of at least 1" >&2; exit 2; }
-	rm -rf "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)"
-	mkdir -p "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)/reports"
-	WITNESS_POLICY_COVERAGE_DIRECTORY="$(abspath $(RUNTIME_POLICY_COVERAGE_DIRECTORY))" $(VENV)/pytest \
-		-q -p no:cacheprovider --no-cov tests/test_native_policy_api.py::test_actual_policy_api
-	for note in "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)"/*.gcno; do \
+.PHONY: runtime-coverage
+runtime-coverage:
+	@test "$$(ulimit -r)" != 0 || { echo "runtime-coverage needs RLIMIT_RTPRIO of at least 1" >&2; exit 2; }
+	rm -rf "$(RUNTIME_COVERAGE_DIRECTORY)"
+	mkdir -p "$(RUNTIME_COVERAGE_DIRECTORY)/reports"
+	env MAKEFLAGS=OPT_FAST=-O0 \
+		RUN_SIMULATION_CFLAGS="$(RUNTIME_COVERAGE_CFLAGS)" RUN_SIMULATION_LDFLAGS=--coverage \
+		AXI_SIMULATOR_CFLAGS="$(RUNTIME_COVERAGE_CFLAGS)" AXI_SIMULATOR_LDFLAGS=--coverage \
+		WITNESS_NATIVE_BUILD_ROOT="$(abspath $(RUNTIME_COVERAGE_DIRECTORY))/native" \
+		WITNESS_LIFECYCLE_BUILD_ROOT="$(abspath $(RUNTIME_COVERAGE_DIRECTORY))/lifecycle" \
+		WITNESS_AXI_COVERAGE_BUILD_ROOT="$(abspath $(RUNTIME_COVERAGE_DIRECTORY))/axi" \
+		WITNESS_POWER_COVERAGE_DIRECTORY="$(abspath $(RUNTIME_COVERAGE_DIRECTORY))/power" \
+		WITNESS_POLICY_COVERAGE_DIRECTORY="$(abspath $(RUNTIME_COVERAGE_DIRECTORY))/policy" \
+		$(VENV)/pytest -q -p no:cacheprovider --no-cov $(RUNTIME_COVERAGE_TESTS)
+	find "$(RUNTIME_COVERAGE_DIRECTORY)" -name '*.gcno' | sort | while read -r note; do \
 		gcov --json-format --stdout --branch-probabilities "$$note" \
-			> "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)/reports/$$(basename "$$note" .gcno).json" || exit $$?; \
+			> "$(RUNTIME_COVERAGE_DIRECTORY)/reports/$$(printf '%s' "$${note%.gcno}" | tr / _).json" \
+			|| exit $$?; \
 	done
-	$(VENV)/python tools/c_coverage_gate.py --source runtime/linux/run_policy.h \
-		--reviewed runtime/coverage-review.json "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)"/reports/*.json
+	$(VENV)/python tools/c_coverage_gate.py $(addprefix --source ,$(RUNTIME_COVERAGE_SOURCES)) \
+		--reviewed runtime/coverage-review.json "$(RUNTIME_COVERAGE_DIRECTORY)"/reports/*.json
 
 # Every line and branch of the Rust controller crate must run too: its own tests, the
 # streaming program under the shared parity and refusal tests, and one benchmark pass, all
@@ -264,6 +290,7 @@ RUN_SIMULATION_LDFLAGS ?=
 SIMULATION_DIRECTORY := build/axi_simulator_$(SIMULATION_THERMAL)
 AXI_SIMULATOR_CFLAGS ?= -std=c++17 -Wall -Wextra -Werror
 AXI_SIMULATOR_VERILATOR_FLAGS ?=
+AXI_SIMULATOR_LDFLAGS ?=
 RTL_SOURCES := rtl/event_codes_pkg.sv $(filter-out rtl/event_codes_pkg.sv,$(wildcard rtl/*.sv))
 .PHONY: axi-simulator
 axi-simulator:
@@ -272,7 +299,7 @@ axi-simulator:
 		$(AXI_SIMULATOR_VERILATOR_FLAGS) \
 		-GPERIOD_TICKS=32768 -GADDRESS_BITS=8 -GGROUP_ADDRESS_BITS=4 \
 		"-GTHERMAL=1'b$(SIMULATION_THERMAL)" --Mdir $(SIMULATION_DIRECTORY) \
-		-CFLAGS "$(AXI_SIMULATOR_CFLAGS)" \
+		-CFLAGS "$(AXI_SIMULATOR_CFLAGS)" $(if $(AXI_SIMULATOR_LDFLAGS),-LDFLAGS "$(AXI_SIMULATOR_LDFLAGS)") \
 		$(RTL_SOURCES) $(abspath runtime/rtl/axi_simulator.cpp) -o axi_simulator
 
 LINUX_CC ?= gcc

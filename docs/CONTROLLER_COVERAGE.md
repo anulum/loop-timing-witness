@@ -13,8 +13,8 @@ Loop Timing Witness — native controller coverage reproduction
 Every line and branch of the C controller kernel and its streaming CLI, and of every source
 of the Rust controller crate, is required on every hosted test run; see
 [C controller gate](#c-controller-gate) and [Rust controller gate](#rust-controller-gate).
-The Linux run policy header is gated the same way, apart from reviewed unreachable outcomes;
-see [Linux run policy gate](#linux-run-policy-gate).
+The host C++ runtime sources are gated the same way, apart from reviewed unreachable outcomes;
+see [Host C++ runtime gate](#host-c-runtime-gate).
 [`controller_coverage.json`](../benchmarks/controller_coverage.json) binds source hashes
 to the GCC and LLVM reports of an earlier recorded snapshot, with 100% executable line
 and branch coverage of both controller kernels and their streaming CLIs. Its C source
@@ -96,6 +96,38 @@ benchmark's step uses `expect` for its constant, valid coefficients, as the stre
 does after validation, so no unreachable error path remains in the crate.
 
 The manual procedure below reproduces the recorded snapshot of both languages.
+
+## Host C++ runtime gate
+
+`make runtime-coverage`, run in the hosted shard that runs the controller tests, judges the
+host C++ runtime over every native test corpus at once: the run command line, the lifecycle,
+configuration and metadata API corpora, the AXI process, the power configuration corpus and the
+scheduling corpus described under
+[native run controller instrumentation](#native-run-controller-instrumentation). Each builds
+with GCC counters on the files under `runtime/` only; `MAKEFLAGS=OPT_FAST=-O0` reaches
+Verilator's sub-make, which compiles the runtime sources unoptimised (the generated makefile
+puts `OPT_FAST` after `CFLAGS` for them) while the model keeps the `-O2` of `CFLAGS`. The
+target exports every report and runs [`c_coverage_gate.py`](../tools/c_coverage_gate.py) on
+the judged sources:
+`runtime/exclusive_output.h`, `runtime/run_configuration.cpp`, `runtime/run_options.h`,
+`runtime/run_output.h` and `runtime/linux/run_policy.h`. More runtime sources join the list as
+their scenarios land. Every executable line and every branch outcome must have run, with two
+exceptions:
+
+- [`runtime/coverage-review.json`](../runtime/coverage-review.json) lists the outcomes no real
+  surface reaches, each with its condition and reason, and the lines only they reach: for
+  example a negative `sched_getcpu` (glibc answers it from the rseq area or the vDSO, without a
+  system call), a failed `CPU_ALLOC`, the bounds checks inside the glibc mask macros, a FIFO
+  priority below the Linux minimum (validation refuses it first), buffered `fprintf` and `fputs`
+  calls whose writes and failures happen at the following flush or close, and states the code
+  never creates. A listed outcome or line that runs fails the gate, so the list cannot go stale.
+- GCC adds an exception edge at every C++ call that may throw; the gate reports how many ran
+  and does not require them.
+
+The policy priority readback scenario runs a FIFO priority 1 thread, so the target refuses to
+start without `RLIMIT_RTPRIO` of at least 1; the hosted step raises it with `sudo prlimit`.
+Without that permission the scenario verifies the kernel's refusal of FIFO instead, and the two
+outcomes it would cover stay untaken.
 
 ## Compile instrumented public interfaces
 
@@ -343,8 +375,6 @@ replay the observed command through both public kernels, and frozen captures fro
 reach the importer/report path with eight observed deadlines and one partial tracking sample.
 This exercises final-drain execution; it does not fabricate a timeout or qualify host-wall latency.
 
-## Linux run policy gate
-
 The Linux scheduling API corpus builds a separate native executable with strict warnings,
 uses actual unprivileged `SCHED_BATCH` in its own children, and checks unchanged real policy
 after invalid public requests. It also exercises preserving inherited policy and applying
@@ -353,28 +383,6 @@ the kernel's failures, a scenario installs a seccomp filter in its own child: th
 answers one system call with an errno (`*_denied`), or skips it and reports success
 (`*_ignored`), which reaches the read refusals and the readback checks of
 [`run_policy.h`](../runtime/linux/run_policy.h). No libc function is replaced.
-
-`make runtime-policy-coverage`, run in the hosted shard that runs the controller tests, builds
-the corpus unoptimised with GCC counters (`WITNESS_POLICY_COVERAGE_DIRECTORY`), runs every
-scenario, exports the report and runs [`c_coverage_gate.py`](../tools/c_coverage_gate.py) on
-`runtime/linux/run_policy.h`. Every executable line and every branch outcome must have run,
-with two exceptions:
-
-- [`runtime/coverage-review.json`](../runtime/coverage-review.json) lists the outcomes no real
-  surface reaches, each with its condition and reason, and the lines only they reach: a
-  negative `sched_getcpu` (glibc answers it from the rseq area or the vDSO, without a system
-  call), a failed `CPU_ALLOC`, the bounds checks inside the glibc mask macros, a FIFO priority
-  below the Linux minimum (validation refuses it first) and a one-CPU readback that differs
-  from the request. A listed outcome or line that runs fails the gate, so the list cannot go
-  stale.
-- GCC adds an exception edge at every C++ call that may throw; the gate reports how many ran
-  and does not require them.
-
-The priority readback scenario runs a FIFO priority 1 thread, so the target refuses to start
-without `RLIMIT_RTPRIO` of at least 1; the hosted step raises it with `sudo prlimit`. Without
-that permission the scenario verifies the kernel's refusal of FIFO instead, and the two
-outcomes it would cover stay untaken. This gate does not judge `run_options.h`: the policy
-corpus uses only its validation, and its parsing functions run only in the run command line.
 
 `tests/test_native_scheduling.py` asks the kernel, through an independent
 child, whether SCHED_FIFO at priority 1 is permitted, and then requires the native run to apply

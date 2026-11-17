@@ -204,7 +204,11 @@ void closed_output(witness::RunOutput &output, const char *events, const char *t
 /** Preserve real EFBIG failures while restoring the cap before profiling completion. */
 void output_limit(witness::Simulation &device, const witness::RunConfiguration &configuration,
                   const std::string &scenario, const char *events, const char *tracking) {
-    const rlim_t maximum = scenario == "header_limit" ? 32 : scenario == "finish_limit" ? 192 : 512;
+    // finish_limit and event_finish_limit keep the 158-byte trace header and fail only the final
+    // flushes: the first fails the trace alone, the second the 320-byte event file as well.
+    const rlim_t maximum = scenario == "header_limit"                                       ? 32
+                           : scenario == "finish_limit" || scenario == "event_finish_limit" ? 192
+                                                                                            : 512;
     const char *message = scenario == "header_limit"   ? "cannot write tracking header"
                           : scenario == "event_limit"  ? "cannot write event record"
                           : scenario == "sample_limit" ? "cannot write tracking sample"
@@ -286,7 +290,8 @@ int main(int argc, char **argv) {
                scenario == "invalid_pid" || scenario == "invalid_lqr") {
         sample_refusal(device, configuration, scenario, argv[3], argv[4]);
     } else if (scenario == "header_limit" || scenario == "event_limit" ||
-               scenario == "sample_limit" || scenario == "finish_limit") {
+               scenario == "sample_limit" || scenario == "finish_limit" ||
+               scenario == "event_finish_limit") {
         output_limit(device, configuration, scenario, argv[3], argv[4]);
     } else if (scenario == "hooks" || scenario == "closed" || scenario == "final_drain" ||
                scenario == "final_drain_no_hooks") {

@@ -423,11 +423,13 @@ and every branch of every `.c` file in `controllers/c` to have run. It then runs
 `make controller-rust-coverage`: the Rust crate's tests, one benchmark pass and the same
 stream and refusal tests against an LLVM branch-instrumented Rust program, and
 `tools/rust_coverage_gate.py --crate controllers/rust` requires every line and branch of
-every source in `controllers/rust/src`. The same shard runs `make runtime-policy-coverage`: the
-Linux scheduling corpus, whose scenarios have the kernel answer system calls through seccomp,
-must execute every line and branch outcome of `runtime/linux/run_policy.h` except the outcomes
-listed with reasons in `runtime/coverage-review.json`; C++ exception edges are reported, not
-required.
+every source in `controllers/rust/src`. The same shard runs `make runtime-coverage`: every
+native test corpus, built with counters on the runtime sources only, must execute every line and
+branch outcome of the judged host C++ runtime sources (`exclusive_output.h`,
+`run_configuration.cpp`, `run_options.h`, `run_output.h`, `linux/run_policy.h`) except the
+outcomes listed with reasons in `runtime/coverage-review.json`; C++ exception edges are
+reported, not required. The scheduling scenarios have the kernel answer system calls through
+seccomp in the test's own child.
 [`docs/CONTROLLER_COVERAGE.md`](docs/CONTROLLER_COVERAGE.md) describes that gate and
 reproduces GCC line/branch and LLVM line/region/function/branch analysis of the kernels
 and streaming CLIs.

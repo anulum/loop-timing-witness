@@ -23,26 +23,35 @@ import pytest
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled
 
+POWER_COVERAGE_DIRECTORY = "WITNESS_POWER_COVERAGE_DIRECTORY"
+
 
 @pytest.fixture(scope="module")
 def power_api_program() -> Path:
-    """Build the actual PAC1934 constructor with strict warnings and compiler counters.
+    """Build the actual PAC1934 constructor with strict warnings.
+
+    When ``WITNESS_POWER_COVERAGE_DIRECTORY`` names a directory, the corpus is built there
+    unoptimised with GCC line and branch counters for the host C++ runtime coverage gate.
+    Otherwise the ordinary optimised build is used.
 
     Returns
     -------
     Path
         Public API corpus linked to the production IIO implementation.
     """
-    directory = Path(
-        os.environ.get("WITNESS_POWER_BUILD_ROOT", str(REPOSITORY_ROOT / "build/power_api"))
-    )
+    coverage = os.environ.get(POWER_COVERAGE_DIRECTORY)
+    if coverage:
+        directory = Path(coverage)
+        flags = ["-O0", "--coverage", "-fprofile-abs-path"]
+    else:
+        directory = REPOSITORY_ROOT / "build/power_api"
+        flags = ["-O2"]
     directory.mkdir(parents=True, exist_ok=True)
     program = directory / "power_configuration_api_test"
     command = [
         "g++",
         "-std=c++17",
-        "-O2",
-        "--coverage",
+        *flags,
         "-Wall",
         "-Wextra",
         "-Werror",

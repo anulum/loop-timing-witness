@@ -91,8 +91,9 @@ are published with verified hashes and explicit software-only evidence scope.
 
 The original-width RTL source-flow obligation is complete: 826 of 832 raw identities executed,
 with six checked source invariants and no unresolved or excluded points. C++ lifecycle evidence
-is tracked separately in [the coverage guide](docs/CONTROLLER_COVERAGE.md). Physical UIO/PAC1934
-operation, privileged scheduling and board timing require their actual resources.
+is tracked separately in [the coverage guide](docs/CONTROLLER_COVERAGE.md). The hosted test shards
+run the native SCHED_FIFO path at priority 1; physical UIO/PAC1934 operation, scheduling on the
+board and board timing require their actual resources.
 
 1. Vendor tool project generation scripts and constraints. The generation scripts produce a Libero
    project for MPFS250T and a [recorded timing run](hardware/icicle/README.md#recorded-libero-run);

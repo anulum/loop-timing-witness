@@ -352,7 +352,11 @@ WITNESS_POLICY_BUILD_ROOT="$PWD/build/native-policy-coverage" \
 ```
 
 Export its actual `policy_api_test.gcno` with gcov and retain this scope separately from RTL
-controller profiles. Positive privileged FIFO application still requires a permitted host policy.
+controller profiles. `tests/test_native_scheduling.py` asks the kernel, through an independent
+child, whether SCHED_FIFO at priority 1 is permitted, and then requires the native run to apply
+it or to refuse with EPERM and no outputs. The hosted test shards raise their real-time limit to
+1 with `sudo prlimit`, so the positive FIFO path runs there; hosts without that limit or
+privilege require the refusal. Higher priorities and real-time latency are not qualified.
 The same test module launches the production simulation CLI through `chrt --batch 0` for
 both plants. Complete healthy runs must retain the inherited batch scheduler and affinity
 in native metadata, with actual event counts and sample traces matching the receipt.

@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The hosted test shards raise their real-time limit to priority 1 (`sudo prlimit --rtprio=1:1`),
+  and `test_fifo_permissions` asks the kernel through an independent child whether SCHED_FIFO at
+  priority 1 is permitted, then requires the native run to apply it or to refuse with EPERM. It
+  accepted either outcome before, and every host had run only the refusal.
 - `witness-controller` 0.3.0 is on crates.io, published on 2026-11-16 by `publish-rust.yml` from
   `7ed2ce5` (crate checksum `9c9e0edc3fd35ff6db27ada3a95adda0c58e59b2abbb2a6a04230f473cc7b2bd`, equal
   to the verified crate the workflow retained). Its sources equal those of the 0.3.0 tag, and its

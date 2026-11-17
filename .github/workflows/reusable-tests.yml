@@ -264,6 +264,8 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           mkdir -p build/coverage/native-profiles
+          # Real-time priority 1 for this shell and its tests: the native run's SCHED_FIFO path runs.
+          sudo prlimit --pid "$$" --rtprio=1:1
           # Parity tests run the one instrumented registry consumer and keep its profiles.
           consumers=(build/native-analysis/bin/registry_consumer-*)
           test "${#consumers[@]}" -eq 1

@@ -14,6 +14,7 @@ import errno
 import json
 import os
 import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -26,6 +27,24 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 __all__ = ["native_run", "native_uio"]
+
+
+def _fifo_permitted() -> bool:
+    """Ask the kernel whether a child of this process may apply SCHED_FIFO at priority 1.
+
+    An independent short-lived child tries it, so capabilities, user namespaces and the inherited
+    RLIMIT_RTPRIO all count as the kernel counts them.
+
+    Returns
+    -------
+    bool
+        Whether the probe child applied the policy.
+    """
+    probe = "import os; os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(1))"
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe], capture_output=True, check=False, timeout=scaled(10)
+    )
+    return result.returncode == 0
 
 
 @pytest.mark.parametrize("policy", ["inherit", "cpu", "normal"])
@@ -123,7 +142,7 @@ def test_refused_policy(native_run: Path, tmp_path: Path, options: list[str]) ->
 
 
 def test_fifo_permissions(native_run: Path, tmp_path: Path) -> None:
-    """Observe a real bounded FIFO run or the actual kernel permission refusal.
+    """Require the kernel's own decision on a bounded FIFO run: the run where permitted, else EPERM.
 
     Parameters
     ----------
@@ -157,11 +176,14 @@ def test_fifo_permissions(native_run: Path, tmp_path: Path) -> None:
         timeout=scaled(10),
         check=False,
     )
-    if result.returncode == 0:
+    if _fifo_permitted():
+        assert result.returncode == 0, result.stderr
         actual = json.loads(metadata.read_text())["host_policy"]
         assert actual["scheduler"] == os.SCHED_FIFO
         assert actual["priority"] == 1
         assert actual["affinity_cpus"] == [cpu]
+        assert events.stat().st_size > 0
+        assert raw.exists()
     else:
         assert result.returncode == 1
         assert result.stderr == f"cannot set Linux scheduler (errno {errno.EPERM})\n"

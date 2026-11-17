@@ -11,15 +11,19 @@
 from __future__ import annotations
 
 import os
+import re
 
 import pytest
 
+from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import (
     SCALE_VARIABLE,
+    VERILATOR_JOB_LIMIT,
     build_jobs,
     scaled,
     scaled_seconds,
     timeout_scale,
+    verilator_jobs,
 )
 
 
@@ -115,3 +119,26 @@ def test_build_jobs_follow_the_usable_processors(monkeypatch: pytest.MonkeyPatch
     assert build_jobs() == len(os.sched_getaffinity(0))
     monkeypatch.setattr(os, "process_cpu_count", lambda: None)
     assert build_jobs() == 1
+
+
+@pytest.mark.parametrize(("processors", "jobs"), [(None, 1), (1, 1), (8, 8), (9, 8), (24, 8)])
+def test_verilator_jobs_stop_at_the_reviewed_limit(
+    monkeypatch: pytest.MonkeyPatch, processors: int | None, jobs: int
+) -> None:
+    """Follow the host's processors up to the reviewed Verilator limit, which the Makefile shares.
+
+    Parameters
+    ----------
+    monkeypatch
+        Environment fixture.
+    processors
+        Usable processors the host reports.
+    jobs
+        Expected Verilator build parallelism.
+    """
+    monkeypatch.setattr(os, "process_cpu_count", lambda: processors)
+    assert verilator_jobs() == jobs
+    makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
+    limit = re.search(r"^VERILATOR_JOB_LIMIT := (\d+)$", makefile, re.MULTILINE)
+    assert limit is not None
+    assert int(limit[1]) == VERILATOR_JOB_LIMIT

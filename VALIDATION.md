@@ -111,9 +111,11 @@ the same declaration, read by `analysis/rust/tests/support/host_profile.rs`. The
 refusals.
 
 Build parallelism follows the host as well. The Makefile's Verilator builds use `VERILATOR_JOBS`, by
-default `nproc`; the tests build generated image Makefiles with as many jobs as the test process has
-usable processors (`loop_timing_witness.host_profile.build_jobs`), and the hosted workflow builds
-Spike and the image with `make -j"$(nproc)"`. The bound of the Makefile's Yosys proofs,
+default `nproc` up to the policy limit below, and the tests pass the same bound
+(`loop_timing_witness.host_profile.verilator_jobs`); the tests build generated image Makefiles
+with as many jobs as the test process has usable processors
+(`loop_timing_witness.host_profile.build_jobs`), and the hosted workflow builds Spike and the
+image with `make -j"$(nproc)"`. The bound of the Makefile's Yosys proofs,
 `SAT_TIMEOUT` (30 seconds), and the fuzz target's per-input bound, `FUZZ_INPUT_TIMEOUT` (10
 seconds), are reference-profile values; the tests pass them scaled, and a direct `make` on another
 host can override them.
@@ -124,7 +126,13 @@ an integer from 1 to 360; the neural checker's sandbox, which limits its worker 
 address space, 30 CPU seconds, 8 MiB per written file and no core file, within a 45-second
 wall-clock deadline (an image binding may name at most 300 seconds); the 3600-second maximum
 `--timeout` of the capture and load commands; the fuzz target's 512 MB resident memory limit per
-input; and the 15-second network timeout of the PyPI download statistics request.
+input; the 15-second network timeout of the PyPI download statistics request; and at most 8
+Verilator build jobs (`VERILATOR_JOB_LIMIT` in the Makefile, `VERILATOR_JOB_LIMIT` in
+`loop_timing_witness.host_profile`). Verilator 5.020, the pinned version, can abort after a
+complete link ("attempted to destroy locked Thread Pool", upstream issue 4931, fixed in 5.026).
+On a 24-processor host, interleaved builds aborted 4 of 220 times at 24 jobs and 0 of 220 times
+at 8 jobs, at equal build time; the difference favours the limit without proving that 8 jobs
+removes the abort (one-sided Fisher exact test, p = 0.06).
 
 ## Native lifecycle profiles
 

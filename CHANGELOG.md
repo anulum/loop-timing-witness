@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Verilator builds use at most 8 jobs, a reviewed policy limit kept apart from the host-derived
+  limits: `VERILATOR_JOBS` defaults to the host's processors up to `VERILATOR_JOB_LIMIT`, and the
+  tests use `host_profile.verilator_jobs()`. Verilator 5.020 can abort after a complete link
+  ("attempted to destroy locked Thread Pool", upstream issue 4931): on a 24-processor host, 4 of
+  220 interleaved builds aborted at 24 jobs and 0 of 220 at 8 jobs, at equal build time. The
+  control-run benchmark workflow no longer overrides the default.
 - The hosted test shards raise their real-time limit to priority 1 (`sudo prlimit --rtprio=1:1`),
   and `test_fifo_permissions` asks the kernel through an independent child whether SCHED_FIFO at
   priority 1 is permitted, then requires the native run to apply it or to refuse with EPERM. It

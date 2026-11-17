@@ -25,6 +25,11 @@ from typing import Final
 
 SCALE_VARIABLE: Final = "WITNESS_HOST_TIMEOUT_SCALE"
 DECIMAL_CHARACTERS: Final = frozenset("0123456789.eE+-")
+# Reviewed policy limit, not a host property: Verilator 5.020, the CI pin, can abort after a
+# complete link ("attempted to destroy locked Thread Pool", upstream issue 4931, fixed in 5.026);
+# 4 of 220 builds aborted at -j 24 on a 24-processor host and 0 of 220 at -j 8. The Makefile holds
+# the same value as VERILATOR_JOB_LIMIT.
+VERILATOR_JOB_LIMIT: Final = 8
 
 
 def timeout_scale() -> float:
@@ -110,3 +115,14 @@ def build_jobs() -> int:
         The processors this process may run on, at least one.
     """
     return os.process_cpu_count() or 1
+
+
+def verilator_jobs() -> int:
+    """Return the parallelism of a Verilator build on the executing host.
+
+    Returns
+    -------
+    int
+        The host's build parallelism, at most the reviewed ``VERILATOR_JOB_LIMIT``.
+    """
+    return min(build_jobs(), VERILATOR_JOB_LIMIT)

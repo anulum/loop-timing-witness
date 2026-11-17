@@ -27,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from loop_timing_witness.host_profile import build_jobs, scaled
+from loop_timing_witness.host_profile import scaled, verilator_jobs
 
 pytest_plugins = ("controller_test_support",)
 
@@ -502,7 +502,7 @@ def closed_loop_harness(tmp_path_factory: pytest.TempPathFactory) -> Path:
             "make",
             "closed-loop-harness",
             f"CLOSED_LOOP_DIRECTORY={directory}",
-            f"VERILATOR_JOBS={build_jobs()}",
+            f"VERILATOR_JOBS={verilator_jobs()}",
         ],
         cwd=REPOSITORY_ROOT,
         check=True,

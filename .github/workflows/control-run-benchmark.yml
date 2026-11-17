@@ -50,7 +50,7 @@ jobs:
           rustup default 1.100.0
       - name: Build the closed-loop harness and both native analysis commands
         run: |
-          make closed-loop-harness VERILATOR_JOBS="$(nproc)"
+          make closed-loop-harness
           cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
           cargo build --release --offline --locked --message-format=json \
             --manifest-path analysis/rust/Cargo.toml \

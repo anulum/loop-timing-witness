@@ -9,8 +9,12 @@
 PYTHON_BOOTSTRAP ?= python3.15
 VENV := .venv/bin
 PREFLIGHT := $(VENV)/python tools/preflight.py
-# Verilator build parallelism follows the executing host: the processors make may run on.
-VERILATOR_JOBS ?= $(shell nproc)
+# Verilator build parallelism follows the executing host, up to a reviewed policy limit. Verilator
+# 5.020, the CI pin, can abort after a complete link ("attempted to destroy locked Thread Pool",
+# upstream issue 4931, fixed in 5.026): 4 of 220 builds at -j 24 on a 24-processor host, 0 of 220 at
+# -j 8, equal build time. host_profile.VERILATOR_JOB_LIMIT holds the same value.
+VERILATOR_JOB_LIMIT := 8
+VERILATOR_JOBS ?= $(shell n=$$(nproc); echo $$(( n < $(VERILATOR_JOB_LIMIT) ? n : $(VERILATOR_JOB_LIMIT) )))
 # Hang guards in seconds on the reference profile; a host that declares a timeout scale passes
 # its scaled values, as the tests do.
 SAT_TIMEOUT ?= 30

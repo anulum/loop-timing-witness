@@ -13,6 +13,7 @@ from __future__ import annotations
 import subprocess
 from typing import TYPE_CHECKING
 
+from native_simulation_manifest import native_metadata
 from test_native_run import configuration, native_run
 from test_native_run_output import OUTPUT_LIMIT_COMMAND, limited_profile_environment
 
@@ -91,3 +92,35 @@ def test_existing_metadata_preserved(native_run: Path, tmp_path: Path) -> None:
     assert metadata.read_bytes() == original
     assert events.stat().st_size == 128 * 16
     assert len(raw.read_text().splitlines()) == 33
+
+
+def test_lqr_run_receipt(native_run: Path, tmp_path: Path) -> None:
+    """Name the LQR kernel in the receipt of a real LQR run and pass the importer's checks.
+
+    Parameters
+    ----------
+    native_run
+        Actual native run controller against the selected RTL plant.
+    tmp_path
+        Exclusive configuration, capture and receipt allocation.
+    """
+    config = tmp_path / "run.conf"
+    config.write_text(configuration("lqr", "none"), encoding="utf-8")
+    result = subprocess.run(
+        [
+            str(native_run),
+            str(config),
+            str(tmp_path / "events.bin"),
+            str(tmp_path / "tracking_raw.csv"),
+            "--metadata",
+            str(tmp_path / "native_metadata.json"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(10),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    facts = native_metadata(tmp_path)
+    assert facts["controller"] == "lqr"
+    assert facts["result"]["samples"] == facts["cycles"] == 32

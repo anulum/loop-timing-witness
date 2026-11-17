@@ -78,17 +78,52 @@ def _write_padded_configuration(config: Path) -> None:
             stream.write(padding)
 
 
+def _change_times(config: Path, mutation: str) -> None:
+    """Change only the configuration's timestamps while its reader is stopped.
+
+    ``modification_second`` and ``modification_nanosecond`` move the modification time by one
+    second or one nanosecond. ``change_second`` keeps both times and waits for the next
+    wall-clock second first, so the kernel's new change time differs in its seconds.
+
+    Parameters
+    ----------
+    config
+        Configuration being hashed.
+    mutation
+        One of the three timestamp mutations.
+    """
+    status = config.stat()
+    modified = status.st_mtime_ns
+    if mutation == "modification_second":
+        modified += 1_000_000_000
+    elif mutation == "modification_nanosecond":
+        modified += 1 if modified % 1_000_000_000 < 999_999_999 else -1
+    else:
+        changed = status.st_ctime_ns // 1_000_000_000
+        while time.time_ns() // 1_000_000_000 <= changed:
+            time.sleep(0.01)
+    os.utime(config, ns=(status.st_atime_ns, modified))
+
+
 def _change(config: Path, mutation: str) -> None:
-    """Grow, truncate, replace or unlink the configuration while its reader is stopped.
+    """Change the configuration's content, identity or timestamps while its reader is stopped.
 
     Parameters
     ----------
     config
         Configuration being hashed; a replacement is written beside it.
     mutation
-        ``append``, ``truncate``, ``replace`` or ``unlink``.
+        ``append``, ``truncate``, ``replace``, ``unlink``, ``parent_replaced`` (the directory
+        is renamed and a new one with a new configuration takes its name, leaving the open file
+        untouched) or a timestamp mutation of :func:`_change_times`.
     """
-    if mutation == "append":
+    if mutation in {"modification_second", "modification_nanosecond", "change_second"}:
+        _change_times(config, mutation)
+    elif mutation == "parent_replaced":
+        config.parent.rename(config.parent.with_name("configuration-before"))
+        config.parent.mkdir()
+        config.write_text(configuration("pid", "none"), encoding="utf-8")
+    elif mutation == "append":
         with config.open("ab") as stream:
             stream.write(b" ")
     elif mutation == "truncate":
@@ -102,7 +137,19 @@ def _change(config: Path, mutation: str) -> None:
         config.unlink()
 
 
-@pytest.mark.parametrize("mutation", ["append", "truncate", "replace", "unlink"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "append",
+        "truncate",
+        "replace",
+        "unlink",
+        "parent_replaced",
+        "modification_second",
+        "modification_nanosecond",
+        "change_second",
+    ],
+)
 def test_actual_configuration_changed_during_hash(
     native_run: Path, tmp_path: Path, mutation: str
 ) -> None:
@@ -115,9 +162,11 @@ def test_actual_configuration_changed_during_hash(
     tmp_path
         Exclusive configuration and output allocation.
     mutation
-        Real append, truncation, path replacement or unlink while the child is stopped.
+        Real append, truncation, path or directory replacement, unlink or timestamp change
+        while the child is stopped.
     """
-    config = tmp_path / "run.conf"
+    config = tmp_path / "configuration" / "run.conf"
+    config.parent.mkdir()
     _write_padded_configuration(config)
     original_size = config.stat().st_size
     events, raw, metadata = (tmp_path / name for name in ("events.bin", "raw.csv", "metadata.json"))

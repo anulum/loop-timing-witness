@@ -110,9 +110,10 @@ puts `OPT_FAST` after `CFLAGS` for them) while the model keeps the `-O2` of `CFL
 target exports every report and runs [`c_coverage_gate.py`](../tools/c_coverage_gate.py) on
 the judged sources:
 `runtime/exclusive_output.h`, `runtime/run_configuration.cpp`, `runtime/run_options.h`,
-`runtime/run_output.h` and `runtime/linux/run_policy.h`. More runtime sources join the list as
-their scenarios land. Every executable line and every branch outcome must have run, with two
-exceptions:
+`runtime/run_output.h`, `runtime/run_control.h`, `runtime/run_metadata.h`,
+`runtime/rtl/run_simulation.cpp`, `runtime/rtl/simulation.h`, `runtime/linux/file_digest.cpp`
+and `runtime/linux/run_policy.h`. More runtime sources join the list as their scenarios land.
+Every executable line and every branch outcome must have run, with two exceptions:
 
 - [`runtime/coverage-review.json`](../runtime/coverage-review.json) lists the outcomes no real
   surface reaches, each with its condition and reason, and the lines only they reach: for

@@ -7,6 +7,7 @@
 // Loop Timing Witness — actual completed-run metadata API custody
 
 #include "../../runtime/run_metadata.h"
+#include "output_limit.h"
 #include <filesystem>
 
 /** Refuse malformed metadata configuration, then write the actual completed run receipt. */
@@ -24,6 +25,21 @@ void metadata_refusal(witness::Simulation &device, const witness::RunConfigurati
         {"tracking_raw", witness::file_digest(tracking)}};
     const auto path = std::string(events) + ".metadata.json";
     const auto thermal = witness::read_register(device, 0x6c) != 0;
+    if (scenario == "metadata_limit") {
+        // The receipt of about 1.4 KiB stays in the stream buffer until fclose, whose write the
+        // 256-byte file-size limit fails; every buffered fprintf before it succeeds.
+        {
+            ScopedOutputLimit limit(256);
+            refusal(
+                [&] {
+                    witness::write_run_metadata(path.c_str(), configuration, result, thermal,
+                                                "rtl_simulation", options, policy, artifacts);
+                },
+                "cannot write native metadata");
+        }
+        assert(std::filesystem::file_size(path) == 256);
+        return;
+    }
     if (scenario == "metadata_amp") {
         const auto resources = std::string(config_path) + ".amp-resources";
         artifacts.push_back({"amp_resources", witness::file_digest(resources.c_str())});

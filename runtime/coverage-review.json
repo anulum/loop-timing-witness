@@ -111,6 +111,391 @@
       "condition": "tracking output closed while the event output is open",
       "reason": "both outputs are opened in the constructor and closed only together in finish(), which refuses a second call on the event output first",
       "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 27,
+      "outcome": 4,
+      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
+      "reason": "GCC sets and clears this cleanup flag around the noexcept construction of the default FileDigest arm, so no exception finds it set; the file_digest arm throws before its temporary exists, which the refusal tests cover",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 27,
+      "outcome": 6,
+      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
+      "reason": "GCC sets and clears this cleanup flag around the noexcept construction of the default FileDigest arm, so no exception finds it set; the file_digest arm throws before its temporary exists, which the refusal tests cover",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 27,
+      "outcome": 7,
+      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
+      "reason": "GCC sets and clears this cleanup flag around the noexcept construction of the default FileDigest arm, so no exception finds it set; the file_digest arm throws before its temporary exists, which the refusal tests cover",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 38,
+      "outcome": 2,
+      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
+      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 38,
+      "outcome": 3,
+      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
+      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 62,
+      "outcome": 8,
+      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
+      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 62,
+      "outcome": 9,
+      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
+      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 62,
+      "outcome": 10,
+      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
+      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 62,
+      "outcome": 11,
+      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
+      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 52,
+      "outcome": 0,
+      "condition": "exception dispatch to a handler other than RuntimeRefused",
+      "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
+      "lines": [
+        56,
+        57,
+        58,
+        59,
+        60,
+        61
+      ]
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 52,
+      "outcome": 2,
+      "condition": "exception dispatch to a handler other than RuntimeRefused",
+      "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 52,
+      "outcome": 3,
+      "condition": "exception dispatch to a handler other than RuntimeRefused",
+      "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 55,
+      "outcome": 5,
+      "condition": "AWVALID without AWREADY at a rising bus edge",
+      "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds AWREADY high (rtl/axi_lite_clock_bridge.sv: awready = reset_n && !address_held && !write_outstanding), so the request is accepted at the first rising bus edge",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 56,
+      "outcome": 3,
+      "condition": "WVALID without WREADY at a rising bus edge",
+      "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds WREADY high (rtl/axi_lite_clock_bridge.sv: wready = reset_n && !data_held && !write_outstanding), so the request is accepted at the first rising bus edge",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 57,
+      "outcome": 3,
+      "condition": "ARVALID without ARREADY at a rising bus edge",
+      "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds ARREADY high (rtl/axi_lite_clock_bridge.sv: arready = reset_n && !read_held && !read_outstanding), so the request is accepted at the first rising bus edge",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 58,
+      "outcome": 3,
+      "condition": "BVALID without BREADY at a rising bus edge",
+      "reason": "the simulation raises BREADY with the request and lowers it only at the B handshake, and the bridge holds BVALID only until that handshake",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 59,
+      "outcome": 3,
+      "condition": "RVALID without RREADY at a rising bus edge",
+      "reason": "the simulation raises RREADY with the request and lowers it only at the R handshake, and the bridge holds RVALID only until that handshake",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 69,
+      "outcome": 0,
+      "condition": "context.gotFinish() during a transaction",
+      "reason": "no production RTL module calls $finish; the check guards a model that ends itself",
+      "lines": [
+        70
+      ]
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 103,
+      "outcome": 1,
+      "condition": "AXI read not answered within the transaction limit",
+      "reason": "the production bridge answers every read, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
+      "lines": [
+        115
+      ]
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 127,
+      "outcome": 1,
+      "condition": "AXI write not answered within the transaction limit",
+      "reason": "the production bridge answers every write, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
+      "lines": [
+        143
+      ]
+    },
+    {
+      "file": "runtime/run_control.h",
+      "line": 66,
+      "outcome": 0,
+      "condition": "run bank release not observed within one simulated second",
+      "reason": "the production RTL releases the run bank a few cycles after the request, and every measured run observes the release on the loop's second read; the bound guards an RTL that never releases it",
+      "lines": [
+        67
+      ]
+    },
+    {
+      "file": "runtime/run_control.h",
+      "line": 68,
+      "outcome": 1,
+      "condition": "register ABI version (0x7c) other than 1",
+      "reason": "the ABI version register 0x7c is a constant of the production RTL, so only another RTL build changes it, and this program is linked against this one; the period check beside it is covered",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_control.h",
+      "line": 68,
+      "outcome": 3,
+      "condition": "Q format (0x78) other than 24",
+      "reason": "the Q-format register 0x78 is a constant of the production RTL, so only another RTL build changes it, and this program is linked against this one; the period check beside it is covered",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_control.h",
+      "line": 133,
+      "outcome": 4,
+      "condition": "commit refused while the run is neither safe nor finished",
+      "reason": "the RTL refuses the commit of a staged command only when the run is not enabled, finished or safe (rtl/control_io_registers.sv), and the loop commits only within an enabled run, so a refusal always reads back finished or safe, which the covered refusals show",
+      "lines": [
+        134
+      ]
+    },
+    {
+      "file": "runtime/run_control.h",
+      "line": 133,
+      "outcome": 6,
+      "condition": "commit refused while the run is neither safe nor finished",
+      "reason": "the RTL refuses the commit of a staged command only when the run is not enabled, finished or safe (rtl/control_io_registers.sv), and the loop commits only within an enabled run, so a refusal always reads back finished or safe, which the covered refusals show",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 63,
+      "outcome": 0,
+      "condition": "fprintf of one artifact < 0",
+      "reason": "the metadata stream is buffered: this fprintf only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": [
+        64
+      ]
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 66,
+      "outcome": 3,
+      "condition": "fputs closing the artifacts < 0",
+      "reason": "the metadata stream is buffered: this fputs only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 66,
+      "outcome": 4,
+      "condition": "an artifact fprintf failed earlier",
+      "reason": "the metadata stream is buffered: this fprintf only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 77,
+      "outcome": 1,
+      "condition": "a buffered write of the first section failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 77,
+      "outcome": 3,
+      "condition": "a buffered write of the artifacts failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 77,
+      "outcome": 5,
+      "condition": "a buffered write of the crypto library failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 77,
+      "outcome": 7,
+      "condition": "a buffered write of the host policy failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 77,
+      "outcome": 9,
+      "condition": "a buffered write of the closing brace failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 38,
+      "outcome": 1,
+      "condition": "st_dev of the hashed file differs",
+      "reason": "before and after come from the same open descriptor, and the named lstat reaches a replacement through the same directory path; a different device needs that path to cross onto another filesystem during the hash, which the test hosts' temporary directories do not guarantee (the identity, size and time changes are covered)",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 46,
+      "outcome": 3,
+      "condition": "fstat of the just-opened descriptor fails",
+      "reason": "fstat of a valid open descriptor of a regular file fails only for EOVERFLOW on 32-bit offsets or a kernel fault; this 64-bit build has neither",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 47,
+      "outcome": 0,
+      "condition": "negative st_size of a regular file",
+      "reason": "the kernel never reports a negative size for a regular file",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 51,
+      "outcome": 1,
+      "condition": "EVP_MD_CTX_new returned no context",
+      "reason": "an allocation failure inside OpenSSL; failing that single allocation needs an allocator interposer, which the real-surface test policy excludes (the initialisation failure is covered through an OpenSSL configuration without SHA-256)",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 57,
+      "outcome": 2,
+      "condition": "read interrupted by a signal (EINTR)",
+      "reason": "read of a regular file is not interruptible on Linux; EINTR arises for pipes, sockets and slow devices, which the S_ISREG check refuses before reading",
+      "lines": [
+        58
+      ]
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 64,
+      "outcome": 2,
+      "condition": "EVP_DigestUpdate fails",
+      "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest update has no failure path for a valid context and only hashes the given bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
+      "lines": [
+        65
+      ]
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 72,
+      "outcome": 3,
+      "condition": "EVP_DigestFinal_ex fails or reports a size other than 32",
+      "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest finalisation has no failure path for a valid context and writes 32 bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
+      "lines": [
+        73
+      ]
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 72,
+      "outcome": 4,
+      "condition": "EVP_DigestFinal_ex fails or reports a size other than 32",
+      "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest finalisation has no failure path for a valid context and writes 32 bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 72,
+      "outcome": 6,
+      "condition": "EVP_DigestFinal_ex fails or reports a size other than 32",
+      "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest finalisation has no failure path for a valid context and writes 32 bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 75,
+      "outcome": 1,
+      "condition": "post-hash fstat fails, or fewer bytes were hashed than the unchanged size",
+      "reason": "line 75 evaluates fstat of the open descriptor after hashing and the hashed byte count against the open-time size: the first fails only as described for the open-time fstat, and a shorter read changes the size, which the earlier unchanged(before, after) check refuses first (the truncation mutation)",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 75,
+      "outcome": 4,
+      "condition": "post-hash fstat fails, or fewer bytes were hashed than the unchanged size",
+      "reason": "line 75 evaluates fstat of the open descriptor after hashing and the hashed byte count against the open-time size: the first fails only as described for the open-time fstat, and a shorter read changes the size, which the earlier unchanged(before, after) check refuses first (the truncation mutation)",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/file_digest.cpp",
+      "line": 86,
+      "outcome": 2,
+      "condition": "equal SHA-256 with a different byte count",
+      "reason": "two inputs of different length with the same SHA-256 would be a hash collision",
+      "lines": []
     }
   ]
 }

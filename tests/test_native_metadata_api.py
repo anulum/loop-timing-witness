@@ -84,6 +84,38 @@ def _check_amp_schema_refusals(receipt: dict[str, Any]) -> None:
     assert not validator.is_valid(modeled)
 
 
+def test_metadata_api_write_limit(lifecycle_program: Path, tmp_path: Path) -> None:
+    """Refuse a receipt whose final write exceeds a real file-size limit, keeping the run data.
+
+    The lifecycle program writes the receipt under a 256-byte soft ``RLIMIT_FSIZE`` in its own
+    process, so its counters stay valid. The buffered receipt reaches the file only at
+    ``fclose``, which fails after 256 bytes.
+
+    Parameters
+    ----------
+    lifecycle_program
+        Public API corpus linked to the production RTL and native controller.
+    tmp_path
+        Exclusive configuration, event, trace and metadata allocation.
+    """
+    config = tmp_path / "run.conf"
+    config.write_text(configuration("pid", "none").replace("pid 32", "pid 2"), encoding="utf-8")
+    events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
+    result = subprocess.run(
+        [str(lifecycle_program), "metadata_limit", str(config), str(events), str(raw)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(10),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "verified metadata_limit\n"
+    assert result.stderr == ""
+    assert tmp_path.joinpath("events.bin.metadata.json").stat().st_size == 256
+    assert events.stat().st_size == 8 * 16
+    assert len(raw.read_text().splitlines()) == 3
+
+
 @pytest.mark.parametrize("scenario", ["zero", "fault", "amp"])
 def test_completed_metadata_api(lifecycle_program: Path, tmp_path: Path, scenario: str) -> None:
     """Refuse invalid public configuration before creating a receipt and retain actual data.

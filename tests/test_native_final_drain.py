@@ -12,18 +12,19 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import struct
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 from test_native_run import check_native_commands, configuration, native_run
 
+from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_profile import scaled
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from conftest import RunTool
 
 __all__ = ["native_run"]
@@ -138,3 +139,63 @@ def test_capture_final_backlog(tmp_path: Path, run_tool: RunTool, thermal: int) 
     assert report["tracking_error"]["status"] == "partial"
     assert report["energy"]["status"] == "unavailable"
     assert report["valid"] is False
+
+
+@pytest.fixture(scope="module")
+def small_fifo_run() -> Path:
+    """Build the production run command line with a four-record event FIFO.
+
+    ``SIMULATION_FIFO_ADDRESS_BITS`` is a build parameter of the run target; the default of 8
+    drains faster than the plant produces records, so only a shallow FIFO overflows.
+
+    Returns
+    -------
+    Path
+        Run command line linked to the mechanical plant with a four-record FIFO.
+    """
+    build_root = Path(os.environ.get("WITNESS_NATIVE_BUILD_ROOT", str(REPOSITORY_ROOT / "build")))
+    directory = build_root / "run_simulation_fifo4"
+    result = subprocess.run(
+        [
+            "make",
+            "run-simulation",
+            "SIMULATION_THERMAL=0",
+            "SIMULATION_FIFO_ADDRESS_BITS=2",
+            f"RUN_SIMULATION_DIRECTORY={directory}",
+        ],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(90),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return directory / "run_simulation"
+
+
+def test_event_overflow_fails_the_run(small_fifo_run: Path, tmp_path: Path) -> None:
+    """Report a real event FIFO overflow and exit with status one after keeping the outputs.
+
+    Parameters
+    ----------
+    small_fifo_run
+        Run command line with a four-record event FIFO.
+    tmp_path
+        Exclusive configuration and output allocation.
+    """
+    config = tmp_path / "run.conf"
+    config.write_text(backlog_configuration("pid"), encoding="utf-8")
+    events, raw = tmp_path / "events.bin", tmp_path / "raw.csv"
+    result = subprocess.run(
+        [str(small_fifo_run), str(config), str(events), str(raw)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=scaled(10),
+    )
+    assert result.returncode == 1
+    assert result.stderr == ""
+    summary = dict(item.split("=") for item in result.stdout.split()[1:])
+    assert summary == {"samples": "1", "records": "5", "misses": "8", "overflow": "15", "safe": "1"}
+    assert events.stat().st_size == 5 * 16
+    assert len(raw.read_text().splitlines()) == 2

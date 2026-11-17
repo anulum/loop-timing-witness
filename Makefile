@@ -206,7 +206,9 @@ RUNTIME_COVERAGE_DIRECTORY ?= build/runtime-coverage
 RUNTIME_COVERAGE_CFLAGS := -std=c++17 -Wall -Wextra -Werror -O2 --coverage -fprofile-abs-path \
 	-fprofile-filter-files=$(CURDIR)/runtime/
 RUNTIME_COVERAGE_SOURCES := runtime/exclusive_output.h runtime/run_configuration.cpp \
-	runtime/run_options.h runtime/run_output.h runtime/linux/run_policy.h
+	runtime/run_options.h runtime/run_output.h runtime/linux/run_policy.h \
+	runtime/run_control.h runtime/run_metadata.h runtime/rtl/run_simulation.cpp \
+	runtime/rtl/simulation.h runtime/linux/file_digest.cpp
 RUNTIME_COVERAGE_TESTS := tests/test_axi_simulator.py tests/test_axi_transport_progress.py \
 	tests/test_host_load_receipt.py tests/test_legacy_analysis_api.py tests/test_linux_load.py \
 	tests/test_linux_load_api.py tests/test_linux_load_readiness_launch.py \

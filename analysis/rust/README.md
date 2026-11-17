@@ -236,6 +236,14 @@ controller library are held to the image's receipt. A corpus laid out as a
 real image built on the review host holds both implementations to the same
 outcomes.
 
+Most of the check's time is SHA-256 over the image's files. The pinned `sha2`
+uses the processor's SHA extensions when it has them and a portable path
+otherwise. On a 466 MB Rust kernel image built by the repository's fixture,
+one pinned CPU, the check took 0.45 s natively and 0.46 s in Python on an
+i5-11600K, and 3.73 s against 2.29 s on a Xeon E5-2640 without SHA
+extensions, where Python's OpenSSL runs hand-written assembly (measured
+2026-11-17).
+
 ## AMP platform binding
 
 `amp_platform::bind_platform(&tree, &memory, device_path, &plic)` admits an AMP

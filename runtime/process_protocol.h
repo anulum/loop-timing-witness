@@ -16,6 +16,7 @@
 #include <charconv>
 #include "refusal.h"
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -88,7 +89,9 @@ template <class Device> int serve(Device &device) {
         if (!std::cout)
             throw witness::RuntimeRefused("cannot write AXI response");
     }
-    if (!std::cin.eof())
+    // std::cin reads through stdio, which reports a read error as end of file: ferror tells
+    // the two apart, so a failed request stream is refused instead of ending as complete.
+    if (std::ferror(stdin) || !std::cin.eof())
         throw witness::RuntimeRefused("cannot read AXI request");
     return 0;
 }

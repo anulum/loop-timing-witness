@@ -427,8 +427,8 @@ every source in `controllers/rust/src`. The same shard runs `make runtime-covera
 native test corpus, built with counters on the runtime sources only, must execute every line and
 branch outcome of the judged host C++ runtime sources (`exclusive_output.h`,
 `run_configuration.cpp`, `run_options.h`, `run_output.h`, `run_control.h`, `run_metadata.h`,
-`rtl/run_simulation.cpp`, `rtl/simulation.h`, `linux/file_digest.cpp`, `linux/run_policy.h`)
-except the
+`rtl/run_simulation.cpp`, `rtl/simulation.h`, `linux/file_digest.cpp`, `linux/run_policy.h`,
+`process_protocol.h`, `rtl/axi_simulator.cpp`, `linux/power_configuration.cpp`) except the
 outcomes listed with reasons in `runtime/coverage-review.json`; C++ exception edges are
 reported, not required. The scheduling scenarios have the kernel answer system calls through
 seccomp in the test's own child.

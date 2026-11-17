@@ -529,3 +529,95 @@ def test_protocol_refusal(simulator: Path, message: str) -> None:
         "X": "unknown request",
     }
     assert result.stderr == expected[message] + "\n"
+
+
+def test_usage_refusal(simulator: Path) -> None:
+    """Refuse any command argument: the process takes its requests only from standard input.
+
+    Parameters
+    ----------
+    simulator
+        Real process transport executable.
+    """
+    result = subprocess.run(
+        [str(simulator), "requests.txt"],
+        input="Q\n",
+        capture_output=True,
+        text=True,
+        timeout=scaled(5),
+        check=False,
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == f"usage: {simulator} < AXI requests\n"
+
+
+def test_end_of_input_ends_the_process(simulator: Path) -> None:
+    """End with status zero when standard input closes after complete requests, without Q.
+
+    Parameters
+    ----------
+    simulator
+        Real process transport executable.
+    """
+    result = subprocess.run(
+        [str(simulator)],
+        input="R 124\n",
+        capture_output=True,
+        text=True,
+        timeout=scaled(5),
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stderr == ""
+    response, data, _ = (int(field) for field in result.stdout.strip().split(","))
+    assert (response, data) == (0, 1)
+
+
+def test_unreadable_input_refused(simulator: Path, tmp_path: Path) -> None:
+    """Refuse a request stream that fails without reaching its end: a directory as input.
+
+    Parameters
+    ----------
+    simulator
+        Real process transport executable.
+    tmp_path
+        Directory opened as the process's standard input.
+    """
+    directory = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        result = subprocess.run(
+            [str(simulator)],
+            stdin=directory,
+            capture_output=True,
+            text=True,
+            timeout=scaled(5),
+            check=False,
+        )
+    finally:
+        os.close(directory)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "cannot read AXI request\n"
+
+
+def test_response_write_failure(simulator: Path) -> None:
+    """Refuse further requests once a reply cannot be written: standard output is full.
+
+    Parameters
+    ----------
+    simulator
+        Real process transport executable.
+    """
+    with Path("/dev/full").open("w") as sink:
+        result = subprocess.run(
+            [str(simulator)],
+            input="R 124\nR 124\n",
+            stdout=sink,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=scaled(5),
+            check=False,
+        )
+    assert result.returncode == 1
+    assert result.stderr == "cannot write AXI response\n"

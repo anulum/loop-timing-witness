@@ -17,13 +17,13 @@ Loop Timing Witness — changelog
 - `make runtime-coverage`, run in the hosted controller shard, requires every line and branch
   outcome of the judged host C++ runtime sources to run: `exclusive_output.h`,
   `run_configuration.cpp`, `run_options.h`, `run_output.h`, `run_control.h`, `run_metadata.h`,
-  `rtl/run_simulation.cpp`, `rtl/simulation.h`, `linux/file_digest.cpp` and `linux/run_policy.h`. It
-  builds every native test corpus with counters on the runtime sources only (`OPT_FAST=-O0` through
-  `MAKEFLAGS`, `-fprofile-filter-files`; the Verilator model keeps `-O2`).
-  `runtime/coverage-review.json` lists, each with its reason, the outcomes no real surface reaches.
-  `tools/c_coverage_gate.py` now also judges named C++ files, reports C++ exception edges without
-  requiring them and refuses a reviewed entry whose outcome or line runs; its messages start with
-  "GCC coverage".
+  `rtl/run_simulation.cpp`, `rtl/simulation.h`, `linux/file_digest.cpp`, `linux/run_policy.h`,
+  `process_protocol.h`, `rtl/axi_simulator.cpp` and `linux/power_configuration.cpp`. It builds every
+  native test corpus with counters on the runtime sources only (`OPT_FAST=-O0` through `MAKEFLAGS`,
+  `-fprofile-filter-files`; the Verilator model keeps `-O2`). `runtime/coverage-review.json` lists,
+  each with its reason, the outcomes no real surface reaches. `tools/c_coverage_gate.py` now also
+  judges named C++ files, reports C++ exception edges without requiring them and refuses a reviewed
+  entry whose outcome or line runs; its messages start with "GCC coverage".
 - New scenarios for that gate: eight scheduling scenarios have the kernel answer one system call
   through seccomp in the test's own child, reaching the policy read refusals and readback checks;
   refusal cases cover duplicate `--metadata`, `--power-config`, `--power-journal`, `--scheduler` and
@@ -31,9 +31,12 @@ Loop Timing Witness — changelog
   flush; a metadata API scenario fails the receipt's final write under a file-size limit; an LQR
   run's receipt passes the importer; a run built with a four-record event FIFO overflows and exits
   with status 1; four more hashing mutations change the modification time by a second or a
-  nanosecond, the change time alone, or replace the configuration's directory. The AXI simulator
-  target takes `AXI_SIMULATOR_LDFLAGS`; the scheduling and power configuration corpora build with
-  counters only under `WITNESS_POLICY_COVERAGE_DIRECTORY` and `WITNESS_POWER_COVERAGE_DIRECTORY`.
+  nanosecond, the change time alone, or replace the configuration's directory; the AXI process
+  refuses a command argument, an unreadable request stream and a full output, and ends cleanly when
+  its input closes; ten malformed power configuration files reach every refusal of the file reader.
+  The AXI simulator target takes `AXI_SIMULATOR_LDFLAGS`; the scheduling and power configuration
+  corpora build with counters only under `WITNESS_POLICY_COVERAGE_DIRECTORY` and
+  `WITNESS_POWER_COVERAGE_DIRECTORY`.
 - Verilator builds use at most 8 jobs, a reviewed policy limit kept apart from the host-derived
   limits: `VERILATOR_JOBS` defaults to the host's processors up to `VERILATOR_JOB_LIMIT`, and the
   tests use `host_profile.verilator_jobs()`. Verilator 5.020 can abort after a complete link
@@ -107,6 +110,13 @@ Loop Timing Witness — changelog
   the commit is unfinished; it raised a `TypeError` before.
 - Source release signatures cover 0.3.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
+
+### Fixed
+
+- The AXI simulator and UIO transport processes refuse a request stream that fails to read
+  ("cannot read AXI request", status 1). `std::cin` reads through stdio, which reports a read
+  error as end of file, so a failed stream, such as a directory given as input, ended with
+  status 0 as if complete; `std::ferror(stdin)` now tells the two apart.
 
 ## [0.3.0] - 2026-11-16
 

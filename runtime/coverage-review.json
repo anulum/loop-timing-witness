@@ -496,6 +496,125 @@
       "condition": "equal SHA-256 with a different byte count",
       "reason": "two inputs of different length with the same SHA-256 would be a hash collision",
       "lines": []
+    },
+    {
+      "file": "runtime/rtl/axi_simulator.cpp",
+      "line": 32,
+      "outcome": 0,
+      "condition": "exception dispatch to a handler other than RuntimeRefused",
+      "reason": "serve and the Simulation throw only RuntimeRefused on the AXI process path (ArgumentRefused belongs to the AMP, Spike and UIO paths), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
+      "lines": [
+        36,
+        37,
+        38,
+        39,
+        40,
+        41
+      ]
+    },
+    {
+      "file": "runtime/rtl/axi_simulator.cpp",
+      "line": 32,
+      "outcome": 2,
+      "condition": "exception dispatch to a handler other than RuntimeRefused",
+      "reason": "serve and the Simulation throw only RuntimeRefused on the AXI process path (ArgumentRefused belongs to the AMP, Spike and UIO paths), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/axi_simulator.cpp",
+      "line": 32,
+      "outcome": 3,
+      "condition": "exception dispatch to a handler other than RuntimeRefused",
+      "reason": "serve and the Simulation throw only RuntimeRefused on the AXI process path (ArgumentRefused belongs to the AMP, Spike and UIO paths), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
+      "lines": []
+    },
+    {
+      "file": "runtime/process_protocol.h",
+      "line": 42,
+      "outcome": 3,
+      "condition": "from_chars stops before the end of an accepted token",
+      "reason": "line 37 admits only tokens of decimal digits, which from_chars consumes completely; a value too large fails with result_out_of_range instead, which the refusal cases cover",
+      "lines": []
+    },
+    {
+      "file": "runtime/process_protocol.h",
+      "line": 94,
+      "outcome": 4,
+      "condition": "!std::cin.eof() after the request loop ends without a stdio error",
+      "reason": "std::cin reads through stdio (synchronised by default), which reports every failed read as end of file and records the error for ferror, which the condition checks first; a directory as input shows it (ferror set, eof set)",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 38,
+      "outcome": 10,
+      "condition": "cleanup of a substr temporary on an exception path",
+      "reason": "these flags guard the destruction of the two substr results when an exception leaves the identity condition (checked in the compiler's CFG); only an allocation failure inside substr or identifier can throw there",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 38,
+      "outcome": 11,
+      "condition": "cleanup of a substr temporary on an exception path",
+      "reason": "these flags guard the destruction of the two substr results when an exception leaves the identity condition (checked in the compiler's CFG); only an allocation failure inside substr or identifier can throw there",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 39,
+      "outcome": 8,
+      "condition": "cleanup of a substr temporary on an exception path",
+      "reason": "these flags guard the destruction of the two substr results when an exception leaves the identity condition (checked in the compiler's CFG); only an allocation failure inside substr or identifier can throw there",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 39,
+      "outcome": 9,
+      "condition": "cleanup of a substr temporary on an exception path",
+      "reason": "these flags guard the destruction of the two substr results when an exception leaves the identity condition (checked in the compiler's CFG); only an allocation failure inside substr or identifier can throw there",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 53,
+      "outcome": 8,
+      "condition": "cleanup of a partially built rail-name array",
+      "reason": "the four rail names (at most six characters) fit the string's inline buffer, so constructing them allocates nothing and cannot throw",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 53,
+      "outcome": 9,
+      "condition": "cleanup of a partially built rail-name array",
+      "reason": "the four rail names (at most six characters) fit the string's inline buffer, so constructing them allocates nothing and cannot throw",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 53,
+      "outcome": 10,
+      "condition": "cleanup of a partially built rail-name array",
+      "reason": "the four rail names (at most six characters) fit the string's inline buffer, so constructing them allocates nothing and cannot throw",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 53,
+      "outcome": 11,
+      "condition": "cleanup of a partially built rail-name array",
+      "reason": "the four rail names (at most six characters) fit the string's inline buffer, so constructing them allocates nothing and cannot throw",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 88,
+      "outcome": 8,
+      "condition": "!input.eof() after a failed read of trailing text",
+      "reason": "the configuration is a regular file: a read after the last field either finds more text, which the extra-text case covers, or reaches end of file; only a read error without EOF, which a regular file does not produce here, takes this outcome",
+      "lines": []
     }
   ]
 }

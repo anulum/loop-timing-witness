@@ -10,9 +10,28 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+
+/** Refuse a malformed configuration file with exactly the expected authored message. */
+int file_refusal(const char *path, const std::string &message) {
+    try {
+        witness::read_power_configuration(path);
+    } catch (const std::runtime_error &error) {
+        const auto text = std::string(error.what());
+        if (text != message)
+            std::cerr << text << '\n';
+        assert(text == message);
+        std::cout << "verified file\n";
+        return 0;
+    }
+    std::cerr << "configuration accepted\n";
+    return 1;
+}
 
 /** Submit malformed public structures to the real PAC1934 constructor. */
 int main(int argc, char **argv) {
+    if (argc == 4 && std::string(argv[1]) == "file")
+        return file_refusal(argv[2], argv[3]);
     if (argc != 3)
         return 1;
     auto configuration = witness::read_power_configuration(argv[2]);

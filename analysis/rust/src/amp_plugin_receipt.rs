@@ -14,7 +14,10 @@
 //! and requires the receipt to agree with the preparation it binds: every
 //! identity but the sources equal to the receipt's own, every preparation and
 //! compiler identity in the receipt's dependencies, and the preparation and
-//! its generation record bound by digest. Every refusal is Python's text.
+//! its generation record bound by digest. A receipt carrying an
+//! `instrumentation` record describes a measurement-only coverage variant:
+//! the analysis never admits one, as Python refuses it outside a coverage run.
+//! Every refusal is Python's text.
 //!
 //! [`decode_plugin_receipt`]: crate::amp_plugin_receipt::decode_plugin_receipt
 
@@ -40,8 +43,8 @@ static SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
 /// # Errors
 ///
 /// [`AmpFailure::Refused`] with Python's text when the bytes break the bounded
-/// JSON rules or the schema, or the receipt omits or contradicts the identities
-/// of its preparation.
+/// JSON rules or the schema, the receipt omits or contradicts the identities
+/// of its preparation, or it records a coverage instrumentation.
 pub fn decode_plugin_receipt(content: &[u8]) -> Result<Map<String, Value>, AmpFailure> {
     let (data, _) = decode_object(content, "AMP plugin build").map_err(AmpFailure::Refused)?;
     if let Some(location) = SCHEMA.locations(&Value::Object(data.clone())).first() {
@@ -51,6 +54,10 @@ pub fn decode_plugin_receipt(content: &[u8]) -> Result<Map<String, Value>, AmpFa
     }
     if contradicts(&data) {
         let text = "AMP plugin receipt omits or contradicts original preparation identities";
+        return Err(AmpFailure::Refused(text.into()));
+    }
+    if data.contains_key("instrumentation") {
+        let text = "AMP plugin build is a coverage measurement variant, never admitted evidence";
         return Err(AmpFailure::Refused(text.into()));
     }
     Ok(data)

@@ -67,6 +67,7 @@ class PluginBuild:
 _PLUGIN_TOOLS = (
     "amp_plugin_inputs.py",
     "amp_plugin_preparation.py",
+    "amp_plugin_receipt.py",
     "write_amp_plugin_manifest.py",
     "amp_build_dependencies.py",
     "amp_build_toolchain.py",

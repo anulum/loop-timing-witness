@@ -12,6 +12,19 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Added
+
+- A measurement-only counted variant of the Spike plugin:
+  `make amp-spike-plugin AMP_PLUGIN_INSTRUMENTATION=coverage` adds GCC counters to the plugin's
+  device object (the Spike adapter, its RAM transport and the AMP logger), and only to it.
+  - The plugin build receipt records the flags in an optional `instrumentation` member, in the
+    schema, the receipt writer and the Python and native validators.
+  - Capture, the capture snapshot check and offline analysis refuse a receipt with the member. Only
+    an explicit coverage-run selection (`admit_plugin(..., instrumented=True)`) admits one, and that
+    selection refuses a production receipt.
+  - The writer and admission refuse a library whose counters (`__gcov_init`) disagree with its
+    receipt.
+
 ### Changed
 
 - `make runtime-coverage`, run in the hosted controller shard, requires every line and branch
@@ -113,6 +126,11 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- The Spike plugin's compile flags are fixed (`override`). An assignment on Make's command line,
+  such as `make amp-spike-plugin AMP_PLUGIN_CXXFLAGS=-O0`, used to build a plugin with other flags.
+  Its receipt, which binds the makefiles but no flag, looked like a production one. Production
+  admission also accepted a plugin carrying GCC counters; it now refuses one whose receipt does not
+  record them.
 - The AXI simulator and UIO transport processes refuse a request stream that fails to read
   ("cannot read AXI request", status 1). `std::cin` reads through stdio, which reports a read
   error as end of file, so a failed stream, such as a directory given as input, ended with

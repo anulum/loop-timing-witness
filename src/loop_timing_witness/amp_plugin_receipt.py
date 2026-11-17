@@ -24,6 +24,65 @@ from .manifest_io import (
 from .validate_measurement_domain import schema_locations
 
 ROOT = Path(__file__).resolve().parent / "data"
+# Every GCC-instrumented object registers its counters through this libgcov entry point.
+_COUNTER_SYMBOL = b"__gcov_init"
+
+
+def instrumentation_record(kind: str, compile_flags: str, link_flags: str) -> dict[str, Any] | None:
+    """Return the receipt record of a measurement-only plugin variant, or None for production.
+
+    Parameters
+    ----------
+    kind
+        ``none`` for the production plugin, ``coverage`` for the counted variant.
+    compile_flags
+        Flags added to the device object, whitespace-separated; empty for production.
+    link_flags
+        Flags added to the shared-object link, whitespace-separated; empty for production.
+
+    Returns
+    -------
+    dict of str to Any or None
+        The ``instrumentation`` record, absent from a production receipt.
+
+    Raises
+    ------
+    ValueError
+        If the kind is unknown, or its flags are given for production or missing for coverage.
+    """
+    if kind not in ("none", "coverage"):
+        message = "AMP plugin instrumentation must be none or coverage"
+        raise ValueError(message)
+    compile_list, link_list = compile_flags.split(), link_flags.split()
+    counted = kind == "coverage"
+    given = (bool(compile_list), bool(link_list))
+    if given != (counted, counted):
+        message = "AMP plugin instrumentation flags disagree with its kind"
+        raise ValueError(message)
+    if not counted:
+        return None
+    return {
+        "kind": "gcov",
+        "objects": ["plugin"],
+        "compile_flags": compile_list,
+        "link_flags": link_list,
+    }
+
+
+def library_instrumented(plugin: Path) -> bool:
+    """Tell whether a plugin library carries GCC coverage counters.
+
+    Parameters
+    ----------
+    plugin
+        Linked plugin library.
+
+    Returns
+    -------
+    bool
+        Whether the library names the libgcov registration entry point.
+    """
+    return _COUNTER_SYMBOL in plugin.read_bytes()
 
 
 def _identities_agree(data: dict[str, Any]) -> bool:
@@ -65,13 +124,16 @@ def _identities_agree(data: dict[str, Any]) -> bool:
     )
 
 
-def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
+def decode_plugin_receipt(content: bytes, *, instrumented: bool = False) -> dict[str, Any]:
     """Require the complete versioned original native compiler and SDK receipt shape.
 
     Parameters
     ----------
     content
         Original receipt bytes, not a reconstructed selection of metadata.
+    instrumented
+        True only for a coverage run, which admits the counted variant and nothing else;
+        every other caller admits production receipts only.
 
     Returns
     -------
@@ -82,7 +144,8 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
     ------
     ValueError
         If JSON, schema identifier, types, bounds or required build identity fields are invalid,
-        or the preparation path names no file beside which its generation record would lie.
+        the preparation path names no file beside which its generation record would lie, or the
+        receipt's instrumentation record disagrees with the selection.
     """
     data = parse_bounded_json_object(content, "AMP plugin build")
     locations = schema_locations(data, load_json_object(ROOT / "amp-plugin-build.schema.json"))
@@ -93,6 +156,12 @@ def decode_plugin_receipt(content: bytes) -> dict[str, Any]:
         raise ValueError(message)
     if not _identities_agree(data):
         message = "AMP plugin receipt omits or contradicts original preparation identities"
+        raise ValueError(message)
+    if "instrumentation" in data and not instrumented:
+        message = "AMP plugin build is a coverage measurement variant, never admitted evidence"
+        raise ValueError(message)
+    if instrumented and "instrumentation" not in data:
+        message = "AMP coverage run requires an instrumented plugin build"
         raise ValueError(message)
     return data
 
@@ -128,13 +197,15 @@ def build_identities(data: dict[str, Any]) -> dict[str, str]:
     return identities
 
 
-def admit_plugin(plugin: Path) -> tuple[bytes, dict[str, Any]]:
+def admit_plugin(plugin: Path, *, instrumented: bool = False) -> tuple[bytes, dict[str, Any]]:
     """Verify the selected actual library and its complete original live build closure.
 
     Parameters
     ----------
     plugin
         Explicit actual library, with original plugin.json beside it.
+    instrumented
+        True only for a coverage run; see :func:`decode_plugin_receipt`.
 
     Returns
     -------
@@ -146,12 +217,17 @@ def admit_plugin(plugin: Path) -> tuple[bytes, dict[str, Any]]:
     OSError
         If the receipt, library, actual dependencies or selected tool files are unavailable.
     ValueError
-        If the library or original compiler/source/header/link/tool bytes changed.
+        If the library or original compiler/source/header/link/tool bytes changed, the
+        receipt's instrumentation record disagrees with the selection, or the library's own
+        counters disagree with the record.
     """
     content = plugin.with_name("plugin.json").read_bytes()
-    data = decode_plugin_receipt(content)
+    data = decode_plugin_receipt(content, instrumented=instrumented)
     if sha256_of_file(plugin) != data["plugin_sha256"]:
         message = "AMP plugin library differs from the original build receipt"
+        raise ValueError(message)
+    if library_instrumented(plugin) != instrumented:
+        message = "AMP plugin library counters disagree with its build receipt"
         raise ValueError(message)
     for name, digest in build_identities(data).items():
         if sha256_of_file(Path(name)) != digest:

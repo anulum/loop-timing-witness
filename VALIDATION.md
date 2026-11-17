@@ -71,7 +71,9 @@ truthfulness of the `architecture_only` state.
   Host library paths must expose the selected actual RV64 compiler dependencies. Native Make
   builds retain complete `-MD` source/system/SDK header records and exclusive plugin build
   receipts. Image verification records the actual driver, frontend, collect2, assembler and
-  linker identities; source/receipt drift requires a fresh build.
+  linker identities; source/receipt drift requires a fresh build. The counted plugin variant
+  (`AMP_PLUGIN_INSTRUMENTATION=coverage`) is measurement-only. Its receipt records the
+  instrumentation, and capture and analysis refuse it.
 - Strace 6.8, Ubuntu noble package `6.8-0ubuntu2`, is required for owned-process refusal tests.
   Tests delay syscall entry and retain actual kernel results; they neither substitute return
   values nor modify process memory. Tracing starts with test-owned children and uses existing
@@ -194,6 +196,7 @@ their original explicit positive and negative signs.
 | Rust toolchain custody | `.venv/bin/pytest -q tests/test_amp_rust_toolchain.py` | actual Rustup proxy/compiler identity and owned real-compiler toolchain refusal when Cargo or RV64 core libraries are missing; requires Rustup and an installed RV64IMAC target |
 | Rust original source custody | `.venv/bin/pytest -q tests/test_amp_rust_sources.py` | actual Rust metadata/final dependency records, archive admission, captured source/library bytes and refusal of missing or escaping original source paths; requires the installed RV64IMAC Rust target |
 | Rust AMP panic refusal | `.venv/bin/pytest -q tests/test_amp_rust_panic.py` | source-bound fault image exercises the original Rust panic handler and terminal `0x109` refusal through public capture on both mechanical and thermal production plants; requires the CI AMP image, Spike, plugins, RV64 GCC and RV64IMAC Rust target |
+| Counted plugin variant | `.venv/bin/pytest -q tests/test_amp_plugin_coverage_variant.py` | public Make build of the counted variant with the production SDK; its receipt's instrumentation record and exact flags, counters only in the device object, refusal by production admission, capture and the receipt writer, admission only under the explicit coverage selection, and Make's fixed flags and refusal of an unknown instrumentation; requires the CI Spike SDK, image and plugins |
 | Rust package consumer | `.venv/bin/pytest -q tests/test_rust_package_consumer.py` | real Cargo archive extraction, separate dependency client, state/refusal tests, strict Clippy, allocator-free WebAssembly and RV64IMAC builds, and actual RISC-V ELF64 soft-float object checks; requires both installed Rust targets |
 | Icicle reference derivation | `.venv/bin/pytest -q tests/test_icicle_reference_derivation.py` | fetches the pinned official reference commit unless `WITNESS_ICICLE_REFERENCE` names a clean local checkout; exercises the public derivation, complete reference-tree receipt, copied RTL hashes and pre-Libero refusal paths; place pytest's base temporary directory on the repository disk |
 | `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `src/loop_timing_witness`, `tools/` and native build support, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |

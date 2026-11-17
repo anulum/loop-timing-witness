@@ -138,6 +138,10 @@ Plugin generation inputs and actual tools are frozen before Verilator runs. Actu
 preprocessing freezes native/model source and system-header dependencies before compilation;
 post-build reconciliation refuses source, generated build-file, dependency-record or tool drift.
 Final receipts must agree with their original preparation, which is retained in capture sources.
+The plugin's compile flags are fixed against Make command-line assignments. A counted coverage
+variant records its instrumentation in its receipt. Capture and analysis refuse that variant, and
+admission refuses a library whose GCC counters disagree with its receipt. A measurement build
+therefore cannot pass as an admitted capture.
 
 The functional clock map and parked companion harts do not establish physical U54 latency,
 Linux coexistence, HSS configuration or PMP isolation. A malicious compiler, simulator, plugin

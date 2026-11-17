@@ -15,7 +15,9 @@ changed as the run manifest corpus changes its nodes, and each change records
 the locations Python's validator reports against the committed schema, which
 uses local references, ``maxProperties`` and ``propertyNames``. One more change
 gives the six link inputs a seventh valid one, so that only ``maxProperties``
-fails. The native crate's unit tests read the same committed file.
+fails. A second base adds the coverage instrumentation record of a counted
+variant, and only that record's nodes are changed in it. The native crate's
+unit tests read the same committed file.
 """
 
 from __future__ import annotations
@@ -32,6 +34,12 @@ from loop_timing_witness.validate_measurement_domain import schema_locations
 BASE: Final = REPOSITORY_ROOT / "tests/data/amp-plugin-build-reduced.json"
 SCHEMA: Final = REPOSITORY_ROOT / "amp-plugin-build.schema.json"
 CORPUS: Final = REPOSITORY_ROOT / "analysis/rust/tests/data/amp-plugin-schema-locations.json"
+COUNTED: Final = {
+    "kind": "gcov",
+    "objects": ["plugin"],
+    "compile_flags": ["-O0", "--coverage"],
+    "link_flags": ["--coverage"],
+}
 
 
 def corpus() -> dict[str, Any]:
@@ -50,9 +58,18 @@ def corpus() -> dict[str, Any]:
     assert isinstance(mutated, dict)
     locations = schema_locations(mutated, schema)
     groups.append({"base": "plugin", "path": ["link_inputs"], "changes": [[seventh, locations]]})
+    counted = {**base, "instrumentation": COUNTED}
+    groups.append(
+        {"base": "counted", "path": [], "changes": [[None, schema_locations(counted, schema)]]}
+    )
+    groups.extend(
+        group
+        for group in cases_of("counted", counted, schema, 99)
+        if group["path"][:1] == ["instrumentation"]
+    )
     return {
         "schema": "loop-timing-witness.amp-plugin-schema-locations.v1",
-        "bases": {"plugin": base},
+        "bases": {"plugin": base, "counted": counted},
         "plugin": groups,
     }
 
@@ -88,3 +105,12 @@ def test_corpus_reaches_the_plugin_schema_constructs() -> None:
     assert len(removed) == 6
     assert all(locations == ["link_inputs"] for locations in removed)
     assert seventh["changes"][0][1] == ["link_inputs"]
+    counted = [group for group in groups if group["base"] == "counted"]
+    assert counted[0]["changes"] == [[None, []]]
+    assert {tuple(group["path"][:2]) for group in counted[1:]} == {
+        ("instrumentation",),
+        ("instrumentation", "kind"),
+        ("instrumentation", "objects"),
+        ("instrumentation", "compile_flags"),
+        ("instrumentation", "link_flags"),
+    }

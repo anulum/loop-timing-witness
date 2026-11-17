@@ -19,6 +19,7 @@ from typing import Any
 from amp_build_dependencies import dependency_hashes
 from amp_plugin_inputs import NATIVE_OBJECTS, ROOT, PluginBuild
 from amp_plugin_preparation import verified_preparation
+from amp_plugin_receipt import instrumentation_record, library_instrumented
 
 from manifest_io import canonical_json_bytes, sha256_of_file
 
@@ -85,13 +86,17 @@ def _add_preparation(
     )
 
 
-def write_plugin_manifest(build: PluginBuild) -> Path:
+def write_plugin_manifest(
+    build: PluginBuild, instrumentation: dict[str, Any] | None = None
+) -> Path:
     """Bind the actual post-build source/header/tool/link closure to the resulting library.
 
     Parameters
     ----------
     build
         Actual Make build selections with complete native compiler dependency records.
+    instrumentation
+        Record of a measurement-only counted variant, or None for the production plugin.
 
     Returns
     -------
@@ -103,11 +108,15 @@ def write_plugin_manifest(build: PluginBuild) -> Path:
     OSError
         If actual original inputs, link artifacts or exclusive receipt are unavailable.
     ValueError
-        If the plant parameter or compiler dependency closure is invalid.
+        If the plant parameter or compiler dependency closure is invalid, or the library's
+        counters disagree with the instrumentation record.
     subprocess.SubprocessError
         If actual Git/compiler/version introspection fails.
     """
     directory = build.directory.resolve()
+    if library_instrumented(directory / "witness_spike_axi.so") != (instrumentation is not None):
+        message = "AMP plugin library counters disagree with its instrumentation"
+        raise ValueError(message)
     model = directory / "rtl"
     records, model_records, dependencies = _compiled_dependencies(directory)
     preparation = verified_preparation(build, dependencies)
@@ -128,6 +137,8 @@ def write_plugin_manifest(build: PluginBuild) -> Path:
         },
         "link_inputs": {str(path): sha256_of_file(path) for path in link_inputs},
     }
+    if instrumentation is not None:
+        data["instrumentation"] = instrumentation
     path = directory / "plugin.json"
     with path.open("xb") as stream:
         stream.write(canonical_json_bytes(data))
@@ -156,8 +167,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--thermal", type=int, required=True)
     parser.add_argument("--fifo-address-bits", type=int, default=8)
     parser.add_argument("--runtime-root", type=Path)
+    parser.add_argument("--instrumentation", default="none")
+    parser.add_argument("--compile-flags", default="")
+    parser.add_argument("--link-flags", default="")
     args = parser.parse_args(argv)
     try:
+        record = instrumentation_record(args.instrumentation, args.compile_flags, args.link_flags)
         path = write_plugin_manifest(
             PluginBuild(
                 args.directory,
@@ -168,7 +183,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.thermal,
                 args.fifo_address_bits,
                 args.runtime_root,
-            )
+            ),
+            record,
         )
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"AMP plugin build receipt: FAIL: {error}", file=sys.stderr)

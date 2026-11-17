@@ -13,6 +13,8 @@ from loop_timing_witness.amp_plugin_receipt import (
     admit_plugin,
     build_identities,
     decode_plugin_receipt,
+    instrumentation_record,
+    library_instrumented,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "admit_plugin",
     "build_identities",
     "decode_plugin_receipt",
+    "instrumentation_record",
+    "library_instrumented",
 ]

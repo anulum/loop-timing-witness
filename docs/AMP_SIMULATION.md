@@ -151,8 +151,9 @@ actual Spike AXI adapter and Verilator runtime. Its output is
 The handwritten C and C++ inputs use `-O2` with strict warnings. The Verilator runtime
 objects also use `-O2`, with matching dependency-preparation and compilation flags. Host compiler optimisation
 keeps long functional captures within their wall-clock budget; it does not change the RTL sample
-period or establish physical processor latency. Native coverage variants retain their explicit
-compiler flags and are reported separately from the admitted production capture.
+period or establish physical processor latency. These compile flags are fixed: an assignment on
+Make's command line does not change them. The counted variant below adds its flags explicitly and
+records them in its receipt.
 Before Verilator generation, the target writes an exclusive `generation.json` with original
 RTL, handwritten code, SDK source/header hashes, Git revision and tracked patch. It records
 the actual compiler frontend, collect2, assembler and linker, Verilator wrapper and native
@@ -188,6 +189,42 @@ a compromised build host or establish physical performance.
 The plugin is tied to the selected Spike API and ABI; rebuilding against a different SDK does
 not establish compatibility with an older executable. Capture records the actual executed
 executable/plugin hashes; retain the original build log and matching SDK separately.
+
+### Measurement-only counted variant
+
+`make amp-spike-plugin AMP_PLUGIN_INSTRUMENTATION=coverage` builds the same plugin with GCC
+counters in its device object: the translation unit of the Spike adapter, its RAM transport and
+the AMP logger. Only that object changes:
+
+- its dependency pass and its compile add
+  `-O0 --coverage -fprofile-abs-path -fprofile-filter-files=runtime/` after the fixed flags;
+- the link adds `--coverage`.
+
+The dependency pass takes the same flags, because at `-O0` GCC includes fewer glibc headers than
+at `-O2`. The filter is unanchored: this build names its sources relative to the repository, while
+test-owned diagnostic variants include the same headers by absolute name. The configuration parser,
+the controller, the model and the Verilator runtime objects keep their production flags.
+`AMP_PLUGIN_INSTRUMENTATION` defaults to `none`, and any other value is refused before generation.
+
+The variant's receipt carries an optional `instrumentation` member: kind `gcov`, the counted
+object `plugin`, and the exact compile and link flags. A production receipt has no such member.
+The receipt writer refuses a member that disagrees with the library. It judges the library by
+libgcov's registration entry point `__gcov_init`, which every counted object calls.
+
+The following refuse a receipt with the member, with
+`AMP plugin build is a coverage measurement variant, never admitted evidence`:
+
+- capture admission;
+- the snapshot check of a capture;
+- offline analysis, in Python and in the native analysis package.
+
+The variant therefore cannot produce or pass as an admitted capture. Only a coverage run admits
+it, by calling `admit_plugin(..., instrumented=True)`. That call refuses a production receipt
+(`AMP coverage run requires an instrumented plugin build`). A library whose counters disagree with
+its receipt is refused under either selection.
+
+Spike handles `SIGABRT` itself and leaves through `exit`. A run that the plugin refuses through an
+uncaught exception therefore still writes its counters.
 
 ## Public capture arguments
 

@@ -168,7 +168,7 @@ The IRQ-free Linux AMP logger, mailbox startup and board qualification requireme
 | `measurement-domain.json`, `measurement-domain.schema.json` | identity, boundary and planned measurement contracts |
 | `run-manifest.schema.json` | versioned, provenance-bound run input contract |
 | `amp-capture.schema.json` | actual dedicated-hart ISA logger receipt and artifact custody |
-| `amp-plugin-build.schema.json` | original generation/compilation, native compiler, SDK, source/header and link provenance |
+| `amp-plugin-build.schema.json` | original generation/compilation, native compiler, SDK, source/header and link provenance, and a counted variant's instrumentation |
 | `capability-inventory.json` | generated public inventory, empty at `architecture_only` |
 | `development-dependency-licences.json` | reviewed licence of every pinned development tool |
 | `docs/` | architecture, measurement protocol, threat model, decision records |

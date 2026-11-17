@@ -257,6 +257,32 @@
     },
     "runtime_libraries": {
       "$ref": "#/$defs/hashes"
+    },
+    "instrumentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "gcov"
+        },
+        "objects": {
+          "const": [
+            "plugin"
+          ]
+        },
+        "compile_flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "link_flags": {
+          "$ref": "#/$defs/flags"
+        }
+      },
+      "required": [
+        "kind",
+        "objects",
+        "compile_flags",
+        "link_flags"
+      ]
     }
   },
   "required": [
@@ -320,6 +346,14 @@
         "sha256",
         "version"
       ]
+    },
+    "flags": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "hashes": {
       "type": "object",

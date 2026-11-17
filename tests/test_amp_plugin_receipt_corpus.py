@@ -16,7 +16,8 @@ Every case starts from the reduced real receipt
   preparation broken alone (identities, every group of names, the
   preparation and generation digests, a preparation path without a name),
   plus spellings Python admits (an identity equal as a float, doubled
-  separators, the root folder and a double-slash root);
+  separators, the root folder and a double-slash root), and a coverage
+  instrumentation record, which no analysis admits;
 - ``snapshot`` cases run ``validate_plugin_snapshot`` on a capture folder
   laid out as ``snapshot_plugin`` writes it, for a receipt whose dependency
   digests are rewritten to small known contents, then changed.
@@ -51,6 +52,12 @@ if TYPE_CHECKING:
 BASE: Final = REPOSITORY_ROOT / "tests/data/amp-plugin-build-reduced.json"
 CORPUS: Final = REPOSITORY_ROOT / "analysis/rust/tests/data/amp-plugin-receipt-cases.json"
 ZERO: Final = "0" * 64
+COUNTED: Final = {
+    "kind": "gcov",
+    "objects": ["plugin"],
+    "compile_flags": ["-O0", "--coverage"],
+    "link_flags": ["--coverage"],
+}
 
 
 def _base() -> dict[str, Any]:
@@ -154,6 +161,10 @@ def _decode_cases() -> dict[str, bytes]:
         "root folder": changed(lambda r: _moved(r, "/compilation.json", "/generation.json")),
         "root folder without generation": changed(lambda r: _moved(r, "/compilation.json")),
         "double-slash root": changed(lambda r: _moved(r, "//x/c.json", "//x/generation.json")),
+        "coverage instrumentation recorded": changed(lambda r: r.update(instrumentation=COUNTED)),
+        "instrumentation of another kind": changed(
+            lambda r: r.update(instrumentation={**COUNTED, "kind": "llvm"})
+        ),
     }
 
 

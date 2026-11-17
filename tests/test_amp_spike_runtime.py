@@ -266,6 +266,11 @@ def test_native_synthetic_overload_refused(tmp_path: Path, plugin_environment: s
             "Assertion `plic.get()' failed",
         ),
         (
+            'compatible = "riscv,plic0";',
+            'compatible = "sifive,plic-1.0.0";',
+            "Witness device requires an available architectural PLIC source",
+        ),
+        (
             "reg = <0x00 0x10000000 0x00 0x100>;",
             "reg = <0 0x40000080 0 0x100>;",
             "overlaps an existing simulator device",
@@ -276,6 +281,9 @@ def test_actual_native_topology_refusal(
     tmp_path: Path, plugin_environment: str, old: str, new: str, finding: str
 ) -> None:
     """Refuse missing real PLIC wiring or a real UART inside the Witness aperture.
+
+    Spike accepts a PLIC compatible with ``sifive,plic-1.0.0`` as well; the Witness
+    device asks for ``riscv,plic0`` only and refuses the other one itself.
 
     Parameters
     ----------
@@ -313,6 +321,25 @@ def test_actual_native_topology_refusal(
     assert "WITNESS_AMP_COMPLETION" not in result.stdout
     assert not (tmp_path / "capture.json").exists()
     assert not (tmp_path / "manifest.json").exists()
+
+
+def test_second_registration_refused(tmp_path: Path) -> None:
+    """Refuse loading both plant plugins into one Spike, as both register ``witness_axi``.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive arguments and native diagnostics.
+    """
+    image = Path(os.environ["WITNESS_AMP_IMAGE"])
+    argv = spike_argv(image, Path(os.environ["WITNESS_SPIKE_PLUGIN"]), tmp_path)
+    index = next(i for i, text in enumerate(argv) if text.startswith("--extlib="))
+    argv.insert(index + 1, "--extlib=" + os.environ["WITNESS_SPIKE_THERMAL_PLUGIN"])
+    result = run_argv(argv, tmp_path)
+    assert result.returncode != 0
+    assert 'Plugin "witness_axi" already registered' in result.stderr
+    assert "WITNESS_AMP_COMPLETION" not in result.stdout
+    assert not (tmp_path / "capture.json").exists()
 
 
 @pytest.mark.parametrize(

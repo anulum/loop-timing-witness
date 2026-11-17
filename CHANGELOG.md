@@ -27,6 +27,23 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `make plugin-coverage`, run in hosted shard 4, requires every line and branch outcome of the
+  Spike plugin's device object to run: `runtime/isa/spike_axi_device.cpp`,
+  `runtime/isa/spike_amp_transport.h` and `runtime/amp_logger.h`.
+  - It builds the counted variant of both plant plugins and runs the direct Spike corpus with them,
+    the diagnostic variants passing the counters on.
+  - The capture refuses the variant. A run with the capture tests counted the same outcomes as one
+    without them.
+  - `runtime/isa/plugin-coverage-review.json` lists the outcomes no real surface reaches, each with
+    its reason. Examples are cleanup landing pads, which never run because Spike catches no exception,
+    and requests Spike's bus never passes to a device.
+  - New scenarios: `tests/test_amp_device_probe.py` calls the unchanged device's public `load` and
+    `store` refusals and its registry device-tree callback, then completes the run. A device tree
+    whose PLIC is `sifive,plic-1.0.0` is refused by the device. Loading both plant plugins into one
+    Spike is refused (`Plugin "witness_axi" already registered`).
+  - `tools/c_coverage_gate.py` accepts a line that gcov lists for several functions, some without
+    branches. Spike's `REGISTER_DEVICE` places such functions on one line; a branchless record adds
+    only its line count.
 - `make runtime-coverage`, run in the hosted controller shard, requires every line and branch
   outcome of the judged host C++ runtime sources to run: `exclusive_output.h`,
   `run_configuration.cpp`, `run_options.h`, `run_output.h`, `run_control.h`, `run_metadata.h`,

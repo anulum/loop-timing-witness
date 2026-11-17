@@ -249,6 +249,9 @@ jobs:
           # Real-time priority 1 for this shell: the policy priority readback scenario runs as FIFO.
           sudo prlimit --pid "$$" --rtprio=1:1
           make runtime-coverage
+      - name: Spike plugin device line and branch coverage
+        if: matrix.shard == 4
+        run: make plugin-coverage
       - name: Native Linux UIO adapter build
         run: make run-uio
       - name: Fetch exact native analysis dependencies

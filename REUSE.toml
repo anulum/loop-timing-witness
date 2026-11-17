@@ -26,6 +26,7 @@ path = [
     "benchmarks/control_run_analysis.json",
     "benchmarks/controller_coverage.json",
     "runtime/coverage-review.json",
+    "runtime/isa/plugin-coverage-review.json",
     "capability-inventory.json",
     "development-dependency-licences.json",
     "docs/assets/loop-timing-witness-system-block-diagram.pdf",

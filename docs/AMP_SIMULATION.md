@@ -225,6 +225,8 @@ its receipt is refused under either selection.
 
 Spike handles `SIGABRT` itself and leaves through `exit`. A run that the plugin refuses through an
 uncaught exception therefore still writes its counters.
+`make plugin-coverage` builds the variant for both plants and runs the direct Spike corpus with it. Its
+[line and branch gate](CONTROLLER_COVERAGE.md#spike-plugin-device-gate) runs in hosted shard 4.
 
 ## Public capture arguments
 

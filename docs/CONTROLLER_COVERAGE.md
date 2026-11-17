@@ -132,6 +132,47 @@ start without `RLIMIT_RTPRIO` of at least 1; the hosted step raises it with `sud
 Without that permission the scenario verifies the kernel's refusal of FIFO instead, and the two
 outcomes it would cover stay untaken.
 
+## Spike plugin device gate
+
+`make plugin-coverage`, run in hosted shard 4, judges the Spike plugin's device object:
+
+- `runtime/isa/spike_axi_device.cpp`;
+- `runtime/isa/spike_amp_transport.h`;
+- `runtime/amp_logger.h`, in its Spike instance. The Linux UIO instance needs the board.
+
+**What the target does.**
+
+1. It builds the
+   [measurement-only counted variant](AMP_SIMULATION.md#measurement-only-counted-variant) of both plant plugins.
+2. It runs the direct Spike corpus with them in place of the production plugins. This corpus covers:
+   - argument, topology and completion refusals;
+   - the logger's public API;
+   - architectural, startup, consumer, cycle, kernel and interrupt faults;
+   - the public device interface probe.
+3. It exports every report.
+4. It runs [`c_coverage_gate.py`](../tools/c_coverage_gate.py) on the three sources.
+
+Diagnostic variants built on the counted plugins add the same counters. Their own copied sources lie outside
+`runtime/` and get none, while the production headers they include are counted.
+
+**Why the capture tests are not in the corpus.** The capture refuses the counted variant. A corpus run with the
+capture tests counted exactly the same lines and outcomes as one without them, so the capture tests keep the
+production plugins in the normal shards.
+
+**Two facts behind the reviewed list.**
+
+- Spike catches no exception. A refusal ends through `std::terminate`, and Spike's own abort handler then exits
+  through `exit`, so the counters of a refused run are written. GCC's unwinder, finding no handler, runs no
+  cleanup on the way. The cleanup landing pads on throw paths therefore never run.
+- Spike's bus passes a device only an access that lies whole inside it. It passes a misaligned word only under
+  `--misaligned`.
+
+[`tests/test_amp_device_probe.py`](../tests/test_amp_device_probe.py) includes the production device source verbatim.
+It calls the public `load` and `store` interface with the requests Spike's bus never forms, and asks Spike's registry
+for the device-tree text that Spike requests only for built-in devices.
+[`runtime/isa/plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) lists the remaining
+outcomes, each with its reason.
+
 ## Compile instrumented public interfaces
 
 Run from the repository root with its development environment installed. Use a fresh

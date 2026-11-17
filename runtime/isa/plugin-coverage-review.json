@@ -1,0 +1,120 @@
+{
+  "entries": [
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 51,
+      "outcome": 3,
+      "condition": "base > numeric_limits<reg_t>::max() - 255",
+      "reason": "the compiler's CFG puts base % 256 != 0, then this test, then interrupt == 0 on line 51 (base == 0 is attributed to line 53); a base that passed base % 256 != 0 is a multiple of 256, and every multiple of 256 is at most max - 255 = 0xffffffffffffff00, so no base reaches this outcome",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 4,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 5,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 6,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 7,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 174,
+      "outcome": 6,
+      "condition": "cleanup of the new-expression when the witness_axi_t constructor throws",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; the constructor's refusals (for example the modelled overload) do throw here, and the tests observe them, but the unwinder never enters this pad",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 174,
+      "outcome": 7,
+      "condition": "cleanup of the new-expression when the witness_axi_t constructor throws",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; the constructor's refusals (for example the modelled overload) do throw here, and the tests observe them, but the unwinder never enters this pad",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 190,
+      "outcome": 6,
+      "condition": "!mmio_device_map().emplace(\"witness_axi\", this).second in REGISTER_DEVICE",
+      "reason": "Spike's REGISTER_DEVICE refuses a second registration of the name with \"Plugin \\\"witness_axi\\\" already registered\"; test_second_registration_refused loads both plant plugins and observes that refusal, but it is thrown from the second library's static initialiser inside dlopen, while Spike still parses its options and before it installs its own SIGABRT handler, so the process dies by the signal (status 134) and that library writes no counters",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 190,
+      "outcome": 8,
+      "condition": "completion of a string concatenation building the already-registered message",
+      "reason": "Spike's REGISTER_DEVICE refuses a second registration of the name with \"Plugin \\\"witness_axi\\\" already registered\"; test_second_registration_refused loads both plant plugins and observes that refusal, but it is thrown from the second library's static initialiser inside dlopen, while Spike still parses its options and before it installs its own SIGABRT handler, so the process dies by the signal (status 134) and that library writes no counters",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 190,
+      "outcome": 10,
+      "condition": "completion of a string concatenation building the already-registered message",
+      "reason": "Spike's REGISTER_DEVICE refuses a second registration of the name with \"Plugin \\\"witness_axi\\\" already registered\"; test_second_registration_refused loads both plant plugins and observes that refusal, but it is thrown from the second library's static initialiser inside dlopen, while Spike still parses its options and before it installs its own SIGABRT handler, so the process dies by the signal (status 134) and that library writes no counters",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 190,
+      "outcome": 12,
+      "condition": "completion of a string concatenation building the already-registered message",
+      "reason": "Spike's REGISTER_DEVICE refuses a second registration of the name with \"Plugin \\\"witness_axi\\\" already registered\"; test_second_registration_refused loads both plant plugins and observes that refusal, but it is thrown from the second library's static initialiser inside dlopen, while Spike still parses its options and before it installs its own SIGABRT handler, so the process dies by the signal (status 134) and that library writes no counters",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_amp_transport.h",
+      "line": 47,
+      "outcome": 1,
+      "condition": "the bus entry passed to dynamic_cast is a null pointer",
+      "reason": "dynamic_cast tests its operand for null before the type check; Spike's bus holds only constructed objects (sim.cc adds the debug module, the configured mem_t memories, the IMSIC pages, every factory device only under if (device), and the boot ROM)",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_amp_transport.h",
+      "line": 65,
+      "outcome": 4,
+      "condition": "!ram->load(...) for a mailbox word",
+      "reason": "mem_t is Spike's only abstract_mem_t, and mem_t::load_store (devices.cc) refuses only addr + len < addr or addr + len > size; the constructor admits the mailbox only when all of it lies in this memory, and offset() admits only aligned words inside the mailbox, so every access ends at or before the memory's end",
+      "lines": [
+        66
+      ]
+    },
+    {
+      "file": "runtime/isa/spike_amp_transport.h",
+      "line": 82,
+      "outcome": 4,
+      "condition": "!ram->store(...) for a consumer-owned word",
+      "reason": "mem_t is Spike's only abstract_mem_t, and mem_t::load_store (devices.cc) refuses only addr + len < addr or addr + len > size; the constructor admits the mailbox only when all of it lies in this memory, and offset() admits only aligned words inside the mailbox, so every access ends at or before the memory's end",
+      "lines": [
+        83
+      ]
+    }
+  ]
+}

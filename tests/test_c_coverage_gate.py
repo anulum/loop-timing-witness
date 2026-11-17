@@ -223,6 +223,31 @@ def test_unsupported_and_inconsistent_reports_are_refused(
     assert capsys.readouterr().err == f"GCC coverage: FAIL {UNSUPPORTED}\n"
 
 
+def test_a_branchless_record_on_a_branching_line_adds_only_its_count(tree: Path) -> None:
+    """Add a record without branches, as a macro's factory function places one, to the count.
+
+    gcov lists a line once for each function with code on it; a branchless record before
+    or after the branching one leaves the branches as they are.
+
+    Parameters
+    ----------
+    tree
+        Owned source tree.
+    """
+    sources = Selection.of([tree / "sources"])
+    report = _load(_program(tree, "negative", []))
+    plain = combine([report], sources)["choose.c"]
+    record = report["files"][0]
+    branching = next(line for line in record["lines"] if line["branches"])
+    branchless = {**branching, "count": 5, "branches": []}
+    record["lines"] = [branchless, *record["lines"], branchless]
+    counts = combine([report], sources)["choose.c"]
+    number = int(branching["line_number"])
+    assert counts.lines[number] == plain.lines[number] + 10
+    assert counts.branches == plain.branches
+    assert counts.exceptional == plain.exceptional
+
+
 def test_long_uncovered_ranges_are_shortened(tree: Path) -> None:
     """List at most ten unexecuted lines and mark the rest.
 

@@ -78,6 +78,11 @@ def _commands(
 ) -> list[list[str]]:
     """Return the strict compile command and the shared-object link command.
 
+    A counted base plugin passes its recorded instrumentation on: the diagnostic object gets
+    the same compile flags after the strict ones and the link the same link flags, so the
+    production headers it includes are counted, while its own copied source, outside
+    ``runtime/``, gets no counters.
+
     Parameters
     ----------
     production
@@ -97,11 +102,13 @@ def _commands(
     compiler = receipt["compilers"]["cxx"]["driver"]
     includes = _includes(receipt)
     strict = ["-std=c++20", "-O2", "-fPIC", "-Wall", "-Wextra", "-Werror", "-Wconversion"]
+    record = receipt.get("instrumentation", {"compile_flags": [], "link_flags": []})
     return [
         [
             compiler["path"],
             *strict,
             "-Wshadow",
+            *record["compile_flags"],
             "-I" + str(production.parent / "rtl"),
             *[argument for path in includes for argument in ["-isystem", str(path)]],
             *("-MD", "-MF", str(directory / "plugin.d")),
@@ -110,6 +117,7 @@ def _commands(
         [
             compiler["path"],
             "-shared",
+            *record["link_flags"],
             "-Wl,--fatal-warnings",
             str(directory / "plugin.o"),
             *[name for name in receipt["link_inputs"] if Path(name).name != "plugin.o"],

@@ -10,8 +10,10 @@
 
 The reports are ``gcov --json-format --stdout --branch-probabilities`` documents
 of GCC ``--coverage`` builds. One source compiled into several programs appears
-in several reports; their counts are added line by line and branch by branch,
-and the same line must carry the same branches in every report.
+in several reports; their counts are added line by line and branch by branch.
+Every record of a line that carries branches must carry the same ones, in every
+report; a record without branches, such as a function a macro places on a
+branching line, adds only its line count.
 
 ``--sources DIR`` judges every file under a directory and requires each ``.c``
 file directly in it to be measured, so a new file cannot pass unmeasured.
@@ -167,6 +169,13 @@ class CoverageError(ValueError):
 def _add_line(counts: SourceCounts, name: str, line: dict[str, Any]) -> None:
     """Add one gcov line record to the accumulated counts of its source.
 
+    gcov lists a line once for each function that has code on it. Instances of one
+    template carry the same branches and are added together. A macro can also place
+    functions with and without branches on one line, such as a registration whose
+    static initialiser branches while its factory functions do not. A record
+    without branches therefore adds only its line count, and the records with
+    branches must all carry the same ones.
+
     Parameters
     ----------
     counts
@@ -185,9 +194,15 @@ def _add_line(counts: SourceCounts, name: str, line: dict[str, Any]) -> None:
     outcomes = [int(branch["count"]) for branch in line["branches"]]
     exceptional = [bool(branch.get("throw", False)) for branch in line["branches"]]
     counts.lines[number] = counts.lines.get(number, 0) + int(line["count"])
-    previous = counts.branches.setdefault(number, [0] * len(outcomes))
-    kinds = counts.exceptional.setdefault(number, exceptional)
-    if len(previous) != len(outcomes) or kinds != exceptional:
+    if not outcomes:
+        counts.branches.setdefault(number, [])
+        counts.exceptional.setdefault(number, [])
+        return
+    if not counts.branches.get(number):
+        counts.branches[number] = [0] * len(outcomes)
+        counts.exceptional[number] = exceptional
+    previous = counts.branches[number]
+    if len(previous) != len(outcomes) or counts.exceptional[number] != exceptional:
         message = f"{name}:{number}: branch structure differs between reports"
         raise CoverageError(message)
     counts.branches[number] = [

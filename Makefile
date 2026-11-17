@@ -245,6 +245,46 @@ runtime-coverage:
 	$(VENV)/python tools/c_coverage_gate.py $(addprefix --source ,$(RUNTIME_COVERAGE_SOURCES)) \
 		--reviewed runtime/coverage-review.json "$(RUNTIME_COVERAGE_DIRECTORY)"/reports/*.json
 
+# The Spike plugin's device object (the adapter, its RAM transport and the AMP logger) runs
+# under the counted variant of amp-spike-plugin: the direct Spike and diagnostic corpus uses it
+# in place of the production plugins, and diagnostic variants pass its counters on. Capture
+# refuses the variant, so the capture tests keep the production plugins in the normal shards.
+# The Spike, SDK and AMP image selections come from the environment, as for those tests; the
+# output directory must be new. runtime/isa/plugin-coverage-review.json lists, with reasons, the
+# outcomes no real surface reaches. C++ exception edges are reported, not required.
+PLUGIN_COVERAGE_DIRECTORY ?= build/plugin-coverage
+PLUGIN_COVERAGE_SOURCES := runtime/isa/spike_axi_device.cpp runtime/isa/spike_amp_transport.h \
+	runtime/amp_logger.h
+PLUGIN_COVERAGE_TESTS := tests/test_amp_architectural_refusals.py tests/test_amp_consumer_fault.py \
+	tests/test_amp_consumer_stall.py tests/test_amp_cycle_fault.py tests/test_amp_device_probe.py \
+	tests/test_amp_exit_channel.py tests/test_amp_image_contract.py tests/test_amp_interrupt_fault.py \
+	tests/test_amp_kernel_fault.py tests/test_amp_logger.py tests/test_amp_logger_api.py \
+	tests/test_amp_spike_command.py tests/test_amp_spike_runtime.py tests/test_amp_spurious_claim.py \
+	tests/test_amp_startup_admission_fault.py tests/test_amp_startup_faults.py
+
+.PHONY: plugin-coverage
+plugin-coverage:
+	test -n "$(WITNESS_SPIKE_SOURCE)" -a -n "$(WITNESS_SPIKE_BUILD)"
+	test ! -e "$(PLUGIN_COVERAGE_DIRECTORY)"
+	mkdir -p "$(PLUGIN_COVERAGE_DIRECTORY)/reports"
+	$(MAKE) amp-spike-plugin AMP_PLUGIN_INSTRUMENTATION=coverage SIMULATION_THERMAL=0 \
+		AMP_SPIKE_SOURCE="$(WITNESS_SPIKE_SOURCE)" AMP_SPIKE_BUILD="$(WITNESS_SPIKE_BUILD)" \
+		AMP_PLUGIN_DIRECTORY="$(abspath $(PLUGIN_COVERAGE_DIRECTORY))/mechanical"
+	$(MAKE) amp-spike-plugin AMP_PLUGIN_INSTRUMENTATION=coverage SIMULATION_THERMAL=1 \
+		AMP_SPIKE_SOURCE="$(WITNESS_SPIKE_SOURCE)" AMP_SPIKE_BUILD="$(WITNESS_SPIKE_BUILD)" \
+		AMP_PLUGIN_DIRECTORY="$(abspath $(PLUGIN_COVERAGE_DIRECTORY))/thermal"
+	env WITNESS_SPIKE_PLUGIN="$(abspath $(PLUGIN_COVERAGE_DIRECTORY))/mechanical/witness_spike_axi.so" \
+		WITNESS_SPIKE_THERMAL_PLUGIN="$(abspath $(PLUGIN_COVERAGE_DIRECTORY))/thermal/witness_spike_axi.so" \
+		$(VENV)/pytest -q -p no:cacheprovider --no-cov \
+		--basetemp="$(abspath $(PLUGIN_COVERAGE_DIRECTORY))/pytest" $(PLUGIN_COVERAGE_TESTS)
+	find "$(PLUGIN_COVERAGE_DIRECTORY)" -name '*.gcno' | sort | while read -r note; do \
+		gcov --json-format --stdout --branch-probabilities "$$note" \
+			> "$(PLUGIN_COVERAGE_DIRECTORY)/reports/$$(printf '%s' "$${note%.gcno}" | tr / _).json" \
+			|| exit $$?; \
+	done
+	$(VENV)/python tools/c_coverage_gate.py $(addprefix --source ,$(PLUGIN_COVERAGE_SOURCES)) \
+		--reviewed runtime/isa/plugin-coverage-review.json "$(PLUGIN_COVERAGE_DIRECTORY)"/reports/*.json
+
 # Every line and branch of the Rust controller crate must run too: its own tests, the
 # streaming program under the shared parity and refusal tests, and one benchmark pass, all
 # with the LLVM branch instrumentation of the native analysis gate.

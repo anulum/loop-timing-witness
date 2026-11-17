@@ -19,6 +19,21 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
+/** Make the kernel answer one system call of this child with an errno without running it.
+ *
+ * An errno of zero skips the call and reports success, so the policy stays unchanged.
+ */
+static void answer_system_call(long number, int error) {
+    std::array<sock_filter, 4> filter{
+        {BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(seccomp_data, nr)),
+         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, static_cast<std::uint32_t>(number), 0, 1),
+         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | static_cast<std::uint32_t>(error)),
+         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)}};
+    sock_fprog program{static_cast<unsigned short>(filter.size()), filter.data()};
+    assert(prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0);
+    assert(prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program) == 0);
+}
+
 /** Refuse invalid public options without changing the actual child-thread policy. */
 int main(int argc, char **argv) {
     if (argc != 2)
@@ -36,6 +51,8 @@ int main(int argc, char **argv) {
     witness::RunOptions options;
     const std::string scenario = argv[1];
     std::string message = "invalid CPU, scheduler or priority request";
+    bool reads_denied = false;
+    auto expected_cpus = before.cpus;
     if (scenario == "cpu_low")
         options.cpu = -2;
     else if (scenario == "scheduler_low")
@@ -81,15 +98,7 @@ int main(int argc, char **argv) {
         options.cpu = before.cpus.front();
     } else if (scenario == "affinity_denied" || scenario == "scheduler_denied") {
         const bool affinity = scenario == "affinity_denied";
-        const auto syscall = affinity ? __NR_sched_setaffinity : __NR_sched_setscheduler;
-        std::array<sock_filter, 4> filter{
-            {BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(seccomp_data, nr)),
-             BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, static_cast<std::uint32_t>(syscall), 0, 1),
-             BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | EACCES),
-             BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)}};
-        sock_fprog program{static_cast<unsigned short>(filter.size()), filter.data()};
-        assert(prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0);
-        assert(prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program) == 0);
+        answer_system_call(affinity ? __NR_sched_setaffinity : __NR_sched_setscheduler, EACCES);
         if (affinity)
             options.cpu = before.cpus.front();
         else
@@ -97,8 +106,43 @@ int main(int argc, char **argv) {
         message = std::string(affinity ? "cannot set Linux CPU affinity (errno "
                                        : "cannot set Linux scheduler (errno ") +
                   std::to_string(EACCES) + ")";
+    } else if (scenario == "scheduler_read_denied" || scenario == "parameter_read_denied") {
+        message = "cannot read Linux scheduler policy";
+        answer_system_call(scenario == "scheduler_read_denied" ? __NR_sched_getscheduler
+                                                               : __NR_sched_getparam,
+                           EPERM);
+        options.cpu = before.cpus.front();
+        reads_denied = true;
+    } else if (scenario == "nice_read_denied") {
+        message = "cannot read Linux nice value";
+        answer_system_call(__NR_getpriority, EPERM);
+        options.cpu = before.cpus.front();
+        reads_denied = true;
+    } else if (scenario == "affinity_read_denied" || scenario == "affinity_mask_unbounded") {
+        const bool unbounded = scenario == "affinity_mask_unbounded";
+        message = unbounded ? "Linux CPU affinity exceeds supported mask size"
+                            : "cannot read Linux CPU affinity";
+        answer_system_call(__NR_sched_getaffinity, unbounded ? EINVAL : EPERM);
+        options.cpu = before.cpus.front();
+        reads_denied = true;
+    } else if (scenario == "affinity_ignored") {
+        message = "Linux scheduler/affinity readback differs from request";
+        if (before.cpus.size() < 2) {
+            std::cerr << "affinity_ignored needs more than one inherited CPU\n";
+            return 1;
+        }
+        answer_system_call(__NR_sched_setaffinity, 0);
+        options.cpu = before.cpus.front();
+    } else if (scenario == "fifo_ignored") {
+        // The affinity change applies; the skipped scheduler change leaves SCHED_BATCH.
+        message = "Linux scheduler/affinity readback differs from request";
+        answer_system_call(__NR_sched_setscheduler, 0);
+        options.scheduler = 1;
+        options.priority = 1;
+        options.cpu = before.cpus.front();
+        expected_cpus = {before.cpus.front()};
     } else if (scenario != "preserve" && scenario != "normal" && scenario != "cpu_only" &&
-               scenario != "normal_unpinned")
+               scenario != "normal_unpinned" && scenario != "fifo_priority_ignored")
         return 1;
     if (scenario == "preserve" || scenario == "normal" || scenario == "cpu_only" ||
         scenario == "normal_unpinned") {
@@ -125,6 +169,31 @@ int main(int argc, char **argv) {
         const auto actual = witness::read_host_policy();
         assert(actual.cpus == std::vector<int>{before.cpus.front()});
         assert(actual.nice == before.nice);
+    } else if (scenario == "fifo_priority_ignored") {
+        // A FIFO thread whose priority change the kernel skips: the scheduler reads back equal
+        // and only the priority differs. Without real-time permission the kernel refuses FIFO.
+        sched_param fifo{};
+        fifo.sched_priority = 1;
+        if (sched_setscheduler(0, SCHED_FIFO, &fifo) != 0) {
+            assert(errno == EPERM);
+        } else {
+            answer_system_call(__NR_sched_setscheduler, 0);
+            options.scheduler = 1;
+            options.priority = 2;
+            options.cpu = before.cpus.front();
+            bool refused = false;
+            try {
+                witness::apply_host_policy(options);
+            } catch (const std::runtime_error &error) {
+                refused = true;
+                assert(std::string(error.what()) ==
+                       "Linux scheduler/affinity readback differs from request");
+            }
+            assert(refused);
+            const auto actual = witness::read_host_policy();
+            assert(actual.scheduler == SCHED_FIFO && actual.priority == 1);
+            assert(actual.cpus == std::vector<int>{before.cpus.front()});
+        }
     } else {
         bool refused = false;
         try {
@@ -134,9 +203,11 @@ int main(int argc, char **argv) {
             assert(std::string(error.what()) == message);
         }
         assert(refused);
-        const auto actual = witness::read_host_policy();
-        assert(actual.scheduler == before.scheduler && actual.priority == before.priority);
-        assert(actual.nice == before.nice && actual.cpus == before.cpus);
+        if (!reads_denied) {
+            const auto actual = witness::read_host_policy();
+            assert(actual.scheduler == before.scheduler && actual.priority == before.priority);
+            assert(actual.nice == before.nice && actual.cpus == expected_cpus);
+        }
     }
     std::cout << "verified " << scenario << '\n';
 }

@@ -4,9 +4,9 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — complete C controller coverage gate
+# Loop Timing Witness — complete GCC-counted C and C++ coverage gate
 
-"""Combine real GCC coverage reports and accept only complete C coverage."""
+"""Combine real GCC coverage reports and accept only complete C and C++ coverage."""
 
 from __future__ import annotations
 
@@ -17,7 +17,16 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from c_coverage_gate import FORMAT_VERSION, UNSUPPORTED, CoverageError, combine, findings, main
+from c_coverage_gate import (
+    FORMAT_VERSION,
+    UNSUPPORTED,
+    CoverageError,
+    Selection,
+    combine,
+    findings,
+    load_reviewed,
+    main,
+)
 
 if TYPE_CHECKING:
     from conftest import RunTool
@@ -144,12 +153,13 @@ def test_two_real_programs_cover_the_shared_source_only_together(
     """
     negative = _program(tree, "negative", [])
     positive = _program(tree, "positive", ["take-positive", "branch"])
-    alone = findings(combine([_load(negative)], tree / "sources"), tree / "sources")
+    sources = Selection.of([tree / "sources"])
+    alone = findings(combine([_load(negative)], sources), sources)
     assert len(alone) == 2
     assert alone[0].startswith("choose.c: lines 3/4, unexecuted 3")
     assert alone[1].startswith("choose.c: branches 1/2, untaken on lines 2")
     assert main(["--sources", str(tree / "sources"), str(negative), str(positive)]) == 0
-    assert capsys.readouterr().out == "C coverage: PASS lines 4/4, branches 2/2\n"
+    assert capsys.readouterr().out == "GCC coverage: PASS lines 4/4, branches 2/2\n"
 
 
 def test_the_driver_outside_the_sources_is_not_judged_and_a_missing_source_fails(
@@ -178,10 +188,11 @@ def test_the_driver_outside_the_sources_is_not_judged_and_a_missing_source_fails
     )
     driver_report = json.loads(driver.stdout)
     assert [Path(record["file"]).name for record in driver_report["files"]] == ["driver.c"]
-    combined = combine([report, driver_report], tree / "sources")
+    selection = Selection.of([tree / "sources"])
+    combined = combine([report, driver_report], selection)
     assert set(combined) == {"choose.c"}
     (tree / "sources/added.c").write_text("int added(void) { return 0; }\n", encoding="utf-8")
-    assert findings(combined, tree / "sources")[0] == "added.c: not measured"
+    assert findings(combined, selection)[0] == "added.c: not measured"
 
 
 def test_unsupported_and_inconsistent_reports_are_refused(
@@ -196,7 +207,7 @@ def test_unsupported_and_inconsistent_reports_are_refused(
     capsys
         Captured command output.
     """
-    sources = tree / "sources"
+    sources = Selection.of([tree / "sources"])
     for document in ({"format_version": "0", "files": []}, {"format_version": FORMAT_VERSION}):
         with pytest.raises(CoverageError, match=UNSUPPORTED):
             combine([document], sources)
@@ -208,8 +219,8 @@ def test_unsupported_and_inconsistent_reports_are_refused(
         combine([report, changed], sources)
     path = tree / "foreign.json"
     path.write_text(json.dumps({"format_version": "0", "files": []}), encoding="utf-8")
-    assert main(["--sources", str(sources), str(path)]) == 2
-    assert capsys.readouterr().err == f"C coverage: FAIL {UNSUPPORTED}\n"
+    assert main(["--sources", str(tree / "sources"), str(path)]) == 2
+    assert capsys.readouterr().err == f"GCC coverage: FAIL {UNSUPPORTED}\n"
 
 
 def test_long_uncovered_ranges_are_shortened(tree: Path) -> None:
@@ -226,7 +237,8 @@ def test_long_uncovered_ranges_are_shortened(tree: Path) -> None:
         "current_working_directory": str(tree),
         "files": [{"file": str(tree / "sources/choose.c"), "lines": lines}],
     }
-    assert findings(combine([report], tree / "sources"), tree / "sources") == [
+    sources = Selection.of([tree / "sources"])
+    assert findings(combine([report], sources), sources) == [
         "choose.c: lines 0/12, unexecuted 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, …"
     ]
 
@@ -244,4 +256,286 @@ def test_the_command_reports_through_its_exit_status(tree: Path, run_tool: RunTo
     report = _program(tree, "negative", [])
     result = run_tool("c_coverage_gate", "--sources", str(tree / "sources"), str(report))
     assert result.returncode == 2
-    assert result.stderr.splitlines()[0] == "C coverage: FAIL choose.c: lines 3/4, unexecuted 3"
+    assert result.stderr.splitlines()[0] == "GCC coverage: FAIL choose.c: lines 3/4, unexecuted 3"
+
+
+HEADER = """\
+#include <stdexcept>
+inline int decide(int value) {
+    if (value < -100)
+        throw std::runtime_error("far below");
+    return value > 0 ? 1 : 2;
+}
+"""
+
+CPP_DRIVER = """\
+#include "decide.h"
+int main(int argc, char **) { return decide(argc - 2) == 1 ? 0 : 0; }
+"""
+
+
+@pytest.fixture
+def header(tmp_path: Path) -> tuple[Path, Path]:
+    """Build a C++ header program, run both reachable outcomes and export the report.
+
+    The header refuses a value below -100 with a throw, which ``argc - 2`` never reaches,
+    so line 3's first outcome and line 4 stay unexecuted and line 4 carries an exception
+    edge.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory.
+
+    Returns
+    -------
+    tuple[Path, Path]
+        The judged header and the gcov JSON report of the program.
+    """
+    (tmp_path / "decide.h").write_text(HEADER, encoding="utf-8")
+    (tmp_path / "driver.cpp").write_text(CPP_DRIVER, encoding="utf-8")
+    subprocess.run(
+        [
+            "g++",
+            "-O0",
+            "--coverage",
+            "-fprofile-abs-path",
+            str(tmp_path / "driver.cpp"),
+            "-o",
+            str(tmp_path / "program"),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    for arguments in ([], ["positive", "value"]):
+        subprocess.run([str(tmp_path / "program"), *arguments], check=True)
+    report = subprocess.run(
+        [
+            "gcov",
+            "--json-format",
+            "--stdout",
+            "--branch-probabilities",
+            str(tmp_path / "program-driver.gcno"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
+    path = tmp_path / "decide.json"
+    path.write_text(report.stdout, encoding="utf-8")
+    return tmp_path / "decide.h", path
+
+
+def _review(path: Path, entries: object) -> Path:
+    """Write a reviewed list.
+
+    Parameters
+    ----------
+    path
+        Destination file.
+    entries
+        The ``entries`` value, possibly malformed.
+
+    Returns
+    -------
+    Path
+        The written list.
+    """
+    path.write_text(json.dumps({"entries": entries}), encoding="utf-8")
+    return path
+
+
+def _entry(file: Path, **changes: object) -> dict[str, object]:
+    """Return the reviewed entry for the header's unreachable refusal, with changes.
+
+    Parameters
+    ----------
+    file
+        The judged header.
+    **changes
+        Fields to replace.
+
+    Returns
+    -------
+    dict[str, object]
+        One reviewed entry.
+    """
+    entry: dict[str, object] = {
+        "file": file.as_posix(),
+        "line": 3,
+        "outcome": 0,
+        "condition": "value < -100",
+        "reason": "the driver passes argc - 2, at least -1",
+        "lines": [4],
+    }
+    entry.update(changes)
+    return entry
+
+
+def test_a_header_needs_its_reachable_outcomes_and_reports_exception_edges(
+    header: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Judge a named C++ header, requiring the throw line until it is reviewed.
+
+    Parameters
+    ----------
+    header
+        The judged header and its report.
+    capsys
+        Captured command output.
+    """
+    source, report = header
+    selection = Selection.of(files=[source])
+    combined = combine([_load(report)], selection)
+    assert combined[source.as_posix()].exceptional[4] == [False, True]
+    assert findings(combined, selection) == [
+        f"{source.as_posix()}: lines 3/4, unexecuted 4",
+        f"{source.as_posix()}: branches 3/5, untaken on lines 3, 4",
+    ]
+    review = _review(source.parent / "review.json", [_entry(source)])
+    assert main(["--source", str(source), "--reviewed", str(review), str(report)]) == 0
+    assert capsys.readouterr().out == (
+        "GCC coverage: PASS lines 3/3, branches 3/3; reviewed unreachable: lines 1, "
+        "branch outcomes 2; exception edges taken 0/1, not required\n"
+    )
+    missing = Selection.of(files=[source.parent / "other.h"])
+    assert findings(combine([_load(report)], missing), missing) == [
+        f"{(source.parent / 'other.h').as_posix()}: not measured"
+    ]
+
+
+def test_a_reviewed_entry_that_runs_or_does_not_fit_fails(
+    header: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refuse stale entries and entries naming no unexecuted outcome of a judged source.
+
+    Parameters
+    ----------
+    header
+        The judged header and its report.
+    capsys
+        Captured command output.
+    """
+    source, report = header
+    taken = _load(report)
+    for record in taken["files"]:
+        for line in record["lines"]:
+            if Path(record["file"]).name == "decide.h" and line["line_number"] in (3, 4):
+                line["branches"][0]["count"] = 1
+                line["count"] = max(int(line["count"]), 1)
+    stale = source.parent / "stale.json"
+    stale.write_text(json.dumps(taken), encoding="utf-8")
+    review = _review(source.parent / "review.json", [_entry(source)])
+    assert main(["--source", str(source), "--reviewed", str(review), str(stale)]) == 2
+    name = source.as_posix()
+    assert capsys.readouterr().err.splitlines() == [
+        f"GCC coverage: FAIL {name}:3: reviewed outcome 0 ran (value < -100)",
+        f"GCC coverage: FAIL {name}:4: reviewed line ran (value < -100)",
+    ]
+    unfit = [
+        _entry(source.parent / "other.h"),
+        _entry(source, line=5, outcome=7),
+        _entry(source, line=4, outcome=1),
+        _entry(source, lines=[9]),
+    ]
+    review = _review(source.parent / "unfit.json", unfit)
+    assert main(["--source", str(source), "--reviewed", str(review), str(report)]) == 2
+    assert capsys.readouterr().err.splitlines()[:4] == [
+        (
+            f"GCC coverage: FAIL {(source.parent / 'other.h').as_posix()}:3: "
+            "reviewed entry for a source that is not judged"
+        ),
+        f"GCC coverage: FAIL {name}:5: reviewed outcome 7 does not exist",
+        f"GCC coverage: FAIL {name}:4: reviewed outcome 1 is an exception edge",
+        f"GCC coverage: FAIL {name}:9: reviewed line is not executable",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("document", "message"),
+    [
+        ("[", "not JSON"),
+        (json.dumps([]), "holds only an entries array"),
+        (json.dumps({"entries": {}}), "holds only an entries array"),
+        (json.dumps({"entries": [], "about": "x"}), "holds only an entries array"),
+        (json.dumps({"entries": [{"file": "a"}]}), "reviewed entry 0: needs exactly the keys"),
+        (json.dumps({"entries": ["text"]}), "reviewed entry 0: needs exactly the keys"),
+    ],
+)
+def test_a_malformed_reviewed_list_is_refused(tmp_path: Path, document: str, message: str) -> None:
+    """Refuse a list that is not one entries array of entries with exactly the known keys.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory.
+    document
+        The list's text.
+    message
+        Expected part of the refusal.
+    """
+    path = tmp_path / "review.json"
+    path.write_text(document, encoding="utf-8")
+    with pytest.raises(CoverageError, match=message):
+        load_reviewed(path)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"reason": " "},
+        {"condition": 3},
+        {"line": True},
+        {"outcome": -1},
+        {"lines": "4"},
+        {"lines": [4.0]},
+    ],
+)
+def test_a_reviewed_entry_with_a_wrong_field_is_refused(
+    tmp_path: Path, changes: dict[str, object]
+) -> None:
+    """Refuse empty texts and lines or outcomes that are not non-negative integers.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory.
+    changes
+        One malformed field.
+    """
+    review = _review(tmp_path / "review.json", [_entry(tmp_path / "decide.h", **changes)])
+    with pytest.raises(CoverageError, match="reviewed entry 0: needs non-empty texts"):
+        load_reviewed(review)
+
+
+def test_a_duplicate_entry_and_a_changed_exception_edge_are_refused(
+    header: tuple[Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refuse an outcome listed twice and reports that disagree about an exception edge.
+
+    Parameters
+    ----------
+    header
+        The judged header and its report.
+    capsys
+        Captured command output.
+    """
+    source, report = header
+    review = _review(source.parent / "review.json", [_entry(source), _entry(source)])
+    assert main(["--source", str(source), "--reviewed", str(review), str(report)]) == 2
+    assert capsys.readouterr().err == (f"GCC coverage: FAIL {review}: an outcome is listed twice\n")
+    changed = _load(report)
+    for record in changed["files"]:
+        for line in record["lines"]:
+            for branch in line["branches"]:
+                branch["throw"] = False
+    with pytest.raises(CoverageError, match=r"decide\.h:4: branch structure differs"):
+        combine([_load(report), changed], Selection.of(files=[source]))
+
+
+def test_the_command_needs_a_judged_source() -> None:
+    """Refuse a run that names no source directory and no source file."""
+    with pytest.raises(SystemExit) as stopped:
+        main(["report.json"])
+    assert stopped.value.code == 2

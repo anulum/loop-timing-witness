@@ -243,6 +243,12 @@ jobs:
       - name: Native controller public API tests
         if: matrix.shard == 2
         run: make controller-tests
+      - name: Linux run policy line and branch coverage
+        if: matrix.shard == 2
+        run: |
+          # Real-time priority 1 for this shell: the priority readback scenario runs as FIFO.
+          sudo prlimit --pid "$$" --rtprio=1:1
+          make runtime-policy-coverage
       - name: Native Linux UIO adapter build
         run: make run-uio
       - name: Fetch exact native analysis dependencies

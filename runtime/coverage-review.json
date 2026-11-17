@@ -1,0 +1,60 @@
+{
+  "entries": [
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 55,
+      "outcome": 0,
+      "condition": "sched_getcpu() < 0",
+      "reason": "glibc answers sched_getcpu from the rseq area or the vDSO without a system call, so no kernel filter can make it fail; the check stays for libc builds that use the getcpu system call",
+      "lines": [56]
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 61,
+      "outcome": 0,
+      "condition": "CPU_ALLOC returned no mask for the inherited affinity",
+      "reason": "one malloc of at most 128 KiB; failing that single allocation needs an allocator interposer, which the real-surface test policy excludes",
+      "lines": [62]
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 66,
+      "outcome": 1,
+      "condition": "CPU_ISSET_S index outside the mask size",
+      "reason": "bound check inside the glibc macro; the loop index stays below the capacity the mask was allocated for",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 88,
+      "outcome": 3,
+      "condition": "options.priority < sched_get_priority_min(SCHED_FIFO)",
+      "reason": "validate_run_options refuses a FIFO priority below 1 before this check, and the Linux SCHED_FIFO minimum is 1",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 95,
+      "outcome": 0,
+      "condition": "CPU_ALLOC returned no mask for the requested CPU",
+      "reason": "one malloc of a few bytes; failing that single allocation needs an allocator interposer, which the real-surface test policy excludes",
+      "lines": [96]
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 98,
+      "outcome": 1,
+      "condition": "CPU_SET_S index outside the mask size",
+      "reason": "bound check inside the glibc macro; the mask is allocated for options.cpu + 1 CPUs",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/run_policy.h",
+      "line": 112,
+      "outcome": 3,
+      "condition": "one CPU reads back, but not the requested one",
+      "reason": "the request lies inside the inherited affinity (checked above); the kernel applies it, refuses it with an errno, or, when the call is skipped, leaves the inherited set, which then holds the requested CPU or more than one CPU",
+      "lines": []
+    }
+  ]
+}

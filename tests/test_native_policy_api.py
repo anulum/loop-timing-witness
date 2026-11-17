@@ -23,27 +23,37 @@ from loop_timing_witness.host_profile import scaled
 
 __all__ = ["native_run"]
 
+POLICY_COVERAGE_DIRECTORY = "WITNESS_POLICY_COVERAGE_DIRECTORY"
+
 
 @pytest.fixture(scope="module")
 def policy_program() -> Path:
-    """Build the real Linux policy API corpus with strict warnings and gcov.
+    """Build the real Linux policy API corpus with strict warnings.
+
+    When ``WITNESS_POLICY_COVERAGE_DIRECTORY`` names a directory, the corpus is built there
+    unoptimised with GCC line and branch counters, so every scenario's counts collect beside
+    its notes for the runtime policy coverage gate. Otherwise the ordinary optimised build is
+    used.
 
     Returns
     -------
     Path
         Native executable using actual libc scheduling and affinity syscalls.
     """
-    directory = Path(
-        os.environ.get("WITNESS_POLICY_BUILD_ROOT", str(REPOSITORY_ROOT / "build/policy_api"))
-    )
+    coverage = os.environ.get(POLICY_COVERAGE_DIRECTORY)
+    if coverage:
+        directory = Path(coverage)
+        flags = ["-O0", "--coverage", "-fprofile-abs-path"]
+    else:
+        directory = REPOSITORY_ROOT / "build/policy_api"
+        flags = ["-O2"]
     directory.mkdir(parents=True, exist_ok=True)
     program = directory / "policy_api_test"
     result = subprocess.run(
         [
             "g++",
             "-std=c++17",
-            "-O2",
-            "--coverage",
+            *flags,
             "-Wall",
             "-Wextra",
             "-Werror",
@@ -87,17 +97,29 @@ def policy_program() -> Path:
         "fifo_permissions",
         "affinity_denied",
         "scheduler_denied",
+        "scheduler_read_denied",
+        "parameter_read_denied",
+        "nice_read_denied",
+        "affinity_read_denied",
+        "affinity_mask_unbounded",
+        "affinity_ignored",
+        "fifo_ignored",
+        "fifo_priority_ignored",
     ],
 )
 def test_actual_policy_api(policy_program: Path, scenario: str) -> None:
     """Keep real affinity and SCHED_BATCH intact after refusing malformed public requests.
+
+    The ``*_denied`` and ``*_ignored`` scenarios install a seccomp filter in the child
+    itself: the kernel answers one system call with an errno, or skips it and reports
+    success, which reaches the read failures and the readback checks.
 
     Parameters
     ----------
     policy_program
         Actual native public-policy API executable.
     scenario
-        Invalid structure or valid inherited/explicit normal policy request.
+        Invalid structure, valid inherited/explicit policy request, or a kernel answer.
     """
     affinity = os.sched_getaffinity(0)
     scheduler = os.sched_getscheduler(0)

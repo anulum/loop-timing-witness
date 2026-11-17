@@ -195,6 +195,27 @@ controller-coverage:
 	$(VENV)/python tools/c_coverage_gate.py --sources controllers/c \
 		"$(CONTROLLER_COVERAGE_DIRECTORY)"/reports/*.json
 
+# Every line and every reachable branch of the Linux run policy must run. Scenarios have the
+# kernel answer system calls through seccomp in the test's own child; the priority readback
+# scenario needs RLIMIT_RTPRIO of at least 1, which the hosted step raises with prlimit.
+# runtime/coverage-review.json lists, with reasons, the outcomes no real surface reaches.
+# C++ exception edges are reported, not required.
+RUNTIME_POLICY_COVERAGE_DIRECTORY ?= build/runtime-policy-coverage
+
+.PHONY: runtime-policy-coverage
+runtime-policy-coverage:
+	@test "$$(ulimit -r)" != 0 || { echo "runtime-policy-coverage needs RLIMIT_RTPRIO of at least 1" >&2; exit 2; }
+	rm -rf "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)"
+	mkdir -p "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)/reports"
+	WITNESS_POLICY_COVERAGE_DIRECTORY="$(abspath $(RUNTIME_POLICY_COVERAGE_DIRECTORY))" $(VENV)/pytest \
+		-q -p no:cacheprovider --no-cov tests/test_native_policy_api.py::test_actual_policy_api
+	for note in "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)"/*.gcno; do \
+		gcov --json-format --stdout --branch-probabilities "$$note" \
+			> "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)/reports/$$(basename "$$note" .gcno).json" || exit $$?; \
+	done
+	$(VENV)/python tools/c_coverage_gate.py --source runtime/linux/run_policy.h \
+		--reviewed runtime/coverage-review.json "$(RUNTIME_POLICY_COVERAGE_DIRECTORY)"/reports/*.json
+
 # Every line and branch of the Rust controller crate must run too: its own tests, the
 # streaming program under the shared parity and refusal tests, and one benchmark pass, all
 # with the LLVM branch instrumentation of the native analysis gate.

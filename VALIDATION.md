@@ -134,11 +134,13 @@ wall-clock deadline (an image binding may name at most 300 seconds); the 3600-se
 `--timeout` of the capture and load commands; the fuzz target's 512 MB resident memory limit per
 input; the 15-second network timeout of the PyPI download statistics request; and at most 8
 Verilator build jobs (`VERILATOR_JOB_LIMIT` in the Makefile, `VERILATOR_JOB_LIMIT` in
-`loop_timing_witness.host_profile`). Verilator 5.020, the pinned version, can abort after a
-complete link ("attempted to destroy locked Thread Pool", upstream issue 4931, fixed in 5.026).
-On a 24-processor host, interleaved builds aborted 4 of 220 times at 24 jobs and 0 of 220 times
-at 8 jobs, at equal build time; the difference favours the limit without proving that 8 jobs
-removes the abort (one-sided Fisher exact test, p = 0.06).
+`loop_timing_witness.host_profile`). Verilator 5.020, the version pinned when the limit was set
+and still the Ubuntu 24.04 package on local hosts, can abort after a complete link ("attempted
+to destroy locked Thread Pool", upstream issue 4931, fixed in 5.026). On a 24-processor host,
+interleaved builds aborted 4 of 220 times at 24 jobs and 0 of 220 times at 8 jobs, at equal build
+time; the difference favours the limit without proving that 8 jobs removes the abort (one-sided
+Fisher exact test, p = 0.06). The hosted runners now pin Verilator 5.032, which contains the fix;
+the limit stays until it is reviewed under 5.032.
 
 ## Native lifecycle profiles
 

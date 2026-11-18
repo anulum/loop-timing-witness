@@ -308,7 +308,7 @@ def test_job_shapes_images_and_local_references(tree: Path) -> None:
     path = tree / WORKFLOWS / "docs.yml"
     path.write_text(
         "name: Docs\non:\n  push:\npermissions: {}\nconcurrency:\n  group: g\njobs:\n"
-        "  validate:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    permissions: {}\n"
+        "  validate:\n    runs-on: ubuntu-26.04\n    timeout-minutes: 5\n    permissions: {}\n"
         "    steps:\n      - run: echo\n      - uses: docker://alpine:3\n"
         f"      - uses: docker://alpine@sha256:{'0' * 64}\n"
         "      - uses: ./.github/workflows/unknown.yml\n"
@@ -395,7 +395,7 @@ def test_gate_with_malformed_steps_and_non_mapping_call(tree: Path) -> None:
         "  tests:\n    uses: ./.github/workflows/reusable-tests.yml\n    permissions: {}\n"
         "  security:\n    uses: ./.github/workflows/reusable-security-audit.yml\n"
         "    permissions: {}\n"
-        "  gate:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n"
+        "  gate:\n    runs-on: ubuntu-26.04\n    timeout-minutes: 5\n"
         "    needs: [static-policy, tests, security]\n"
         "    if: always()\n    permissions: {}\n    steps: [text]\n",
         encoding="utf-8",

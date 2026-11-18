@@ -25,10 +25,11 @@ from typing import Final
 
 SCALE_VARIABLE: Final = "WITNESS_HOST_TIMEOUT_SCALE"
 DECIMAL_CHARACTERS: Final = frozenset("0123456789.eE+-")
-# Reviewed policy limit, not a host property: Verilator 5.020, the CI pin, can abort after a
-# complete link ("attempted to destroy locked Thread Pool", upstream issue 4931, fixed in 5.026);
-# 4 of 220 builds aborted at -j 24 on a 24-processor host and 0 of 220 at -j 8. The Makefile holds
-# the same value as VERILATOR_JOB_LIMIT.
+# Reviewed policy limit, not a host property: Verilator 5.020, the CI pin when the limit was set and
+# still the Ubuntu 24.04 package on local hosts, can abort after a complete link ("attempted to
+# destroy locked Thread Pool", upstream issue 4931, fixed in 5.026); 4 of 220 builds aborted at
+# -j 24 on a 24-processor host and 0 of 220 at -j 8. The hosted runners pin 5.032; the limit stays
+# until it is reviewed there. The Makefile holds the same value as VERILATOR_JOB_LIMIT.
 VERILATOR_JOB_LIMIT: Final = 8
 
 

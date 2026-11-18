@@ -33,7 +33,8 @@ Loop Timing Witness — changelog
   - Verilator 5.032, which contains both upstream fixes of the thread-pool abort (issue 4931);
   - Yosys 0.52, Icarus Verilog 12.0-3, OpenSSL 3.5.5, strace 6.19, dtc 1.7.2 and Boost 1.90
     (Boost.System is header-only, so its package is gone);
-  - clang 21.1.8 for the fuzzing build.
+  - clang 21.1.8 for the fuzzing build, linking GCC 15's C++ library (`FUZZ_GCC_INSTALL`).
+    It named GCC 13's, which the hosted image still ships and the 26.04 packages do not.
 
   The neural source contracts keep the Verilator 5.020 and g++ 13.3 identities of the
   acquisitions they describe, which the runner does not produce.

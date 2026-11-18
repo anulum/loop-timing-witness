@@ -22,7 +22,9 @@ SAT_TIMEOUT ?= 30
 FUZZ_DIRECTORY ?= build/fuzz
 FUZZ_CC ?= clang-21
 FUZZ_CXX ?= clang++-21
-FUZZ_GCC_INSTALL ?= /usr/lib/gcc/x86_64-linux-gnu/13
+# The C++ standard library the fuzz driver links: GCC 15's, whose libstdc++-15-dev the hosted
+# Ubuntu 26.04 fuzz and test jobs pin.
+FUZZ_GCC_INSTALL ?= /usr/lib/gcc/x86_64-linux-gnu/15
 FUZZ_SECONDS ?= 120
 FUZZ_INPUT_TIMEOUT ?= 10
 FUZZ_SOURCE ?= controllers/c/witness_controller.c

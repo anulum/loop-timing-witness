@@ -156,7 +156,11 @@ def library_identities(
             continue
         path = Path(value.split("=>", 1)[-1].strip().rsplit(" (", 1)[0])
         if not path.is_absolute() or not path.is_file():
-            message = "AMP loader did not resolve an available absolute library: " + value
+            records = " | ".join(record.strip() for record in listing.splitlines())
+            message = (
+                f"AMP loader did not resolve an available absolute library: {value}; "
+                f"complete listing: {records}"
+            )
             raise ValueError(message)
         resolved = path.resolve()
         identities[str(resolved)] = sha256_of_file(resolved)

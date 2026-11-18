@@ -210,5 +210,10 @@ def test_loader_record_of_the_listed_executable(own_record: str | None) -> None:
         data = library_identities(interpreter, listing, own_record)
         assert data == library_identities(interpreter, original)
         return
-    with pytest.raises(ValueError, match=r"available absolute library: \(0x0000000000400000\)$"):
+    records = " | ".join(record.strip() for record in listing.splitlines())
+    with pytest.raises(ValueError, match="complete listing") as refused:
         library_identities(interpreter, listing, own_record)
+    assert str(refused.value) == (
+        "AMP loader did not resolve an available absolute library: (0x0000000000400000); "
+        f"complete listing: {records}"
+    )

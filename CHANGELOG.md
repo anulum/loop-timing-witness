@@ -179,7 +179,8 @@ Loop Timing Witness — changelog
   GCC driver, `cc1`, `collect2`) also prints a nameless record at the tool's fixed load address,
   which was refused as an unresolved library. `tools/amp_tool_runtime.py` skips exactly that
   record, derived from the tool's own lowest loadable segment; the tool's bytes are hashed
-  separately, and any other nameless record is still refused.
+  separately, and any other nameless record is still refused. A refusal quotes the complete
+  loader listing.
 - `tools/closed_loop_run.py` prepares every repeat (sources, declarations and harness copy)
   before any harness runs, then runs the repeats in parallel.
   - Before, each thread copied its harness while other threads forked their runs. A child forked

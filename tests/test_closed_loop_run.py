@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import closed_loop_run
 import pytest
 from closed_loop_run import main
 from closed_loop_stimulus import (
@@ -134,6 +135,40 @@ def test_campaign_binds_every_repeat(campaign: Path) -> None:
             CYCLES
         )
         assert (summary["cycles"], summary["overflow"], summary["safe"]) == (CYCLES, 0, True)
+
+
+def test_every_repeat_is_prepared_before_any_harness_runs(
+    harness: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Copy every repeat's harness before the first one runs, then run them in parallel.
+
+    A thread that copies an executable while another thread forks leaves the copy's
+    write descriptor in that child until it executes; running the copy then fails with
+    ETXTBSY, as one 26.04 campaign did. The real harness still runs every repeat.
+
+    Parameters
+    ----------
+    harness
+        Built harness executable.
+    tmp_path
+        Campaign parent directory.
+    monkeypatch
+        Observation of each harness start.
+    """
+    output = tmp_path / "campaign"
+    original = closed_loop_run.run_harness
+    observed: list[list[str]] = []
+
+    def observing(binary: Path, run: Path, cycles: int, seed: int) -> dict[str, Any]:
+        ready = output.glob("repeat-*/closed_loop_harness")
+        observed.append(sorted(path.parent.name for path in ready))
+        return original(binary, run, cycles, seed)
+
+    monkeypatch.setattr(closed_loop_run, "run_harness", observing)
+    arguments = ["--output", str(output), "--cycles", str(CYCLES), "--repeats", "3"]
+    status = main([*arguments, "--seed", str(SEED), "--harness", str(harness), "--jobs", "3"])
+    assert status == 0
+    assert observed == [["repeat-1", "repeat-2", "repeat-3"]] * 3
 
 
 def test_repeats_are_deterministic_and_seeded(

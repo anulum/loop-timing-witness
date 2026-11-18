@@ -143,6 +143,12 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- `tools/closed_loop_run.py` prepares every repeat (sources, declarations and harness copy)
+  before any harness runs, then runs the repeats in parallel.
+  - Before, each thread copied its harness while other threads forked their runs. A child forked
+    in that window kept the copy's write descriptor until it executed, and running that copy
+    failed with `Text file busy` (ETXTBSY).
+  - One five-repeat campaign on a loaded Ubuntu 26.04 host lost its last repeat this way.
 - The Spike plugin's compile flags are fixed (`override`). An assignment on Make's command line,
   such as `make amp-spike-plugin AMP_PLUGIN_CXXFLAGS=-O0`, used to build a plugin with other flags.
   Its receipt, which binds the makefiles but no flag, looked like a production one. Production

@@ -306,10 +306,12 @@ def run_manifest(
     }
 
 
-def capture_repeat(
-    harness: Path, campaign: Path, index: int, cycles: int, seed: int
-) -> dict[str, Any]:
-    """Produce one repeat directory and return its campaign entry.
+def prepare_repeat(harness: Path, campaign: Path, index: int, cycles: int, seed: int) -> list[Path]:
+    """Create one repeat directory with its sources, declarations and harness copy.
+
+    Every repeat is prepared before any harness runs. A thread that copies an executable
+    while another thread forks would leave the copy's write descriptor in that child until
+    it executes, and running the copy in that window fails with ETXTBSY.
 
     Parameters
     ----------
@@ -326,16 +328,43 @@ def capture_repeat(
 
     Returns
     -------
-    dict[str, Any]
-        Repeat entry binding the run manifest by path and SHA-256.
+    list[Path]
+        The repeat's source snapshot.
     """
     run = campaign / f"repeat-{index}"
     run.mkdir()
     sources = snapshot_sources(run)
     shutil.copyfile(ROOT / "measurement-domain.json", run / "measurement-domain.json")
     (run / "stimulus.json").write_bytes(canonical_json_bytes(declaration(cycles, seed)))
+    shutil.copy2(harness, run / "closed_loop_harness")
+    return sources
+
+
+def capture_repeat(
+    campaign: Path, index: int, cycles: int, seed: int, sources: list[Path]
+) -> dict[str, Any]:
+    """Run one prepared repeat and return its campaign entry.
+
+    Parameters
+    ----------
+    campaign
+        Campaign directory.
+    index
+        One-based repeat index.
+    cycles
+        Control cycles of the repeat.
+    seed
+        Seed of this repeat's service offsets.
+    sources
+        The repeat's source snapshot from :func:`prepare_repeat`.
+
+    Returns
+    -------
+    dict[str, Any]
+        Repeat entry binding the run manifest by path and SHA-256.
+    """
+    run = campaign / f"repeat-{index}"
     binary = run / "closed_loop_harness"
-    shutil.copy2(harness, binary)
     started = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     summary = run_harness(binary, run, cycles, seed)
     write_tracking(run)
@@ -385,13 +414,19 @@ def capture_campaign(request: CampaignRequest) -> Path:
         message = "harness binary is missing; run make closed-loop-harness"
         raise ValueError(message)
     output.mkdir()
+    indexes = range(1, repeats + 1)
+    snapshots = [
+        prepare_repeat(request.harness, output, index, request.cycles, request.seed + index - 1)
+        for index in indexes
+    ]
     with ThreadPoolExecutor(max_workers=max(1, min(request.jobs, repeats))) as pool:
         entries = list(
             pool.map(
-                lambda index: capture_repeat(
-                    request.harness, output, index, request.cycles, request.seed + index - 1
+                lambda index, sources: capture_repeat(
+                    output, index, request.cycles, request.seed + index - 1, sources
                 ),
-                range(1, repeats + 1),
+                indexes,
+                snapshots,
             )
         )
     document = {

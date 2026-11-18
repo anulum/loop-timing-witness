@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from amp_rust_vectors import rust_vectors
-from amp_tool_runtime import elf_interpreter, library_identities
+from amp_tool_runtime import elf_interpreter, library_identities, own_load_record
 
 from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
@@ -200,7 +200,7 @@ def runtime_libraries(programs: list[Path]) -> dict[str, str]:
         listing = subprocess.check_output(
             [str(interpreter), "--list", str(program)], text=True, timeout=scaled(10)
         )
-        identities.update(library_identities(interpreter, listing))
+        identities.update(library_identities(interpreter, listing, own_load_record(program)))
     return identities
 
 

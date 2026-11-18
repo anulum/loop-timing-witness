@@ -16,7 +16,13 @@ from pathlib import Path
 
 import pytest
 from amp_build_toolchain import compiler_identity, executable_path, runtime_libraries
-from amp_tool_runtime import elf_interpreter, library_identities
+from amp_tool_runtime import (
+    PT_LOAD,
+    elf_interpreter,
+    library_identities,
+    own_load_record,
+    program_headers,
+)
 
 from loop_timing_witness.host_profile import scaled
 from manifest_io import sha256_of_file
@@ -155,3 +161,54 @@ def test_disappearing_actual_loaded_library(tmp_path: Path) -> None:
     owned.unlink()
     with pytest.raises(ValueError, match="available absolute library"):
         library_identities(interpreter, listing)
+
+
+@pytest.mark.parametrize("kind", ["position-dependent", "position-independent", "no-load"])
+def test_own_load_record_of_owned_compiler_copy(tmp_path: Path, kind: str) -> None:
+    """Name the fixed load address of a position-dependent executable and nothing otherwise.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive owned compiler copy with its ELF type or segment types changed.
+    kind
+        Position-dependent executable, position-independent file, or one without a
+        loadable segment.
+    """
+    content = bytearray(executable_path("gcc").read_bytes())
+    headers = program_headers(bytes(content))
+    loads = [header[3] for header in headers if header[0] == PT_LOAD]
+    struct.pack_into("<H", content, 16, 3 if kind == "position-independent" else 2)
+    if kind == "no-load":
+        offset = struct.unpack_from("<Q", content, 32)[0]
+        for index, header in enumerate(headers):
+            if header[0] == PT_LOAD:
+                struct.pack_into("<I", content, offset + 56 * index, 0)
+    selected = tmp_path / "original-gcc-copy"
+    selected.write_bytes(content)
+    expected = f"(0x{min(loads) & ~0xFFF:016x})" if kind == "position-dependent" else None
+    assert own_load_record(selected) == expected
+
+
+@pytest.mark.parametrize("own_record", ["(0x0000000000400000)", "(0x0000000000401000)", None])
+def test_loader_record_of_the_listed_executable(own_record: str | None) -> None:
+    """Skip only the listed executable's own nameless record; refuse any other nameless record.
+
+    Parameters
+    ----------
+    own_record
+        Record the caller derived from the listed executable, or none. Only the first equals
+        the nameless record at 0x400000 added to the actual listing.
+    """
+    compiler = executable_path("gcc")
+    interpreter = elf_interpreter(compiler)
+    original = subprocess.check_output(
+        [str(interpreter), "--list", str(compiler)], text=True, timeout=scaled(10)
+    )
+    listing = original + "\t(0x0000000000400000)\n"
+    if own_record == "(0x0000000000400000)":
+        data = library_identities(interpreter, listing, own_record)
+        assert data == library_identities(interpreter, original)
+        return
+    with pytest.raises(ValueError, match=r"available absolute library: \(0x0000000000400000\)$"):
+        library_identities(interpreter, listing, own_record)

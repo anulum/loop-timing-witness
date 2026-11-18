@@ -12,30 +12,46 @@
       "file": "runtime/isa/spike_axi_device.cpp",
       "line": 67,
       "outcome": 4,
-      "condition": "cleanup of the Settings string copies on an exception path",
-      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
-      "lines": []
-    },
-    {
-      "file": "runtime/isa/spike_axi_device.cpp",
-      "line": 67,
-      "outcome": 5,
-      "condition": "cleanup of the Settings string copies on an exception path",
-      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
-      "lines": []
-    },
-    {
-      "file": "runtime/isa/spike_axi_device.cpp",
-      "line": 67,
-      "outcome": 6,
-      "condition": "cleanup of the Settings string copies on an exception path",
-      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "condition": "destruction of a Settings path copy under its cleared cleanup guard",
+      "reason": "GCC arms a cleanup flag after copying the run path and the event path into the returned Settings and sets both flags to 0 once the tracking path is copied, ahead of their tests on this path, so the guarded destructions cannot run",
       "lines": []
     },
     {
       "file": "runtime/isa/spike_axi_device.cpp",
       "line": 67,
       "outcome": 7,
+      "condition": "destruction of a Settings path copy under its cleared cleanup guard",
+      "reason": "GCC arms a cleanup flag after copying the run path and the event path into the returned Settings and sets both flags to 0 once the tracking path is copied, ahead of their tests on this path, so the guarded destructions cannot run",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 8,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 9,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 10,
+      "condition": "cleanup of the Settings string copies on an exception path",
+      "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 67,
+      "outcome": 11,
       "condition": "cleanup of the Settings string copies on an exception path",
       "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; only a failed allocation of a short path string could throw here",
       "lines": []
@@ -44,6 +60,14 @@
       "file": "runtime/isa/spike_axi_device.cpp",
       "line": 174,
       "outcome": 6,
+      "condition": "deallocation of the new-expression's storage under its cleared guard",
+      "reason": "GCC clears the new-expression's cleanup flag as soon as the witness_axi_t constructor returns, ahead of its test on this path, so the guarded deallocation cannot run",
+      "lines": []
+    },
+    {
+      "file": "runtime/isa/spike_axi_device.cpp",
+      "line": 174,
+      "outcome": 8,
       "condition": "cleanup of the new-expression when the witness_axi_t constructor throws",
       "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; the constructor's refusals (for example the modelled overload) do throw here, and the tests observe them, but the unwinder never enters this pad",
       "lines": []
@@ -51,7 +75,7 @@
     {
       "file": "runtime/isa/spike_axi_device.cpp",
       "line": 174,
-      "outcome": 7,
+      "outcome": 9,
       "condition": "cleanup of the new-expression when the witness_axi_t constructor throws",
       "reason": "Spike (7ab2efd) catches no exception around plugin calls, so GCC's two-phase unwinder finds no handler in its search phase and calls std::terminate without running any cleanup; this landing pad (a block gcov marks as reached only through an exception edge) therefore never runs, whichever call throws; the constructor's refusals (for example the modelled overload) do throw here, and the tests observe them, but the unwinder never enters this pad",
       "lines": []
@@ -84,7 +108,7 @@
       "file": "runtime/isa/spike_axi_device.cpp",
       "line": 190,
       "outcome": 12,
-      "condition": "completion of a string concatenation building the already-registered message",
+      "condition": "completion of the runtime_error construction from the already-registered message",
       "reason": "Spike's REGISTER_DEVICE refuses a second registration of the name with \"Plugin \\\"witness_axi\\\" already registered\"; test_second_registration_refused loads both plant plugins and observes that refusal, but it is thrown from the second library's static initialiser inside dlopen, while Spike still parses its options and before it installs its own SIGABRT handler, so the process dies by the signal (status 134) and that library writes no counters",
       "lines": []
     },

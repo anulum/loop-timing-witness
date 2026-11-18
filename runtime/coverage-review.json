@@ -115,41 +115,49 @@
     {
       "file": "runtime/rtl/run_simulation.cpp",
       "line": 27,
-      "outcome": 4,
-      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
-      "reason": "GCC sets and clears this cleanup flag around the noexcept construction of the default FileDigest arm, so no exception finds it set; the file_digest arm throws before its temporary exists, which the refusal tests cover",
-      "lines": []
-    },
-    {
-      "file": "runtime/rtl/run_simulation.cpp",
-      "line": 27,
       "outcome": 6,
-      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
-      "reason": "GCC sets and clears this cleanup flag around the noexcept construction of the default FileDigest arm, so no exception finds it set; the file_digest arm throws before its temporary exists, which the refusal tests cover",
+      "condition": "destruction of the default FileDigest arm's temporary under its cleared guard",
+      "reason": "GCC sets the cleanup flag of the default FileDigest arm and clears its temporary's guard right after the noexcept construction, before the cleanup test, so the guarded destruction cannot run; the file_digest arm leaves the cleanup flag unset",
       "lines": []
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
       "line": 27,
-      "outcome": 7,
+      "outcome": 8,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
-      "reason": "GCC sets and clears this cleanup flag around the noexcept construction of the default FileDigest arm, so no exception finds it set; the file_digest arm throws before its temporary exists, which the refusal tests cover",
+      "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
       "lines": []
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 38,
+      "line": 27,
+      "outcome": 10,
+      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
+      "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 27,
+      "outcome": 11,
+      "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
+      "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/run_simulation.cpp",
+      "line": 40,
       "outcome": 2,
-      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
-      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
+      "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
       "lines": []
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 38,
+      "line": 40,
       "outcome": 3,
-      "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
-      "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
+      "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
+      "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
       "lines": []
     },
     {
@@ -606,6 +614,30 @@
       "outcome": 11,
       "condition": "cleanup of a partially built rail-name array",
       "reason": "the four rail names (at most six characters) fit the string's inline buffer, so constructing them allocates nothing and cannot throw",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 69,
+      "outcome": 0,
+      "condition": "destruction of a value-initialised member under its cleared cleanup guard",
+      "reason": "GCC arms a cleanup flag after constructing each string member of the value-initialised result (device, kernel_release and every rail name) and sets it to 0 once the enclosing object or element is complete, ahead of the flag test on this path, so the guarded destruction cannot run; only an exception, which std::string's default constructor never raises, would find a flag set",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 69,
+      "outcome": 4,
+      "condition": "destruction of a value-initialised member under its cleared cleanup guard",
+      "reason": "GCC arms a cleanup flag after constructing each string member of the value-initialised result (device, kernel_release and every rail name) and sets it to 0 once the enclosing object or element is complete, ahead of the flag test on this path, so the guarded destruction cannot run; only an exception, which std::string's default constructor never raises, would find a flag set",
+      "lines": []
+    },
+    {
+      "file": "runtime/linux/power_configuration.cpp",
+      "line": 69,
+      "outcome": 6,
+      "condition": "destruction of a value-initialised member under its cleared cleanup guard",
+      "reason": "GCC arms a cleanup flag after constructing each string member of the value-initialised result (device, kernel_release and every rail name) and sets it to 0 once the enclosing object or element is complete, ahead of the flag test on this path, so the guarded destruction cannot run; only an exception, which std::string's default constructor never raises, would find a flag set",
       "lines": []
     },
     {

@@ -27,7 +27,8 @@ host execution coverage, not board qualification.
 Production Rust builds use 1.100.0. Stable LLVM coverage additionally reports complete line,
 region and function coverage for the library and CLI, but does not instrument branches.
 The separate branch analysis uses `nightly-2026-08-21`, with `llvm-tools-preview`, without
-changing the production compiler or disabling any branch. GCC 13.3.0 uses `--coverage`.
+changing the production compiler or disabling any branch. GCC 15.2.0 (the hosted Ubuntu
+26.04 compiler) uses `--coverage`.
 Build outputs and raw reports remain under ignored `build/` and the crate's `target/`.
 
 ## Python coverage report in CI
@@ -122,10 +123,15 @@ Every executable line and every branch outcome must have run, with two exception
   example a negative `sched_getcpu` (glibc answers it from the rseq area or the vDSO, without a
   system call), a failed `CPU_ALLOC`, the bounds checks inside the glibc mask macros, a FIFO
   priority below the Linux minimum (validation refuses it first), buffered `fprintf` and `fputs`
-  calls whose writes and failures happen at the following flush or close, and states the code
-  never creates. A listed outcome or line that runs fails the gate, so the list cannot go stale.
+  calls whose writes and failures happen at the following flush or close, states the code
+  never creates, and the cleanup flags GCC 15 sets to 0 on the normal path before it tests
+  them. A listed outcome or line that runs fails the gate, so the list cannot go stale.
 - GCC adds an exception edge at every C++ call that may throw; the gate reports how many ran
   and does not require them.
+
+The reviewed outcome numbers, here and in the plugin list below, are those of GCC 15.2, the
+hosted Ubuntu 26.04 compiler. GCC 13 numbers some cleanup outcomes differently, so it fails
+both gates on otherwise complete coverage.
 
 The policy priority readback scenario runs a FIFO priority 1 thread, so the target refuses to
 start without `RLIMIT_RTPRIO` of at least 1; the hosted step raises it with `sudo prlimit`.
@@ -159,13 +165,15 @@ Diagnostic variants built on the counted plugins add the same counters. Their ow
 capture tests counted exactly the same lines and outcomes as one without them, so the capture tests keep the
 production plugins in the normal shards.
 
-**Two facts behind the reviewed list.**
+**Three facts behind the reviewed list.**
 
 - Spike catches no exception. A refusal ends through `std::terminate`, and Spike's own abort handler then exits
   through `exit`, so the counters of a refused run are written. GCC's unwinder, finding no handler, runs no
   cleanup on the way. The cleanup landing pads on throw paths therefore never run.
 - Spike's bus passes a device only an access that lies whole inside it. It passes a misaligned word only under
   `--misaligned`.
+- On the normal path GCC 15 sets a cleanup flag to 0 once the object it guards is complete, and only then tests
+  it, so the guarded destruction or deallocation under that test never runs.
 
 [`tests/test_amp_device_probe.py`](../tests/test_amp_device_probe.py) includes the production device source verbatim.
 It calls the public `load` and `store` interface with the requests Spike's bus never forms, and asks Spike's registry
@@ -588,8 +596,8 @@ Native C++ compiler edges and hardware acquisition remain separate scopes.
 
 ## Native lifecycle guard proof
 
-The lifecycle corpus retains the original production RTL, GCC 13.3 optimisation
-level and nanosecond timers. `commit_boundary` delays a real one-cycle run through
+The lifecycle corpus retains the original production RTL, the production GCC
+optimisation level and nanosecond timers. `commit_boundary` delays a real one-cycle run through
 `Simulation::advance`; the live-status read still sees an active run, while the
 subsequent full-word command commit receives the actual finished-run SLVERR.
 The trace retains one observed sample with `submitted=0`, and all three real

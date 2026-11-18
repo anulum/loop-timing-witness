@@ -46,6 +46,18 @@ Loop Timing Witness — changelog
   - `runtime/coverage-review.json` follows the one line `runtime/linux/file_digest.cpp` lost.
 - `tools/c_coverage_gate.py` reads gcov JSON format 2 (GCC 14 and later) as well as format 1. The
   fields it reads are the same in both.
+- The reviewed outcomes of both native coverage gates follow GCC 15.2. Each new entry was checked
+  in the compiler's control-flow graph of the exact coverage build.
+  - On the normal path GCC 15 tests cleanup flags it has already set to 0, so the guarded
+    destructions cannot run: `run_simulation.cpp` line 27 (outcome 6), `power_configuration.cpp`
+    line 69 (outcomes 0, 4 and 6), and `spike_axi_device.cpp` line 67 (outcomes 4 and 7) and
+    line 174 (outcome 6).
+  - The landing-pad outcomes moved: `run_simulation.cpp` line 27 to outcomes 8, 10 and 11,
+    `spike_axi_device.cpp` line 67 to outcomes 8 to 11 and line 174 to outcomes 8 and 9.
+  - The vector assignment's cleanup of the `artifacts` initialiser is on `run_simulation.cpp`
+    line 40 (outcomes 2 and 3), no longer on line 38.
+  - Outcome 12 of the plugin's `REGISTER_DEVICE` line is named for what it completes, the
+    `runtime_error` construction.
 - `make plugin-coverage`, run in hosted shard 4, requires every line and branch outcome of the
   Spike plugin's device object to run: `runtime/isa/spike_axi_device.cpp`,
   `runtime/isa/spike_amp_transport.h` and `runtime/amp_logger.h`.

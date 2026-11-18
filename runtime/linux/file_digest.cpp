@@ -41,8 +41,7 @@ bool unchanged(const struct stat &before, const struct stat &after) {
 } // namespace
 FileDigest file_digest(const char *path) {
     Descriptor file{::open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)};
-    struct stat before {
-    }, after{}, named{};
+    struct stat before{}, after{}, named{};
     if (file.value < 0 || fstat(file.value, &before) != 0 || !S_ISREG(before.st_mode) ||
         before.st_size < 0)
         throw witness::RuntimeRefused("cannot hash actual regular artifact");

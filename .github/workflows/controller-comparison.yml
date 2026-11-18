@@ -22,7 +22,7 @@ concurrency:
 jobs:
   measure:
     name: Native controller comparison on the fixed runner
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: read # read benchmark sources, without repository write authority

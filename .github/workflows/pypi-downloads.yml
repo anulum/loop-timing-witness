@@ -23,7 +23,7 @@ jobs:
   verify:
     name: Verify the exact source revision
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: read # verify exact-source successful validation
@@ -54,7 +54,7 @@ jobs:
   snapshot:
     name: Import and publish only the project download CSV
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: [verify]
     environment:

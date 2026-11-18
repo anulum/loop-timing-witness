@@ -16,7 +16,7 @@ permissions: {}
 jobs:
   audit:
     name: Secrets, vulnerabilities, licences and workflow security
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 25
     permissions:
       contents: read # read the repository and its history for the scans

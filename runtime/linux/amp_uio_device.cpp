@@ -111,7 +111,7 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
         descriptor = open(("/dev/" + identity.device).c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW);
         if (descriptor < 0)
             failure("open AMP UIO");
-        struct stat status {};
+        struct stat status{};
         if (fstat(descriptor, &status) < 0)
             failure("stat AMP UIO");
         if (!S_ISCHR(status.st_mode) ||

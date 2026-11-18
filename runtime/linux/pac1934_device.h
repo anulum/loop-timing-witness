@@ -20,7 +20,7 @@ namespace witness {
 class Pac1934Device {
     PowerConfiguration configuration;
     int directory = -1;
-    struct stat identity {};
+    struct stat identity{};
     /** Read one whole kernfs text attribute through the owned device directory. */
     std::string attribute(const std::string &name) const;
 

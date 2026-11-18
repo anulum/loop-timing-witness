@@ -27,6 +27,25 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- Every hosted workflow runs on `ubuntu-26.04` (25 jobs, before `ubuntu-24.04`), with the Ubuntu
+  26.04 toolchain pinned:
+  - GCC 15.2 for native code and `riscv64-linux-gnu-gcc-15` 15.2 for the RV64 firmware;
+  - Verilator 5.032, which contains both upstream fixes of the thread-pool abort (issue 4931);
+  - Yosys 0.52, Icarus Verilog 12.0-3, OpenSSL 3.5.5, strace 6.19, dtc 1.7.2 and Boost 1.90
+    (Boost.System is header-only, so its package is gone);
+  - clang 21.1.8 for the fuzzing build.
+
+  The neural source contracts keep the Verilator 5.020 and g++ 13.3 identities of the
+  acquisitions they describe, which the runner does not produce.
+  `.github/actionlint.yaml` declares the `ubuntu-26.04` label: the pinned actionlint v1.7.12, its
+  newest release, knows the hosted labels only up to `ubuntu-24.04`.
+- clang-format 21.1.8 comes from the development lock as the hash-pinned `clang-format` wheel,
+  the same binary on every host and runner, instead of the `clang-format-18` apt package.
+  `tools/check_native_format.py` requires 21.1.8 and uses the environment's wheel by default.
+  - Six files take its brace-initialiser layout.
+  - `runtime/coverage-review.json` follows the one line `runtime/linux/file_digest.cpp` lost.
+- `tools/c_coverage_gate.py` reads gcov JSON format 2 (GCC 14 and later) as well as format 1. The
+  fields it reads are the same in both.
 - `make plugin-coverage`, run in hosted shard 4, requires every line and branch outcome of the
   Spike plugin's device object to run: `runtime/isa/spike_axi_device.cpp`,
   `runtime/isa/spike_amp_transport.h` and `runtime/amp_logger.h`.

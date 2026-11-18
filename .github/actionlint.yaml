@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — workflow lint configuration
+
+# Every job runs on the GitHub-hosted ubuntu-26.04 runner. The pinned actionlint v1.7.12, its
+# newest release, knows the GitHub-hosted labels only up to ubuntu-24.04 and refuses any other
+# label it does not know. A label named here is accepted as known.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

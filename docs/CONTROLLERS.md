@@ -203,7 +203,7 @@ and PID state matches RTL; each final 1,000-sample error is below 4,000 raw unit
 physical plant. Freeze and invalid configuration trip the independent actuator
 monitor; IRQ drop/delay and overload requests leave the fabric service timely.
 
-The `Controller comparison` workflow defines weekly and manual measurement on `ubuntu-24.04`.
+The `Controller comparison` workflow defines weekly and manual measurement on `ubuntu-26.04`.
 It builds both kernels, runs the same recorder, and retains the CI JSON plus a runner receipt
 for 30 days. The receipt binds the JSON SHA-256 to the hosted commit, repository, run ID and
 attempt. Verify the actual hosted run and artifact digest before using it as CI evidence;

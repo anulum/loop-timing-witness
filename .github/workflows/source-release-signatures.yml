@@ -30,7 +30,7 @@ jobs:
   verify:
     name: Verify immutable source assets
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read # read frozen release assets and source
@@ -92,7 +92,7 @@ jobs:
   sign:
     name: Sign verified assets with OIDC
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: [verify]
     environment:
@@ -130,7 +130,7 @@ jobs:
   publish:
     name: Attach the cryptographically verified bundle
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: [sign]
     environment:

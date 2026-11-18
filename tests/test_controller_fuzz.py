@@ -138,7 +138,7 @@ def test_build_refuses_an_incompatible_compiler(
         timeout=scaled(60),
     )
     assert result.returncode != 0
-    assert ' = "18.1.3"' in result.stdout
+    assert ' = "21.1.8"' in result.stdout
     assert not directory.exists()
 
 

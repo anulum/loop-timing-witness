@@ -34,6 +34,7 @@ jsonschema==4.26.0
 PyYAML==6.0.3
 # Spelling
 typos==1.52.2
+clang-format==21.1.8
 # Licensing, workflow security, dependency audit, software inventory
 reuse==6.3.0
 zizmor==1.32.0

@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import sys
@@ -18,7 +17,7 @@ import tomllib
 from typing import TYPE_CHECKING
 
 import pytest
-from check_native_format import main
+from check_native_format import default_formatter, main
 from test_check_source_gates import source_tree
 
 from conftest import REPOSITORY_ROOT
@@ -38,10 +37,11 @@ def formatter() -> str:
     Returns
     -------
     str
-        Actual formatter executable selected by the public environment or PATH.
+        The formatter the checker selects by default: the environment's choice or the
+        hash-locked wheel installed beside this interpreter.
     """
-    executable = os.environ.get("WITNESS_CLANG_FORMAT") or shutil.which("clang-format-18")
-    assert executable is not None, "actual pinned clang-format-18 is required"
+    executable = shutil.which(default_formatter())
+    assert executable is not None, "actual pinned clang-format 21.1.8 is required"
     return executable
 
 
@@ -134,7 +134,29 @@ def test_wrong_real_driver_is_refused(source_tree: Path, run_tool: RunTool) -> N
         "check_native_format", "--root", str(source_tree), "--formatter", sys.executable
     )
     assert result.returncode == 1
-    assert "expected clang-format 18.1.3; received Python" in result.stdout
+    assert "expected clang-format 21.1.8; received Python" in result.stdout
+
+
+def test_default_formatter_is_the_locked_wheel_or_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a selection, the wheel beside the interpreter wins over ``PATH``.
+
+    Parameters
+    ----------
+    tmp_path
+        Directory standing in for an environment's ``bin``.
+    monkeypatch
+        Interpreter path and environment of this process.
+    """
+    monkeypatch.delenv("WITNESS_CLANG_FORMAT", raising=False)
+    interpreter = tmp_path / "python"
+    monkeypatch.setattr(sys, "executable", str(interpreter))
+    assert default_formatter() == "clang-format"
+    (tmp_path / "clang-format").write_bytes(b"")
+    assert default_formatter() == str(tmp_path / "clang-format")
+    monkeypatch.setenv("WITNESS_CLANG_FORMAT", "chosen-format")
+    assert default_formatter() == "chosen-format"
 
 
 def test_missing_enrolled_original_native_file_is_refused(

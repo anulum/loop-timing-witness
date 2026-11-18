@@ -41,6 +41,7 @@ REQUIRED_FILES = (
     ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/config.yml",
     ".github/ISSUE_TEMPLATE/feature_request.yml",
+    ".github/actionlint.yaml",
     ".github/dependabot.yml",
     ".github/pull_request_template.md",
     ".github/workflow-inventory.json",

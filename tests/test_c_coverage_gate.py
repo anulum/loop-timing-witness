@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from c_coverage_gate import (
-    FORMAT_VERSION,
+    FORMAT_VERSIONS,
     UNSUPPORTED,
     CoverageError,
     Selection,
@@ -208,7 +208,7 @@ def test_unsupported_and_inconsistent_reports_are_refused(
         Captured command output.
     """
     sources = Selection.of([tree / "sources"])
-    for document in ({"format_version": "0", "files": []}, {"format_version": FORMAT_VERSION}):
+    for document in ({"format_version": "0", "files": []}, {"format_version": "2"}):
         with pytest.raises(CoverageError, match=UNSUPPORTED):
             combine([document], sources)
     report = _load(_program(tree, "negative", []))
@@ -248,17 +248,20 @@ def test_a_branchless_record_on_a_branching_line_adds_only_its_count(tree: Path)
     assert counts.exceptional == plain.exceptional
 
 
-def test_long_uncovered_ranges_are_shortened(tree: Path) -> None:
-    """List at most ten unexecuted lines and mark the rest.
+@pytest.mark.parametrize("version", sorted(FORMAT_VERSIONS))
+def test_long_uncovered_ranges_are_shortened(tree: Path, version: str) -> None:
+    """List at most ten unexecuted lines and mark the rest, in either gcov JSON format.
 
     Parameters
     ----------
     tree
         Owned source tree.
+    version
+        gcov JSON format: 1 from GCC 13, 2 from GCC 14 and later.
     """
     lines = [{"line_number": number, "count": 0, "branches": []} for number in range(1, 13)]
     report = {
-        "format_version": FORMAT_VERSION,
+        "format_version": version,
         "current_working_directory": str(tree),
         "files": [{"file": str(tree / "sources/choose.c"), "lines": lines}],
     }

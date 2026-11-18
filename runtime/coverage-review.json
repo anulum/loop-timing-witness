@@ -405,7 +405,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 46,
+      "line": 45,
       "outcome": 3,
       "condition": "fstat of the just-opened descriptor fails",
       "reason": "fstat of a valid open descriptor of a regular file fails only for EOVERFLOW on 32-bit offsets or a kernel fault; this 64-bit build has neither",
@@ -413,7 +413,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 47,
+      "line": 46,
       "outcome": 0,
       "condition": "negative st_size of a regular file",
       "reason": "the kernel never reports a negative size for a regular file",
@@ -421,7 +421,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 51,
+      "line": 50,
       "outcome": 1,
       "condition": "EVP_MD_CTX_new returned no context",
       "reason": "an allocation failure inside OpenSSL; failing that single allocation needs an allocator interposer, which the real-surface test policy excludes (the initialisation failure is covered through an OpenSSL configuration without SHA-256)",
@@ -429,37 +429,37 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 57,
+      "line": 56,
       "outcome": 2,
       "condition": "read interrupted by a signal (EINTR)",
       "reason": "read of a regular file is not interruptible on Linux; EINTR arises for pipes, sockets and slow devices, which the S_ISREG check refuses before reading",
       "lines": [
-        58
+        57
       ]
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 64,
+      "line": 63,
       "outcome": 2,
       "condition": "EVP_DigestUpdate fails",
       "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest update has no failure path for a valid context and only hashes the given bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
       "lines": [
-        65
+        64
       ]
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 72,
+      "line": 71,
       "outcome": 3,
       "condition": "EVP_DigestFinal_ex fails or reports a size other than 32",
       "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest finalisation has no failure path for a valid context and writes 32 bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
       "lines": [
-        73
+        72
       ]
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 72,
+      "line": 71,
       "outcome": 4,
       "condition": "EVP_DigestFinal_ex fails or reports a size other than 32",
       "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest finalisation has no failure path for a valid context and writes 32 bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
@@ -467,7 +467,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 72,
+      "line": 71,
       "outcome": 6,
       "condition": "EVP_DigestFinal_ex fails or reports a size other than 32",
       "reason": "after SHA-256 initialisation succeeds, OpenSSL's digest finalisation has no failure path for a valid context and writes 32 bytes; a provider without SHA-256 fails at initialisation, which the OpenSSL configuration scenario covers",
@@ -475,7 +475,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 75,
+      "line": 74,
       "outcome": 1,
       "condition": "post-hash fstat fails, or fewer bytes were hashed than the unchanged size",
       "reason": "line 75 evaluates fstat of the open descriptor after hashing and the hashed byte count against the open-time size: the first fails only as described for the open-time fstat, and a shorter read changes the size, which the earlier unchanged(before, after) check refuses first (the truncation mutation)",
@@ -483,7 +483,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 75,
+      "line": 74,
       "outcome": 4,
       "condition": "post-hash fstat fails, or fewer bytes were hashed than the unchanged size",
       "reason": "line 75 evaluates fstat of the open descriptor after hashing and the hashed byte count against the open-time size: the first fails only as described for the open-time fstat, and a shorter read changes the size, which the earlier unchanged(before, after) check refuses first (the truncation mutation)",
@@ -491,7 +491,7 @@
     },
     {
       "file": "runtime/linux/file_digest.cpp",
-      "line": 86,
+      "line": 85,
       "outcome": 2,
       "condition": "equal SHA-256 with a different byte count",
       "reason": "two inputs of different length with the same SHA-256 would be a hash collision",

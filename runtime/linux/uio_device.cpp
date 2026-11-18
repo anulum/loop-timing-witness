@@ -96,7 +96,7 @@ UioDevice::UioDevice(const UioIdentity &identity) {
         descriptor = open(("/dev/" + identity.device).c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW);
         if (descriptor < 0)
             syscall_error("open UIO");
-        struct stat status {};
+        struct stat status{};
         if (fstat(descriptor, &status) < 0)
             syscall_error("stat UIO");
         const auto device_number =

@@ -21,7 +21,7 @@ jobs:
   build:
     if: github.ref == 'refs/heads/main'
     name: Verify revision and build Python artifacts
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read # read the exact source revision
@@ -56,7 +56,7 @@ jobs:
       - name: Install the exact build and consumer toolchains
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes iverilog=12.0-2build2
+          sudo apt-get install --no-install-recommends --yes iverilog=12.0-3
           python -m venv .venv
           .venv/bin/python -m pip install --require-hashes --no-deps -r requirements-build.txt
           PYYAML_FORCE_LIBYAML=0 .venv/bin/python -m pip install --require-hashes --no-deps --no-build-isolation -r requirements-dev.txt
@@ -84,7 +84,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     name: Publish via the project-bound PyPI identity
     needs: [build]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       id-token: write # exchange this exact repository/workflow/environment identity with PyPI

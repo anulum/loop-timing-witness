@@ -50,7 +50,7 @@ truthfulness of the `architecture_only` state.
   on every host.
 - Flit Core 4.2.0 is the hash-pinned Python distribution build backend in the same development
   lock, with the current complete-chain upload cut-off recorded in both lock headers.
-- Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu noble package `12.0-2build2`, to compile the
+- Icarus Verilog 12.0 (`iverilog` and `vvp`), Ubuntu 26.04 package `12.0-3`, to compile the
   synthesizable capture and buffered witness modules and produce binary event files consumed by
   the host CLI tests. The reusable test workflow installs that exact package through Ubuntu's signed APT
   repositories and prints both tool versions. A missing simulator fails the tests; simulation
@@ -60,8 +60,12 @@ truthfulness of the `architecture_only` state.
   source enrolment rejects drift between this pin and each maintained crate's Rust version.
   C uses GNU 128-bit integers and strict GCC compilation with all warnings as errors.
   Tool versions are printed by the jobs. The controller kernels have no third-party native dependencies.
-- Verilator 5.020 (`verilator`), Ubuntu noble package `5.020-1`, builds the native controller
+- The hosted workflows run on `ubuntu-26.04`. GCC 15.2 (`gcc`, `g++`) builds the native code, and
+  the RV64 firmware uses `riscv64-linux-gnu-gcc-15` 15.2.
+- Verilator 5.032 (`verilator`), Ubuntu 26.04 package `5.032-1`, builds the native controller
   against the production AXI top. C++17 and Linux headers are required for the native adapters.
+  The neural source contracts keep the Verilator 5.020 and g++ 13.3 identities of the acquisitions
+  they describe; the runner's toolchain does not change them.
 - The [dedicated-hart ISA capture tests](docs/AMP_SIMULATION.md) require actual Spike execution,
   matching original source/generated headers, both production RTL plugins and a publicly built
   RV64 firmware image. The plugin uses C++20; firmware uses the freestanding RV64IMAC/Zicsr/Zifencei
@@ -74,12 +78,12 @@ truthfulness of the `architecture_only` state.
   linker identities; source/receipt drift requires a fresh build. The counted plugin variant
   (`AMP_PLUGIN_INSTRUMENTATION=coverage`) is measurement-only. Its receipt records the
   instrumentation, and capture and analysis refuse it.
-- Strace 6.8, Ubuntu noble package `6.8-0ubuntu2`, is required for owned-process refusal tests.
+- Strace 6.19, Ubuntu 26.04 package `6.19+ds-0ubuntu5`, is required for owned-process refusal tests.
   Tests delay syscall entry and retain actual kernel results; they neither substitute return
   values nor modify process memory. Tracing starts with test-owned children and uses existing
   kernel permissions. A missing tracer fails the tests; no security settings are changed.
 - OpenSSL 3 headers and `libcrypto` are required for native artifact SHA-256 receipts. The
-  reusable test workflow installs `libssl-dev=3.0.13-0ubuntu3.16` and `libssl3t64=3.0.13-0ubuntu3.16`, prints the actual development
+  reusable test workflow installs `libssl-dev=3.5.5-1ubuntu3.7` and `libssl3t64=3.5.5-1ubuntu3.7`, prints the actual development
   and runtime packages, and links the adapters with `-lcrypto`. Native metadata records both
   header and runtime version numbers. This dependency belongs to the run adapters; it is not
   linked into the standalone C/Rust controller kernels.
@@ -153,9 +157,9 @@ execution; they do not qualify physical timing or complete RTL branch coverage.
 
 ## Native formatting
 
-Install clang-format 18.1.3; Ubuntu 24.04 uses
-`clang-format-18=1:18.1.3-1ubuntu1`. Run
-`.venv/bin/python tools/preflight.py --only native-format`.
+clang-format 21.1.8 comes from the development lock as the hash-pinned `clang-format` wheel, so
+every host and runner uses the same binary; `make venv` installs it in `.venv/bin`, where the checker
+finds it by default. Run `.venv/bin/python tools/preflight.py --only native-format`.
 `WITNESS_CLANG_FORMAT` or the formatter command's `--formatter` option can select an
 existing private installation. The reported version must match the pin. The
 command checks every enrolled C/C++ source and header against the explicit
@@ -202,7 +206,7 @@ their original explicit positive and negative signs.
 | Icicle reference derivation | `.venv/bin/pytest -q tests/test_icicle_reference_derivation.py` | fetches the pinned official reference commit unless `WITNESS_ICICLE_REFERENCE` names a clean local checkout; exercises the public derivation, complete reference-tree receipt, copied RTL hashes and pre-Libero refusal paths; place pytest's base temporary directory on the repository disk |
 | `tests` | `pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=100` | every test; 100 % statement and branch coverage of `src/loop_timing_witness`, `tools/` and native build support, including subprocess runs of the host CLI against event files produced by Icarus RTL simulation |
 | `source-gates` | `python tools/check_source_gates.py` | tracked and new non-ignored Python/native sources are enrolled in actual gates; Python lint, strict typing and statement/branch coverage scopes match configuration |
-| `native-format` | `python tools/check_native_format.py` | complete enrolled C/C++ and header candidate; clang-format 18.1.3 and the explicit repository style, with missing tool, omitted source and formatting drift refused |
+| `native-format` | `python tools/check_native_format.py` | complete enrolled C/C++ and header candidate; clang-format 21.1.8 and the explicit repository style, with missing tool, omitted source and formatting drift refused |
 | `measurement-domain` | `python tools/validate_measurement_domain.py` | repeated-key rejection, JSON Schema, cross-field rules, and — where the canonical project registry is present — group and project identity |
 | `capability-inventory` | `python tools/generate_capability_inventory.py --check` | committed inventory byte-identical to a fresh generation from a valid manifest |
 | `provenance-headers` | `python tools/check_provenance_headers.py` | seven-line provenance header in every publishable file with a comment syntax; Markdown header inside an HTML comment with rendered content after it |

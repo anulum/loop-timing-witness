@@ -54,7 +54,7 @@ std::string Pac1934Device::attribute(const std::string &name) const {
 }
 Pac1934Device::Pac1934Device(const PowerConfiguration &config) : configuration(config) {
     validate_power_configuration(configuration);
-    struct utsname kernel {};
+    struct utsname kernel{};
     if (uname(&kernel) != 0 || configuration.kernel_release != kernel.release)
         throw witness::RuntimeRefused("actual kernel release differs from power configuration");
     const auto path = std::filesystem::path("/sys/bus/iio/devices") / configuration.device;
@@ -81,7 +81,7 @@ Pac1934Device::~Pac1934Device() {
 void Pac1934Device::verify() const {
     const auto path = std::filesystem::path("/sys/bus/iio/devices") / configuration.device;
     const auto actual = std::filesystem::canonical(path);
-    struct stat current {};
+    struct stat current{};
     if (stat(actual.c_str(), &current) != 0 || current.st_dev != identity.st_dev ||
         current.st_ino != identity.st_ino ||
         std::filesystem::canonical(actual.parent_path() / "driver").filename() != "pac1934" ||

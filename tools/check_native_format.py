@@ -21,7 +21,7 @@ from check_source_gates import LANGUAGES, audit
 
 from repository_files import candidate_files
 
-FORMATTER_VERSION = "18.1.3"
+FORMATTER_VERSION = "21.1.8"
 NATIVE_LANGUAGES = frozenset({"c", "cxx", "headers"})
 
 
@@ -59,7 +59,8 @@ def _dry_run(root: Path, formatter: str) -> tuple[subprocess.CompletedProcess[st
     version = subprocess.run(  # noqa: S603 - Caller selects the formatter; no shell is used.
         [formatter, "--version"], capture_output=True, text=True, check=True
     )
-    if re.search(r"\bclang-format version 18\.1\.3(?:\s|$)", version.stdout) is None:
+    pinned = rf"\bclang-format version {re.escape(FORMATTER_VERSION)}(?:\s|$)"
+    if re.search(pinned, version.stdout) is None:
         return f"expected clang-format {FORMATTER_VERSION}; received {version.stdout.strip()}"
     result = subprocess.run(  # noqa: S603 - Caller selects the formatter; no shell is used.
         [formatter, f"--style=file:{style}", "--dry-run", "--Werror", "--ferror-limit=0", *paths],
@@ -69,6 +70,21 @@ def _dry_run(root: Path, formatter: str) -> tuple[subprocess.CompletedProcess[st
         check=False,
     )
     return result, len(paths)
+
+
+def default_formatter() -> str:
+    """Return the formatter the development lock installs beside this interpreter.
+
+    Returns
+    -------
+    str
+        ``WITNESS_CLANG_FORMAT`` when set; otherwise the ``clang-format`` of the
+        running environment (the hash-locked wheel), or the one on ``PATH``.
+    """
+    locked = Path(sys.executable).with_name("clang-format")
+    return os.environ.get("WITNESS_CLANG_FORMAT") or (
+        str(locked) if locked.is_file() else "clang-format"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -87,9 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument(
-        "--formatter", default=os.environ.get("WITNESS_CLANG_FORMAT", "clang-format-18")
-    )
+    parser.add_argument("--formatter", default=default_formatter())
     args = parser.parse_args(argv)
     root = args.root.resolve()
     findings = audit(root)

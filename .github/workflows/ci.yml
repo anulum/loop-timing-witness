@@ -38,7 +38,7 @@ jobs:
       contents: read # read the repository and its history for the scans
   gate:
     name: Required gate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     needs: [static-policy, tests, security]
     if: always()

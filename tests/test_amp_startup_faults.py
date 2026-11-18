@@ -71,24 +71,27 @@ def _replace_main_instructions(image: Path, original: str, damaged: str) -> tupl
 @pytest.mark.parametrize(
     "case",
     [
-        # Keep the actual integral-max store, then publish that register instead of zero.
+        # GCC 15.2 sequences (riscv64-linux-gnu-gcc-15). The mailbox base is a2.
+        # Keep the actual integral-max store `c.sw a0,104(a2)`, then publish that register
+        # instead of zero: `sw zero,108(a2)` becomes `sw a0,108(a2)` or `sw a0,44(a2)`.
         (
             "run-reserved",
-            "bcd423a60406",
-            "bcd423a6f406",
+            "28d623260606",
+            "28d62326a606",
             "AMP run contract reserved field changed",
         ),
         (
             "fresh-mailbox",
-            "bcd423a60406",
-            "bcd423a6f402",
+            "28d623260606",
+            "28d62326a602",
             "AMP firmware did not initialize a fresh mailbox",
         ),
-        # Publish the actual IRQ source register (2) instead of ARMED (1), before START.
+        # Publish a4, which still holds the checked logger status 2, instead of ARMED (1)
+        # before START: `c.sw a1,4(a2)` becomes `c.sw a4,4(a2)`; the fence stays.
         (
             "arm-status",
-            "d8c00f00f00f",
-            "d0c00f00f00f",
+            "4cc20f00f00f",
+            "58c20f00f00f",
             "AMP firmware did not arm a fresh run",
         ),
     ],

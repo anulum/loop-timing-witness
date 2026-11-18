@@ -20,8 +20,8 @@ VERILATOR_JOBS ?= $(shell n=$$(nproc); echo $$(( n < $(VERILATOR_JOB_LIMIT) ? n 
 SAT_TIMEOUT ?= 30
 
 FUZZ_DIRECTORY ?= build/fuzz
-FUZZ_CC ?= clang-18
-FUZZ_CXX ?= clang++-18
+FUZZ_CC ?= clang-21
+FUZZ_CXX ?= clang++-21
 FUZZ_GCC_INSTALL ?= /usr/lib/gcc/x86_64-linux-gnu/13
 FUZZ_SECONDS ?= 120
 FUZZ_INPUT_TIMEOUT ?= 10
@@ -30,8 +30,8 @@ FUZZ_SOURCE ?= controllers/c/witness_controller.c
 .PHONY: controller-fuzz-build controller-fuzz
 
 controller-fuzz-build:
-	test "$$( $(FUZZ_CC) -dumpversion )" = "18.1.3"
-	test "$$( $(FUZZ_CXX) -dumpversion )" = "18.1.3"
+	test "$$( $(FUZZ_CC) -dumpversion )" = "21.1.8"
+	test "$$( $(FUZZ_CXX) -dumpversion )" = "21.1.8"
 	mkdir -p "$(FUZZ_DIRECTORY)"
 	$(FUZZ_CC) -std=gnu11 -O1 -g -fno-omit-frame-pointer $(CONTROLLER_WARNINGS) -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -Icontrollers/c -c "$(FUZZ_SOURCE)" -o "$(FUZZ_DIRECTORY)/controller.o"
 	$(FUZZ_CXX) --gcc-install-dir="$(FUZZ_GCC_INSTALL)" -std=c++20 -O1 -g -UNDEBUG -Wall -Wextra -Werror -Wconversion -Wshadow -fno-omit-frame-pointer -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all -Icontrollers/c fuzz/controller_fuzz.cpp "$(FUZZ_DIRECTORY)/controller.o" -o "$(FUZZ_DIRECTORY)/controller_fuzz"

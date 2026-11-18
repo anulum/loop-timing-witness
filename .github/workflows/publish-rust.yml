@@ -21,7 +21,7 @@ jobs:
   publish:
     if: github.ref == 'refs/heads/main'
     name: Verify and publish the standalone controller crate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read # read the exact source revision

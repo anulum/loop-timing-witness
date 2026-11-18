@@ -9,7 +9,10 @@
 """Require every line and branch of the judged C and C++ sources to be executed.
 
 The reports are ``gcov --json-format --stdout --branch-probabilities`` documents
-of GCC ``--coverage`` builds. One source compiled into several programs appears
+of GCC ``--coverage`` builds, in format 1 (GCC 13) or format 2 (GCC 14 and later).
+Format 2 adds block identifiers, calls and condition records to each line; the
+line count and the branch outcomes with their exception flag, which are all the
+gate reads, are the same in both. One source compiled into several programs appears
 in several reports; their counts are added line by line and branch by branch.
 Every record of a line that carries branches must carry the same ones, in every
 report; a record without branches, such as a function a macro places on a
@@ -41,7 +44,7 @@ from typing import TYPE_CHECKING, Any, Final
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-FORMAT_VERSION: Final = "1"
+FORMAT_VERSIONS: Final = frozenset({"1", "2"})
 UNSUPPORTED: Final = "Unsupported gcov report."
 SHOWN_LINES: Final = 10
 REVIEW_KEYS: Final = frozenset({"file", "line", "outcome", "condition", "reason", "lines"})
@@ -233,7 +236,7 @@ def combine(reports: Iterable[dict[str, Any]], selection: Selection) -> dict[str
     combined: dict[str, SourceCounts] = {}
     for report in reports:
         files = report.get("files")
-        if report.get("format_version") != FORMAT_VERSION or not isinstance(files, list):
+        if report.get("format_version") not in FORMAT_VERSIONS or not isinstance(files, list):
             raise CoverageError(UNSUPPORTED)
         for record in files:
             base = Path(report.get("current_working_directory", "."))

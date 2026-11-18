@@ -325,7 +325,7 @@ processes exit, use `gcov -b -c -j` on `run_simulation.gcno`, `run_configuration
 source paths in the resulting JSON; filter by those paths, not generated Verilator or system
 library totals. Inspect uncovered lines and branch counts before making any coverage claim.
 CLI file-size-limit tests relocate their child counters with
-[`GCOV_PREFIX`](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc/Cross-profiling.html).
+[`GCOV_PREFIX`](https://gcc.gnu.org/onlinedocs/gcc-15.2.0/gcc/Cross-profiling.html).
 The limit also affects profiling files, so those child counter files may be truncated and must
 not be merged into the baseline. Their exit status and retained data prove behavior; they do
 not supply valid compiler coverage counts. Never use a corrupted gcov export as coverage evidence.

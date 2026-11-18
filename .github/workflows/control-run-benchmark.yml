@@ -20,7 +20,7 @@ concurrency:
 jobs:
   measure:
     name: Python and native control-run analysis on closed-loop data
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 240
     permissions:
       contents: read # read benchmark sources, without repository write authority
@@ -34,7 +34,7 @@ jobs:
       - name: Install the pinned RTL simulator
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes verilator=5.020-1
+          sudo apt-get install --no-install-recommends --yes verilator=5.032-1
           verilator --version
       - name: Install the hashed development lock and repository package
         run: |

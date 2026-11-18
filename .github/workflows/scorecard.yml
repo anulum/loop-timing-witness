@@ -25,7 +25,7 @@ jobs:
   analysis:
     if: github.ref == 'refs/heads/main'
     name: OpenSSF Scorecard analysis
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read # read the repository settings and files

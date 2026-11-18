@@ -22,7 +22,7 @@ concurrency:
 jobs:
   validate:
     name: Documentation links and native API website
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read # read the documentation
@@ -62,7 +62,7 @@ jobs:
     name: Publish verified documentation
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [validate]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       pages: write # deploy the validated website

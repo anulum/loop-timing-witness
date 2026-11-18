@@ -52,6 +52,10 @@ def test_actual_complete_toolchain(name: str, frontend: str) -> None:
 def test_absent_actual_program_refused(tmp_path: Path) -> None:
     """Refuse an absent actual selected executable through public toolchain admission.
 
+    The driver answers ``-print-prog-name`` for a program it cannot find with the name itself,
+    which the build ``PATH`` must then resolve. GCC 13 answers so for the assembler and the
+    linker too; GCC 15 names them absolutely, so the relative path is exercised here.
+
     Parameters
     ----------
     tmp_path
@@ -61,6 +65,8 @@ def test_absent_actual_program_refused(tmp_path: Path) -> None:
         executable_path(str(tmp_path / "absent-gcc"))
     with pytest.raises(ValueError, match="unavailable executable"):
         compiler_identity("gcc", str(tmp_path / "absent-frontend"))
+    with pytest.raises(ValueError, match=r"actual executable: absent-frontend$"):
+        compiler_identity("gcc", "absent-frontend")
 
 
 @pytest.mark.parametrize("name", ["gcc", "g++", "/usr/bin/perl", "/usr/bin/verilator_bin"])

@@ -314,7 +314,7 @@ def simulator_identity(executable: Path, plugin: Path) -> dict[str, Any]:
     listing = subprocess.check_output(
         [str(interpreter), "--list", str(plugin)], text=True, timeout=scaled(10)
     )
-    libraries.update(library_identities(interpreter, listing))
+    libraries.update(library_identities(interpreter, listing, own_load_record(plugin)))
     return {
         "path": str(selected),
         "sha256": sha256_of_file(selected),

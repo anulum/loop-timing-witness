@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 import struct
 import subprocess
 from pathlib import Path
@@ -159,13 +160,17 @@ def test_disappearing_actual_loaded_library(tmp_path: Path) -> None:
     )
     assert str(owned) in listing
     owned.unlink()
-    with pytest.raises(ValueError, match="available absolute library"):
-        library_identities(interpreter, listing)
+    with pytest.raises(ValueError, match="available absolute library") as refused:
+        library_identities(interpreter, listing, own_load_record(compiler))
+    assert str(owned) in str(refused.value).partition("; complete listing")[0]
+
+
+PIE_RECORD = "(0x00007dbb3efad000)"
 
 
 @pytest.mark.parametrize("kind", ["position-dependent", "position-independent", "no-load"])
 def test_own_load_record_of_owned_compiler_copy(tmp_path: Path, kind: str) -> None:
-    """Name the fixed load address of a position-dependent executable and nothing otherwise.
+    """Require the fixed load page of a position-dependent executable, else any page.
 
     Parameters
     ----------
@@ -179,41 +184,76 @@ def test_own_load_record_of_owned_compiler_copy(tmp_path: Path, kind: str) -> No
     headers = program_headers(bytes(content))
     loads = [header[3] for header in headers if header[0] == PT_LOAD]
     struct.pack_into("<H", content, 16, 3 if kind == "position-independent" else 2)
-    if kind == "no-load":
-        offset = struct.unpack_from("<Q", content, 32)[0]
-        for index, header in enumerate(headers):
-            if header[0] == PT_LOAD:
-                struct.pack_into("<I", content, offset + 56 * index, 0)
+    offset = struct.unpack_from("<Q", content, 32)[0]
+    for index, header in enumerate(headers):
+        if kind == "no-load" and header[0] == PT_LOAD:
+            struct.pack_into("<I", content, offset + 56 * index, 0)
     selected = tmp_path / "original-gcc-copy"
     selected.write_bytes(content)
-    expected = f"(0x{min(loads) & ~0xFFF:016x})" if kind == "position-dependent" else None
-    assert own_load_record(selected) == expected
+    pattern = own_load_record(selected)
+    fixed = f"(0x{min(loads) & ~0xFFF:016x})"
+    assert pattern.fullmatch(fixed)
+    assert bool(pattern.fullmatch(PIE_RECORD)) is (kind != "position-dependent")
+    assert not pattern.fullmatch("(0x00007dbb3efad010)")
 
 
-@pytest.mark.parametrize("own_record", ["(0x0000000000400000)", "(0x0000000000401000)", None])
-def test_loader_record_of_the_listed_executable(own_record: str | None) -> None:
-    """Skip only the listed executable's own nameless record; refuse any other nameless record.
+@pytest.mark.parametrize(
+    ("record", "position", "pattern"),
+    [
+        ("(0x0000000000400000)", "first", "(0x0000000000400000)"),
+        (PIE_RECORD, "first", None),
+        (PIE_RECORD, "last", None),
+        ("(0x0000000000400000)", "first", "(0x0000000000401000)"),
+        ("(0x00007dbb3efad010)", "first", None),
+        (PIE_RECORD, "absent", None),
+    ],
+)
+def test_loader_record_of_the_listed_executable(
+    tmp_path: Path, record: str, position: str, pattern: str | None
+) -> None:
+    """Skip the listed executable's own nameless record only first; refuse any other.
 
     Parameters
     ----------
-    own_record
-        Record the caller derived from the listed executable, or none. Only the first equals
-        the nameless record at 0x400000 added to the actual listing.
+    tmp_path
+        Owned position-independent compiler copy whose pattern admits any page.
+    record
+        Nameless record added to the actual listing.
+    position
+        Whether the record leads or ends the listing, or no pattern is supplied at all.
+    pattern
+        Fixed record of a position-dependent executable, or ``None`` for the
+        position-independent copy's pattern.
     """
     compiler = executable_path("gcc")
     interpreter = elf_interpreter(compiler)
-    original = subprocess.check_output(
+    actual = subprocess.check_output(
         [str(interpreter), "--list", str(compiler)], text=True, timeout=scaled(10)
+    ).splitlines(keepends=True)
+    own = own_load_record(compiler)
+    body = "".join(
+        line for index, line in enumerate(actual) if index or not own.fullmatch(line.strip())
     )
-    listing = original + "\t(0x0000000000400000)\n"
-    if own_record == "(0x0000000000400000)":
-        data = library_identities(interpreter, listing, own_record)
-        assert data == library_identities(interpreter, original)
+    content = bytearray(compiler.read_bytes())
+    struct.pack_into("<H", content, 16, 3)
+    copy = tmp_path / "original-gcc-copy"
+    copy.write_bytes(content)
+    expected = re.compile(re.escape(pattern)) if pattern else own_load_record(copy)
+    listing = f"\t{record}\n{body}" if position == "first" else f"{body}\t{record}\n"
+    supplied = None if position == "absent" else expected
+    admitted = {
+        ("(0x0000000000400000)", "first", "(0x0000000000400000)"),
+        (PIE_RECORD, "first", None),
+    }
+    if (record, position, pattern) in admitted:
+        assert library_identities(interpreter, listing, supplied) == library_identities(
+            interpreter, body
+        )
         return
-    records = " | ".join(record.strip() for record in listing.splitlines())
+    records = " | ".join(line.strip() for line in listing.splitlines())
     with pytest.raises(ValueError, match="complete listing") as refused:
-        library_identities(interpreter, listing, own_record)
+        library_identities(interpreter, listing, supplied)
     assert str(refused.value) == (
-        "AMP loader did not resolve an available absolute library: (0x0000000000400000); "
+        f"AMP loader did not resolve an available absolute library: {record}; "
         f"complete listing: {records}"
     )

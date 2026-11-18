@@ -174,13 +174,14 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
-- The AMP build toolchain identity admits the loader's record of a position-dependent tool
-  itself. On the hosted `ubuntu-26.04` runner, glibc 2.43's `ld.so --list` of such a tool (the
-  GCC driver, `cc1`, `collect2`) also prints a nameless record at the tool's fixed load address,
-  which was refused as an unresolved library. `tools/amp_tool_runtime.py` skips exactly that
-  record, derived from the tool's own lowest loadable segment; the tool's bytes are hashed
-  separately, and any other nameless record is still refused. A refusal quotes the complete
-  loader listing.
+- The AMP build toolchain and simulator identities admit the loader's record of the listed
+  program itself. On the hosted `ubuntu-26.04` runner, glibc 2.43's `ld.so --list` begins with a
+  nameless record at the listed program's load address, which was refused as an unresolved
+  library. `tools/amp_tool_runtime.py` skips that record only as the first record, and only at
+  the program's fixed load page (position-dependent tools such as the GCC driver, `cc1` and
+  `collect2`) or at a page address (position-independent tools and the plugin library). The
+  program's bytes are hashed separately, and any other nameless record is still refused. A
+  refusal quotes the complete loader listing.
 - `tools/closed_loop_run.py` prepares every repeat (sources, declarations and harness copy)
   before any harness runs, then runs the repeats in parallel.
   - Before, each thread copied its harness while other threads forked their runs. A child forked

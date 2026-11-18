@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 import struct
 from pathlib import Path
 
@@ -55,13 +56,15 @@ def program_headers(content: bytes) -> list[tuple[int, ...]]:
     ]
 
 
-def own_load_record(path: Path) -> str | None:
-    """Return the loader list record of a position-dependent executable itself.
+def own_load_record(path: Path) -> re.Pattern[str]:
+    """Return the pattern of the loader's list record of the listed executable itself.
 
-    On the hosted ``ubuntu-26.04`` runner the glibc 2.43 loader, asked to list the libraries
-    of a position-dependent (``ET_EXEC``) executable, also prints a record for that executable:
-    no name, only its fixed load address. The record names no library, and the executable's own
-    bytes are hashed by the caller, so it is the one nameless record a listing may carry.
+    On the hosted ``ubuntu-26.04`` runner the glibc 2.43 loader begins ``--list`` output with
+    a record for the listed executable: no name, only its load address. The riscv64
+    assembler, a position-independent executable, was listed at 0x00007dbb3efad000, just
+    below the vDSO and the loader, where the loader maps the program first. The same loader
+    in an Ubuntu 26.04 container on another host prints no such record. The record names no
+    library, and the caller hashes the executable's bytes itself.
 
     Parameters
     ----------
@@ -70,9 +73,10 @@ def own_load_record(path: Path) -> str | None:
 
     Returns
     -------
-    str or None
-        ``(0x…)`` with the page of the lowest loadable segment, as the loader prints it, or
-        ``None`` for a position-independent file, whose listing carries no such record.
+    re.Pattern of str
+        For a position-dependent (``ET_EXEC``) executable, ``(0x…)`` with the page of its
+        lowest loadable segment, where it must load; otherwise any page-aligned address,
+        which the kernel chooses.
 
     Raises
     ------
@@ -83,8 +87,8 @@ def own_load_record(path: Path) -> str | None:
     headers = program_headers(content)
     loads = [header[3] for header in headers if header[0] == PT_LOAD]
     if struct.unpack_from("<H", content, 16)[0] != ET_EXEC or not loads:
-        return None
-    return f"(0x{min(loads) & ~PAGE_MASK:016x})"
+        return re.compile(r"\(0x[0-9a-f]{13}000\)")
+    return re.compile(re.escape(f"(0x{min(loads) & ~PAGE_MASK:016x})"))
 
 
 def elf_interpreter(path: Path) -> Path:
@@ -124,7 +128,7 @@ def elf_interpreter(path: Path) -> Path:
 
 
 def library_identities(
-    interpreter: Path, listing: str, own_record: str | None = None
+    interpreter: Path, listing: str, own_record: re.Pattern[str] | None = None
 ) -> dict[str, str]:
     """Hash actual filesystem libraries from the selected loader's successful list output.
 
@@ -135,8 +139,8 @@ def library_identities(
     listing
         Complete successful bounded ``interpreter --list executable`` output.
     own_record
-        The listed executable's own nameless record from :func:`own_load_record`, or ``None``
-        when the listing may carry none.
+        Pattern of the listed executable's own nameless record from :func:`own_load_record`,
+        admitted as the first record only, or ``None`` when the listing may carry none.
 
     Returns
     -------
@@ -150,16 +154,16 @@ def library_identities(
         If any other loader record does not identify an available absolute filesystem library.
     """
     identities = {str(interpreter): sha256_of_file(interpreter)}
-    for line in listing.splitlines():
-        value = line.strip()
-        if value.startswith("linux-vdso.so.1 ") or value == own_record:
+    records = [line.strip() for line in listing.splitlines()]
+    own = bool(records) and own_record is not None and own_record.fullmatch(records[0]) is not None
+    for value in records[int(own) :]:
+        if value.startswith("linux-vdso.so.1 "):
             continue
         path = Path(value.split("=>", 1)[-1].strip().rsplit(" (", 1)[0])
         if not path.is_absolute() or not path.is_file():
-            records = " | ".join(record.strip() for record in listing.splitlines())
             message = (
                 f"AMP loader did not resolve an available absolute library: {value}; "
-                f"complete listing: {records}"
+                f"complete listing: {' | '.join(records)}"
             )
             raise ValueError(message)
         resolved = path.resolve()

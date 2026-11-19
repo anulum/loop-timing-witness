@@ -38,9 +38,10 @@ Loop Timing Witness — changelog
 
   The neural source contracts keep the Verilator 5.020 and g++ 13.3 identities of the
   acquisitions they describe, which the runner does not produce. The Verilator build job limit
-  of 8, set for 5.020's thread-pool abort, stays until it is reviewed under 5.032; VALIDATION,
-  the Makefile and `host_profile` no longer call 5.020 the CI pin. Recorded measurements keep
-  the runner and toolchain they name.
+  of 8, set for 5.020's thread-pool abort, was reviewed under 5.032-1 on 22 processors: 0 of 262
+  builds aborted at 22 jobs and 22 jobs built no faster than 8, so it stays for every host.
+  VALIDATION, the Makefile and `host_profile` no longer call 5.020 the CI pin. Recorded
+  measurements keep the runner and toolchain they name.
   `.github/actionlint.yaml` declares the `ubuntu-26.04` label: the pinned actionlint v1.7.12, its
   newest release, knows the hosted labels only up to `ubuntu-24.04`.
 - clang-format 21.1.8 comes from the development lock as the hash-pinned `clang-format` wheel,

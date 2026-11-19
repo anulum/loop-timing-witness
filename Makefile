@@ -13,7 +13,8 @@ PREFLIGHT := $(VENV)/python tools/preflight.py
 # 5.020, the CI pin when the limit was set and still the Ubuntu 24.04 package on local hosts, can
 # abort after a complete link ("attempted to destroy locked Thread Pool", upstream issue 4931, fixed
 # in 5.026): 4 of 220 builds at -j 24 on a 24-processor host, 0 of 220 at -j 8, equal build time.
-# The hosted runners pin 5.032; the limit stays until it is reviewed there.
+# Reviewed under 5.032, the hosted pin (2026-11-19): no abort at -j 22 and no faster build than at
+# -j 8, so 8 stays for every host.
 # host_profile.VERILATOR_JOB_LIMIT holds the same value.
 VERILATOR_JOB_LIMIT := 8
 VERILATOR_JOBS ?= $(shell n=$$(nproc); echo $$(( n < $(VERILATOR_JOB_LIMIT) ? n : $(VERILATOR_JOB_LIMIT) )))

@@ -139,8 +139,12 @@ and still the Ubuntu 24.04 package on local hosts, can abort after a complete li
 to destroy locked Thread Pool", upstream issue 4931, fixed in 5.026). On a 24-processor host,
 interleaved builds aborted 4 of 220 times at 24 jobs and 0 of 220 times at 8 jobs, at equal build
 time; the difference favours the limit without proving that 8 jobs removes the abort (one-sided
-Fisher exact test, p = 0.06). The hosted runners now pin Verilator 5.032, which contains the fix;
-the limit stays until it is reviewed under 5.032.
+Fisher exact test, p = 0.06). The hosted runners now pin Verilator 5.032, which contains the fix.
+Reviewed under 5.032 on 2026-11-19 (Ubuntu 26.04 package 5.032-1, 22 processors): 0 of 262 builds
+aborted at 22 jobs, and 22 jobs built no faster than 8 (median 12.22 s against 12.34 s one build at
+a time, 13.66 s against 13.63 s three at a time; one-sided Mann–Whitney p = 0.27 and 0.41). The
+limit therefore stays 8 on every host: it costs no measured time under 5.032 (the build has at most
+six compiles to run in parallel) and still prevents the abort where 5.020 runs.
 
 ## Native lifecycle profiles
 

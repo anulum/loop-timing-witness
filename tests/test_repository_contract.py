@@ -98,10 +98,7 @@ FORBIDDEN_PATHS = (
     "ARCHIVE",
     "BACKUP",
 )
-UNEARNED_BADGE_MARKERS = (
-    "api.reuse.software/badge/",
-    "bestpractices.dev/projects/",
-)
+UNEARNED_BADGE_MARKERS = ("api.reuse.software/badge/",)
 WORKFLOWS = REPOSITORY_ROOT / ".github" / "workflows"
 
 
@@ -238,6 +235,7 @@ def _check_badges(readme: str, doi: str) -> None:
             "OpenSSF Scorecard",
             "https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness",
         ),
+        ("OpenSSF Best Practices", "https://www.bestpractices.dev/projects/15127"),
     ]
     assert "https://img.shields.io/pypi/v/loop-timing-witness.svg" in readme
     assert "https://img.shields.io/crates/v/witness-controller.svg" in readme
@@ -245,6 +243,8 @@ def _check_badges(readme: str, doi: str) -> None:
     assert (
         "https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge" in readme
     )
+    # Record 15127 earned the passing level on 2026-11-20; the badge shows its current level.
+    assert "https://www.bestpractices.dev/projects/15127/badge" in readme
 
 
 def test_manifest_and_inventory_state_architecture_only() -> None:

@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +29,7 @@ from c_coverage_gate import (
     load_reviewed,
     main,
 )
+from conftest import REPOSITORY_ROOT
 
 if TYPE_CHECKING:
     from conftest import RunTool
@@ -567,3 +570,35 @@ def test_the_command_needs_a_judged_source() -> None:
     with pytest.raises(SystemExit) as stopped:
         main(["report.json"])
     assert stopped.value.code == 2
+
+
+REVIEWED_LISTS = ("runtime/coverage-review.json", "runtime/isa/plugin-coverage-review.json")
+COUNT_ROW = re.compile(
+    r"^\| \[`[^`]+`\]\(\.\./(?P<list>[^)]+)\) \| `(?P<source>[^`]+)` \| (?P<count>\d+) \|$"
+)
+
+
+def test_the_documented_counts_hold_every_reviewed_outcome() -> None:
+    """The coverage document's table equals both reviewed lists, source by source.
+
+    The committed lists are read with the gate's own loader, so a malformed edit fails here as
+    well as in the native gate. Any added or removed entry changes a count, and so needs the
+    public table changed in the same commit; the totals sentence follows the same counts.
+    """
+    document = (REPOSITORY_ROOT / "docs" / "CONTROLLER_COVERAGE.md").read_text(encoding="utf-8")
+    section = document.split("## Reviewed outcome counts\n", 1)[1].split("\n## ", 1)[0]
+    documented = Counter[tuple[str, str]]()
+    for line in section.splitlines():
+        if (row := COUNT_ROW.match(line)) is not None:
+            documented[row["list"], row["source"]] += int(row["count"])
+    listed = Counter(
+        (name, entry.file)
+        for name in REVIEWED_LISTS
+        for entry in load_reviewed(REPOSITORY_ROOT / name)
+    )
+    assert documented == listed
+    runtime, plugin = (
+        sum(count for (name, _), count in listed.items() if name == list_name)
+        for list_name in REVIEWED_LISTS
+    )
+    assert f"The runtime list holds {runtime} outcomes and the plugin list {plugin}." in section

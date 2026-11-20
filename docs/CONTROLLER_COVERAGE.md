@@ -181,6 +181,32 @@ for the device-tree text that Spike requests only for built-in devices.
 [`runtime/isa/plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) lists the remaining
 outcomes, each with its reason.
 
+## Reviewed outcome counts
+
+A reviewed list could make the gate pass by naming more outcomes. Two rules stop that: a listed
+outcome that runs fails the gate, and this table holds the number of listed outcomes per source.
+[`tests/test_c_coverage_gate.py`](../tests/test_c_coverage_gate.py) reads both lists with the
+gate's own loader and requires this table to match them source by source. An addition therefore
+changes this public table in the same commit, beside its reason in the list.
+
+| Reviewed list | Source | Outcomes |
+|---|---|---|
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/linux/file_digest.cpp` | 12 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/linux/power_configuration.cpp` | 12 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/linux/run_policy.h` | 10 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/process_protocol.h` | 2 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/axi_simulator.cpp` | 3 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/run_simulation.cpp` | 13 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/simulation.h` | 8 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_configuration.cpp` | 1 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_control.h` | 5 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_metadata.h` | 8 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_output.h` | 2 |
+| [`plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) | `runtime/isa/spike_amp_transport.h` | 3 |
+| [`plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) | `runtime/isa/spike_axi_device.cpp` | 14 |
+
+The runtime list holds 76 outcomes and the plugin list 17.
+
 ## Compile instrumented public interfaces
 
 Run from the repository root with its development environment installed. Use a fresh

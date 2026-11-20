@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- The reviewed lists of unreachable C and C++ branch outcomes have a public count table in
+  `docs/CONTROLLER_COVERAGE.md`, per list and source (76 runtime and 17 plugin outcomes). A test reads
+  both lists with the coverage gate's own loader and requires the table and its totals to match, so an
+  added entry changes the public table in the same commit and a malformed list fails in the Python
+  tests as well as in the native gate.
 - A measurement-only counted variant of the Spike plugin:
   `make amp-spike-plugin AMP_PLUGIN_INSTRUMENTATION=coverage` adds GCC counters to the plugin's
   device object (the Spike adapter, its RAM transport and the AMP logger), and only to it.

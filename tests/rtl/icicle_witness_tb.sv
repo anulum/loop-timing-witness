@@ -16,7 +16,8 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
     logic awvalid = 0, awready, wvalid = 0, wready, bvalid, bready = 0;
     logic arvalid = 0, arready, rvalid, rready = 0, interrupt_line;
     logic [1:0] bresp, rresp;
-    integer cycles;
+    logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror;
+    integer cycles, sample_mirror_edges = 0;
 
     always #7 bus_clock = ~bus_clock;
     always #5 capture_clock = ~capture_clock;
@@ -29,8 +30,10 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
         .bresp(bresp), .bvalid(bvalid), .bready(bready),
         .araddr(araddr), .arvalid(arvalid), .arready(arready),
         .rdata(rdata), .rresp(rresp), .rvalid(rvalid), .rready(rready),
-        .interrupt_line(interrupt_line)
+        .interrupt_line(interrupt_line), .sample_ready_mirror(sample_ready_mirror),
+        .actuator_write_mirror(actuator_write_mirror), .safe_state_mirror(safe_state_mirror)
     );
+    always @(sample_ready_mirror) if (run_reset_n && capture_clock_locked) sample_mirror_edges++;
 
     task automatic write_register(input logic [7:0] offset, input logic [31:0] data);
         @(negedge bus_clock);
@@ -72,7 +75,8 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
     end
 
     task automatic expect_held_in_reset(input string reason);
-        if (awready || wready || arready || interrupt_line) $fatal(1, reason);
+        if (awready || wready || arready || interrupt_line || sample_ready_mirror
+            || actuator_write_mirror || safe_state_mirror) $fatal(1, reason);
     endtask
 
     initial begin
@@ -97,6 +101,7 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
             cycles = cycles + 1;
         end
         if (!interrupt_line) $fatal(1, "sample interrupt did not reach board port");
+        if (sample_mirror_edges == 0) $fatal(1, "sample-ready mirror did not reach board port");
         read_register(8'h9c, read_value);
         if (!read_value[0]) $fatal(1, "sample interrupt status missing");
         write_register(8'ha4, 1);

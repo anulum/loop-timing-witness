@@ -17,6 +17,13 @@ foreach witness_variant {
         error "TIME WITNESS requires the baseline reference Linux configuration: $witness_variant"
     }
 }
+if {![info exists project_dir]} {
+    error "TIME WITNESS requires the reference project's project_dir"
+}
+set witness_pins [file normalize [file join $local_dir script_support constraints LOOP_TIMING_WITNESS.pdc]]
+if {![file isfile $witness_pins]} {
+    error "derived source lacks the witness pin constraints"
+}
 set witness_rtl_dir [file normalize [file join $local_dir witness_rtl]]
 set witness_top [file join $witness_rtl_dir icicle_witness.sv]
 set witness_package [file join $witness_rtl_dir event_codes_pkg.sv]
@@ -59,6 +66,9 @@ sd_connect_pins -sd_name {FIC_0_PERIPHERALS} -pin_names {"ARESETN" "icicle_witne
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:capture_clock} -port_name {WITNESS_CAPTURE_CLK}
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:capture_clock_locked} -port_name {WITNESS_CAPTURE_LOCK}
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:interrupt_line} -port_name {WITNESS_IRQ}
+sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:sample_ready_mirror} -port_name {WITNESS_SAMPLE_READY}
+sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:actuator_write_mirror} -port_name {WITNESS_ACT_WRITE}
+sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:safe_state_mirror} -port_name {WITNESS_SAFE_STATE}
 generate_component -component_name {FIC_0_PERIPHERALS} -recursive 0
 sd_update_instance -sd_name ${top_level_name} -instance_name {FIC_0_PERIPHERALS_1}
 # The base design ties MSS fabric-to-processor interrupts 11 to 58 low; bit 11 becomes the witness interrupt
@@ -102,4 +112,32 @@ sd_update_instance -sd_name ${top_level_name} -instance_name {CLOCKS_AND_RESETS}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_CLK"     "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_CLK"}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_LOCK"    "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_LOCK"}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"FIC_0_PERIPHERALS_1:WITNESS_IRQ" "MSS_WRAPPER_1:MSS_INT_F2M_11"}
+# The event mirrors leave the device on the three pins that LOOP_TIMING_WITNESS.pdc fixes.
+foreach witness_mirror {WITNESS_SAMPLE_READY WITNESS_ACT_WRITE WITNESS_SAFE_STATE} {
+    sd_connect_pin_to_port -sd_name ${top_level_name} -pin_name "FIC_0_PERIPHERALS_1:$witness_mirror" -port_name $witness_mirror
+}
 generate_component -component_name ${top_level_name} -recursive 0
+
+# The reference has already associated its own I/O constraints with place-and-route; the
+# association is replaced by the same list, of the baseline configuration the witness
+# requires, with the witness pins added.
+import_files -convert_EDN_to_HDL 0 -io_pdc $witness_pins
+organize_tool_files \
+    -tool {PLACEROUTE} \
+    -file "${project_dir}/constraint/io/ICICLE_CAN0.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_MIKROBUS.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_SDIO.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_USB.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_MAC.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_PCIE.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_MMUART0.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_MMUART1.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_MMUART3.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_MMUART2.pdc" \
+    -file "${project_dir}/constraint/io/ICICLE_RPi.pdc" \
+    -file "${project_dir}/constraint/io/LOOP_TIMING_WITNESS.pdc" \
+    -file "${project_dir}/constraint/fp/NW_PLL.pdc" \
+    -file "${project_dir}/constraint/fic_clocks.sdc" \
+    -module ${top_level_name}::work \
+    -input_type {constraint}

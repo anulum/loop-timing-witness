@@ -69,7 +69,13 @@ WITNESS_CROSSING_CONSTRAINTS = (
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 WITNESS_SCRIPT = REPOSITORY_ROOT / "hardware/icicle/LOOP_TIMING_WITNESS.tcl"
 DERIVED_SCRIPT = "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl"
+WITNESS_PINS = REPOSITORY_ROOT / "hardware/icicle/LOOP_TIMING_WITNESS.pdc"
+DERIVED_PINS = "script_support/constraints/LOOP_TIMING_WITNESS.pdc"
 RTL_SNAPSHOT = "witness_rtl"
+WITNESS_FILES = frozenset(
+    {*DERIVED_HASHES, DERIVED_SCRIPT, DERIVED_PINS, "witness_derivation.json"}
+)
+"""Derived files checked on their own, outside the unmodified reference remainder."""
 
 
 class ReferenceDerivationRefusedError(ValueError):
@@ -230,7 +236,7 @@ def verify_reference(source: Path) -> None:
 
 
 def _derivation_manifest(
-    witness_tcl_sha256: str, witness_hashes: dict[str, str]
+    witness_tcl_sha256: str, witness_pdc_sha256: str, witness_hashes: dict[str, str]
 ) -> dict[str, object]:
     """Return the derivation manifest of the pinned reference and the witness inputs.
 
@@ -238,6 +244,8 @@ def _derivation_manifest(
     ----------
     witness_tcl_sha256
         Digest of the witness connection script.
+    witness_pdc_sha256
+        Digest of the witness pin constraints.
     witness_hashes
         Digest of every witness RTL source by file name.
 
@@ -245,7 +253,7 @@ def _derivation_manifest(
     -------
     dict[str, object]
         Reference commit and tree, remainder, source and derived file digests,
-        witness script and RTL digests, and the validation scope.
+        witness script, pin constraint and RTL digests, and the validation scope.
     """
     return {
         "source_commit": REFERENCE_COMMIT,
@@ -254,6 +262,7 @@ def _derivation_manifest(
         "source_files_sha256": SOURCE_HASHES,
         "derived_files_sha256": DERIVED_HASHES,
         "witness_tcl_sha256": witness_tcl_sha256,
+        "witness_pdc_sha256": witness_pdc_sha256,
         "witness_rtl_dir": RTL_SNAPSHOT,
         "witness_rtl_sha256": witness_hashes,
         "validation_scope": "source derivation only; Libero DRC and timing are unverified",
@@ -370,15 +379,18 @@ def derive(source: Path, destination: Path) -> None:
         _apply_edits(staged_output)
         script_destination = staged_output / DERIVED_SCRIPT
         shutil.copyfile(WITNESS_SCRIPT, script_destination)
+        pins_destination = staged_output / DERIVED_PINS
+        shutil.copyfile(WITNESS_PINS, pins_destination)
         witness_hashes = _snapshot_rtl(staged_output / RTL_SNAPSHOT)
-        excluded = frozenset({*DERIVED_HASHES, DERIVED_SCRIPT, "witness_derivation.json"})
         if (
-            tree_sha256(staged_output, excluded, frozenset({RTL_SNAPSHOT}))
+            tree_sha256(staged_output, WITNESS_FILES, frozenset({RTL_SNAPSHOT}))
             != REFERENCE_REMAINDER_SHA256
         ):
             msg = "derived reference remainder differs from pinned commit"
             raise ReferenceDerivationRefusedError(msg)
-        manifest = _derivation_manifest(sha256(script_destination), witness_hashes)
+        manifest = _derivation_manifest(
+            sha256(script_destination), sha256(pins_destination), witness_hashes
+        )
         (staged_output / "witness_derivation.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
@@ -398,11 +410,11 @@ def verify_derived(destination: Path) -> None:
     Raises
     ------
     ValueError
-        Manifest, vendor Tcl, connection Tcl or RTL snapshot differs.
+        Manifest, vendor Tcl, connection Tcl, pin constraints or RTL snapshot differs.
     """
     rtl_sources = sorted((REPOSITORY_ROOT / "rtl").glob("*.sv"))
     witness_hashes = {path.name: sha256(path) for path in rtl_sources}
-    expected = _derivation_manifest(sha256(WITNESS_SCRIPT), witness_hashes)
+    expected = _derivation_manifest(sha256(WITNESS_SCRIPT), sha256(WITNESS_PINS), witness_hashes)
     manifest_path = destination / "witness_derivation.json"
     if manifest_path.is_symlink():
         msg = "derived manifest must be a local file"
@@ -411,8 +423,10 @@ def verify_derived(destination: Path) -> None:
     if manifest != expected:
         msg = "derived manifest differs from current repository input"
         raise ReferenceDerivationRefusedError(msg)
-    excluded = frozenset({*DERIVED_HASHES, DERIVED_SCRIPT, "witness_derivation.json"})
-    if tree_sha256(destination, excluded, frozenset({RTL_SNAPSHOT})) != REFERENCE_REMAINDER_SHA256:
+    if (
+        tree_sha256(destination, WITNESS_FILES, frozenset({RTL_SNAPSHOT}))
+        != REFERENCE_REMAINDER_SHA256
+    ):
         msg = "derived reference remainder differs from pinned commit"
         raise ReferenceDerivationRefusedError(msg)
     for relative, digest in DERIVED_HASHES.items():
@@ -423,6 +437,10 @@ def verify_derived(destination: Path) -> None:
     connection = destination / DERIVED_SCRIPT
     if connection.is_symlink() or sha256(connection) != expected["witness_tcl_sha256"]:
         msg = "derived witness connection Tcl changed"
+        raise ReferenceDerivationRefusedError(msg)
+    pins = destination / DERIVED_PINS
+    if pins.is_symlink() or sha256(pins) != expected["witness_pdc_sha256"]:
+        msg = "derived witness pin constraints changed"
         raise ReferenceDerivationRefusedError(msg)
     _verify_rtl_snapshot(destination / RTL_SNAPSHOT, witness_hashes)
 

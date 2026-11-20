@@ -13,8 +13,8 @@ does not ignore, so a new file is checked before it is staged. Each file type
 has exactly one rule:
 
 - hash-comment files (Python, TOML, YAML, requirements, citation metadata,
-  Makefile, Dockerfile, included Make recipes, assembly, shell, Tcl and Git/editor
-  configuration)
+  Makefile, Dockerfile, included Make recipes, assembly, shell, Tcl, Libero pin
+  constraints and Git/editor configuration)
   start with the seven header lines,
   each prefixed by ``# ``; Python and shell files may carry a shebang line first;
   Cargo.lock carries Cargo's exact two-line generated preamble before the header;
@@ -60,6 +60,7 @@ HASH_COMMENT_SUFFIXES: Final = frozenset(
         ".in",
         ".lock",
         ".mk",
+        ".pdc",
         ".S",
         ".py",
         ".sh",

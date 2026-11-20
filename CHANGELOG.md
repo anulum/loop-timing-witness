@@ -14,6 +14,18 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Event mirror outputs for an external time tagger: `control_plant_witness`, the fabric controller
+  wrapper, `axi_control_witness` and `icicle_witness` expose `sample_ready_mirror` and
+  `actuator_write_mirror`, capture-clock registers that toggle on the edge recording each
+  `SAMPLE_READY` and `ACT_WRITE`, and `safe_state_mirror`, which rises with `SAFE_STATE` and holds
+  the latched safe state. The Icicle derivation places them on three bank 1 pins that no baseline
+  constraint uses (J26 pins 7 and 31 of the Raspberry Pi connector, and J12), from the new
+  `hardware/icicle/LOOP_TIMING_WITNESS.pdc`, whose digest the derivation manifest binds; the
+  connection script adds the top-level ports and the pins to the place-and-route constraints. The
+  plant simulation requires every mirror edge at the counter value of its record, and the
+  measurement protocol's acceptance gains the external cross-check: intervals between pin edges on
+  the tagger's own timebase must equal the witness intervals within the timebase, edge and pin-skew
+  bound. The provenance check covers `.pdc` files.
 - `make fifo-invariants` checks the dual-clock event buffer with free write and read clocks over
   every interleaving of 30 steps from reset (four writes and four reads, one wrap of both
   pointers): no write when full, no read when empty, and a freely chosen record read back

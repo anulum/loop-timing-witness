@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -25,6 +26,7 @@ DERIVE = ROOT / "hardware/icicle/derive_reference.sh"
 RUN = ROOT / "hardware/icicle/run_reference.sh"
 VERIFY = ROOT / "tools/derive_icicle_reference.py"
 PYTHON = ROOT / ".venv/bin/python"
+PINS = "script_support/constraints/LOOP_TIMING_WITNESS.pdc"
 
 
 @pytest.fixture(scope="module")
@@ -182,6 +184,10 @@ def test_public_derivation_and_vendor_preflight(derived_tree: Path) -> None:
                 f"{bound} -from [ get_clocks {{ {source} }} ] -to [ get_clocks {{ {target} }} ]"
                 in constraints.splitlines()
             )
+    assert (
+        manifest["witness_pdc_sha256"]
+        == hashlib.sha256((derived_tree / PINS).read_bytes()).hexdigest()
+    )
     missing_libero = derived_tree / "not-installed-libero"
     for device in ("MPFS250T", "MPFS250T_ES"):
         refusal = invoke(str(RUN), str(derived_tree), str(missing_libero), device)
@@ -202,6 +208,7 @@ def test_public_derivation_and_vendor_preflight(derived_tree: Path) -> None:
             "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl",
             "derived witness connection Tcl changed",
         ),
+        (PINS, "derived witness pin constraints changed"),
         ("witness_derivation.json", "derived manifest differs"),
     ],
 )
@@ -237,6 +244,73 @@ def test_public_verifier_refuses_changed_real_inputs(
     assert runner.returncode != 0
     assert expected in runner.stderr
     assert not (changed / "BASE_DESIGN_9C34320F").exists()
+
+
+def _placement_constraints(script: str) -> list[str]:
+    """Return the files of every place-and-route constraint association in a Libero script.
+
+    Parameters
+    ----------
+    script
+        Libero Tcl text.
+
+    Returns
+    -------
+    list[str]
+        Constraint file names of each ``organize_tool_files -tool {PLACEROUTE}`` command, one
+        space-joined entry per command, in script order.
+    """
+    commands = re.findall(
+        r"organize_tool_files \\\s*-tool \{PLACEROUTE\}(.*?)-module", script, re.DOTALL
+    )
+    return [
+        " ".join(re.findall(r'-file "\$\{project_dir\}/constraint/(\S+)"', command))
+        for command in commands
+    ]
+
+
+def test_witness_pins_are_free_and_join_the_baseline_placement(derived_tree: Path) -> None:
+    """Place the event mirrors on pins no reference constraint uses, keeping every baseline file.
+
+    The reference's own place-and-route association, for the baseline configuration that the
+    witness requires, is the witness script's association without the witness pins; none of the
+    three mirror pins appears in any of the reference's I/O constraint files.
+
+    Parameters
+    ----------
+    derived_tree
+        Real source produced by the public derivation command.
+    """
+    reference = (derived_tree / "MPFS_ICICLE_KIT_REFERENCE_DESIGN.tcl").read_text(encoding="utf-8")
+    witness = (
+        derived_tree / "script_support/additional_configurations/LOOP_TIMING_WITNESS.tcl"
+    ).read_text(encoding="utf-8")
+    baseline = _placement_constraints(reference)[-1]
+    (association,) = _placement_constraints(witness)
+    assert association.split() == [
+        *baseline.split()[: baseline.split().index("io/ICICLE_RPi.pdc") + 1],
+        "io/LOOP_TIMING_WITNESS.pdc",
+        "fp/NW_PLL.pdc",
+        "fic_clocks.sdc",
+    ]
+    assert baseline.split()[-2:] == ["fp/NW_PLL.pdc", "fic_clocks.sdc"]
+    pins = (derived_tree / PINS).read_text(encoding="utf-8")
+    placed = dict(re.findall(r"-port_name (\S+) \\\s*-pin_name (\S+)", pins))
+    assert placed == {
+        "WITNESS_SAMPLE_READY": "A6",
+        "WITNESS_ACT_WRITE": "D8",
+        "WITNESS_SAFE_STATE": "C15",
+    }
+    assert pins.count("-DIRECTION OUTPUT") == 3
+    for name in baseline.split():
+        if name.startswith("io/"):
+            constraint = derived_tree / "script_support/constraints" / name.removeprefix("io/")
+            used = set(re.findall(r"-pin_name\s+(\S+)", constraint.read_text(encoding="utf-8")))
+            assert used, name
+            assert not used & set(placed.values()), name
+    for port in placed:
+        assert f"-port_name {{{port}}}" in witness
+        assert port in witness
 
 
 def test_public_verifier_refuses_extra_reference_input(derived_tree: Path, tmp_path: Path) -> None:

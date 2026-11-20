@@ -181,6 +181,7 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
             "script.py": "#!/usr/bin/env python3\n" + hash_header() + "\n",
             "hardware/derive.sh": "#!/usr/bin/env bash\n" + hash_header() + "set -eu\n",
             "hardware/connect.tcl": hash_header() + "puts ready\n",
+            "hardware/pins.pdc": hash_header() + "set_io -port_name P -pin_name A6\n",
             "Makefile": hash_header() + "all:\n",
             ".github/CODEOWNERS": hash_header() + "* @owner\n",
             "config.yml": hash_header() + "key: value\n",
@@ -244,6 +245,11 @@ def test_compliant_files_of_every_rule_pass(make_git_tree: MakeGitTree) -> None:
             "hardware/connect.tcl",
             "puts ready\n",
             "hardware/connect.tcl: must start with the seven-line '# ' provenance header",
+        ),
+        (
+            "hardware/pins.pdc",
+            "set_io -port_name P -pin_name A6\n",
+            "hardware/pins.pdc: must start with the seven-line '# ' provenance header",
         ),
         (
             "rtl/witness.sv",

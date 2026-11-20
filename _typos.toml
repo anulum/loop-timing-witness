@@ -16,3 +16,7 @@ extend-exclude = [
     "LICENSE",
     "LICENSES/",
 ]
+
+[default.extend-identifiers]
+# Libero's import_files option names the EDIF netlist format (EDN) it may convert.
+convert_EDN_to_HDL = "convert_EDN_to_HDL"

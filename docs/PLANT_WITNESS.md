@@ -49,6 +49,7 @@ and do not change `reference_mode` or `reference_amplitude` in the cycle that ra
 | `plant_clipped`, `reference_clipped` | Saturation at the last sample; retain/sample these with `sample_valid`. These are flags, not cumulative clipping counters. |
 | `counter_ticks`, `overflow_count`, `buffer_full` | Capture timebase, saturating combined lost-event count and downstream FIFO full status. Group queue exhaustion can lose events even when FIFO full is low. |
 | `drain_valid`, `drain_empty`, `drain_record` | Existing 16-byte stream in the drain domain. |
+| `sample_ready_mirror`, `actuator_write_mirror`, `safe_state_mirror` | Capture-domain registers for an [external time tagger](MEASUREMENT_PROTOCOL.md#external-cross-check). The first two toggle on the edge that records each `SAMPLE_READY` and `ACT_WRITE`, so each edge carries the counter value of its record; the third rises with `SAFE_STATE` and follows `safe_interrupt`. Reset clears all three. The fabric controller wrapper, `axi_control_witness` and `icicle_witness` expose them. |
 
 Parameters: `PERIOD_TICKS` defaults to 100,000 at the planned 100 MHz (1 kHz);
 `MISS_LIMIT` defaults to three, must be positive; `SAFE_VALUE` defaults to zero.

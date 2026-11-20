@@ -55,7 +55,8 @@ def test_integrated_plant_faults_and_host_reports(
     """
     fault, thermal = scenario
     run, manifest = make_rtl_run()
-    stdout, rows = _simulate(run_rtl, run, fault, thermal)
+    mirrors = tmp_path / "mirrors.csv"
+    stdout, rows = _simulate(run_rtl, run, fault, thermal, mirrors)
     check_trajectory(rows, thermal)
     _write_tracking(run, rows)
     _declare_plant(manifest, fault, thermal)
@@ -71,10 +72,45 @@ def test_integrated_plant_faults_and_host_reports(
     assert [event[4] for event in events if event[0] == 4] == [
         int(rows[0]["ticks"]) + period * 100000 for period in range(1, 6)
     ]
+    _check_mirrors(mirrors, events, fault)
+
+
+def _check_mirrors(path: Path, events: list[tuple[int, ...]], fault: int) -> None:
+    """Require each mirror edge on the edge that records its event.
+
+    The two event mirrors toggle once per SAMPLE_READY and ACT_WRITE event, at the counter value
+    the event's record carries; the safe-state mirror rises once, with SAFE_STATE, and stays high.
+
+    Parameters
+    ----------
+    path
+        Mirror changes written by the testbench, with the counter value of each edge.
+    events
+        Drained event records as ``(code, flags, reserved, cycle, ticks)``.
+    fault
+        Injected fault kind, or a negative value for none.
+    """
+    with path.open(encoding="utf-8", newline="") as stream:
+        changes = [
+            {name: int(value) for name, value in row.items()} for row in csv.DictReader(stream)
+        ]
+    levels = {"sample_ready": 0, "actuator_write": 0, "safe_state": 0}
+    edges: dict[str, list[int]] = {name: [] for name in levels}
+    for change in changes:
+        for name, level in levels.items():
+            if change[name] != level:
+                edges[name].append(change["ticks"])
+                levels[name] = change[name]
+    assert edges["sample_ready"] == [event[4] for event in events if event[0] == 1]
+    assert edges["actuator_write"] == [event[4] for event in events if event[0] == 3]
+    assert edges["safe_state"] == [event[4] for event in events if event[0] == 5]
+    assert len(edges["safe_state"]) == (0 if fault < 0 else 1)
+    assert len(edges["sample_ready"]) == 5
+    assert levels["safe_state"] == (0 if fault < 0 else 1)
 
 
 def _simulate(
-    run_rtl: RunRtl, run: Path, fault: int, thermal: int
+    run_rtl: RunRtl, run: Path, fault: int, thermal: int, mirrors: Path
 ) -> tuple[str, list[dict[str, str]]]:
     """Run the plant witness testbench into the run directory and read its plant rows.
 
@@ -88,6 +124,8 @@ def _simulate(
         Injected fault kind, or a negative value for none.
     thermal
         Mechanical (0) or thermal (1) plant.
+    mirrors
+        File receiving the mirror changes.
 
     Returns
     -------
@@ -98,7 +136,11 @@ def _simulate(
     result = run_rtl(
         "control_plant_witness_tb",
         {"FAULT": fault, "THERMAL": thermal},
-        [f"+EVENT_FILE={run / 'events.bin'}", f"+TRACK_FILE={raw_tracking}"],
+        [
+            f"+EVENT_FILE={run / 'events.bin'}",
+            f"+TRACK_FILE={raw_tracking}",
+            f"+MIRROR_FILE={mirrors}",
+        ],
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "CONTROL_PASS" in result.stdout

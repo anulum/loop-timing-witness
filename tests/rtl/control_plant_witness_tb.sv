@@ -27,6 +27,11 @@ module control_plant_witness_tb #(
     logic [31:0] total_misses, consecutive_misses, late_commands, overflow_count;
     logic [63:0] counter_ticks;
     logic [127:0] drain_record;
+    logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror;
+    logic [2:0] mirror_seen = 3'b000;
+    logic [63:0] mirror_tick;
+    integer mirror_handle = 0;
+    string mirror_file;
     logic irq_seen [0:4];
     logic delay_wait = 0, saw_freeze = 0, saw_overload = 0;
     logic signed [31:0] edge_actuator;
@@ -52,8 +57,20 @@ module control_plant_witness_tb #(
         .consecutive_misses(consecutive_misses), .late_commands(late_commands),
         .overflow_count(overflow_count), .counter_ticks(counter_ticks), .drain_request(1'b1),
         .drain_valid(drain_valid), .drain_empty(drain_empty), .drain_record(drain_record),
-        .buffer_full(buffer_full)
+        .buffer_full(buffer_full), .sample_ready_mirror(sample_ready_mirror),
+        .actuator_write_mirror(actuator_write_mirror), .safe_state_mirror(safe_state_mirror)
     );
+    // With +MIRROR_FILE, every change of the three mirrors is written with the counter value
+    // of the edge that made it, the value the event record of that edge carries.
+    always @(posedge capture_clock) begin
+        mirror_tick = counter_ticks;
+        #1;
+        if (mirror_handle && {safe_state_mirror, actuator_write_mirror, sample_ready_mirror} != mirror_seen) begin
+            mirror_seen = {safe_state_mirror, actuator_write_mirror, sample_ready_mirror};
+            $fwrite(mirror_handle, "%0d,%0d,%0d,%0d\n", mirror_tick, sample_ready_mirror,
+                actuator_write_mirror, safe_state_mirror);
+        end
+    end
     // The simulated service waits for its delayed IRQ; overload means no service.
     // This is a declared stimulus, not a benchmark of processor execution.
     always @(posedge capture_clock) begin
@@ -133,6 +150,11 @@ module control_plant_witness_tb #(
         handle = $fopen(event_file, "wb");
         track_handle = $fopen(track_file, "w");
         if (!handle || !track_handle) $fatal(1, "output open failed");
+        if ($value$plusargs("MIRROR_FILE=%s", mirror_file)) begin
+            mirror_handle = $fopen(mirror_file, "w");
+            if (!mirror_handle) $fatal(1, "mirror output open failed");
+            $fwrite(mirror_handle, "ticks,sample_ready,actuator_write,safe_state\n");
+        end
         $fwrite(track_handle, "cycle,reference,output,velocity,actuator,ticks\n");
         repeat (4) @(negedge capture_clock);
         run_reset_n = 1;
@@ -158,10 +180,12 @@ module control_plant_witness_tb #(
         @(negedge capture_clock);
         run_reset_n = 0;
         #1;
-        if (safe_interrupt || total_misses || overflow_count || counter_ticks || late_commands)
+        if (safe_interrupt || total_misses || overflow_count || counter_ticks || late_commands
+            || sample_ready_mirror || actuator_write_mirror || safe_state_mirror)
             $fatal(1, "reset did not clear run state");
         $fclose(handle);
         $fclose(track_handle);
+        if (mirror_handle) $fclose(mirror_handle);
         $display("RESET_PASS");
         $finish;
     end

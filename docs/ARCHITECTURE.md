@@ -255,8 +255,9 @@ evidence.
 3. **Injected-delay test:** a delay of k periods must measure as k periods within one tick.
 4. **Bus-offset calibration:** the fabric placement, with no processor involvement, gives the
    minimum read and write path latency, recorded as the instrument floor.
-5. **External cross-check (optional):** mirrored strobes on a logic analyser agree within the
-   analyser's resolution.
+5. **External cross-check:** an external time tagger, on its own timebase, records the event
+   mirror pins while the witness records the same run; the witness intervals must agree with the
+   tagger's within the bound in the [measurement protocol](MEASUREMENT_PROTOCOL.md#external-cross-check).
 6. **Overflow test:** an undrained buffer must be counted as overflow and invalidate the run.
 
 ## Repository layout and contracts

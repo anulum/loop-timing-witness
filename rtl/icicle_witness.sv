@@ -10,6 +10,8 @@
 // The low eight address bits are the complete witness register aperture.
 // The witness stays in reset until the capture clock's PLL reports lock, and
 // returns to reset if the lock drops; both witness domains reset together.
+// The three event mirrors leave the fabric on board pins for an external time
+// tagger; they are capture-clock registers (hardware/icicle/README.md).
 module icicle_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter bit THERMAL = 0
@@ -32,7 +34,8 @@ module icicle_witness #(
     output logic [1:0] rresp,
     output logic rvalid,
     input logic rready,
-    output logic interrupt_line
+    output logic interrupt_line,
+    output logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror
 );
     wire [29:0] unused_awaddr_high = awaddr[37:8];
     wire [29:0] unused_araddr_high = araddr[37:8];
@@ -58,6 +61,8 @@ module icicle_witness #(
         .araddr(araddr[7:0]), .arvalid(arvalid), .arready(arready),
         .rdata(rdata), .rresp(rresp), .rvalid(rvalid), .rready(rready),
         .interrupt_line(interrupt_line),
+        .sample_ready_mirror(sample_ready_mirror), .actuator_write_mirror(actuator_write_mirror),
+        .safe_state_mirror(safe_state_mirror),
         .run_drained(unused_run_drained), .run_enabled(unused_run_enabled), .run_finished(unused_run_finished), .capture_quiescent(unused_capture_quiescent),
         .sample_read(unused_sample_read), .actuator_write(unused_actuator_write), .buffer_full(unused_buffer_full), .capture_active(unused_capture_active),
         .sample_valid(unused_sample_valid), .sample_interrupt(unused_sample_interrupt), .delayed_interrupt(unused_delayed_interrupt), .cycle_number(unused_cycle_number),

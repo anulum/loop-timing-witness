@@ -13,6 +13,11 @@
 // capture_quiescent is a register, one capture edge behind its terms, so the
 // synchroniser that reads it in another clock domain never sees a combinational
 // hazard: at a run's end the event strobes clear on the edge a record appears.
+// The three mirrors are capture-clock registers for an external time tagger. Each changes on
+// the edge that records its event, so a pin edge and the event's timestamp are one fixed
+// clock-to-output delay apart: sample_ready_mirror and actuator_write_mirror toggle on every
+// SAMPLE_READY and ACT_WRITE event, and safe_state_mirror rises with SAFE_STATE and holds the
+// latched safe state. A run reset clears all three.
 module control_plant_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter logic [31:0] MISS_LIMIT = 32'd3,
@@ -46,6 +51,7 @@ module control_plant_witness #(
     output logic plant_clipped, reference_clipped,
     output logic safe_interrupt, fault_ready, freeze_actuator, overload_request,
     output logic run_finished, capture_quiescent,
+    output logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror,
     output logic [31:0] total_misses, consecutive_misses, late_commands, overflow_count,
     output logic [63:0] counter_ticks,
     input logic drain_request,
@@ -72,6 +78,17 @@ module control_plant_witness #(
     always_ff @(posedge capture_clock or negedge reset_n) begin
         if (!reset_n) capture_quiescent <= 1'b0;
         else capture_quiescent <= finished && !record_valid && event_mask == 0;
+    end
+    always_ff @(posedge capture_clock or negedge reset_n) begin
+        if (!reset_n) begin
+            sample_ready_mirror <= 1'b0;
+            actuator_write_mirror <= 1'b0;
+            safe_state_mirror <= 1'b0;
+        end else begin
+            sample_ready_mirror <= sample_ready_mirror ^ event_mask[0];
+            actuator_write_mirror <= actuator_write_mirror ^ event_mask[2];
+            safe_state_mirror <= event_mask[4] || safe_interrupt;
+        end
     end
     assign fault_ready = injector_ready && !safe_interrupt && !trip_now && !finished;
     control_cycle #(.PERIOD_TICKS(PERIOD_TICKS), .SAFE_VALUE(SAFE_VALUE)) cycle_registers (

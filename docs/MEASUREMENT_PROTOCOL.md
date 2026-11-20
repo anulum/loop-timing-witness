@@ -234,8 +234,41 @@ These limits are part of every report:
 ## Acceptance of the instrument before any result
 
 A result may be reported only after the instrument has passed, on the same bitstream, the
-known-period test, the injected-delay test, the overflow test and the bus-offset calibration
-described in [`ARCHITECTURE.md`](ARCHITECTURE.md). Their records are kept with the run records.
+known-period test, the injected-delay test, the overflow test, the bus-offset calibration
+described in [`ARCHITECTURE.md`](ARCHITECTURE.md) and the external cross-check below. Their records
+are kept with the run records.
+
+### External cross-check
+
+The first four tests run on the witness's own timebase, so a fault shared by the counter and the
+tests could pass them all. The cross-check measures the same run with an independent instrument:
+a time tagger, or a logic analyser that timestamps edges, with a calibrated timebase of its own,
+records the three [event mirror pins](../hardware/icicle/README.md#event-mirror-pins) while the
+witness records the run.
+
+The sample-ready and actuator-write pins toggle on the capture edge that records each
+`SAMPLE_READY` and `ACT_WRITE`, and the safe-state pin rises on the edge that records `SAFE_STATE`.
+The k-th edge of a toggling pin therefore belongs to the k-th record of its event, counted from the
+release of the run reset, which clears all three pins; an edge that a later reset makes is not
+compared. The cross-check requires as many pin edges as records, and for each compared pair of
+records (successive `SAMPLE_READY`, giving the sample period; `SAMPLE_READY` to the following
+`ACT_WRITE`, giving input to actuation; the first `SAMPLE_READY` to `SAFE_STATE`) it compares the witness interval `L_w = n·T` with the tagger interval `L_t` between
+the corresponding pin edges:
+
+`|L_w − L_t| ≤ (ε_w + ε_t)·L + s + 2r`
+
+`ε_w` is the witness timebase bound, 15·10⁻⁶ (see the [uncertainty budget](#uncertainty-budget)),
+`ε_t` the tagger's timebase bound, `r` the tagger's timing error bound for one edge, and `s` the
+skew between the two pins: zero for edges of one pin, apart from the difference between rising and
+falling output delays, and otherwise the spread of the pins' clock-to-output delays in the timing
+report plus the difference of the board and cable paths and of the tagger's channels, which the
+operator measures and declares. Capture-domain events fall on capture edges, so no `T` term
+enters: a disagreement larger than the bound is a witness defect, such as a lost or added count.
+A tagger with a smaller `ε_t` also measures the witness scale: the slope of `L_t` against `L_w` over
+the run, reported with its standard error, may then replace the oscillator bound in the budget.
+`ACT_WRITE` is recorded, and mirrored, on the capture edge after its two synchroniser stages, so
+the cross-check covers the timebase and the capture path; the bus path before it is the
+bus-offset calibration's.
 
 ## Plant simulation prerequisite
 

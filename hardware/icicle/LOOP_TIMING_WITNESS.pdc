@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Commercial license available
+# © Concepts 1996–2026 Miroslav Šotek. All rights reserved.
+# © Code 2020–2026 Miroslav Šotek. All rights reserved.
+# ORCID: 0009-0009-3560-0851
+# Contact: www.anulum.li | protoscience@anulum.li
+# Loop Timing Witness — Icicle event mirror pins
+
+# Three bank 1 pins that no constraint of the reference design uses; the reference's
+# ICICLE_RPi.pdc fixes bank 1 at 3.3 V. Board nets from the Icicle Kit schematic:
+# A6 is RPi_GPIO4_GCLK on Raspberry Pi connector J26 pin 7, D8 is RPI_GPIO6 on J26
+# pin 31, and C15 is PF_C15 on the single-pin connector J12.
+
+set_io -port_name WITNESS_SAMPLE_READY \
+    -pin_name A6                      \
+    -fixed true                       \
+    -io_std LVCMOS33                  \
+    -DIRECTION OUTPUT
+
+set_io -port_name WITNESS_ACT_WRITE \
+    -pin_name D8                    \
+    -fixed true                     \
+    -io_std LVCMOS33                \
+    -DIRECTION OUTPUT
+
+set_io -port_name WITNESS_SAFE_STATE \
+    -pin_name C15                    \
+    -fixed true                      \
+    -io_std LVCMOS33                 \
+    -DIRECTION OUTPUT

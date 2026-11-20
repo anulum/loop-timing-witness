@@ -9,7 +9,8 @@
 // AXI addresses are offsets inside an externally decoded256-byte aperture.
 // run_drained and drain stream belong to bus_clock; plant diagnostics belong
 // to capture_clock. Raw IRQ strobes belong to capture_clock; interrupt_line is
-// a retained bus-domain level. External reset aborts AXI; bus-local0x98 resets
+// a retained bus-domain level. The three event mirrors belong to capture_clock and are
+// registers, for board pins and an external time tagger. External reset aborts AXI; bus-local0x98 resets
 // the run banks while preserving the AXI transport and its accepted responses.
 module axi_control_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
@@ -47,6 +48,7 @@ module axi_control_witness #(
     input logic rready,
     output logic run_drained, run_enabled, run_finished, capture_quiescent, interrupt_line,
     output logic sample_read, actuator_write,
+    output logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror,
     output logic buffer_full, capture_active, sample_valid, sample_interrupt, delayed_interrupt,
     output logic [31:0] cycle_number, delayed_cycle,
     output logic signed [31:0] sample_value, velocity, reference_value, actuator_value,
@@ -172,7 +174,9 @@ module axi_control_witness #(
         .total_misses(total_misses), .consecutive_misses(consecutive_misses), .late_commands(late_commands),
         .overflow_count(overflow_count), .counter_ticks(counter_ticks), .drain_request(drain_request),
         .drain_valid(drain_valid), .drain_empty(drain_empty), .drain_record(drain_record),
-        .run_finished(run_finished), .capture_quiescent(capture_quiescent)
+        .run_finished(run_finished), .capture_quiescent(capture_quiescent),
+        .sample_ready_mirror(sample_ready_mirror), .actuator_write_mirror(actuator_write_mirror),
+        .safe_state_mirror(safe_state_mirror)
     );
     event_record_window window (
         .bus_clock(bus_clock), .reset_n(bus_reset_n),

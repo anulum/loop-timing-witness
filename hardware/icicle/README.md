@@ -41,10 +41,10 @@ Each change must abort publication. A separate filesystem race creates the reque
 destination immediately before publication; derivation must preserve that competing tree.
 
 The derived tree contains the official reference plus narrowly changed vendor sources, this
-repository's [`LOOP_TIMING_WITNESS.tcl`](LOOP_TIMING_WITNESS.tcl), and
-`witness_derivation.json`. It also contains `witness_rtl/`, an exact copy of the current
+repository's [`LOOP_TIMING_WITNESS.tcl`](LOOP_TIMING_WITNESS.tcl) and
+[`LOOP_TIMING_WITNESS.pdc`](LOOP_TIMING_WITNESS.pdc), and `witness_derivation.json`. It also contains `witness_rtl/`, an exact copy of the current
 production SystemVerilog sources. The manifest hashes the derived vendor files, the connection
-script and each copied RTL source. Libero imports this snapshot so later repository edits
+script, the pin constraints and each copied RTL source. Libero imports this snapshot so later repository edits
 cannot silently change an already-derived design. Keep the source repository and its licence
 with the derived tree; the manifest is provenance for source preparation, not a Libero result.
 The pre-Libero verifier also checks the complete unmodified reference-file inventory against
@@ -107,7 +107,11 @@ The witness script adds the rest to the generated design:
   reference clock. The reference CCC uses all four PLL0 outputs (125, 125, 125 and 50 MHz)
   and does not instantiate PLL1, so no reference output is free for the witness. Its lock
   output reaches the witness, which holds both of its clock domains in reset until that PLL
-  locks and returns to reset if the lock drops.
+  locks and returns to reset if the lock drops;
+- the three [event mirror pins](#event-mirror-pins) as top-level outputs. The script imports
+  their constraints and replaces the place-and-route constraint association, which the
+  reference has already made for its baseline configuration, by the same list with the
+  witness pins added.
 
 Each change runs after the base design has generated with every input connected, because
 SmartDesign refuses an unconnected input when it generates a component. The reference's
@@ -122,6 +126,30 @@ the release (`change_vault_location`); it holds every core the reference request
 original board support package must establish the interrupt's PLIC and device-tree identity
 before a processor may consume it. Source derivation and RTL simulation do not qualify a
 board.
+
+## Event mirror pins
+
+The witness drives three capture-clock registers to device pins for the
+[external cross-check](../../docs/MEASUREMENT_PROTOCOL.md#external-cross-check) with a time
+tagger. The sample-ready and actuator-write pins toggle on the capture edge that records each
+`SAMPLE_READY` and `ACT_WRITE` event; the safe-state pin rises on the edge that records
+`SAFE_STATE` and stays high while the safe state is latched. A run reset clears all three.
+
+| Mirror | Top-level port | Ball | Board net | Connector |
+| --- | --- | --- | --- | --- |
+| Sample ready, toggle | `WITNESS_SAMPLE_READY` | A6 | `RPi_GPIO4_GCLK` | J26 pin 7 |
+| Actuator write, toggle | `WITNESS_ACT_WRITE` | D8 | `RPI_GPIO6` | J26 pin 31 |
+| Safe state, level | `WITNESS_SAFE_STATE` | C15 | `PF_C15` | J12 |
+
+The balls and nets come from the Icicle Kit schematic (bank 1 and Raspberry Pi connector sheets
+of the engineering-sample board). Its bank 1 ball assignments agree with every ball that the
+reference's `ICICLE_RPi.pdc` and `ICICLE_MIKROBUS.pdc` place on the same nets. No constraint
+of the reference's baseline configuration uses the three balls; J26 is the Raspberry Pi
+connector, and J12 a single-pin connector on net `PF_C15`, paired on the board with J13 on
+`PF_C14` (ball C14). The pins are LVCMOS33 outputs in bank 1, which the reference fixes at
+3.3 V. Only the I²C loopback variant, which the witness refuses, uses D8. The output delay of
+each pin is in the timing report; the pins are not a board result until a programmed board has
+passed the cross-check.
 
 ## Recorded Libero run
 
@@ -159,6 +187,9 @@ the two FIFO Gray pointers and the capture quiescence register. Its flags are st
 timing of each crossing is bounded by the derived constraints above, and the report meets
 them. The whole design uses 27 502 4LUT (10.8 %), 20 700 DFF (8.1 %), 104 uSRAM, 127 LSRAM
 and 20 math blocks.
+
+This run predates the [event mirror pins](#event-mirror-pins), which change the derived
+RTL, connection script and constraints.
 
 The reports stay with the run; their SHA-256 values are:
 

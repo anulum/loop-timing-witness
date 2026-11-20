@@ -17,6 +17,17 @@ from typing import TYPE_CHECKING
 import pytest
 from test_controller_parity import DEFAULT, SCALE
 
+from loop_timing_witness.control_reference import (
+    Sample,
+    closed_loop,
+    default_pid,
+    deviation,
+    lqr,
+    mechanical_plant,
+    steady_period,
+    thermal_plant,
+)
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -118,3 +129,54 @@ def test_long_quantized_feedback(
         assert native.stdout == expected
     assert max(abs(int(row["output"])) for row in rows) < 2 * SCALE
     assert max(abs(int(row["reference"]) - int(row["output"])) for row in rows[-1000:]) < 4000
+    _check_against_float_reference(scenario, rows)
+
+
+# Measured on the RTL trajectories (docs/CONTROLLERS.md, "Float64 reference and steady state"):
+# the largest output and command differences from the float64 loop in raw LSB, the steady
+# period of the complete fixed-point state, the sample where that cycle starts, and the
+# reference minus the output there, in raw LSB.
+FLOAT_REFERENCE: dict[tuple[int, int], tuple[int, int, int, int, int]] = {
+    (0, 0): (942, 1428, 1, 32650, 270),
+    (0, 1): (727, 757, 1, 8869, 435),
+    (1, 0): (1000, 484, 1, 23806, 1000),
+    (1, 1): (707, 292, 1, 7532, 707),
+}
+
+
+def _check_against_float_reference(scenario: tuple[int, int], rows: list[dict[str, str]]) -> None:
+    """Compare a fixed-point trajectory with its float64 loop and find its steady period.
+
+    Parameters
+    ----------
+    scenario
+        Mechanical/thermal plant and PID/LQR mode.
+    rows
+        Fixed-point trajectory rows.
+    """
+    thermal, mode = scenario
+    plant = thermal_plant() if thermal else mechanical_plant()
+    controller = lqr(plant, (1.0,) if thermal else (10.0, 1.0)) if mode else default_pid()
+    reference = closed_loop(plant, controller, 1.0, len(rows))
+    fixed = [
+        Sample(
+            int(row["output"]) / SCALE, int(row["velocity"]) / SCALE, int(row["command"]) / SCALE
+        )
+        for row in rows
+    ]
+    worst = deviation(fixed, reference)
+    states = [
+        tuple(
+            int(row[name]) for name in ("output", "velocity", "command", "integral", "derivative")
+        )
+        for row in rows
+    ]
+    period, start = steady_period(states, len(states))
+    measured = (
+        round(worst["output"] * SCALE),
+        round(worst["command"] * SCALE),
+        period,
+        start,
+        SCALE - int(rows[start]["output"]),
+    )
+    assert measured == FLOAT_REFERENCE[scenario], f"{scenario}: {measured}"

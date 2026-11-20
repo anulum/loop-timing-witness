@@ -95,6 +95,68 @@ Saturation makes the closed loop nonlinear, so linear poles alone do not qualify
 reference/state range. Design residual, stability and longer trajectories are separate gates
 from arithmetic parity.
 
+## Float64 reference and steady state
+
+[`control_reference.py`](../src/loop_timing_witness/control_reference.py) computes each default loop
+in float64 from the unquantized design values: the exact zero-order-hold plants, the PID gains
+before rounding and LQR gains designed on the unquantized plants. Its loop timing is the fixed-point
+loop's: the plant starts at rest, and the command computed from a sample is applied for the
+following sample interval. Rounded to raw units, its plants and PID gains are the documented raw
+defaults, and its Riccati design on the quantized plants gives the documented LQR gains exactly.
+
+`tests/test_controller_trajectories.py` compares the 64,000-sample RTL trajectories of the four
+default loops, with a unit reference, against it. The loop state recorded at each sample (output,
+velocity, command, integral and derivative) is the complete state, so once one recorded state
+repeats, the loop repeats for ever; the test finds the first repetition in the whole trajectory.
+In raw Q8.24 units (one unit is 2⁻²⁴):
+
+| Plant | Controller | Largest output difference | Largest command difference | Steady state | Reached at sample | Reference minus output there |
+|---|---|---:|---:|---|---:|---:|
+| Mechanical | PID | 942 | 1428 | fixed point | 32650 | 270 |
+| Mechanical | LQR | 727 | 757 | fixed point | 8869 | 435 |
+| Thermal | PID | 1000 | 484 | fixed point | 23806 | 1000 |
+| Thermal | LQR | 707 | 292 | fixed point | 7532 | 707 |
+
+No loop enters a limit cycle: each settles on a fixed point slightly below the reference. In the
+PID loops this is the floored integral: it changes only when `ki_period * e` reaches one raw unit, so with the default `ki_period` of 16777 an error of up to 1000 raw units leaves it unchanged:
+the thermal PID loop stops exactly at that edge. The largest differences from the float64 loop,
+below 1500 raw units (9·10⁻⁵ of the unit reference), come from this bias, the rounded coefficients
+and the floored arithmetic together.
+
+## Timing margins
+
+[`control_timing.py`](../src/loop_timing_witness/control_timing.py) computes how much input-output
+delay a linear loop tolerates, from the continuous plant, its zero-order-hold discretization and
+the controller. Saturation, conditional integration and quantization are left out: the margins
+describe the unsaturated loop around its operating point. A state-feedback loop is treated as
+the scalar loop of the gain row times the plant, with a unit discrete controller.
+
+- **Delay margin:** `phase_margin / crossover`, in sample periods, for a constant delay. This is
+  the continuous-time formula; for these loops it agrees with direct simulation of whole-period
+  delays, which decays one period below the computed margin and grows one period above it.
+- **Jitter margin:** the largest `N` for which Theorem 1 of
+  [Cervin, Lincoln, Eker, Årzén and Buttazzo (2004)](https://lup.lub.lu.se/record/536017), from Kao
+  and Lincoln (2004), guarantees stability under any time-varying delay in `[0, N*h]`. The theorem
+  is sufficient only, so this is a lower bound. The aliased plant gain sums 129 terms directly
+  and adds the leading-order tail in closed form.
+- `latency_verdict` compares measured input-output latencies with the jitter margin and reports
+  the headroom in decades.
+
+The default loops, sampled every millisecond:
+
+| Plant | Controller | Crossover (rad per sample) | Phase margin | Delay margin (periods) | Jitter margin (periods) |
+|---|---|---:|---:|---:|---:|
+| Mechanical | PID | 0.00155 | 29.8° | 335.1 | 312.8 |
+| Mechanical | LQR | 0.00211 | 86.5° | 715.2 | 606.0 |
+| Thermal | PID | 0.00182 | 103.4° | 993.0 | 428.0 |
+| Thermal | LQR | none: the loop gain stays below one | — | unbounded | 2415.4 |
+
+Their bandwidth is about a thousandth of the sample rate, so any delay inside one period, and any
+jitter up to hundreds of periods, keeps them stable, and their tracking error barely changes with
+latency. They exercise the instrument's timing paths, but with these coefficients they cannot
+separate the controller placements by control quality. That needs a loop whose crossover is a
+sizable fraction of the sample rate.
+
 ## Fabric integration
 
 The controller accepts one valid sample per clock edge and registers its command plus

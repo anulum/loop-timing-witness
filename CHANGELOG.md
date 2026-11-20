@@ -14,6 +14,18 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `loop_timing_witness.control_reference` computes the default benchmark loops in float64 from the
+  unquantized design values, and finds the exact steady period of a recorded fixed-point loop. The
+  long RTL trajectory test now compares each default loop with it: the largest output and command
+  differences are below 1500 raw units, and every loop settles on a fixed point (no limit cycle),
+  each slightly below the reference; `docs/CONTROLLERS.md` gives the measured values per loop.
+- `loop_timing_witness.control_timing` computes a loop's crossover, phase margin, constant delay
+  margin and jitter margin (Theorem 1 of Cervin, Lincoln, Eker, Årzén and Buttazzo, 2004: stability
+  under any time-varying delay in `[0, N*h]`), and compares measured input-output latencies with the
+  jitter margin. Direct simulation of whole-period delays brackets the computed delay margin of the
+  default mechanical PID loop. `docs/CONTROLLERS.md` gives the default loops' margins: delay margins
+  of 335 to 993 periods and jitter margins of 313 to 2415 periods, so these loops cannot separate
+  controller placements by control quality.
 - The reviewed lists of unreachable C and C++ branch outcomes have a public count table in
   `docs/CONTROLLER_COVERAGE.md`, per list and source (76 runtime and 17 plugin outcomes). A test reads
   both lists with the coverage gate's own loader and requires the table and its totals to match, so an

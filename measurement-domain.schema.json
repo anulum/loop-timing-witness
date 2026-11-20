@@ -46,6 +46,13 @@
           "type": "array",
           "uniqueItems": true
         },
+        "reference_events": {
+          "items": {
+            "$ref": "#/$defs/event_name"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "sample_rate_hz": {
           "oneOf": [
             {

@@ -95,6 +95,17 @@ def _profile_event(document: dict[str, Any]) -> None:
     )
 
 
+def _without_reference(document: dict[str, Any]) -> None:
+    """Remove the CONTROL profile's optional reference events, leaving the PPS code alone.
+
+    Parameters
+    ----------
+    document
+        Domain changed in place.
+    """
+    del document["design_contracts"]["event_profiles"]["CONTROL"]["reference_events"]
+
+
 def _without_implementation(document: dict[str, Any]) -> None:
     """Remove the declared Gray-pointer implementation of the event buffer.
 
@@ -159,6 +170,27 @@ CHANGES: Final[dict[str, list[Change]]] = {
     ],
     "shallow buffer": [
         _set(f"{CONTRACTS}/event_fifo/depth_records", 4096),
+        _set(f"{CONTRACTS}/event_fifo/minimum_drain_rate_hz", 1),
+    ],
+    "reference code missing": [_set(f"{CONTRACTS}/event_codes/PPS", None)],
+    "reference without profile": [_without_reference],
+    "reference in interval": [
+        _set(f"{CONTRACTS}/event_profiles/CONTROL/intervals/0/start_event", "PPS")
+    ],
+    "reference fills buffer": [
+        _without_implementation,
+        _set(f"{CONTRACTS}/event_fifo/depth_records", 80001),
+        _set(f"{CONTRACTS}/event_fifo/minimum_drain_rate_hz", 1),
+    ],
+    "float reference fills buffer": [
+        _floats,
+        _without_implementation,
+        _set(f"{CONTRACTS}/event_fifo/depth_records", 80001.0),
+        _set(f"{CONTRACTS}/event_fifo/minimum_drain_rate_hz", 1.0),
+    ],
+    "reference buffer margin": [
+        _without_implementation,
+        _set(f"{CONTRACTS}/event_fifo/depth_records", 80002),
         _set(f"{CONTRACTS}/event_fifo/minimum_drain_rate_hz", 1),
     ],
     "placements repeat": [_set(f"{CONTRACTS}/controller_placements/1/identifier", "fabric_logic")],

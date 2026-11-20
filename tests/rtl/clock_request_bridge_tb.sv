@@ -45,7 +45,7 @@ module clock_request_bridge_tb #(
         .command_value(capture_data[31:0]), .fault_arm(1'b0), .fault_kind(2'd0),
         .fault_cycle(32'd0), .fault_periods(32'd0), .reference_mode(2'd0),
         .reference_amplitude(32'sd16777216), .reference_offset(32'sd0), .ramp_increment(32'sd0),
-        .phase_increment(4'd1), .capture_active(capture_active), .sample_valid(sample_valid),
+        .phase_increment(4'd1), .pps_in(1'b0), .capture_active(capture_active), .sample_valid(sample_valid),
         .cycle_number(cycle_number), .sample_value(sample_value), .velocity(velocity),
         .reference_value(reference_value), .actuator_value(actuator_value),
         .safe_interrupt(safe_interrupt), .total_misses(total_misses), .overflow_count(overflow_count),

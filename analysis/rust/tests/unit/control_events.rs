@@ -8,16 +8,21 @@
 
 //! Refuse every malformed record with the Python decoder's text and order.
 
-use super::{Event, Names, decode};
+use super::{Edge, Event, Names, decode, decode_stream};
 use crate::control_number::Num;
 use serde_json::{Value, json};
 
-/// A measurement domain's contracts with two profiles and float and integer codes.
+/// A measurement domain's contracts with two profiles, float and integer codes, and a reference
+/// event that only the CONTROL profile declares.
 fn contracts() -> Value {
     json!({
-        "event_codes": {"SAMPLE_READY": 1, "DEADLINE": 4.0, "INPUT_WRITE": 8},
+        "event_codes": {"SAMPLE_READY": 1, "DEADLINE": 4.0, "INPUT_WRITE": 8, "PPS": 18},
         "event_profiles": {
-            "CONTROL": {"periodic_events": ["SAMPLE_READY"], "occasional_events": ["DEADLINE"]},
+            "CONTROL": {
+                "periodic_events": ["SAMPLE_READY"],
+                "occasional_events": ["DEADLINE"],
+                "reference_events": ["PPS"]
+            },
             "COMPUTE": {"periodic_events": ["INPUT_WRITE"], "occasional_events": []}
         }
     })
@@ -118,4 +123,69 @@ fn malformed_records(base: &[u8]) -> Vec<(Vec<Vec<u8>>, &'static str)> {
             "event record 1: duplicate SAMPLE_READY in cycle 0",
         ),
     ]
+}
+
+#[test]
+fn reference_records_decode_apart_from_the_cycle_order() {
+    let records = [
+        record(1, [0; 3], 0, 10),
+        record(18, [0; 3], 0, 5),
+        record(4, [0; 3], 0, 20),
+        record(18, [0; 3], 2, 30),
+        record(1, [0; 3], 1, 21),
+    ]
+    .concat();
+    let (events, edges) =
+        decode_stream(&records, &contracts(), "CONTROL", Num::Int(3)).expect("valid records");
+    assert_eq!(events.len(), 3);
+    assert_eq!(
+        edges,
+        [
+            Edge {
+                code: 18,
+                sequence: 0,
+                ticks: 5
+            },
+            Edge {
+                code: 18,
+                sequence: 2,
+                ticks: 30
+            }
+        ]
+    );
+    assert_eq!(
+        decode(&records, &contracts(), "CONTROL", Num::Int(3)).expect("events"),
+        events
+    );
+}
+
+#[test]
+fn malformed_reference_records_are_refused() {
+    let first = record(18, [0; 3], 4, 100);
+    for (records, refusal) in [
+        (
+            vec![record(18, [0, 0, 1], 0, 1)],
+            "event record 0: reserved bits must be zero",
+        ),
+        (
+            vec![first.clone(), record(18, [0; 3], 4, 200)],
+            "event record 1: PPS order is not monotonic",
+        ),
+        (
+            vec![first.clone(), record(18, [0; 3], 5, 100)],
+            "event record 1: PPS order is not monotonic",
+        ),
+    ] {
+        assert_eq!(
+            control(&records).err().as_deref(),
+            Some(refusal),
+            "{refusal}"
+        );
+    }
+    assert_eq!(
+        decode(&first, &contracts(), "COMPUTE", Num::Int(3))
+            .err()
+            .as_deref(),
+        Some("event record 0: code 18 is not in COMPUTE")
+    );
 }

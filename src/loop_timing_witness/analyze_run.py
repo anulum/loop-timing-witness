@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .amp_report_completion import attach_amp_completion
-from .event_stream import decode_events
+from .event_stream import decode_stream
 from .host_load_receipt import attach_host_load
 from .latency_jitter import JITTER_METHOD, summarise_jitter
 from .native_completion import attach_completion_statistics
 from .neural_run_dispatch import dispatch_analysis
+from .reference_timebase import reference_timebase
 from .report_outputs import write_report
 from .run_analysis import analyse_events
 from .run_manifest import RunInputs, load_run
@@ -159,7 +160,7 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
     """
     manifest = inputs.manifest
     contracts = inputs.domain["design_contracts"]
-    events = decode_events(
+    events, edges = decode_stream(
         inputs.files["events"], contracts, manifest["profile"], manifest["cycle_count"]
     )
     summary, cycle_rows = events_block(manifest, contracts, events)
@@ -181,6 +182,7 @@ def build_report(inputs: RunInputs) -> tuple[dict[str, Any], list[dict[str, int 
             missing_energy=missing_energy,
         ),
         "events": summary,
+        "reference_timebase": reference_timebase(edges, contracts["timebase"]["clock_hz"]),
         "tracking_error": tracking,
         "energy": energy,
         "limits": report_limits(contracts, tracking),

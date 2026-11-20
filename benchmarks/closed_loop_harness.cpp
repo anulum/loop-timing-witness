@@ -282,6 +282,7 @@ std::uint64_t start(Harness &harness, Vcontrol_plant_witness &model, const Stimu
     model.run_reset_n = 0;
     model.enable = 0;
     model.fault_arm = 0;
+    model.pps_in = 0; // no reference pulse: the harness records control events only
     model.reference_offset = 0;
     model.ramp_increment = 0;
     model.command_value = 0;

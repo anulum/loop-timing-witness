@@ -109,6 +109,11 @@ register and the cycle counter. It raises the `CONTROL` profile strobes:
 | `FAULT_INJECTED` | fault injector action |
 | `FAULT_DETECTED` | monitor detects the injected fault |
 
+The `CONTROL` profile also has one reference event, `PPS` (code 18): the rising edge of an
+external pulse-per-second input, with the reference's own sequence number in place of a cycle. It
+is written only into write slots that no strobe record claims, and the host analysis fits the
+counter's rate against it ([`PLANT_WITNESS.md`](PLANT_WITNESS.md#pulse-per-second-reference)).
+
 ### Event witness and buffer
 
 `rtl/event_witness.sv` connects `rtl/event_record_capture.sv` to a Gray-pointer dual-clock

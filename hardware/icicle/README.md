@@ -135,21 +135,27 @@ The witness drives three capture-clock registers to device pins for the
 [external cross-check](../../docs/MEASUREMENT_PROTOCOL.md#external-cross-check) with a time
 tagger. The sample-ready and actuator-write pins toggle on the capture edge that records each
 `SAMPLE_READY` and `ACT_WRITE` event; the safe-state pin rises on the edge that records
-`SAFE_STATE` and stays high while the safe state is latched. A run reset clears all three.
+`SAFE_STATE` and stays high while the safe state is latched. A run reset clears all three. A
+fourth pin takes the [pulse-per-second reference](../../docs/PLANT_WITNESS.md#pulse-per-second-reference)
+into the witness.
 
-| Mirror | Top-level port | Ball | Board net | Connector |
+| Signal | Top-level port | Ball | Board net | Connector |
 | --- | --- | --- | --- | --- |
 | Sample ready, toggle | `WITNESS_SAMPLE_READY` | A6 | `RPi_GPIO4_GCLK` | J26 pin 7 |
 | Actuator write, toggle | `WITNESS_ACT_WRITE` | D8 | `RPI_GPIO6` | J26 pin 31 |
 | Safe state, level | `WITNESS_SAFE_STATE` | C15 | `PF_C15` | J12 |
+| Pulse per second, input | `WITNESS_PPS` | C14 | `PF_C14` | J13 |
 
 The balls and nets come from the Icicle Kit schematic (bank 1 and Raspberry Pi connector sheets
 of the engineering-sample board). Its bank 1 ball assignments agree with every ball that the
 reference's `ICICLE_RPi.pdc` and `ICICLE_MIKROBUS.pdc` place on the same nets. No constraint
-of the reference's baseline configuration uses the three balls; J26 is the Raspberry Pi
-connector, and J12 a single-pin connector on net `PF_C15`, paired on the board with J13 on
-`PF_C14` (ball C14). The pins are LVCMOS33 outputs in bank 1, which the reference fixes at
-3.3 V. Only the I²C loopback variant, which the witness refuses, uses D8. The output delay of
+of the reference's baseline configuration uses the four balls; J26 is the Raspberry Pi
+connector, and J12 and J13 are single-pin connectors on nets `PF_C15` and `PF_C14`. The mirrors
+are LVCMOS33 outputs and the reference input an LVCMOS33 input with a weak pull-down, as the
+reference's mikroBUS interrupt input has, so an open connector records no edge; all four are in
+bank 1, which the reference fixes at 3.3 V, and a source with another output level needs a level
+translator. The reference input has no I/O timing constraint: it is asynchronous by design and
+enters two capture-clock synchroniser stages. Only the I²C loopback variant, which the witness refuses, uses D8. The output delay of
 each pin is in the timing report; the pins are not a board result until a programmed board has
 passed the cross-check.
 

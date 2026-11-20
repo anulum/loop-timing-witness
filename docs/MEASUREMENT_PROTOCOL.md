@@ -215,6 +215,25 @@ offset known to 1 ns, and 4.1 ns for short intervals with a negligible offset te
 to actuation): `u_c = √((T/√12)² + u_scale² + u_offset²)`. The witness records when an access reaches
 the fabric, not when the processor executes the instruction behind it.
 
+### Pulse-per-second reference
+
+A pulse-per-second source on the [reference input](../hardware/icicle/README.md#event-mirror-pins)
+measures the timebase scale instead of bounding it. The witness timestamps each rising edge on the
+64-bit counter after two synchroniser stages, a fixed latency of two capture periods plus the
+edge's phase to the next capture edge, and the host analysis fits the counter against the edges'
+sequence numbers ([`reference_timebase`](HOST_ANALYSIS.md#pulse-per-second-reference-timebase)).
+The fixed latency cancels in the slope; the phase, between 0 and `T` for each edge and independent
+between edges, enters the residuals and so the fit's standard error `u_fit` (in ppm), together with
+the source's own edge jitter. The scale error `δ` that the fit reports then corrects intervals,
+`L = n·T / (1 + δ·10⁻⁶)`, and the scale term becomes `u_scale = L·10⁻⁶·√(u_fit² + u_ref²)`, where
+`u_ref` is the standard uncertainty of the source's frequency over the run, in ppm, taken from its
+declaration: a disciplined source with a stated bound `a` gives `a/√3`. Nothing in the witness
+measures `u_ref`, so a result that uses the correction states the source and its declaration. The
+fit holds for the run's duration only; it does not describe the oscillator at another temperature or
+age. The input is a 3.3 V LVCMOS pin, so a source with another output level needs a level
+translator, and an edge that arrives while the previous one still waits for a write slot is missing
+from the sequence, which the report counts.
+
 ## Stated limits
 
 These limits are part of every report:

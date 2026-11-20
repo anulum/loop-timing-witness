@@ -74,7 +74,7 @@ module axi_lite_clock_bridge_tb #(
         .command_cycle(cycle_number), .command_value(capture_write_data), .fault_arm(1'b0),
         .fault_kind(2'd0), .fault_cycle(32'd0), .fault_periods(32'd0), .reference_mode(2'd0),
         .reference_amplitude(32'sd16777216), .reference_offset(32'sd0), .ramp_increment(32'sd0),
-        .phase_increment(4'd1), .capture_active(capture_active), .sample_valid(sample_valid),
+        .phase_increment(4'd1), .pps_in(1'b0), .capture_active(capture_active), .sample_valid(sample_valid),
         .cycle_number(cycle_number), .sample_value(sample_value), .actuator_value(actuator_value),
         .safe_interrupt(safe_interrupt), .total_misses(total_misses), .overflow_count(overflow_count),
         .counter_ticks(counter_ticks), .drain_request(drain_request), .drain_valid(drain_valid), .drain_record(drain_record),

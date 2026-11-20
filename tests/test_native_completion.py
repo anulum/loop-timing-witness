@@ -13,10 +13,12 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import struct
 import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from control_rust_support import canonical, python_outcome, rust_outcome
 from native_simulation_manifest import write_native_manifest
 from test_native_run import configuration, native_run
 
@@ -101,6 +103,55 @@ def test_bound_completion(
         assert result.returncode == 1
         assert "native" in result.stderr
         assert not (tmp_path / "report").exists()
+
+
+@pytest.mark.parametrize("counted", [True, False])
+def test_reference_records_count_as_drained_records(
+    native_run: Path, tmp_path: Path, run_tool: RunTool, *, counted: bool
+) -> None:
+    """Count a pulse-per-second record among the records the native drain took.
+
+    A board run with a reference input drains PPS records beside the cycle records, so its
+    receipt counts them; the simulation's input stays low, so the test appends one PPS record
+    to a real run and rebinds the event file. With the receipt counting it, both analyses
+    accept the run, agree on the report and keep the cycle events unchanged; a receipt that
+    leaves it out contradicts the event file and both refuse the run.
+
+    Parameters
+    ----------
+    native_run
+        Actual production RTL/controller executable.
+    tmp_path
+        Exclusive capture allocation.
+    run_tool
+        Public analyzer process.
+    counted
+        Whether the receipt counts the appended record.
+    """
+    path, metadata = _execute(native_run, tmp_path, "none")
+    manifest = json.loads(path.read_text())
+    facts = json.loads(metadata.read_text())
+    events = tmp_path / "events.bin"
+    cycle_events = len(events.read_bytes()) // 16
+    events.write_bytes(events.read_bytes() + struct.pack("<BBHIQ", 18, 0, 0, 0, 3))
+    digest = hashlib.sha256(events.read_bytes()).hexdigest()
+    manifest["files"]["events"]["sha256"] = digest
+    facts["artifacts"]["events"].update(sha256=digest, bytes=events.stat().st_size)
+    facts["result"]["records"] += int(counted)
+    _rebind_metadata(path, manifest, metadata, facts)
+    python = python_outcome(path)
+    assert canonical(rust_outcome(path, tmp_path / "rust")) == canonical(python)
+    result = run_tool("analyze_run", str(path), "--output-dir", str(tmp_path / "report"))
+    if counted:
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads((tmp_path / "report/report.json").read_text())
+        assert report["native_completion"] == facts["result"]
+        assert report["events"]["event_count"] == cycle_events
+        assert report["reference_timebase"]["edges"] == 1
+    else:
+        assert result.returncode == 1
+        assert "native" in result.stderr
+        assert python["report"] is None
 
 
 def _execute(native_run: Path, directory: Path, fault: str) -> tuple[Path, Path]:

@@ -51,6 +51,11 @@ fn items(value: &Value) -> &[Value] {
     value.as_array().expect("schema-checked array")
 }
 
+/// The reference events of a profile; the member is optional and absent means none.
+fn reference_events(profile: &Value) -> &[Value] {
+    profile.get("reference_events").map_or(&[], items)
+}
+
 /// Python's `repr` of a string matched by a schema identifier pattern.
 fn quoted(value: &str) -> String {
     format!("'{value}'")
@@ -210,12 +215,17 @@ fn timebase(contracts: &Value) -> Vec<String> {
     findings
 }
 
-/// Every event name of a profile, periodic before occasional.
-fn profile_events(profile: &Value) -> impl Iterator<Item = &str> {
+/// The events of a profile that belong to a cycle, periodic before occasional.
+fn cycle_events(profile: &Value) -> impl Iterator<Item = &str> {
     items(&profile["periodic_events"])
         .iter()
         .chain(items(&profile["occasional_events"]))
         .map(text)
+}
+
+/// Every event name of a profile: its cycle events, then its reference events.
+fn profile_events(profile: &Value) -> impl Iterator<Item = &str> {
+    cycle_events(profile).chain(reference_events(profile).iter().map(text))
 }
 
 /// Check event-profile consistency and sample-rate bounds.
@@ -293,7 +303,7 @@ fn rate(name: &str, profile: &Value) -> Option<String> {
 
 /// Check that every interval of one profile joins two of its own events.
 fn intervals(name: &str, profile: &Value) -> Vec<String> {
-    let events: BTreeSet<&str> = profile_events(profile).collect();
+    let events: BTreeSet<&str> = cycle_events(profile).collect();
     let declared = items(&profile["intervals"]);
     let mut findings = Vec::new();
     if repeated(declared.iter().map(|interval| text(&interval["name"]))) {
@@ -346,7 +356,11 @@ fn buffer(contracts: &Value) -> Vec<String> {
             continue;
         }
         let count = items(&profile["periodic_events"]).len() as u128;
-        if drain.compare(Num::of(&rate["maximum"]).mul(Num::Int(count))) != Ordering::Greater {
+        let reference = reference_events(profile).len() as u128;
+        let arrivals = Num::of(&rate["maximum"])
+            .mul(Num::Int(count))
+            .add(Num::Int(reference));
+        if drain.compare(arrivals) != Ordering::Greater {
             findings.push(format!(
                 "event_fifo: fills before the slowest drain at the {name} maximum sample rate"
             ));

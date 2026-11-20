@@ -270,11 +270,12 @@ def _placement_constraints(script: str) -> list[str]:
 
 
 def test_witness_pins_are_free_and_join_the_baseline_placement(derived_tree: Path) -> None:
-    """Place the event mirrors on pins no reference constraint uses, keeping every baseline file.
+    """Place the mirrors and the reference input on unused pins, keeping every baseline file.
 
     The reference's own place-and-route association, for the baseline configuration that the
     witness requires, is the witness script's association without the witness pins; none of the
-    three mirror pins appears in any of the reference's I/O constraint files.
+    three mirror outputs or the pulse-per-second input, which has a weak pull-down, appears in
+    any of the reference's I/O constraint files.
 
     Parameters
     ----------
@@ -300,8 +301,10 @@ def test_witness_pins_are_free_and_join_the_baseline_placement(derived_tree: Pat
         "WITNESS_SAMPLE_READY": "A6",
         "WITNESS_ACT_WRITE": "D8",
         "WITNESS_SAFE_STATE": "C15",
+        "WITNESS_PPS": "C14",
     }
     assert pins.count("-DIRECTION OUTPUT") == 3
+    assert pins.count("-DIRECTION INPUT") == pins.count("-RES_PULL Down") == 1
     for name in baseline.split():
         if name.startswith("io/"):
             constraint = derived_tree / "script_support/constraints" / name.removeprefix("io/")

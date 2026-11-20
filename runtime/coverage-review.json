@@ -275,22 +275,22 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 165,
+      "line": 167,
       "outcome": 1,
       "condition": "AXI read not answered within the transaction limit",
       "reason": "the production bridge answers every read, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
       "lines": [
-        177
+        179
       ]
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 189,
+      "line": 191,
       "outcome": 1,
       "condition": "AXI write not answered within the transaction limit",
       "reason": "the production bridge answers every write, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
       "lines": [
-        205
+        207
       ]
     },
     {

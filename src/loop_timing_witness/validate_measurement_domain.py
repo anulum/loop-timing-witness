@@ -269,12 +269,13 @@ def _all_event_names(profiles: dict[str, Any]) -> list[str]:
     Returns
     -------
     list[str]
-        Periodic then occasional events of each profile, duplicates kept.
+        Periodic, occasional and reference events of each profile, duplicates kept.
     """
     names: list[str] = []
     for profile in profiles.values():
         names.extend(profile["periodic_events"])
         names.extend(profile["occasional_events"])
+        names.extend(profile.get("reference_events", []))
     return names
 
 
@@ -433,9 +434,10 @@ def _buffer_findings(contracts: dict[str, Any]) -> list[str]:
 
     A declared Gray-pointer implementation requires a supported power-of-two
     depth; archived contracts without that declaration retain the sizing rule.
-    The buffer fills in ``depth / (maximum_rate * periodic_events)`` seconds
-    at the highest sample rate; the drain interval is at most
-    ``1 / minimum_drain_rate`` seconds. The comparison uses integers.
+    The buffer fills in ``depth / (maximum_rate * periodic_events + reference_events)``
+    seconds at the highest sample rate, a reference event such as a pulse per second adding at
+    most one record each second; the drain interval is at most ``1 / minimum_drain_rate``
+    seconds. The comparison uses integers.
 
     Parameters
     ----------
@@ -458,7 +460,9 @@ def _buffer_findings(contracts: dict[str, Any]) -> list[str]:
         rate = profile["sample_rate_hz"]
         if rate is None:
             continue
-        arrivals = rate["maximum"] * len(profile["periodic_events"])
+        arrivals = rate["maximum"] * len(profile["periodic_events"]) + len(
+            profile.get("reference_events", [])
+        )
         if fifo["depth_records"] * fifo["minimum_drain_rate_hz"] <= arrivals:
             findings.append(
                 f"event_fifo: fills before the slowest drain at the {profile_name} "

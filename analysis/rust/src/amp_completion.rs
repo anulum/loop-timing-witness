@@ -21,7 +21,7 @@
 //! [`validate_capture`]: crate::amp_completion::validate_capture
 
 use crate::amp_tracking::decode_tracking;
-use crate::control_events::{Names, decode};
+use crate::control_events::{Names, RECORD, decode};
 use crate::control_json::decode_object;
 use crate::control_manifest::load_domain;
 use crate::control_number::Num;
@@ -137,7 +137,8 @@ pub fn validate_capture(
         .iter()
         .filter(|event| names.get(event.code) == Some("SAMPLE_READ"))
         .map(|event| event.cycle);
-    if decoded.len() as u64 != completion.events
+    // The logger counts every record it took from the fabric, reference records too.
+    if (events.len() / RECORD) as u64 != completion.events
         || !read_cycles.eq(observations.iter().map(|row| row.cycle))
     {
         return Err("AMP completion and event/telemetry observations disagree".to_owned());

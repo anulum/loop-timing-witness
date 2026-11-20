@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .event_stream import decode_events
+from .event_stream import EVENT_RECORD, decode_events
 from .manifest_io import parse_bounded_json_object
 from .native_tracking import decode_tracking
 from .run_manifest import load_domain
@@ -143,6 +143,8 @@ def validate_capture(
     if completion.overflow:
         message = "AMP fabric FIFO overflow invalidates capture"
         raise ValueError(message)
-    if len(decoded) != completion.events or read_cycles != observed_cycles:
+    # The logger counts every record it took from the fabric, reference records too.
+    records = len(events) // EVENT_RECORD.size
+    if records != completion.events or read_cycles != observed_cycles:
         message = "AMP completion and event/telemetry observations disagree"
         raise ValueError(message)

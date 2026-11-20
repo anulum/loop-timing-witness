@@ -122,7 +122,8 @@ class Simulation {
      *
      * Every input starts idle, as an AXI master drives ARVALID, AWVALID and WVALID low during
      * reset, so no transaction depends on the model's initial values. The reset period is held
-     * without sampling the bus, so no flag from before the reset meets a handshake.
+     * without sampling the bus, so no flag from before the reset meets a handshake. The
+     * pulse-per-second reference stays low, so a simulated run records no reference edge.
      */
     explicit Simulation(const SimulationOptions &options = {}) : context(options) {
         model.bus_clock = 0;
@@ -136,6 +137,7 @@ class Simulation {
         model.araddr = 0;
         model.arvalid = 0;
         model.rready = 0;
+        model.pps_in = 0;
         model.run_reset_n = 0;
         model.eval();
         hold_reset(140);

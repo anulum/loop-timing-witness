@@ -79,6 +79,7 @@ mod control_plots;
 mod control_printable;
 mod control_publication;
 mod control_receipts;
+mod control_reference;
 mod control_report;
 mod control_schema;
 mod control_series;

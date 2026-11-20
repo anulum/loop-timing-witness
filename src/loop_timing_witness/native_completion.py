@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .event_stream import EVENT_RECORD
 from .manifest_io import load_json_object, parse_bounded_json_object
 from .run_analysis import analyse_events
 from .validate_measurement_domain import schema_locations
@@ -60,7 +61,7 @@ def _configuration_matches(
     manifest
         Validated run declaration.
     event_count
-        Number of actually decoded records.
+        Number of actually decoded records, cycle and reference records alike.
 
     Returns
     -------
@@ -96,7 +97,7 @@ def _counters_match(
     manifest
         Validated run declaration.
     event_count
-        Number of actually decoded records.
+        Number of actually decoded records, cycle and reference records alike.
     control
         Full-run control analysis and sample-read count, before warm-up exclusion.
 
@@ -134,7 +135,7 @@ def completion_statistics(
     manifest
         Validated run declaration.
     event_count
-        Number of actually decoded records.
+        Number of actually decoded records, cycle and reference records alike.
     control
         Full-run control analysis and sample-read count, before warm-up exclusion.
 
@@ -196,10 +197,11 @@ def attach_completion_statistics(
             )
         control = dict(full["control"])
         control["sample_read_events"] = sum(event.name == "SAMPLE_READ" for event in events)
+        # The native drain counts every record it took from the fabric, reference records too.
         report["native_completion"] = completion_statistics(
             inputs.files["native_metadata"],
             inputs.manifest,
-            len(events),
+            len(inputs.files["events"]) // EVENT_RECORD.size,
             control,
         )
         report["input_sha256"]["native_metadata"] = inputs.manifest["native_metadata"]["sha256"]

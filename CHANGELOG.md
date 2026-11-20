@@ -14,6 +14,29 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Pulse-per-second reference input: `control_plant_witness` timestamps each rising edge of an
+  asynchronous `pps_in` on the 64-bit counter after two synchroniser stages and records it as
+  event code 18 (`PPS`, a new `reference_events` member of the CONTROL profile in the measurement
+  domain) with its own sequence number in the cycle field. The record waits for a write slot that
+  no capture record claims, so the reference never displaces or delays a control event (a plant
+  simulation with the pulse gives the same control records as without it); an edge that arrives
+  while the previous one waits is not recorded and leaves a gap in the sequence. The synchroniser
+  resets high, so a pulse already high at the release is not an edge, and the run is quiescent only
+  when no reference record waits. The fabric wrapper, `axi_control_witness` and `icicle_witness`
+  pass the input through; the Icicle derivation places `WITNESS_PPS` on ball C14 (J13, `PF_C14`),
+  LVCMOS33 with a weak pull-down.
+  - The Python and Rust decoders check reference records on their own (zero reserved bits,
+    increasing sequence number and counter value) and keep them out of the cycle checks; both
+    domain validators count reference events among the coded names and in the buffer-sizing rule.
+  - The native and AMP completion checks count every record of the event file, reference records
+    too, as the native drain and the AMP logger do, so a board run with a connected reference keeps
+    its completion receipt valid; both analyses refuse a receipt that leaves a PPS record out.
+  - The report's new `reference_timebase` member gives the edge count, the skipped edges and an
+    ordinary least-squares fit of the counter against the sequence numbers: ticks per second, the
+    scale error against the declared clock in ppm with its standard error, and the residuals, with
+    the same bits in both languages (shared corpus `control-reference-cases.json`).
+  - `docs/MEASUREMENT_PROTOCOL.md` uses the fit in the uncertainty budget in place of the
+    oscillator bound, with the reference's own declared uncertainty added.
 - Register map version 2: the fault schedule (kind, target cycle, duration, arm) moves to its own
   4 KiB fault page at `0x1000`–`0x100c`; the run page refuses its old offsets `0x58`–`0x64`, every
   other address of the 8 KiB aperture returns SLVERR, the injector status stays at `0x68` and

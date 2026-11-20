@@ -262,8 +262,9 @@ The analyzer validates its schema, source kind, controller coefficients, plant, 
 and sample period against the run. The native fault kind, cycle and delay duration must
 also match the declared fault schedule, including an empty schedule for an unfaulted run.
 `native_completion` preserves the program's final live
-sample/record/miss/overflow/safe counters. Recorded event count and overflow must always agree
-with the receipt. With zero overflow, full-run deadline count, misses, sample reads and safe state must
+sample/record/miss/overflow/safe counters. The event file's record count, reference records
+included, and the overflow must always agree with the receipt, as the native drain and the AMP
+logger count every record they take from the fabric. With zero overflow, full-run deadline count, misses, sample reads and safe state must
 agree too. This check includes the warm-up prefix even when reported metrics exclude it. Existing
 manifests without a native receipt retain their original analysis path.
 
@@ -418,6 +419,14 @@ the first consecutive missed deadline to `SAFE_STATE`. A fault schedule must mat
 injection cycles. The event file is invalid for a complete run if a cycle anchor is absent or
 the FIFO overflow count is nonzero.
 
+A profile's reference events, the `CONTROL` profile's `PPS` (code 18), are decoded apart from the
+cycle events. The fabric writes a pulse-per-second record into a write slot that no cycle event
+claims, so it may follow cycle records with later counter values; its cycle field holds the
+reference's own sequence number. Each reference record needs zero reserved bits, and its sequence
+number and counter value must exceed those of the previous record of the same kind; a gap in the
+sequence numbers is an edge that arrived while the previous one still waited. The cycle checks,
+intervals and completeness never see these records.
+
 For every interval the tool reports the sample count, observation duration in ticks, median,
 p95, p99, p99.9 and maximum. Percentiles use linear interpolation at position `(n − 1) × p` in
 the sorted samples. Control error is the RMS and peak absolute value of `reference − output`
@@ -529,6 +538,23 @@ such window (null when the run has fewer deadlines), so the loop meets `(m, K)` 
 number is at most `m`. `longest_miss_run` is the longest run of consecutive misses and
 `observed_deadlines` the number of deadlines in cycle order. A deadline is missed as in the
 [calculations](#calculations).
+
+### Pulse-per-second reference timebase
+
+`reference_timebase` describes the run's [pulse-per-second edges](PLANT_WITNESS.md#pulse-per-second-reference),
+or is null when the run has none. It counts the `edges`, names the `first_sequence` and
+`last_sequence` and gives the `missing_edges` the sequence skips. With two or more edges an ordinary
+least-squares line through (sequence number, counter value) gives `ticks_per_second` and
+`scale_error_ppm`, the counter's rate against the domain's `clock_hz` in parts per million, with the
+`max_abs_residual_ticks`; with three or more, `scale_standard_error_ppm` is the slope's standard
+error from the residuals (`n − 2` degrees of freedom) and `residual_rms_ticks` their root mean
+square. The sums run left to right in plain double-precision arithmetic, in the same order in Python
+and Rust, so both analyses give the same bits; the shared corpus
+`analysis/rust/tests/data/control-reference-cases.json` holds the cases. The numbers describe the
+counter relative to the reference: the reference's own frequency error is not inferred and is added
+from its declaration, as the [measurement protocol](MEASUREMENT_PROTOCOL.md#pulse-per-second-reference)
+states. A simulated pulse has no physical second, so a simulation's scale error only checks the
+arithmetic.
 
 ### Energy method and frequency sweep
 

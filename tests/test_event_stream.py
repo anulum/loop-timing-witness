@@ -12,12 +12,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from conftest import REPOSITORY_ROOT
+from loop_timing_witness.event_stream import Event, ReferenceEdge, decode_events, decode_stream
+from loop_timing_witness.manifest_io import load_json_object
 
 MakeRtlRun = Callable[[], tuple[Path, dict[str, Any]]]
 RunTool = Callable[..., subprocess.CompletedProcess[str]]
@@ -106,3 +111,79 @@ def test_corrupt_rtl_event_record_is_refused(
     assert result.returncode == 1
     assert finding in result.stderr
     assert not output.exists()
+
+
+def _records(*fields: tuple[int, int, int, int, int]) -> bytes:
+    """Pack event records.
+
+    Parameters
+    ----------
+    *fields
+        Code, reserved byte, reserved word, cycle or sequence number and ticks of each record.
+
+    Returns
+    -------
+    bytes
+        The little-endian records in order.
+    """
+    return b"".join(struct.pack("<BBHIQ", *record) for record in fields)
+
+
+def _contracts() -> dict[str, Any]:
+    """Return the packaged measurement domain's design contracts.
+
+    Returns
+    -------
+    dict[str, Any]
+        Contracts with the CONTROL profile's PPS reference event.
+    """
+    domain = load_json_object(
+        REPOSITORY_ROOT / "src/loop_timing_witness/data/measurement-domain.json"
+    )
+    return dict(domain["design_contracts"])
+
+
+def test_reference_records_decode_apart_from_the_cycle_order() -> None:
+    """A PPS record may follow a later cycle record; it leaves the cycle events unchanged."""
+    content = _records(
+        (1, 0, 0, 0, 10), (18, 0, 0, 0, 5), (2, 0, 0, 0, 20), (18, 0, 0, 2, 30), (1, 0, 0, 1, 21)
+    )
+    events, edges = decode_stream(content, _contracts(), "CONTROL", 3)
+    assert events == (
+        Event("SAMPLE_READY", 0, 10),
+        Event("SAMPLE_READ", 0, 20),
+        Event("SAMPLE_READY", 1, 21),
+    )
+    assert edges == (ReferenceEdge("PPS", 0, 5), ReferenceEdge("PPS", 2, 30))
+    assert decode_events(content, _contracts(), "CONTROL", 3) == events
+
+
+@pytest.mark.parametrize(
+    ("records", "refusal"),
+    [
+        ([(18, 0, 1, 0, 1)], "event record 0: reserved bits must be zero"),
+        ([(18, 1, 0, 0, 1)], "event record 0: reserved bits must be zero"),
+        ([(18, 0, 0, 4, 100), (18, 0, 0, 4, 200)], "event record 1: PPS order is not monotonic"),
+        ([(18, 0, 0, 4, 100), (18, 0, 0, 5, 100)], "event record 1: PPS order is not monotonic"),
+    ],
+)
+def test_malformed_reference_records_are_refused(
+    records: list[tuple[int, int, int, int, int]], refusal: str
+) -> None:
+    """A PPS record needs zero reserved bits and a later sequence number and counter value.
+
+    Parameters
+    ----------
+    records
+        Records of one CONTROL run.
+    refusal
+        Expected refusal text.
+    """
+    with pytest.raises(ValueError, match=refusal):
+        decode_stream(_records(*records), _contracts(), "CONTROL", 3)
+
+
+def test_a_profile_without_reference_events_refuses_the_pps_code() -> None:
+    """The COMPUTE profile declares no reference event, so code 18 is foreign to it."""
+    with pytest.raises(ValueError, match="event record 0: code 18 is not in COMPUTE"):
+        decode_stream(_records((18, 0, 0, 0, 1)), _contracts(), "COMPUTE", 3)

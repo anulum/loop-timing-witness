@@ -24,7 +24,7 @@ module icicle_witness_tb #(parameter bit THERMAL = 0);
 
     icicle_witness #(.PERIOD_TICKS(32'd64), .THERMAL(THERMAL)) device (
         .bus_clock(bus_clock), .capture_clock(capture_clock),
-        .capture_clock_locked(capture_clock_locked), .run_reset_n(run_reset_n),
+        .capture_clock_locked(capture_clock_locked), .run_reset_n(run_reset_n), .pps_in(1'b0),
         .awaddr(awaddr), .awvalid(awvalid), .awready(awready),
         .wdata(wdata), .wstrb(wstrb), .wvalid(wvalid), .wready(wready),
         .bresp(bresp), .bvalid(bvalid), .bready(bready),

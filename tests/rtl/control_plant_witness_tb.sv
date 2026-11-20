@@ -28,6 +28,9 @@ module control_plant_witness_tb #(
     logic [63:0] counter_ticks;
     logic [127:0] drain_record;
     logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror;
+    logic pps_in = 0, run_finished;
+    integer pps_period = 0, pps_handle = 0;
+    string pps_file;
     logic [2:0] mirror_seen = 3'b000;
     logic [63:0] mirror_tick;
     integer mirror_handle = 0;
@@ -47,8 +50,8 @@ module control_plant_witness_tb #(
         .actuator_write(actuator_write), .command_cycle(command_cycle), .command_value(command_value),
         .fault_arm(fault_arm), .fault_kind(fault_kind), .fault_cycle(32'd1), .fault_periods(32'd2),
         .reference_mode(2'd0), .reference_amplitude(32'sd16777216), .reference_offset(32'sd0),
-        .ramp_increment(32'sd0), .phase_increment(4'd1), .capture_active(capture_active),
-        .sample_valid(sample_valid), .sample_interrupt(sample_interrupt),
+        .ramp_increment(32'sd0), .phase_increment(4'd1), .pps_in(pps_in),
+        .capture_active(capture_active), .sample_valid(sample_valid), .sample_interrupt(sample_interrupt),
         .delayed_interrupt(delayed_interrupt), .cycle_number(cycle_number), .delayed_cycle(delayed_cycle),
         .sample_value(sample_value), .velocity(velocity), .reference_value(reference_value),
         .actuator_value(actuator_value), .plant_clipped(plant_clipped), .reference_clipped(reference_clipped),
@@ -58,8 +61,21 @@ module control_plant_witness_tb #(
         .overflow_count(overflow_count), .counter_ticks(counter_ticks), .drain_request(1'b1),
         .drain_valid(drain_valid), .drain_empty(drain_empty), .drain_record(drain_record),
         .buffer_full(buffer_full), .sample_ready_mirror(sample_ready_mirror),
-        .actuator_write_mirror(actuator_write_mirror), .safe_state_mirror(safe_state_mirror)
+        .actuator_write_mirror(actuator_write_mirror), .safe_state_mirror(safe_state_mirror),
+        .run_finished(run_finished)
     );
+    // With +PPS_PERIOD, a reference pulse rises at every counter value 1000 past a multiple of that
+    // many ticks until the run finishes and stays high for a fifth of the period; +PPS_FILE receives
+    // the counter value at each rise. The pulse changes on the falling edge, between two captures.
+    always @(negedge capture_clock) begin
+        if (pps_period > 0 && capture_active && !run_finished) begin
+            if (counter_ticks % pps_period == 1000) begin
+                pps_in = 1;
+                $fwrite(pps_handle, "%0d\n", counter_ticks);
+            end
+            if (counter_ticks % pps_period == 1000 + pps_period / 5) pps_in = 0;
+        end
+    end
     // With +MIRROR_FILE, every change of the three mirrors is written with the counter value
     // of the edge that made it, the value the event record of that edge carries.
     always @(posedge capture_clock) begin
@@ -156,6 +172,11 @@ module control_plant_witness_tb #(
             $fwrite(mirror_handle, "ticks,sample_ready,actuator_write,safe_state\n");
         end
         $fwrite(track_handle, "cycle,reference,output,velocity,actuator,ticks\n");
+        if ($value$plusargs("PPS_PERIOD=%d", pps_period)) begin
+            if (pps_period < 10 || !$value$plusargs("PPS_FILE=%s", pps_file)) $fatal(1, "PPS_FILE or period missing");
+            pps_handle = $fopen(pps_file, "w");
+            if (!pps_handle) $fatal(1, "pps output open failed");
+        end
         repeat (4) @(negedge capture_clock);
         run_reset_n = 1;
         wait (capture_active);
@@ -186,6 +207,7 @@ module control_plant_witness_tb #(
         $fclose(handle);
         $fclose(track_handle);
         if (mirror_handle) $fclose(mirror_handle);
+        if (pps_handle) $fclose(pps_handle);
         $display("RESET_PASS");
         $finish;
     end

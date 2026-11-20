@@ -95,7 +95,8 @@ and board qualification have separate acceptance requirements.
 `loop_timing_witness.neural_event_stream.decode_neural_channel` decodes the separate
 input, state and service capture streams, retaining original payload and alignment-marker
 bytes. Its neural record vocabulary uses data codes 14, 15 and 16 respectively and marker
-code 17; it does not register a neural profile in the CONTROL/COMPUTE domain. Missing
+code 17; it does not register a neural profile in the CONTROL/COMPUTE domain, whose
+pulse-per-second reference event therefore continues at code 18. Missing
 markers, identity gaps and empty streams remain visible. A marker-only service stream has
 an empty payload; this alone does not establish that the encoder tail or export completed.
 Reserved bits, marker positions, population bounds, record order and the 16-bit no-wrap

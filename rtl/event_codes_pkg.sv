@@ -20,4 +20,6 @@ package event_codes_pkg;
     localparam logic [7:0] OUTPUT_READ = 8'd11;
     localparam logic [7:0] INTERRUPT_ENTRY = 8'd12;
     localparam logic [7:0] ACT_LATE = 8'd13;
+    // Codes 14 to 17 belong to the neural step profile; the reference input continues at 18.
+    localparam logic [7:0] PPS = 8'd18;
 endpackage

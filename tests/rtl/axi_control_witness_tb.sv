@@ -36,7 +36,7 @@ module axi_control_witness_tb #(
         .awaddr(awaddr), .awvalid(awvalid), .awready(awready), .wdata(wdata), .wstrb(wstrb),
         .wvalid(wvalid), .wready(wready), .bresp(bresp), .bvalid(bvalid), .bready(bready),
         .araddr(araddr), .arvalid(arvalid), .arready(arready), .rdata(rdata), .rresp(rresp),
-        .rvalid(rvalid), .rready(rready), .run_drained(run_drained), .run_enabled(run_enabled),
+        .rvalid(rvalid), .rready(rready), .pps_in(1'b0), .run_drained(run_drained), .run_enabled(run_enabled),
         .run_finished(run_finished), .capture_quiescent(capture_quiescent), .sample_read(sample_read), .interrupt_line(interrupt_line),
         .cycle_number(cycle_number), .sample_value(sample_value), .safe_interrupt(safe_interrupt),
         .total_misses(total_misses), .overflow_count(overflow_count), .counter_ticks(counter_ticks),

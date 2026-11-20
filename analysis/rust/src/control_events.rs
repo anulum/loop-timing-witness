@@ -13,13 +13,19 @@
 //! `event_stream.decode_events`, in its order for each record: reserved bits,
 //! a code of the selected profile, a cycle inside the run, monotonic time and
 //! cycle order, and one event of each kind per cycle.
+//!
+//! A profile's reference events, such as the CONTROL profile's pulse per second,
+//! are records that the fabric writes into a slot no cycle event claims, with
+//! the reference's own sequence number in the cycle field. They are checked on
+//! their own, as in `event_stream.decode_stream`: zero reserved bits, then a
+//! sequence number and counter value above the previous edge of the same kind.
 
 use crate::control_number::Num;
 use serde_json::Value;
 use std::cmp::Ordering;
 
 /// Bytes of one event record.
-const RECORD: usize = 16;
+pub(crate) const RECORD: usize = 16;
 
 /// One timestamp captured by the fabric witness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +34,17 @@ pub(crate) struct Event {
     pub(crate) code: u8,
     /// Zero-based control or compute cycle.
     pub(crate) cycle: u32,
+    /// Free-running fabric counter value, in clock ticks.
+    pub(crate) ticks: u64,
+}
+
+/// One edge of an external time reference, timestamped by the fabric witness.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Edge {
+    /// Event code, naming the reference through the measurement domain.
+    pub(crate) code: u8,
+    /// The reference's own edge count when this edge arrived.
+    pub(crate) sequence: u32,
     /// Free-running fabric counter value, in clock ticks.
     pub(crate) ticks: u64,
 }
@@ -58,13 +75,23 @@ impl Names {
     }
 }
 
-/// Decode and validate the complete binary event file of one profile.
+/// Decode and validate the complete binary event file of one profile, returning its cycle events.
 pub(crate) fn decode(
     content: &[u8],
     contracts: &Value,
     profile: &str,
     cycle_count: Num,
 ) -> Result<Vec<Event>, String> {
+    decode_stream(content, contracts, profile, cycle_count).map(|(events, _)| events)
+}
+
+/// Decode and validate the complete binary event file of one profile, cycle and reference records apart.
+pub(crate) fn decode_stream(
+    content: &[u8],
+    contracts: &Value,
+    profile: &str,
+    cycle_count: Num,
+) -> Result<(Vec<Event>, Vec<Edge>), String> {
     if !content.len().is_multiple_of(RECORD) {
         return Err("event file is not a whole number of 16-byte records".to_owned());
     }
@@ -72,6 +99,7 @@ pub(crate) fn decode(
         return Err("event file is empty".to_owned());
     }
     let allowed = allowed(contracts, profile);
+    let references = references(contracts, profile);
     let names = Names::of(contracts);
     let admitted = Admitted {
         names: &names,
@@ -80,10 +108,21 @@ pub(crate) fn decode(
         cycle_count,
     };
     let mut events = Vec::with_capacity(content.len() / RECORD);
+    let mut edges = Vec::new();
+    let mut latest: [Option<Edge>; 256] = [None; 256];
     let mut seen = [false; 256];
     let (mut previous_ticks, mut previous_cycle): (Option<u64>, Option<u32>) = (None, None);
     let (records, _) = content.as_chunks::<RECORD>();
     for (index, record) in records.iter().enumerate() {
+        if let Some(name) = names
+            .get(record[0])
+            .filter(|name| references.contains(name))
+        {
+            let edge = reference_edge(index, record, name, &latest)?;
+            latest[usize::from(edge.code)] = Some(edge);
+            edges.push(edge);
+            continue;
+        }
         let Event { code, cycle, ticks } = admitted.event(index, record)?;
         if previous_ticks.is_some_and(|previous| ticks < previous)
             || previous_cycle.is_some_and(|previous| cycle < previous)
@@ -103,7 +142,45 @@ pub(crate) fn decode(
         events.push(Event { code, cycle, ticks });
         (previous_ticks, previous_cycle) = (Some(ticks), Some(cycle));
     }
-    Ok(events)
+    Ok((events, edges))
+}
+
+/// The reference event names the profile admits; the member is optional.
+fn references<'a>(contracts: &'a Value, profile: &str) -> Vec<&'a str> {
+    contracts["event_profiles"][profile]
+        .get("reference_events")
+        .map_or_else(Vec::new, |list| {
+            list.as_array()
+                .expect("schema-checked array")
+                .iter()
+                .map(|name| name.as_str().expect("schema-checked string"))
+                .collect()
+        })
+}
+
+/// Decode one reference record with zero reserved bits, after the previous edge of its kind.
+fn reference_edge(
+    index: usize,
+    record: &[u8; RECORD],
+    name: &str,
+    latest: &[Option<Edge>; 256],
+) -> Result<Edge, String> {
+    if record[1..4] != [0, 0, 0] {
+        return Err(format!("event record {index}: reserved bits must be zero"));
+    }
+    let edge = Edge {
+        code: record[0],
+        sequence: u32::from_le_bytes(record[4..8].try_into().expect("four bytes")),
+        ticks: u64::from_le_bytes(record[8..16].try_into().expect("eight bytes")),
+    };
+    if latest[usize::from(edge.code)]
+        .is_some_and(|previous| edge.sequence <= previous.sequence || edge.ticks <= previous.ticks)
+    {
+        return Err(format!(
+            "event record {index}: {name} order is not monotonic"
+        ));
+    }
+    Ok(edge)
 }
 
 /// The event names the profile admits, periodic before occasional.

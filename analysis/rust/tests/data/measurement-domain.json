@@ -14,6 +14,7 @@
       "INPUT_WRITE": 8,
       "INTERRUPT_ENTRY": 12,
       "OUTPUT_READ": 11,
+      "PPS": 18,
       "SAFE_STATE": 5,
       "SAMPLE_READ": 2,
       "SAMPLE_READY": 1
@@ -108,6 +109,9 @@
           "SAMPLE_READ",
           "ACT_WRITE",
           "DEADLINE"
+        ],
+        "reference_events": [
+          "PPS"
         ],
         "sample_rate_hz": {
           "default": 1000,

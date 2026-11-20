@@ -10,6 +10,7 @@
 // All command and fault inputs belong to capture_clock and hold through its edge.
 // reference_mode and reference_amplitude must be unchanged over the edge before a sample.
 // enable must stay high until stop_after_cycle closes the requested final cycle.
+// pps_in is the asynchronous pulse-per-second reference that control_plant_witness records.
 module fabric_control_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter logic [31:0] MISS_LIMIT = 32'd3,
@@ -46,6 +47,7 @@ module fabric_control_witness #(
     input logic [1:0] reference_mode,
     input logic signed [31:0] reference_amplitude, reference_offset, ramp_increment,
     input logic [3:0] phase_increment,
+    input logic pps_in,
     output logic buffer_full, capture_active, sample_valid, sample_interrupt, delayed_interrupt,
     output logic [31:0] cycle_number, delayed_cycle,
     output logic signed [31:0] sample_value, velocity, reference_value, actuator_value,
@@ -109,6 +111,7 @@ module fabric_control_witness #(
         .reference_offset(reference_offset),
         .ramp_increment(ramp_increment),
         .phase_increment(phase_increment),
+        .pps_in(pps_in),
         .buffer_full(buffer_full),
         .capture_active(capture_active),
         .sample_valid(sample_valid),

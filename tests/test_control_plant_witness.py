@@ -75,6 +75,105 @@ def test_integrated_plant_faults_and_host_reports(
     _check_mirrors(mirrors, events, fault)
 
 
+def test_pps_reference_reaches_the_report(
+    run_rtl: RunRtl,
+    run_tool: RunTool,
+    make_rtl_run: MakeRtlRun,
+    tmp_path: Path,
+) -> None:
+    """Record a pulse beside the healthy run without changing any control record, then fit it.
+
+    Every rise of the testbench pulse becomes one PPS record with the counter value two captures
+    after the rise and consecutive sequence numbers; the control records equal those of the same
+    run without the pulse, so the reference never displaces or delays them. The public analysis
+    fits the simulated period exactly, which only checks the arithmetic: a simulated pulse has no
+    physical second.
+
+    Parameters
+    ----------
+    run_rtl
+        Public RTL compiler and simulator runner.
+    run_tool
+        Public CLI runner.
+    make_rtl_run
+        Simulation run manifest factory.
+    tmp_path
+        Bounded simulator and report directory.
+    """
+    period = 110000
+    run, manifest = make_rtl_run()
+    rises_file = tmp_path / "pps.txt"
+    result = run_rtl(
+        "control_plant_witness_tb",
+        {"FAULT": -1, "THERMAL": 0},
+        [
+            f"+EVENT_FILE={run / 'events.bin'}",
+            f"+TRACK_FILE={run / 'plant.csv'}",
+            f"+PPS_PERIOD={period}",
+            f"+PPS_FILE={rises_file}",
+        ],
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "CONTROL_PASS records=25" in result.stdout
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    baseline = run_rtl(
+        "control_plant_witness_tb",
+        {"FAULT": -1, "THERMAL": 0},
+        [f"+EVENT_FILE={plain / 'events.bin'}", f"+TRACK_FILE={plain / 'plant.csv'}"],
+    )
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    events = list(struct.iter_unpack("<BBHIQ", (run / "events.bin").read_bytes()))
+    rises = [int(line) for line in rises_file.read_text(encoding="utf-8").split()]
+    assert rises == [1000 + period * second for second in range(5)]
+    assert [event for event in events if event[0] == 18] == [
+        (18, 0, 0, second, rise + 2) for second, rise in enumerate(rises)
+    ]
+    assert [event for event in events if event[0] != 18] == list(
+        struct.iter_unpack("<BBHIQ", (plain / "events.bin").read_bytes())
+    )
+    with (run / "plant.csv").open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    _write_tracking(run, rows)
+    _declare_plant(manifest, -1, 0)
+    _bind_sources(run, manifest, tmp_path / "control_plant_witness_tb.vvp")
+    (run / "manifest.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+    output = tmp_path / "reports"
+    analysis = run_tool("analyze_run", str(run / "manifest.json"), "--output-dir", str(output))
+    assert analysis.returncode == 0, analysis.stderr
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    _check_plant_report(report, -1)
+    assert report["events"]["event_count"] == 20
+    assert report["reference_timebase"] == {
+        "event": "PPS",
+        "edges": 5,
+        "first_sequence": 0,
+        "last_sequence": 4,
+        "missing_edges": 0,
+        "ticks_per_second": float(period),
+        "scale_error_ppm": (period - 100_000_000) / 100_000_000 * 1_000_000.0,
+        "scale_standard_error_ppm": 0.0,
+        "residual_rms_ticks": 0.0,
+        "max_abs_residual_ticks": 0.0,
+    }
+
+
+def test_pps_edges_wait_for_free_slots_and_gaps_show_lost_edges(run_rtl: RunRtl) -> None:
+    """Hold the drain until a pulse edge must wait and the next one is not recorded.
+
+    The self-checking testbench also requires that a pulse already high at the reset's release
+    is not an edge and that no reference loss counts as capture overflow.
+
+    Parameters
+    ----------
+    run_rtl
+        Public RTL compiler and simulator runner.
+    """
+    result = run_rtl("pps_reference_tb", {}, [])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PPS_PASS records=6" in result.stdout
+
+
 def _check_mirrors(path: Path, events: list[tuple[int, ...]], fault: int) -> None:
     """Require each mirror edge on the edge that records its event.
 

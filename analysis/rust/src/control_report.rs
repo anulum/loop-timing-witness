@@ -16,10 +16,11 @@
 
 use crate::amp_report_completion::attach_amp_completion;
 use crate::control_analysis::{Row, events_block, full_control, whole};
-use crate::control_events::{Event, Names, decode};
+use crate::control_events::{Event, Names, RECORD, decode_stream};
 use crate::control_manifest::Failure;
 use crate::control_number::{Num, python_number};
 use crate::control_receipts::{completion_statistics, host_load, native_metadata, python_equal};
+use crate::control_reference::reference_timebase;
 use crate::control_series::{energy_per_cycle, observed_tracking_error, tracking_error};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -59,7 +60,11 @@ pub(crate) fn build_report(
         .expect("schema-checked profile");
     let cycle_count = Num::of(&manifest["cycle_count"]);
     let warmup = Num::of(&manifest["warmup_cycles"]);
-    let events = decode(&files["events"], contracts, profile, cycle_count)?;
+    let (events, edges) = decode_stream(&files["events"], contracts, profile, cycle_count)?;
+    let pulses: Vec<_> = edges
+        .into_iter()
+        .filter(|edge| names.get(edge.code) == Some("PPS"))
+        .collect();
     let (mut summary, rows) = events_block(manifest, contracts, &events)?;
     let (cycles, first) = (
         u64::try_from(whole(cycle_count)).unwrap_or(u64::MAX),
@@ -76,6 +81,13 @@ pub(crate) fn build_report(
     let complete = python_equal(&anchors(&summary, &window), &summary["cycle_count"]);
     let mut report = report_object(manifest, contracts, complete, tracking, energy);
     report.insert("events".to_owned(), std::mem::take(&mut summary));
+    let clock = contracts["timebase"]["clock_hz"]
+        .as_f64()
+        .expect("schema-checked clock frequency");
+    report.insert(
+        "reference_timebase".to_owned(),
+        reference_timebase(&pulses, clock),
+    );
     attach_completion(manifest, contracts, files, &events, &names, &mut report)?;
     attach_amp_completion(manifest, contracts, files, directory, &events, &mut report)?;
     attach_host_load(manifest, files, &mut report)?;
@@ -324,7 +336,9 @@ fn attach_completion(
             .iter()
             .filter(|event| names.get(event.code) == Some("SAMPLE_READ"))
             .count();
-        let result = completion_statistics(content, manifest, events.len(), &control, reads)?;
+        // The native drain counts every record it took from the fabric, reference records too.
+        let records = files["events"].len() / RECORD;
+        let result = completion_statistics(content, manifest, records, &control, reads)?;
         report.insert("native_completion".to_owned(), result);
         report["input_sha256"]
             .as_object_mut()

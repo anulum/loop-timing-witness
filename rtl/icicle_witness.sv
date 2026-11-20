@@ -17,7 +17,7 @@ module icicle_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter bit THERMAL = 0
 ) (
-    input logic bus_clock, capture_clock, capture_clock_locked, run_reset_n,
+    input logic bus_clock, capture_clock, capture_clock_locked, run_reset_n, pps_in,
     input logic [37:0] awaddr,
     input logic awvalid,
     output logic awready,
@@ -59,7 +59,7 @@ module icicle_witness #(
         .awaddr(awaddr[12:0]), .awvalid(awvalid), .awready(awready),
         .wdata(wdata), .wstrb(wstrb), .wvalid(wvalid), .wready(wready),
         .bresp(bresp), .bvalid(bvalid), .bready(bready),
-        .araddr(araddr[12:0]), .arvalid(arvalid), .arready(arready),
+        .araddr(araddr[12:0]), .arvalid(arvalid), .arready(arready), .pps_in(pps_in),
         .rdata(rdata), .rresp(rresp), .rvalid(rvalid), .rready(rready),
         .interrupt_line(interrupt_line),
         .sample_ready_mirror(sample_ready_mirror), .actuator_write_mirror(actuator_write_mirror),

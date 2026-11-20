@@ -89,7 +89,7 @@ module control_io_registers_tb #(
         .command_cycle(command_cycle), .command_value(command_value), .fault_arm(fault_arm),
         .fault_kind(fault_kind), .fault_cycle(fault_cycle), .fault_periods(fault_periods), .reference_mode(reference_mode),
         .reference_amplitude(reference_amplitude), .reference_offset(reference_offset), .ramp_increment(ramp_increment),
-        .phase_increment(phase_increment), .sample_valid(sample_valid), .cycle_number(cycle_number),
+        .phase_increment(phase_increment), .pps_in(1'b0), .sample_valid(sample_valid), .cycle_number(cycle_number),
         .sample_value(sample_value), .velocity(velocity), .reference_value(reference_value),
         .actuator_value(actuator_value), .safe_interrupt(safe_interrupt), .total_misses(total_misses),
         .overflow_count(overflow_count), .counter_ticks(counter_ticks), .run_finished(run_finished),

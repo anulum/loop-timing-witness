@@ -21,7 +21,7 @@ power readings and physical safe-state acceptance remain planned.
 
 ## Ports and configuration
 
-All inputs except `drain_request` are synchronous to `capture_clock`; drain inputs and outputs
+All inputs except `drain_request` and the asynchronous `pps_in` are synchronous to `capture_clock`; drain inputs and outputs
 belong to `drain_clock`. `run_reset_n` asynchronously asserts the common run reset; each domain
 releases it after two local edges. A reset flushes events, plant state, monitor and injection.
 `capture_active` marks local reset release. `control_cycle.sv` owns the sample period,
@@ -337,6 +337,26 @@ full downstream FIFO drops and counts each serialized record. Both contribute on
 Any loss invalidates the host run. No source is stalled and no dropped event is recreated.
 The FIFO uses the existing common-reset CDC contract. Neither group serialization nor RAM
 inference establishes a 100 MHz board timing result.
+
+## Pulse-per-second reference
+
+`pps_in` takes an external pulse-per-second reference, such as a GNSS receiver's timing output,
+so that the host analysis can measure the counter's rate against it. Two capture-clock synchroniser
+stages and an edge register follow the pin; they reset high, so a pulse that is already high when
+the run reset releases is not an edge. From that release until the run finishes, each rising edge
+increments a 32-bit sequence number and its counter value is held as one record: code 18 (`PPS`,
+the `CONTROL` profile's reference event in the measurement domain), the edge's sequence number in
+the cycle field and the counter value of the cycle in which the edge register sees the rise, two
+capture periods after the second stage takes the new level. The record enters the event FIFO on an
+edge where no capture record is valid, so a control event is never displaced or delayed by it; a
+reference record may therefore follow capture records with later counter values. An edge that
+arrives while the previous record still waits is counted in the sequence but not recorded, so the
+host sees the gap, and no reference loss enters `overflow_count`. The run is quiescent only when no
+reference record waits. In simulation and the native programs the input stays low.
+[`tests/rtl/pps_reference_tb.sv`](../tests/rtl/pps_reference_tb.sv) holds the drain until an edge
+waits and the next is lost, and the plant testbench's `+PPS_PERIOD` run gives the same control
+records as the run without the pulse. The host decoding and fit are in
+[`HOST_ANALYSIS.md`](HOST_ANALYSIS.md#pulse-per-second-reference-timebase).
 
 ## Reproduce
 

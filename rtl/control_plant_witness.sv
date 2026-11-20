@@ -18,6 +18,14 @@
 // clock-to-output delay apart: sample_ready_mirror and actuator_write_mirror toggle on every
 // SAMPLE_READY and ACT_WRITE event, and safe_state_mirror rises with SAFE_STATE and holds the
 // latched safe state. A run reset clears all three.
+// pps_in is an asynchronous pulse-per-second reference. Two capture-clock synchroniser stages and
+// an edge register follow it, so each rising edge is timestamped two to three capture periods
+// after it reaches the pin, the same latency for every edge. From the run reset's release until the
+// run finishes, every rising edge counts in a sequence number, and its counter value waits as one
+// 16-byte record, code 18 (PPS) with the sequence number in the cycle field, for a write slot that
+// no capture record claims: the reference never displaces or delays a control event. An edge that
+// arrives while the previous one still waits is not recorded, and the gap in the sequence numbers
+// shows it. The synchroniser resets high, so a pulse already high at the release is not an edge.
 module control_plant_witness #(
     parameter logic [31:0] PERIOD_TICKS = 32'd100000,
     parameter logic [31:0] MISS_LIMIT = 32'd3,
@@ -45,6 +53,7 @@ module control_plant_witness #(
     input logic [1:0] reference_mode,
     input logic signed [31:0] reference_amplitude, reference_offset, ramp_increment,
     input logic [3:0] phase_increment,
+    input logic pps_in,
     output logic buffer_full, capture_active, sample_valid, sample_interrupt, delayed_interrupt,
     output logic [31:0] cycle_number, delayed_cycle,
     output logic signed [31:0] sample_value, velocity, reference_value, actuator_value,
@@ -66,6 +75,12 @@ module control_plant_witness #(
     logic [255:0] event_cycles;
     logic record_valid, record_ready;
     logic [127:0] record;
+    (* ASYNC_REG = "TRUE" *) logic [1:0] pps_stage;
+    logic pps_previous, pps_valid;
+    logic [31:0] pps_sequence;
+    logic [127:0] pps_record;
+    wire pps_rising = pps_stage[1] && !pps_previous && !finished;
+    wire pps_taken = pps_valid && !record_valid && record_ready;
     logic actuator_accept;
     clock_reset_release capture_reset (
         .clock(capture_clock), .run_reset_n(run_reset_n), .local_reset_n(reset_n)
@@ -77,7 +92,26 @@ module control_plant_witness #(
     assign run_finished = finished;
     always_ff @(posedge capture_clock or negedge reset_n) begin
         if (!reset_n) capture_quiescent <= 1'b0;
-        else capture_quiescent <= finished && !record_valid && event_mask == 0;
+        else capture_quiescent <= finished && !record_valid && !pps_valid && event_mask == 0;
+    end
+    always_ff @(posedge capture_clock or negedge reset_n) begin
+        if (!reset_n) begin
+            pps_stage <= 2'b11;
+            pps_previous <= 1'b1;
+            pps_sequence <= '0;
+            pps_valid <= 1'b0;
+            pps_record <= '0;
+        end else begin
+            pps_stage <= {pps_stage[0], pps_in};
+            pps_previous <= pps_stage[1];
+            if (pps_rising) pps_sequence <= pps_sequence + 1'b1;
+            if (pps_rising && (!pps_valid || pps_taken)) begin
+                pps_valid <= 1'b1;
+                pps_record <= {counter_ticks, pps_sequence, 24'd0, 8'd18};
+            end else if (pps_taken) begin
+                pps_valid <= 1'b0;
+            end
+        end
     end
     always_ff @(posedge capture_clock or negedge reset_n) begin
         if (!reset_n) begin
@@ -135,8 +169,9 @@ module control_plant_witness #(
         .record(record), .record_ready(record_ready), .overflow_count(overflow_count)
     );
     event_record_fifo #(.ADDRESS_BITS(ADDRESS_BITS)) buffer (
-        .write_clock(capture_clock), .write_reset_n(reset_n), .write_valid(record_valid),
-        .write_data(record), .write_ready(record_ready), .write_full(buffer_full),
+        .write_clock(capture_clock), .write_reset_n(reset_n), .write_valid(record_valid || pps_valid),
+        .write_data(record_valid ? record : pps_record), .write_ready(record_ready),
+        .write_full(buffer_full),
         .read_clock(drain_clock), .read_reset_n(drain_reset_n), .read_request(drain_request),
         .read_valid(drain_valid), .read_data(drain_record), .read_empty(drain_empty)
     );

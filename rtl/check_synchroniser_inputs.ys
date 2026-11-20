@@ -29,3 +29,6 @@ select -assert-count 1 w:reset_control.capture_reset_ready %ci2 t:* %i
 select -assert-count 1 w:reset_control.capture_reset_ready %ci2 t:$adff %i
 select -assert-count 1 w:reset_control.capture_reset_allowed %ci2 t:* %i
 select -assert-count 1 w:reset_control.capture_reset_allowed %ci2 t:$adff %i
+# The asynchronous pulse-per-second input drives the first synchroniser stage and nothing else.
+select -assert-count 1 w:pps_in %co1 t:* %i
+select -assert-count 1 w:pps_in %co1 t:$adff %i

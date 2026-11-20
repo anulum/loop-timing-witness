@@ -69,6 +69,7 @@ sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:sample_ready_mirror} -port_name {WITNESS_SAMPLE_READY}
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:actuator_write_mirror} -port_name {WITNESS_ACT_WRITE}
 sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:safe_state_mirror} -port_name {WITNESS_SAFE_STATE}
+sd_connect_pin_to_port -sd_name {FIC_0_PERIPHERALS} -pin_name {icicle_witness_0:pps_in} -port_name {WITNESS_PPS}
 generate_component -component_name {FIC_0_PERIPHERALS} -recursive 0
 sd_update_instance -sd_name ${top_level_name} -instance_name {FIC_0_PERIPHERALS_1}
 # The base design ties MSS fabric-to-processor interrupts 11 to 58 low; bit 11 becomes the witness interrupt
@@ -112,9 +113,10 @@ sd_update_instance -sd_name ${top_level_name} -instance_name {CLOCKS_AND_RESETS}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_CLK"     "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_CLK"}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"CLOCKS_AND_RESETS:WITNESS_CAPTURE_LOCK"    "FIC_0_PERIPHERALS_1:WITNESS_CAPTURE_LOCK"}
 sd_connect_pins -sd_name ${top_level_name} -pin_names {"FIC_0_PERIPHERALS_1:WITNESS_IRQ" "MSS_WRAPPER_1:MSS_INT_F2M_11"}
-# The event mirrors leave the device on the three pins that LOOP_TIMING_WITNESS.pdc fixes.
-foreach witness_mirror {WITNESS_SAMPLE_READY WITNESS_ACT_WRITE WITNESS_SAFE_STATE} {
-    sd_connect_pin_to_port -sd_name ${top_level_name} -pin_name "FIC_0_PERIPHERALS_1:$witness_mirror" -port_name $witness_mirror
+# The event mirrors leave the device, and the pulse-per-second reference enters it, on the four
+# pins that LOOP_TIMING_WITNESS.pdc fixes.
+foreach witness_pin {WITNESS_SAMPLE_READY WITNESS_ACT_WRITE WITNESS_SAFE_STATE WITNESS_PPS} {
+    sd_connect_pin_to_port -sd_name ${top_level_name} -pin_name "FIC_0_PERIPHERALS_1:$witness_pin" -port_name $witness_pin
 }
 generate_component -component_name ${top_level_name} -recursive 0
 

@@ -30,11 +30,21 @@ COMBINATIONAL = {
         (
             "    always_ff @(posedge capture_clock or negedge reset_n) begin\n"
             "        if (!reset_n) capture_quiescent <= 1'b0;\n"
-            "        else capture_quiescent <= finished && !record_valid && event_mask == 0;\n"
+            "        else capture_quiescent <= finished && !record_valid && !pps_valid"
+            " && event_mask == 0;\n"
             "    end\n"
         ),
-        "    assign capture_quiescent = reset_n && finished && !record_valid && event_mask == 0;\n",
+        (
+            "    assign capture_quiescent = reset_n && finished && !record_valid && !pps_valid\n"
+            "        && event_mask == 0;\n"
+        ),
         "w:window.capture_quiescent %ci2 t:$adff %i",
+    ),
+    "pulse per second": (
+        "rtl/control_plant_witness.sv",
+        "            pps_stage <= {pps_stage[0], pps_in};\n",
+        "            pps_stage <= {pps_stage[0], pps_in && !finished};\n",
+        "w:pps_in %co1 t:$adff %i",
     ),
     "reset permission": (
         "rtl/axi_control_witness.sv",
@@ -76,14 +86,15 @@ def test_production_synchroniser_inputs_are_registers() -> None:
 
 @pytest.mark.parametrize("variant", sorted(COMBINATIONAL))
 def test_combinational_synchroniser_input_is_refused(tmp_path: Path, variant: str) -> None:
-    """Refuse the earlier combinational form of each synchroniser input.
+    """Refuse a combinational form of each synchroniser input.
 
     Parameters
     ----------
     tmp_path
         Copy of the RTL tree holding the combinational variant.
     variant
-        Which synchroniser input returns to its combinational form.
+        Which synchroniser input takes a combinational form: an earlier one, or logic between
+        the pulse-per-second pin and its first synchroniser stage.
     """
     source, register, combinational, assertion = COMBINATIONAL[variant]
     shutil.copytree(REPOSITORY_ROOT / "rtl", tmp_path / "rtl")

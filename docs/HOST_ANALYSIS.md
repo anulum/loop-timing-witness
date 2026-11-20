@@ -121,6 +121,11 @@ simulation run. A CONTROL board run requires both files. A COMPUTE
 board run requires power and declares tracking as `null`. Missing data remains
 `unavailable` in the report; it is never substituted.
 
+A run may also declare `files.kernel_trace`, the kernel trace that a
+[trace stop](PLANT_WITNESS.md#kernel-trace-stop) ended, with its SHA-256. The analysis does not
+read the trace; it verifies its digest like every declared file and reports it among the input
+hashes, so the trace stays bound to the run whose deadline miss stopped it.
+
 ## Native simulation capture
 
 ```bash

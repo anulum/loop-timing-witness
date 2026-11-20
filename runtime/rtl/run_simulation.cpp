@@ -29,6 +29,7 @@ int main(int argc, char **argv) {
         if (options.metadata)
             witness::verify_digest(argv[1], original);
         const auto policy = witness::apply_host_policy(options);
+        const auto kernel = witness::read_kernel_context();
         witness::Simulation device;
         witness::RunOutput output(argv[2], argv[3]);
         const auto result = witness::execute_run(device, configuration, output);
@@ -42,7 +43,7 @@ int main(int argc, char **argv) {
         if (options.metadata)
             witness::write_run_metadata(options.metadata, configuration, result,
                                         witness::read_register(device, 0x6c) != 0, "rtl_simulation",
-                                        options, policy, artifacts);
+                                        options, policy, kernel, artifacts);
         std::cout << "simulation_only samples=" << result.samples << " records=" << result.records
                   << " misses=" << result.misses << " overflow=" << result.overflow
                   << " safe=" << result.safe << std::endl;

@@ -7,32 +7,12 @@
 // Loop Timing Witness — actual Linux scheduling API validation
 
 #include "../../runtime/linux/run_policy.h"
-#include <array>
+#include "system_call_answer.h"
 #include <cassert>
-#include <cstddef>
-#include <cstdint>
 #include <iostream>
-#include <linux/filter.h>
-#include <linux/seccomp.h>
 #include <limits>
 #include <string>
-#include <sys/prctl.h>
 #include <sys/syscall.h>
-
-/** Make the kernel answer one system call of this child with an errno without running it.
- *
- * An errno of zero skips the call and reports success, so the policy stays unchanged.
- */
-static void answer_system_call(long number, int error) {
-    std::array<sock_filter, 4> filter{
-        {BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(seccomp_data, nr)),
-         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, static_cast<std::uint32_t>(number), 0, 1),
-         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | static_cast<std::uint32_t>(error)),
-         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)}};
-    sock_fprog program{static_cast<unsigned short>(filter.size()), filter.data()};
-    assert(prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0);
-    assert(prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program) == 0);
-}
 
 /** Refuse invalid public options without changing the actual child-thread policy. */
 int main(int argc, char **argv) {

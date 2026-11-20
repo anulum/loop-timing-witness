@@ -214,7 +214,8 @@ RUNTIME_COVERAGE_SOURCES := runtime/exclusive_output.h runtime/run_configuration
 	runtime/run_options.h runtime/run_output.h runtime/linux/run_policy.h \
 	runtime/run_control.h runtime/run_metadata.h runtime/rtl/run_simulation.cpp \
 	runtime/rtl/simulation.h runtime/linux/file_digest.cpp runtime/process_protocol.h \
-	runtime/rtl/axi_simulator.cpp runtime/linux/power_configuration.cpp
+	runtime/rtl/axi_simulator.cpp runtime/linux/power_configuration.cpp \
+	runtime/linux/kernel_context.h
 RUNTIME_COVERAGE_TESTS := tests/test_axi_simulator.py tests/test_axi_transport_progress.py \
 	tests/test_host_load_receipt.py tests/test_legacy_analysis_api.py tests/test_linux_load.py \
 	tests/test_linux_load_api.py tests/test_linux_load_readiness_launch.py \
@@ -222,6 +223,7 @@ RUNTIME_COVERAGE_TESTS := tests/test_axi_simulator.py tests/test_axi_transport_p
 	tests/test_native_configuration.py tests/test_native_configuration_api.py \
 	tests/test_native_configuration_mutation.py tests/test_native_file_digest.py \
 	tests/test_native_final_drain.py tests/test_native_hash_mutation.py \
+	tests/test_native_kernel_context.py \
 	tests/test_native_late_command.py tests/test_native_lifecycle_api.py \
 	tests/test_native_metadata_api.py tests/test_native_policy_api.py tests/test_native_run.py \
 	tests/test_native_run_metadata.py tests/test_native_run_output.py \

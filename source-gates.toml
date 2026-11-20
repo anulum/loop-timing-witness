@@ -62,6 +62,7 @@ paths = [
     "runtime/rtl/axi_simulator.cpp",
     "runtime/rtl/run_simulation.cpp",
     "runtime/run_configuration.cpp",
+    "tests/native/kernel_context_api_test.cpp",
     "tests/native/policy_api_test.cpp",
     "tests/native/power_configuration_api_test.cpp",
     "tests/native/rtl_counter_saturation.cpp",
@@ -87,6 +88,7 @@ paths = [
     "runtime/linux/amp_uio_configuration.h",
     "runtime/linux/amp_uio_device.h",
     "runtime/linux/file_digest.h",
+    "runtime/linux/kernel_context.h",
     "runtime/linux/pac1934_device.h",
     "runtime/linux/power_configuration.h",
     "runtime/linux/power_journal.h",
@@ -103,6 +105,7 @@ paths = [
     "tests/native/configuration_api.h",
     "tests/native/metadata_api.h",
     "tests/native/output_limit.h",
+    "tests/native/system_call_answer.h",
 ]
 
 [profiles.linker]

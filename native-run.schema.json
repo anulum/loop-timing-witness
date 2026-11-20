@@ -230,6 +230,64 @@
         "safe"
       ]
     },
+    "host_kernel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "release": {
+          "type": "string",
+          "pattern": "^[ -!#-Z_-~]{1,64}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[ -!#-Z_-~]{1,64}$"
+        },
+        "realtime": {
+          "type": "boolean"
+        },
+        "isolated_cpus": {
+          "type": "string",
+          "pattern": "^([0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)?$"
+        },
+        "nohz_full_cpus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^([0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)?$"
+        },
+        "boot_parameters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(isolcpus|nohz|nohz_full|rcu_nocbs|rcu_nocb_poll|irqaffinity|kthread_cpus|preempt|threadirqs|skew_tick|idle|cpuidle\\.off|processor\\.max_cstate|intel_idle\\.max_cstate|nosoftlockup|nowatchdog|nmi_watchdog|clocksource|tsc|mitigations)(=[!#-Z_-~]{0,255})?$"
+          }
+        },
+        "locked_memory_kib": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999999999999
+        },
+        "cpu_dma_latency_us": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "release",
+        "version",
+        "realtime",
+        "isolated_cpus",
+        "nohz_full_cpus",
+        "boot_parameters",
+        "locked_memory_kib",
+        "cpu_dma_latency_us"
+      ]
+    },
     "host_policy": {
       "type": "object",
       "additionalProperties": false,

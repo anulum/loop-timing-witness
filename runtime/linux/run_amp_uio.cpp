@@ -49,6 +49,7 @@ int main(int argc, char **argv) {
             sensor = std::make_unique<witness::Pac1934Device>(power);
         }
         const auto policy = witness::apply_host_policy(options);
+        const auto kernel = witness::read_kernel_context();
         witness::AmpUioDevice device(resources.identity, resources.fabric, resources.mailbox);
         const auto startup = device.time();
         std::uint32_t abi = 0;
@@ -100,7 +101,7 @@ int main(int argc, char **argv) {
         if (options.metadata)
             witness::write_run_metadata(options.metadata, configuration, result,
                                         witness::read_register(device, 0x6c) != 0,
-                                        "amp_uio_unqualified", options, policy, artifacts);
+                                        "amp_uio_unqualified", options, policy, kernel, artifacts);
         std::cout << "amp_uio_unqualified samples=" << result.samples
                   << " records=" << result.records << " misses=" << result.misses
                   << " overflow=" << result.overflow << " safe=" << result.safe << std::endl;

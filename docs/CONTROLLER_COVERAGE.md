@@ -113,8 +113,8 @@ the judged sources:
 `runtime/exclusive_output.h`, `runtime/run_configuration.cpp`, `runtime/run_options.h`,
 `runtime/run_output.h`, `runtime/run_control.h`, `runtime/run_metadata.h`,
 `runtime/rtl/run_simulation.cpp`, `runtime/rtl/simulation.h`, `runtime/linux/file_digest.cpp`,
-`runtime/linux/run_policy.h`, `runtime/process_protocol.h`, `runtime/rtl/axi_simulator.cpp` and
-`runtime/linux/power_configuration.cpp`.
+`runtime/linux/run_policy.h`, `runtime/process_protocol.h`, `runtime/rtl/axi_simulator.cpp`,
+`runtime/linux/power_configuration.cpp` and `runtime/linux/kernel_context.h`.
 More runtime sources join the list as their scenarios land.
 Every executable line and every branch outcome must have run, with two exceptions:
 
@@ -200,12 +200,12 @@ changes this public table in the same commit, beside its reason in the list.
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/simulation.h` | 8 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_configuration.cpp` | 1 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_control.h` | 5 |
-| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_metadata.h` | 8 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_metadata.h` | 9 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_output.h` | 2 |
 | [`plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) | `runtime/isa/spike_amp_transport.h` | 3 |
 | [`plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) | `runtime/isa/spike_axi_device.cpp` | 14 |
 
-The runtime list holds 76 outcomes and the plugin list 17.
+The runtime list holds 77 outcomes and the plugin list 17.
 
 ## Compile instrumented public interfaces
 

@@ -18,6 +18,7 @@ void metadata_refusal(witness::Simulation &device, const witness::RunConfigurati
     const auto result = witness::execute_run(device, configuration, output);
     assert(result.samples == configuration.cycles && result.misses == 0);
     const auto policy = witness::read_host_policy();
+    const auto kernel = witness::read_kernel_context();
     const witness::RunOptions options;
     std::vector<witness::ArtifactDigest> artifacts{
         {"configuration", witness::file_digest(config_path)},
@@ -33,7 +34,8 @@ void metadata_refusal(witness::Simulation &device, const witness::RunConfigurati
             refusal(
                 [&] {
                     witness::write_run_metadata(path.c_str(), configuration, result, thermal,
-                                                "rtl_simulation", options, policy, artifacts);
+                                                "rtl_simulation", options, policy, kernel,
+                                                artifacts);
                 },
                 "cannot write native metadata");
         }
@@ -44,7 +46,7 @@ void metadata_refusal(witness::Simulation &device, const witness::RunConfigurati
         const auto resources = std::string(config_path) + ".amp-resources";
         artifacts.push_back({"amp_resources", witness::file_digest(resources.c_str())});
         witness::write_run_metadata(path.c_str(), configuration, result, thermal,
-                                    "amp_uio_unqualified", options, policy, artifacts);
+                                    "amp_uio_unqualified", options, policy, kernel, artifacts);
         return;
     }
     auto invalid = configuration;
@@ -61,10 +63,10 @@ void metadata_refusal(witness::Simulation &device, const witness::RunConfigurati
     refusal(
         [&] {
             witness::write_run_metadata(path.c_str(), invalid, result, thermal, "rtl_simulation",
-                                        options, policy, artifacts);
+                                        options, policy, kernel, artifacts);
         },
         message);
     assert(!std::filesystem::exists(path));
     witness::write_run_metadata(path.c_str(), configuration, result, thermal, "rtl_simulation",
-                                options, policy, artifacts);
+                                options, policy, kernel, artifacts);
 }

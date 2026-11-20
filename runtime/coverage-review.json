@@ -146,7 +146,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 40,
+      "line": 41,
       "outcome": 2,
       "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
       "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
@@ -154,7 +154,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 40,
+      "line": 41,
       "outcome": 3,
       "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
       "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
@@ -162,7 +162,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 62,
+      "line": 63,
       "outcome": 8,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -170,7 +170,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 62,
+      "line": 63,
       "outcome": 9,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -178,7 +178,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 62,
+      "line": 63,
       "outcome": 10,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -186,7 +186,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 62,
+      "line": 63,
       "outcome": 11,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -194,22 +194,22 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 52,
+      "line": 53,
       "outcome": 0,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
       "lines": [
-        56,
         57,
         58,
         59,
         60,
-        61
+        61,
+        62
       ]
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 52,
+      "line": 53,
       "outcome": 2,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
@@ -217,7 +217,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 52,
+      "line": 53,
       "outcome": 3,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
@@ -339,17 +339,17 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 63,
+      "line": 65,
       "outcome": 0,
       "condition": "fprintf of one artifact < 0",
       "reason": "the metadata stream is buffered: this fprintf only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": [
-        64
+        66
       ]
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 66,
+      "line": 68,
       "outcome": 3,
       "condition": "fputs closing the artifacts < 0",
       "reason": "the metadata stream is buffered: this fputs only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -357,7 +357,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 66,
+      "line": 68,
       "outcome": 4,
       "condition": "an artifact fprintf failed earlier",
       "reason": "the metadata stream is buffered: this fprintf only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -365,42 +365,50 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 77,
+      "line": 82,
       "outcome": 1,
       "condition": "a buffered write of the first section failed before fclose",
-      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": []
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 77,
+      "line": 82,
       "outcome": 3,
       "condition": "a buffered write of the artifacts failed before fclose",
-      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": []
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 77,
+      "line": 82,
       "outcome": 5,
       "condition": "a buffered write of the crypto library failed before fclose",
-      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": []
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 77,
+      "line": 82,
       "outcome": 7,
-      "condition": "a buffered write of the host policy failed before fclose",
-      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "condition": "a buffered write of the kernel context failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": []
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 77,
+      "line": 82,
       "outcome": 9,
+      "condition": "a buffered write of the host policy failed before fclose",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "lines": []
+    },
+    {
+      "file": "runtime/run_metadata.h",
+      "line": 82,
+      "outcome": 11,
       "condition": "a buffered write of the closing brace failed before fclose",
-      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
+      "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": []
     },
     {

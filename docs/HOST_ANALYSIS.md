@@ -137,6 +137,28 @@ original binary events, raw controller trace and
 controller coefficients, reference, full fault duration, overload work and completion counters.
 The producer checks event count, missed deadlines and run length against the decoded capture.
 Failed runs retain their artifacts; an existing output directory is refused.
+
+### Linux real-time context
+
+The native metadata also records `host_kernel`, the Linux real-time context the run started
+under, read once by [`kernel_context.h`](../runtime/linux/kernel_context.h) before the run
+acquires its device or outputs. It is a record of the host, not a timing qualification:
+
+| Field | Source | Meaning |
+|---|---|---|
+| `release`, `version` | `uname(2)` | Kernel release and build string; the build string names the preemption model, for example `PREEMPT_DYNAMIC` or `PREEMPT_RT`. |
+| `realtime` | `/sys/kernel/realtime` | True when the file reads `1` (a PREEMPT_RT kernel); false when it is absent. |
+| `isolated_cpus` | `/sys/devices/system/cpu/isolated` | CPUs isolated from the scheduler at boot, as a CPU list; empty when none. |
+| `nohz_full_cpus` | `/sys/devices/system/cpu/nohz_full` | CPUs in full dynamic tick mode; empty when none, null when the kernel has no full dynamic tick. |
+| `boot_parameters` | `/proc/cmdline` | The boot parameters with the keys `isolcpus`, `nohz`, `nohz_full`, `rcu_nocbs`, `rcu_nocb_poll`, `irqaffinity`, `kthread_cpus`, `preempt`, `threadirqs`, `skew_tick`, `idle`, `cpuidle.off`, `processor.max_cstate`, `intel_idle.max_cstate`, `nosoftlockup`, `nowatchdog`, `nmi_watchdog`, `clocksource`, `tsc` and `mitigations`, in boot order. |
+| `locked_memory_kib` | `VmLck` of `/proc/self/status` | Memory the run process had locked before the run. |
+| `cpu_dma_latency_us` | `/dev/cpu_dma_latency` | The current CPU latency PM QoS target in microseconds; null when the device cannot be opened, which is normal without root. Opening it adds a request at the default value, so reading constrains nothing. |
+
+The isolated CPU list, the command line and the process status must exist. Every source except
+the CPU latency device must be readable when it exists, and each must have its kernel format. A
+missing required source, an unreadable one, a malformed one, or recorded text outside printable
+ASCII or containing `"`, `\`, `[`, `]` or `^` refuses the run before it starts. The member is
+optional in the schema, so metadata written before it was added stays valid.
 Each capture also freezes the actual loaded parent project tools, Python package
 and packaged JSON contracts. Their original paths, resolved locations and SHA-256
 values are recorded in `producer_context.json`, alongside the Python interpreter,

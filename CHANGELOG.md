@@ -14,6 +14,16 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Native run metadata records `host_kernel`, the Linux real-time context of the run: kernel release
+  and build string, the PREEMPT_RT flag, isolated and full dynamic tick CPUs, the isolation, tick,
+  RCU, interrupt, preemption, idle, watchdog, clock source and mitigation boot parameters, the
+  process's locked memory and the current CPU latency PM QoS target. `runtime/linux/kernel_context.h`
+  reads it once before the run acquires its device or outputs, in the simulation, UIO and AMP UIO
+  programs, and refuses a missing, unreadable or malformed kernel source. The member is optional
+  in the native run schema, so earlier metadata stays valid; the shared receipt schema corpus and
+  the native coverage gate cover it, and `docs/HOST_ANALYSIS.md` lists every field and source. The
+  runtime's reviewed outcomes move with the shifted lines, and one is added: the buffered write of
+  the kernel context, whose failure happens at the checked `fclose` (77 runtime outcomes).
 - `container/Dockerfile`, a development and test container: Ubuntu 26.04 pinned by digest, the
   exact apt packages the workflows pin, Python 3.15.2, Rust 1.100.0 and Go 1.27.4, every download
   checked against its SHA-256 and run as an unprivileged user. `tests/test_container_definition.py`

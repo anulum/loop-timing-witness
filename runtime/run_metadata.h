@@ -14,6 +14,7 @@
 #define WITNESS_RUN_METADATA_H
 #include "run_control.h"
 #include "refusal.h"
+#include "linux/kernel_context.h"
 #include "linux/run_policy.h"
 #include "linux/file_digest.h"
 #include <openssl/crypto.h>
@@ -23,6 +24,7 @@ namespace witness {
 inline void write_run_metadata(const char *path, const RunConfiguration &config,
                                const RunResult &result, bool thermal, const char *kind,
                                const RunOptions &options, const HostPolicy &policy,
+                               const KernelContext &kernel,
                                const std::vector<ArtifactDigest> &artifacts) {
     validate_configuration(config);
     std::FILE *file = std::fopen(path, "wx");
@@ -71,10 +73,14 @@ inline void write_run_metadata(const char *path, const RunConfiguration &config,
             "\"runtime_version_number\": %llu},\n",
             static_cast<unsigned long long>(OPENSSL_VERSION_NUMBER),
             static_cast<unsigned long long>(OpenSSL_version_num())) < 0;
+    std::string kernel_member;
+    append_kernel_context_json(kernel_member, kernel);
+    const bool kernel_failed = std::fputs(kernel_member.c_str(), file) < 0;
     const bool policy_failed = write_host_policy(file, options, policy);
     const bool end_failed = std::fprintf(file, "}\n") < 0;
     const int status = std::fclose(file);
-    if (failed || artifact_failed || crypto_failed || policy_failed || end_failed || status)
+    if (failed || artifact_failed || crypto_failed || kernel_failed || policy_failed ||
+        end_failed || status)
         throw witness::RuntimeRefused("cannot write native metadata");
 }
 } // namespace witness

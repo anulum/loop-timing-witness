@@ -42,6 +42,23 @@ The 128-bit output is `{timebase_ticks[63:0], cycle[31:0], 16'd0, 8'd0, event_co
 Write its least significant byte first for the published 16-byte little-endian host format.
 The record payload is unspecified when `drain_valid` is low, including during reset.
 
+## What the witness adds to the measured path
+
+The witness adds no processor access and no bus transaction. In the `CONTROL` profile,
+`SAMPLE_READ` comes from the controller's own first read of the sample register (`0x00`) and
+`ACT_WRITE` from its own command commit (`0x30`): the register bank raises each strobe on the
+capture edge where it accepts that access
+([`control_io_registers.sv`](../rtl/control_io_registers.sv)), and the witness only timestamps
+it. Capture never back-pressures the source: the event input has no ready signal, and a full
+channel drops its newest record and counts the loss, which invalidates the run.
+
+What a controller access does cost is the crossing of
+[`axi_lite_clock_bridge.sv`](../rtl/axi_lite_clock_bridge.sv) from the bus clock into the capture
+clock, where the emulated plant and its registers run. Both processor placements reach the
+registers through it. The bus-offset calibration of the
+[architecture](ARCHITECTURE.md) measures that path as the instrument floor, which every latency
+table reports.
+
 ## Capacity and loss
 
 ### Shared-counter channels

@@ -65,6 +65,7 @@ The second part covers the controls needed for a qualified physical instrument.
 | Worker policy drift or premature exit | actual CPU/scheduler readback and owned-process exit status are verified; incomplete collection does not produce a completed load receipt |
 | Claiming more load than was observed | actual operation counters and worker/native time brackets remain bound to the capture; loopback UDP is not NIC traffic and fsync is not proof of uncached storage |
 | Closing a reused descriptor or signalling an unrelated process | owned pipe endpoints close once; production cleanup retains process-group leader identity until reaping; tracing tests retain owned pidfds and verify live parent relationships |
+| Arming or changing a fault during a run from a process that shares the register window | the fault registers (`0x58`–`0x64`) lie in the controller's 256-byte register window; [`run_configuration_registers.sv`](../rtl/run_configuration_registers.sv) accepts their writes only while the run is not started and no fault is armed, refuses them afterwards, and accepts one arm per common reset; the Linux UIO adapters hold an exclusive non-blocking `flock` on the device for the whole run |
 | Accepting a foreign device or writing over evidence | adapters check actual kernel device identity, ownership and ABI before use; native output files are created exclusively |
 | Substituting a development dependency | `pip install --require-hashes` refuses any file whose hash is not in the lock; the licence guard refuses a package or version without a reviewed record |
 | Tampering with a workflow towards write authority | top-level permissions must be empty, the only allowed write scope is code-scanning upload, write-authority workflows are refused, actions must be commit-pinned, privileged triggers are refused |
@@ -84,8 +85,13 @@ fails a gate whose tool is missing, cannot run or is not the pinned version.
 - The Go-built tools are verified by module version and checksum recorded in the binary; the Go
   toolchain that reads that record is itself trusted.
 - The licence record is a reviewed statement, not an automatic legal analysis.
-- No cryptographic signing of commits or of the manifest exists yet. Hashes establish byte
+- Commits and run manifests are not signed. Release tags and the published source assets are
+  ([source release signatures](SOURCE_RELEASE_SIGNATURES.md)). Elsewhere hashes establish byte
   identity, not authentication against an actor who can edit the artefact and its declaration.
+- The UIO lock is advisory. A process that opens the device without taking it, or root through
+  `/dev/mem`, can still write the register window: before start it can arm a fault or change the
+  run configuration, and during a run it can issue controller accesses. The fault registers
+  share the controller's page, so page protection cannot separate them.
 - Workload and executable bounds do not reserve a CPU or exclude other host jobs. Processes with
   the same privileges can alter scheduling or files; actual refusal tests establish specific
   guards, not isolation from a compromised local user.

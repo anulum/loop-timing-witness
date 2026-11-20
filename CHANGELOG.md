@@ -32,6 +32,15 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The threat model covers the fault-injection registers in the controller's register window: the
+  hardware accepts their writes only before start and before an arm, and refuses them afterwards;
+  the UIO lock that keeps other processes out is advisory, now a stated residual risk. Its residual
+  on signatures now says that release tags and source assets are signed and commits and run
+  manifests are not.
+- `docs/FABRIC_WITNESS.md` states what the witness adds to the measured path: no processor access
+  and no back-pressure, with `SAMPLE_READ` and `ACT_WRITE` taken from the controller's own register
+  accesses; the bus-to-capture clock crossing that those accesses pay is the instrument floor of
+  the bus-offset calibration.
 - Every hosted workflow runs on `ubuntu-26.04` (25 jobs, before `ubuntu-24.04`), with the Ubuntu
   26.04 toolchain pinned:
   - GCC 15.2 for native code and `riscv64-linux-gnu-gcc-15` 15.2 for the RV64 firmware;

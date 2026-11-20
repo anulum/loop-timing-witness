@@ -22,6 +22,7 @@ Loop Timing Witness — README
 [![Typed Python](https://img.shields.io/badge/python-typed-blue.svg)](https://github.com/anulum/loop-timing-witness/blob/main/src/loop_timing_witness/py.typed)
 [![Codecov](https://codecov.io/gh/anulum/loop-timing-witness/branch/main/graph/badge.svg)](https://app.codecov.io/github/anulum/loop-timing-witness)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/anulum/loop-timing-witness/badge)](https://scorecard.dev/viewer/?uri=github.com/anulum/loop-timing-witness)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15127/badge)](https://www.bestpractices.dev/projects/15127)
 
 The coverage badge describes Python host/tool reports. Native and RTL proof scopes
 are documented in the [coverage guide](https://github.com/anulum/loop-timing-witness/blob/main/docs/CONTROLLER_COVERAGE.md).

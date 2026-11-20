@@ -283,6 +283,12 @@ _FIXED_CELLS: Final = (
 )
 
 
+# Values whose zero runs exceed the interpreter's 4300-digit integer-string limit. They stay out of
+# the random operand pool, so the random operations keep their committed values, and form one
+# operation of their own with a fixed divisor.
+_LONG_ZERO_CELLS: Final = ("1" + "0" * 4400 + "e-4400", "0." + "0" * 4400 + "1e4401")
+
+
 def _cells(generator: _Values) -> list[str]:
     """Return measurement cells covering every form, bound and refusal.
 
@@ -319,7 +325,8 @@ def _measurements(generator: _Values) -> tuple[list[dict[str, Any]], list[Decima
     Returns
     -------
     tuple[list[dict[str, Any]], list[Decimal]]
-        Cases in cell order, and the admitted values in the same order.
+        Cases in cell order, then the long zero-run cells, and the admitted values of the
+        ordinary cells in the same order.
     """
     measurements: list[dict[str, Any]] = []
     values: list[Decimal] = []
@@ -331,6 +338,10 @@ def _measurements(generator: _Values) -> tuple[list[dict[str, Any]], list[Decima
         else:
             measurements.append({"cell": _packed(cell), "value": _canonical(value)})
             values.append(value)
+    measurements.extend(
+        {"cell": _packed(cell), "value": _canonical(measurement(cell, "value"))}
+        for cell in _LONG_ZERO_CELLS
+    )
     return measurements, values
 
 
@@ -347,7 +358,8 @@ def _operations(generator: _Values, values: list[Decimal]) -> list[dict[str, Any
     Returns
     -------
     list[dict[str, Any]]
-        The rounding-tie pairs, then the random pairs, with their results.
+        The rounding-tie pairs, then the random pairs, then the long zero-run pair, with their
+        results.
     """
     ties = [
         (Decimal(1234567890123456789012345678), Decimal("0.5")),
@@ -359,22 +371,40 @@ def _operations(generator: _Values, values: list[Decimal]) -> list[dict[str, Any
         (Decimal(0), Decimal(0)),
     ]
     pairs = ties + [(generator.choice(values), generator.choice(values)) for _ in range(40)]
-    operations = []
-    for left, right in pairs:
-        divisor = generator.choice([1, 2, 3, 7, 10, 1000003, 2**53 + 1, 2**64 - 1])
-        operations.append(
-            {
-                "left": _canonical(left),
-                "right": _canonical(right),
-                "divisor": divisor,
-                "sum": _canonical(left + right),
-                "difference": _canonical(left - right),
-                "product": _canonical(left * right),
-                "quotient": _canonical(abs(left) / divisor),
-                "float": float(abs(left) / divisor),
-            }
-        )
+    operations = [
+        _operation(left, right, generator.choice([1, 2, 3, 7, 10, 1000003, 2**53 + 1, 2**64 - 1]))
+        for left, right in pairs
+    ]
+    long_left, long_right = (measurement(cell, "value") for cell in _LONG_ZERO_CELLS)
+    operations.append(_operation(long_left, long_right, 3))
     return operations
+
+
+def _operation(left: Decimal, right: Decimal, divisor: int) -> dict[str, Any]:
+    """Return the exact sum, difference, product and quotient of one value pair.
+
+    Parameters
+    ----------
+    left, right
+        Operands.
+    divisor
+        Integer divisor of the left operand's magnitude.
+
+    Returns
+    -------
+    dict[str, Any]
+        Operands and results in canonical form, and the quotient as a float.
+    """
+    return {
+        "left": _canonical(left),
+        "right": _canonical(right),
+        "divisor": divisor,
+        "sum": _canonical(left + right),
+        "difference": _canonical(left - right),
+        "product": _canonical(left * right),
+        "quotient": _canonical(abs(left) / divisor),
+        "float": float(abs(left) / divisor),
+    }
 
 
 def _decimal_cases(generator: _Values) -> dict[str, Any]:

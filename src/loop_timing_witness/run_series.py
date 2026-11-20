@@ -185,10 +185,13 @@ def measurement(value: str, field: str) -> Decimal:
     if not digits:
         return Decimal("-0" if negative else "0")
     shift = _decimal_shift(exponent, whole, fraction, len(digits), field)
-    # Built from its digits, as Decimal(value) represents it, so that no implementation
-    # of the decimal module converts a long run of leading zeros to an integer.
-    coefficient = tuple(int(digit) for digit in (whole + fraction).lstrip("0"))
-    return Decimal((int(negative), coefficient, shift - len(fraction)))
+    # Built from the significant digits only, the trailing zeros moved into the exponent, as the
+    # Rust reader builds it. Every admitted value then has at most 28 coefficient digits, so no
+    # implementation of the decimal module converts a long run of leading or trailing zeros to an
+    # integer; the pure-Python module would meet the interpreter's integer-string limit there.
+    trailing = len(whole + fraction) - len((whole + fraction).rstrip("0"))
+    coefficient = tuple(int(digit) for digit in digits)
+    return Decimal((int(negative), coefficient, shift - len(fraction) + trailing))
 
 
 def tracking_error(

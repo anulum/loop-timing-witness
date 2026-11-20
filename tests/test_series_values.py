@@ -10,11 +10,16 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from decimal import Decimal
 
 import pytest
 
+from conftest import REPOSITORY_ROOT
 from loop_timing_witness.host_load_receipt import validate_host_load
+from loop_timing_witness.host_profile import scaled
 from loop_timing_witness.native_completion import completion_statistics
 from loop_timing_witness.run_series import count, measurement, tracking_error
 from loop_timing_witness.tracking_observations import observed_tracking_error
@@ -46,6 +51,40 @@ def test_measurement_accepts_plain_values_in_range(text: str, value: Decimal) ->
         Expected exact value.
     """
     assert measurement(text, "output") == value
+
+
+def test_long_zero_runs_compute_without_the_c_decimal_module() -> None:
+    """Values with more than 4300 leading or trailing zeros compute under the pure-Python module.
+
+    A CPython built without libmpdec imports the pure-Python decimal module, which converts a
+    coefficient to an integer for arithmetic and so meets the interpreter's 4300-digit limit. Each
+    admitted value keeps only its significant digits, so a child interpreter that cannot import
+    the C module reads both values as 1 and computes with them; the former constructor kept the
+    trailing zeros and failed there.
+    """
+    code = (
+        "import sys\n"
+        "sys.modules['_decimal'] = None\n"
+        "sys.modules.pop('decimal', None)\n"
+        "import decimal, _pydecimal\n"
+        "assert decimal.Decimal is _pydecimal.Decimal\n"
+        "from loop_timing_witness.run_series import measurement\n"
+        "for text in ('1' + '0' * 4400 + 'e-4400', '0.' + '0' * 4400 + '1e4401'):\n"
+        "    value = measurement(text, 'output')\n"
+        "    assert value.as_tuple().digits == (1,)\n"
+        "    assert value * value + value == 2\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(REPOSITORY_ROOT / "src")}
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=scaled(60),
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

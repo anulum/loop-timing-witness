@@ -179,6 +179,12 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- Series values keep only their significant digits, with trailing zeros moved into the exponent as
+  the Rust reader stores them. A value with more than 4300 trailing zeros (`1` followed by 4400
+  zeros and `e-4400`) used to keep them, and under a CPython without the C decimal module its first
+  arithmetic stopped at the interpreter's 4300-digit integer-string limit; the C module and the
+  Rust reader computed it. The shared series corpus gains two such values and one operation, kept
+  out of the random operand pool so every other case stays as committed.
 - The AMP build toolchain and simulator identities admit the loader's record of the listed
   program itself. On the hosted `ubuntu-26.04` runner, glibc 2.43's `ld.so --list` begins with a
   nameless record at the listed program's load address, which was refused as an unresolved

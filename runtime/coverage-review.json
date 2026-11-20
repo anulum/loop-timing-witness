@@ -225,7 +225,7 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 55,
+      "line": 74,
       "outcome": 5,
       "condition": "AWVALID without AWREADY at a rising bus edge",
       "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds AWREADY high (rtl/axi_lite_clock_bridge.sv: awready = reset_n && !address_held && !write_outstanding), so the request is accepted at the first rising bus edge",
@@ -233,7 +233,7 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 56,
+      "line": 75,
       "outcome": 3,
       "condition": "WVALID without WREADY at a rising bus edge",
       "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds WREADY high (rtl/axi_lite_clock_bridge.sv: wready = reset_n && !data_held && !write_outstanding), so the request is accepted at the first rising bus edge",
@@ -241,7 +241,7 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 57,
+      "line": 76,
       "outcome": 3,
       "condition": "ARVALID without ARREADY at a rising bus edge",
       "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds ARREADY high (rtl/axi_lite_clock_bridge.sv: arready = reset_n && !read_held && !read_outstanding), so the request is accepted at the first rising bus edge",
@@ -249,48 +249,32 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 58,
-      "outcome": 3,
-      "condition": "BVALID without BREADY at a rising bus edge",
-      "reason": "the simulation raises BREADY with the request and lowers it only at the B handshake, and the bridge holds BVALID only until that handshake",
-      "lines": []
-    },
-    {
-      "file": "runtime/rtl/simulation.h",
-      "line": 59,
-      "outcome": 3,
-      "condition": "RVALID without RREADY at a rising bus edge",
-      "reason": "the simulation raises RREADY with the request and lowers it only at the R handshake, and the bridge holds RVALID only until that handshake",
-      "lines": []
-    },
-    {
-      "file": "runtime/rtl/simulation.h",
-      "line": 69,
+      "line": 88,
       "outcome": 0,
       "condition": "context.gotFinish() during a transaction",
       "reason": "no production RTL module calls $finish; the check guards a model that ends itself",
       "lines": [
-        70
+        89
       ]
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 103,
+      "line": 137,
       "outcome": 1,
       "condition": "AXI read not answered within the transaction limit",
       "reason": "the production bridge answers every read, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
       "lines": [
-        115
+        149
       ]
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 127,
+      "line": 161,
       "outcome": 1,
       "condition": "AXI write not answered within the transaction limit",
       "reason": "the production bridge answers every write, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
       "lines": [
-        143
+        177
       ]
     },
     {

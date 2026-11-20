@@ -30,9 +30,28 @@ struct Edge {
     std::uint32_t data;
 };
 
+/** Initial values of the model's variables, chosen before the model is built.
+ *
+ * Mode 0 starts every variable without an initial value at zero, as Verilator does by default;
+ * mode 2 draws them from the seed, which with a model built with `--x-initial unique` and
+ * `--x-assign unique` shows whether any result depends on an uninitialised value.
+ */
+struct SimulationOptions {
+    int random_reset = 0; ///< Verilator rand-reset mode: 0 zeros, 1 all ones, 2 random.
+    int seed = 0;         ///< Seed of the random values in mode 2.
+};
+
 /** Deterministic 7 ns bus and 5 ns capture half-periods, with real CDC logic. */
 class Simulation {
-    VerilatedContext context;
+    /** A Verilator context set up before the model it serves is built. */
+    struct Context : VerilatedContext {
+        /** Apply the initial-value options. */
+        explicit Context(const SimulationOptions &options) {
+            randReset(options.random_reset);
+            randSeed(options.seed);
+        }
+    };
+    Context context;
     Vaxi_control_witness model{&context};
     /** Whether the model was evaluated after its last input or clock change. */
     bool settled = false;
@@ -72,8 +91,23 @@ class Simulation {
     }
 
   public:
-    /** Assert the external common reset and release both actual clock domains. */
-    Simulation() {
+    /** Assert the external common reset and release both actual clock domains.
+     *
+     * Every input starts idle, as an AXI master drives ARVALID, AWVALID and WVALID low during
+     * reset, so no transaction depends on the model's initial values.
+     */
+    explicit Simulation(const SimulationOptions &options = {}) : context(options) {
+        model.bus_clock = 0;
+        model.capture_clock = 0;
+        model.awaddr = 0;
+        model.awvalid = 0;
+        model.wdata = 0;
+        model.wstrb = 0;
+        model.wvalid = 0;
+        model.bready = 0;
+        model.araddr = 0;
+        model.arvalid = 0;
+        model.rready = 0;
         model.run_reset_n = 0;
         model.eval();
         advance(140);

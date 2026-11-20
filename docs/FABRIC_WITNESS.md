@@ -200,6 +200,16 @@ host tests bind the sources, compiled simulation and binary stream by SHA-256, c
 periods and 20-tick loop latency, and mark an actual overflow stream invalid. Those values are
 test schedules, not board performance claims.
 
+`make fifo-invariants` (run by `tests/test_fifo_proof.py`) checks the buffer at two records with
+Yosys, the write and read clocks free so that `clk2fflogic` explores every interleaving of their
+edges, from one asynchronous reset of both domains. Shadow counts of accepted writes and reads
+give the true occupancy: the buffer never accepts a write when full and never accepts a read when
+empty, and a record chosen freely by its write index is read back unchanged and in order. The
+check is bounded: it covers every trace of 30 steps from reset, which hold four writes and four
+reads, so both pointers complete one wrap. The data check follows data bit 0, which stands for
+every bit because the memory writes and reads whole words at one address. Its negation, that the
+buffer never fills, yields a counterexample.
+
 Generic synthesis must retain one 128-bit by 16,384 dual-clock memory at default capacity.
 Post-optimisation equivalence uses a small FIFO configuration with memory mapping and
 `async2sync` normalisation before comparing the prepared and synthesised designs. That proof

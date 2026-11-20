@@ -93,6 +93,9 @@ def _verilator_command(
     ]
     return [
         *("verilator", "--cc", "--exe", "--build", "--Wall"),
+        # Unassigned and X values come from the context's rand-reset mode, so a scenario can
+        # start the model from random initial values; mode 0 keeps them at zero.
+        *("--x-assign", "unique", "--x-initial", "unique"),
         *(["--coverage-line"] if rtl_coverage else []),
         *("--top-module", "axi_control_witness", "-j", "2"),
         *("-GPERIOD_TICKS=32768", "-GADDRESS_BITS=5", "-GGROUP_ADDRESS_BITS=4"),
@@ -144,6 +147,53 @@ def lifecycle_program(
         )
         assert result.returncode == 0, result.stdout + result.stderr
     return directory / "run_lifecycle_test"
+
+
+def test_random_initial_values_change_no_result(lifecycle_program: Path, tmp_path: Path) -> None:
+    """A run from random initial values gives the same events, trace and result as from zeros.
+
+    The model is built with ``--x-assign unique --x-initial unique``; seed 0 starts every variable
+    without an initial value at zero, seeds 1 to 4 draw them at random. The common reset must
+    define every state that reaches an output, so all five runs agree byte for byte.
+
+    Parameters
+    ----------
+    lifecycle_program
+        Native test linked directly to the actual production RTL model.
+    tmp_path
+        Exclusive configuration and run outputs.
+    """
+    config = tmp_path / "run.conf"
+    config.write_text(configuration("pid", "drop").replace("pid 32", "pid 64"), encoding="utf-8")
+    outcomes = []
+    for seed in range(5):
+        events, raw = tmp_path / f"events-{seed}.bin", tmp_path / f"raw-{seed}.csv"
+        result = subprocess.run(
+            [str(lifecycle_program), f"x_initial_{seed}", str(config), str(events), str(raw)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=scaled(60),
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.stdout.endswith(f"verified x_initial_{seed}\n")
+        outcomes.append(
+            (result.stdout.splitlines()[0].encode(), events.read_bytes(), raw.read_bytes())
+        )
+    # The drop fault removes one sample and misses its deadline, from zeros and from every seed.
+    assert outcomes[0][0].startswith(b"samples=63 records=")
+    assert outcomes[0][0].endswith(b" misses=1 overflow=0 safe=0")
+    for seed, outcome in enumerate(outcomes[1:], start=1):
+        for part, (got, want) in zip(
+            ("result", "events", "trace"), zip(outcome, outcomes[0], strict=True), strict=True
+        ):
+            offset = next(
+                (i for i, (a, b) in enumerate(zip(got, want, strict=False)) if a != b),
+                min(len(got), len(want)),
+            )
+            assert got == want, (
+                f"seed {seed}: {part} differs from offset {offset} ({len(got)} vs {len(want)} long)"
+            )
 
 
 @pytest.mark.parametrize(

@@ -14,6 +14,14 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `make fifo-invariants` checks the dual-clock event buffer with free write and read clocks over
+  every interleaving of 30 steps from reset (four writes and four reads, one wrap of both
+  pointers): no write when full, no read when empty, and a freely chosen record read back
+  unchanged and in order; the never-full negation yields a counterexample.
+- `witness::SimulationOptions` selects the model's initial values (Verilator rand-reset mode and
+  seed). The lifecycle corpus, built with `--x-assign unique --x-initial unique`, runs one
+  configuration from zeros and from four random seeds and requires byte-identical events, trace
+  and result.
 - `loop_timing_witness.energy_sweep` separates each rail's static power from the marginal energy
   per cycle: from run reports of one placement at three or more cycle rates and one temperature,
   a least-squares line `P = P0 + E_dyn·f` with standard errors and `r²`, refusing mixed placements,
@@ -248,6 +256,12 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- The RTL simulation wrapper starts every model input idle before the first evaluation. It set
+  only the reset input, so with random initial values the bus handshake inputs, which an AXI
+  master must hold low during reset, started random and a spurious transaction was refused; the
+  random-initial-value test found it. Two reviewed outcomes of `runtime/rtl/simulation.h` (a write
+  or read response without the matching ready during reset) now run in that test and leave the
+  list (75 runtime outcomes).
 - The Rust analysis matches schema patterns without recursion. The former matcher took a few stack
   frames per repeated character and aborted the native analysis with a stack overflow on a manifest
   string of about 5,000 characters, which Python refused or accepted normally; the differential

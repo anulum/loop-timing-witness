@@ -228,9 +228,20 @@ int main(int argc, char **argv) {
     if (argc != 5)
         return 1;
     const auto configuration = witness::read_configuration(argv[2]);
-    witness::Simulation device;
     const std::string scenario = argv[1];
-    if (scenario == "run_timeout" || scenario == "final_drain_timeout") {
+    // x_initial_<seed>: seed 0 starts from zeros, any other seed from random initial values.
+    const bool x_initial = scenario.compare(0, 10, "x_initial_") == 0;
+    witness::SimulationOptions options;
+    options.seed = x_initial ? std::stoi(scenario.substr(10)) : 0;
+    options.random_reset = options.seed ? 2 : 0;
+    witness::Simulation device(options);
+    if (x_initial) {
+        witness::RunOutput output(argv[3], argv[4]);
+        const auto result = witness::execute_run(device, configuration, output);
+        std::cout << "samples=" << result.samples << " records=" << result.records
+                  << " misses=" << result.misses << " overflow=" << result.overflow
+                  << " safe=" << result.safe << '\n';
+    } else if (scenario == "run_timeout" || scenario == "final_drain_timeout") {
         timed_out_run(device, configuration, scenario, argv[3], argv[4]);
     } else if (scenario == "commit_boundary") {
         boundary_commit(device, configuration, argv[3], argv[4]);

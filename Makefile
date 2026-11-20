@@ -505,6 +505,34 @@ safe-state-invariants:
 		> "$(SAFE_STATE_DIRECTORY)/negative.log" 2>&1 || exit $$?
 	grep -Fq 'SAT proof finished - model found: FAIL!' "$(SAFE_STATE_DIRECTORY)/negative.log"
 
+FIFO_PROOF_DIRECTORY ?= build/fifo-invariants
+FIFO_PROOF_SOURCES := rtl/event_record_fifo.sv tests/formal/event_record_fifo_proof.sv
+FIFO_PROOF_FLOW := prep -top event_record_fifo_proof; flatten; memory_map; opt; clk2fflogic; opt; check -assert
+
+# The dual-clock event buffer at two records, with the write and read clocks free (clk2fflogic),
+# checked from reset over every interleaving of FIFO_PROOF_DEPTH steps of clock events: its
+# occupancy rules, and the watched record's data and order. Thirty steps hold four writes and four
+# reads, so both two-bit pointers complete one wrap; a fifth read needs more steps.
+# The negative control, which asserts that the buffer never fills, must yield a counterexample.
+FIFO_PROOF_DEPTH ?= 30
+.PHONY: fifo-invariants
+fifo-invariants:
+	mkdir -p "$(FIFO_PROOF_DIRECTORY)"
+	yosys -Q -T -p "read_verilog -formal -sv $(FIFO_PROOF_SOURCES); \
+		chparam -set ADDRESS_BITS 1 -set CHECK_DATA 0 event_record_fifo_proof; $(FIFO_PROOF_FLOW); \
+		sat -seq $(FIFO_PROOF_DEPTH) -prove-asserts -verify -timeout $(SAT_TIMEOUT)" \
+		> "$(FIFO_PROOF_DIRECTORY)/occupancy.log" 2>&1
+	yosys -Q -T -p "read_verilog -formal -sv $(FIFO_PROOF_SOURCES); \
+		chparam -set ADDRESS_BITS 1 -set CHECK_DATA 1 event_record_fifo_proof; $(FIFO_PROOF_FLOW); \
+		sat -seq $(FIFO_PROOF_DEPTH) -prove-asserts -verify -timeout $(SAT_TIMEOUT)" \
+		> "$(FIFO_PROOF_DIRECTORY)/data.log" 2>&1
+	yosys -Q -T -p "read_verilog -formal -sv $(FIFO_PROOF_SOURCES); \
+		chparam -set ADDRESS_BITS 1 -set CHECK_DATA 0 -set NEGATIVE_CONTROL 1 event_record_fifo_proof; \
+		$(FIFO_PROOF_FLOW); sat -seq $(FIFO_PROOF_DEPTH) -prove-asserts -timeout $(SAT_TIMEOUT) \
+		-dump_json $(FIFO_PROOF_DIRECTORY)/counterexample.json" \
+		> "$(FIFO_PROOF_DIRECTORY)/negative.log" 2>&1
+	grep -Fq 'SAT proof finished - model found: FAIL!' "$(FIFO_PROOF_DIRECTORY)/negative.log"
+
 .PHONY: rtl-invariants
 rtl-invariants:
 	mkdir -p "$(RTL_INVARIANT_DIRECTORY)"

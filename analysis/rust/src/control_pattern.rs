@@ -19,6 +19,12 @@
 //! `\S` excludes exactly the characters for which Python's `str.isspace` is true,
 //! and `\d` matches every character for which `str.isdecimal` is true, not only
 //! the ASCII digits.
+//!
+//! A compiled pattern is a small instruction program that a breadth-first simulation runs
+//! over the text: every start position at once, each instruction at most once per position,
+//! and no recursion over the text. Whether a match exists anywhere, the only question a
+//! schema asks, is the same as for Python's backtracking search, and the time and stack
+//! needed grow with the text length times the program length, not with nesting depth.
 
 use crate::control_text::{python_decimal, python_space};
 
@@ -47,9 +53,30 @@ struct Piece {
     maximum: Option<usize>,
 }
 
-/// A compiled schema pattern: its alternative sequences.
+/// One instruction of a compiled pattern.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Pattern(Vec<Vec<Piece>>);
+enum Instruction {
+    /// Continue only at the start of the text.
+    Start,
+    /// Continue only at the end of the text, or before one final newline.
+    End,
+    /// Consume one character from inclusive ranges.
+    Class(Vec<(char, char)>),
+    /// Consume one character that Python does not treat as whitespace.
+    NotSpace,
+    /// Consume one character that Python treats as a decimal digit.
+    Digit,
+    /// Continue at both targets.
+    Split(usize, usize),
+    /// Continue at the target.
+    Jump(usize),
+    /// A match exists.
+    Match,
+}
+
+/// A compiled schema pattern: its instruction program.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Pattern(Vec<Instruction>);
 
 impl Pattern {
     /// Compile one pattern of the supported subset.
@@ -60,13 +87,154 @@ impl Pattern {
         if position != characters.len() {
             return Err(unsupported(text));
         }
-        Ok(Self(found))
+        let mut program = Vec::new();
+        emit_alternatives(&found, &mut program);
+        program.push(Instruction::Match);
+        Ok(Self(program))
     }
 
     /// Tell whether the pattern matches anywhere in the text, as `re.search` does.
     pub(crate) fn search(&self, text: &str) -> bool {
         let characters: Vec<char> = text.chars().collect();
-        (0..=characters.len()).any(|start| any_of(&self.0, &characters, start, &mut |_| true))
+        let mut seen = vec![usize::MAX; self.0.len()];
+        let mut threads = Vec::new();
+        for position in 0..=characters.len() {
+            if self.add(0, position, &characters, &mut seen, &mut threads) {
+                return true;
+            }
+            let mut following = Vec::new();
+            for &thread in &threads {
+                let consumed =
+                    characters
+                        .get(position)
+                        .is_some_and(|&character| match &self.0[thread] {
+                            Instruction::Class(ranges) => ranges
+                                .iter()
+                                .any(|&(low, high)| (low..=high).contains(&character)),
+                            Instruction::NotSpace => !python_space(character),
+                            _ => python_decimal(character),
+                        });
+                if consumed
+                    && self.add(
+                        thread + 1,
+                        position + 1,
+                        &characters,
+                        &mut seen,
+                        &mut following,
+                    )
+                {
+                    return true;
+                }
+            }
+            threads = following;
+        }
+        false
+    }
+
+    /// Follow every non-consuming instruction from one, at one position, collecting the
+    /// consuming instructions reached; tell whether `Match` is reached.
+    fn add(
+        &self,
+        first: usize,
+        position: usize,
+        characters: &[char],
+        seen: &mut [usize],
+        threads: &mut Vec<usize>,
+    ) -> bool {
+        let mut pending = vec![first];
+        while let Some(index) = pending.pop() {
+            if seen[index] == position {
+                continue;
+            }
+            seen[index] = position;
+            match &self.0[index] {
+                Instruction::Start => {
+                    if position == 0 {
+                        pending.push(index + 1);
+                    }
+                }
+                Instruction::End => {
+                    if position == characters.len()
+                        || (position + 1 == characters.len() && characters[position] == '\n')
+                    {
+                        pending.push(index + 1);
+                    }
+                }
+                Instruction::Split(first_target, second_target) => {
+                    pending.push(*second_target);
+                    pending.push(*first_target);
+                }
+                Instruction::Jump(target) => pending.push(*target),
+                Instruction::Match => return true,
+                _ => threads.push(index),
+            }
+        }
+        false
+    }
+}
+
+/// Emit alternative sequences: each but the last behind a split, each ending at one join.
+fn emit_alternatives(found: &[Vec<Piece>], program: &mut Vec<Instruction>) {
+    let mut jumps = Vec::new();
+    for (index, pieces) in found.iter().enumerate() {
+        let split = program.len();
+        if index + 1 < found.len() {
+            program.push(Instruction::Split(split + 1, 0));
+        }
+        for piece in pieces {
+            emit_piece(piece, program);
+        }
+        if index + 1 < found.len() {
+            jumps.push(program.len());
+            program.push(Instruction::Jump(0));
+            let next = program.len();
+            program[split] = Instruction::Split(split + 1, next);
+        }
+    }
+    let join = program.len();
+    for jump in jumps {
+        program[jump] = Instruction::Jump(join);
+    }
+}
+
+/// Emit one piece: its required copies, then a loop or its optional copies.
+fn emit_piece(piece: &Piece, program: &mut Vec<Instruction>) {
+    for _ in 0..piece.minimum {
+        emit_atom(&piece.atom, program);
+    }
+    match piece.maximum {
+        None => {
+            let split = program.len();
+            program.push(Instruction::Split(split + 1, 0));
+            emit_atom(&piece.atom, program);
+            program.push(Instruction::Jump(split));
+            let after = program.len();
+            program[split] = Instruction::Split(split + 1, after);
+        }
+        Some(maximum) => {
+            let mut splits = Vec::new();
+            for _ in piece.minimum..maximum {
+                splits.push(program.len());
+                program.push(Instruction::Split(program.len() + 1, 0));
+                emit_atom(&piece.atom, program);
+            }
+            let after = program.len();
+            for split in splits {
+                program[split] = Instruction::Split(split + 1, after);
+            }
+        }
+    }
+}
+
+/// Emit one atom.
+fn emit_atom(atom: &Atom, program: &mut Vec<Instruction>) {
+    match atom {
+        Atom::Start => program.push(Instruction::Start),
+        Atom::End => program.push(Instruction::End),
+        Atom::Class(ranges) => program.push(Instruction::Class(ranges.clone())),
+        Atom::NotSpace => program.push(Instruction::NotSpace),
+        Atom::Digit => program.push(Instruction::Digit),
+        Atom::Group(inner) => emit_alternatives(inner, program),
     }
 }
 
@@ -207,92 +375,6 @@ fn number(text: &str, pattern: &str) -> Result<usize, String> {
         return Err(unsupported(pattern));
     }
     text.parse().map_err(|_| unsupported(pattern))
-}
-
-/// Match any alternative, as Python's backtracking tries each, and continue.
-fn any_of(
-    found: &[Vec<Piece>],
-    characters: &[char],
-    position: usize,
-    rest: &mut dyn FnMut(usize) -> bool,
-) -> bool {
-    found
-        .iter()
-        .any(|pieces| matches(pieces, characters, position, &mut *rest))
-}
-
-/// Match pieces from one position and pass the end position to the continuation.
-fn matches(
-    pieces: &[Piece],
-    characters: &[char],
-    position: usize,
-    rest: &mut dyn FnMut(usize) -> bool,
-) -> bool {
-    let Some((piece, tail)) = pieces.split_first() else {
-        return rest(position);
-    };
-    repeat(piece, 0, characters, position, &mut |end| {
-        matches(tail, characters, end, rest)
-    })
-}
-
-/// Match one piece greedily between its bounds, backtracking through the continuation.
-fn repeat(
-    piece: &Piece,
-    count: usize,
-    characters: &[char],
-    position: usize,
-    rest: &mut dyn FnMut(usize) -> bool,
-) -> bool {
-    if (piece.minimum, piece.maximum) == (1, Some(1)) {
-        return once(&piece.atom, characters, position, rest);
-    }
-    if piece.maximum.is_none_or(|maximum| count < maximum) {
-        let advanced = once(&piece.atom, characters, position, &mut |end| {
-            end != position && repeat(piece, count + 1, characters, end, rest)
-        });
-        if advanced {
-            return true;
-        }
-    }
-    count >= piece.minimum && rest(position)
-}
-
-/// Match one atom once from a position.
-fn once(
-    atom: &Atom,
-    characters: &[char],
-    position: usize,
-    rest: &mut dyn FnMut(usize) -> bool,
-) -> bool {
-    match atom {
-        Atom::Start => position == 0 && rest(position),
-        Atom::End => {
-            let at_end = position == characters.len()
-                || (position + 1 == characters.len() && characters[position] == '\n');
-            at_end && rest(position)
-        }
-        Atom::Class(ranges) => {
-            characters.get(position).is_some_and(|&character| {
-                ranges
-                    .iter()
-                    .any(|&(low, high)| (low..=high).contains(&character))
-            }) && rest(position + 1)
-        }
-        Atom::NotSpace => {
-            characters
-                .get(position)
-                .is_some_and(|&character| !python_space(character))
-                && rest(position + 1)
-        }
-        Atom::Digit => {
-            characters
-                .get(position)
-                .is_some_and(|&character| python_decimal(character))
-                && rest(position + 1)
-        }
-        Atom::Group(inner) => any_of(inner, characters, position, rest),
-    }
 }
 
 #[cfg(test)]

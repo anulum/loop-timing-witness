@@ -1043,3 +1043,37 @@ fn digits_and_escaped_dots_follow_python() {
         assert_eq!(version.search(text), expected, "{text:?}");
     }
 }
+
+#[test]
+fn texts_far_longer_than_any_stack_are_searched_as_python_searches() {
+    // CPython 3.15 `re.search` gives these outcomes; the former recursive matcher used a few
+    // stack frames per repeated character and overflowed a test thread's stack near 5,000.
+    let letters = "a".repeat(100_000);
+    let mut digit_last = "x".repeat(50_000);
+    digit_last.push('5');
+    let mut path_last = "a".repeat(20_000);
+    path_last.push('!');
+    for (pattern, text, expected) in [
+        ("^[a-z]*$", letters.as_str(), true),
+        ("[0-9]$", digit_last.as_str(), true),
+        ("^[A-Za-z0-9][A-Za-z0-9._/-]*$", path_last.as_str(), false),
+    ] {
+        let compiled = Pattern::compile(pattern).expect("supported pattern");
+        assert_eq!(compiled.search(text), expected, "{pattern}");
+    }
+}
+
+#[test]
+fn empty_iterations_count_towards_the_minimum_as_in_python() {
+    // CPython 3.15 `re.search` outcomes.
+    for (pattern, text, expected) in [
+        ("^(a?){2}$", "", true),
+        ("^(a?){2}$", "a", true),
+        ("^(a?){2,3}$", "aaa", true),
+        ("^(a?){2,3}$", "aaaa", false),
+        ("^(|a){3}b$", "b", true),
+    ] {
+        let compiled = Pattern::compile(pattern).expect("supported pattern");
+        assert_eq!(compiled.search(text), expected, "{pattern} on {text:?}");
+    }
+}

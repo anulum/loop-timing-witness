@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Differential mutation fuzzing of the run input readers (`tests/test_run_input_fuzz.py`): each case
+  mutates one bound input of a real Icarus capture with seeded byte and text changes, re-declares its
+  digest and requires the same outcome from the Python and Rust analyses. A fixed-seed batch runs in
+  the test suite; the fuzzing workflow gains a job with 200 cases per profile on push and 5,000 on
+  schedule, keeping the inputs of any differing case. 6,000 cases passed after the fix below.
 - `loop_timing_witness.control_reference` computes the default benchmark loops in float64 from the
   unquantized design values, and finds the exact steady period of a recorded fixed-point loop. The
   long RTL trajectory test now compares each default loop with it: the largest output and command
@@ -205,6 +210,13 @@ Loop Timing Witness — changelog
 
 ### Fixed
 
+- The Rust analysis matches schema patterns without recursion. The former matcher took a few stack
+  frames per repeated character and aborted the native analysis with a stack overflow on a manifest
+  string of about 5,000 characters, which Python refused or accepted normally; the differential
+  fuzzer found it. Patterns now compile to a small instruction program run breadth-first over the
+  text, so time and stack no longer grow with nesting. Repetitions that may match empty now count
+  towards a minimum as in Python (`^(a?){2}$` matches the empty text); no committed schema pattern
+  has such a repetition.
 - Series values keep only their significant digits, with trailing zeros moved into the exponent as
   the Rust reader stores them. A value with more than 4300 trailing zeros (`1` followed by 4400
   zeros and `e-4400`) used to keep them, and under a CPython without the C decimal module its first

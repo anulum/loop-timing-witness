@@ -90,10 +90,11 @@
       "category": 8,
       "file": "controller-fuzz.yml",
       "jobs": [
-        "campaign"
+        "campaign",
+        "run-inputs"
       ],
       "kind": "standalone",
-      "owner": "bounded coverage-guided sanitizer fuzzing of the public controller with retained crash inputs"
+      "owner": "bounded coverage-guided sanitizer fuzzing of the public controller and differential mutation fuzzing of the run input readers, with retained failing inputs"
     },
     {
       "category": 8,

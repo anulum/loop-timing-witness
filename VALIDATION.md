@@ -42,6 +42,22 @@ truthfulness of the `architecture_only` state.
 
 ## Environment
 
+The [`container/Dockerfile`](container/Dockerfile) definition reproduces this environment away
+from the hosted runners: Ubuntu 26.04 pinned by image digest, the exact apt packages the
+workflows pin, Python 3.15.2 (python-build-standalone 20261026), Rust 1.100.0 with the CI
+components and targets, and Go 1.27.4. Each download is checked against its recorded SHA-256
+before use, and `tests/test_container_definition.py` keeps every pin equal to the workflows'.
+It runs as the image's unprivileged `ubuntu` user. A run that needs a real-time priority passes
+it in, as the hosted step does with `prlimit`:
+
+```bash
+docker build -t loop-timing-witness-dev container
+docker run --rm --ulimit rtprio=1:1 -v "$PWD":/work loop-timing-witness-dev make venv preflight
+```
+
+On a host slower than the reference profile, set `WITNESS_HOST_TIMEOUT_SCALE` (see
+[Host-derived limits](#host-derived-limits)).
+
 - Python 3.15 in `.venv`, created by `make venv` from `requirements-dev.txt`, which pins every
   development package with its hashes and is installed with `pip install --require-hashes`.
   PyYAML publishes no CPython 3.15 wheel, so it is built from its hashed source distribution

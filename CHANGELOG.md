@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `container/Dockerfile`, a development and test container: Ubuntu 26.04 pinned by digest, the
+  exact apt packages the workflows pin, Python 3.15.2, Rust 1.100.0 and Go 1.27.4, every download
+  checked against its SHA-256 and run as an unprivileged user. `tests/test_container_definition.py`
+  keeps its pins equal to the workflows', and `VALIDATION.md` shows how to build and use it.
 - Differential mutation fuzzing of the run input readers (`tests/test_run_input_fuzz.py`): each case
   mutates one bound input of a real Icarus capture with seeded byte and text changes, re-declares its
   digest and requires the same outcome from the Python and Rust analyses. A fixed-seed batch runs in

@@ -14,6 +14,10 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `docs/MEASUREMENT_PROTOCOL.md` has a GUM uncertainty budget: the timebase scale from the Icicle
+  Kit's 50 MHz reference oscillator (±10 ppm with temperature and supply, ±5 ppm first-year aging,
+  from its data sheet), the event phase behind the two-stage request synchroniser (`T/√12` per
+  processor end), the calibrated bus offset and oscillator jitter, combined for each interval kind.
 - `make safe-state-invariants` proves the deadline monitor's safe-state rules by temporal induction
   for miss limits 1, 3 and 255: the latch sets only on a missed deadline completing `MISS_LIMIT`
   consecutive misses, a latched monitor has counted at least that many misses, the consecutive count

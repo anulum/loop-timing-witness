@@ -143,6 +143,49 @@ required by the board procedure. Formats and validation are in
 [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md); register snapshots, reset custody and final drain are in
 [`PLANT_WITNESS.md`](PLANT_WITNESS.md).
 
+## Uncertainty budget
+
+The budget follows the [Guide to the expression of uncertainty in measurement](https://doi.org/10.59161/JCGM100-2008E)
+(GUM): each component is a standard uncertainty, a bounded component of half-width `a` with no
+preferred value inside the bound counts as rectangular (`a/√3`), and independent components
+combine in quadrature. `T` is the capture period, 10 ns. Board values marked as measured come from
+the acceptance tests and are reported with every result; no board has been measured yet.
+
+**Timebase scale.** The 64-bit counter runs on the 100 MHz capture clock that `WITNESS_CCC` derives
+from the Icicle Kit's 50 MHz fabric reference oscillator X5, a DSC1001DL5-050.0000
+([Icicle Kit User Guide DS60001679E](https://www.microchip.com/en-us/development-tool/mpfs-icicle-kit-es),
+section 3.13). Its frequency tolerance is ±10 ppm, including initial tolerance, temperature and
+supply voltage, and its aging ±5 ppm in the first year at +25 °C
+([DSC1001/3/4 data sheet DS20005529F](https://www.microchip.com/en-us/product/dsc1001), Table 1-1). A
+locked PLL output keeps the reference's relative error, so an interval `L` read from the counter has
+a scale error of at most 15 ppm in the first year: `u = 15·10⁻⁶ · L / √3`, 0.09 ns for 10 µs and
+8.7 ns for 1 ms. The error is common to every interval of one board, so comparisons between
+controller placements on the same board share it.
+
+**Event phase.** Events raised in the capture domain (`SAMPLE_READY`, `DEADLINE`, `SAFE_STATE`) fall on
+capture edges and carry no phase error. A processor access reaches the capture domain through
+[`clock_request_bridge.sv`](../rtl/clock_request_bridge.sv), whose request toggle passes two capture
+synchroniser stages: the recorded `SAMPLE_READ` or `ACT_WRITE` follows the bus edge of the access by a
+fixed number of capture periods, which the bus offset contains, plus the time to the next capture
+edge, between 0 and `T`. That phase gives `u = T/√12 = 2.9 ns` for an interval with one processor
+end, and `T/√6 = 4.1 ns` for an interval between two processor accesses (independent phases).
+
+**Bus offset.** The fixed part of each access path is the instrument floor: the bus-offset
+calibration measures it with the fabric placement and reports it with every latency table. Its
+standard uncertainty is the standard error of the calibration mean (measured).
+
+**Oscillator jitter.** The oscillator's period jitter is at most 15 ps RMS (DS20005529F, 1.8 V,
+100 MHz, measured over 50,000 cycles), three orders of magnitude below `T`; the capture PLL adds its
+own jitter. Over long intervals the accumulated phase error is bounded by the scale term above. The
+known-period test on the board, which requires a period from the same timebase to appear as an
+exact interval, is the check that jitter and the PLL do not move edges by a capture period.
+
+**Combined.** For the controller's service interval (`SAMPLE_READ` to `ACT_WRITE`), both ends are
+processor accesses: `u_c = √((T/√6)² + u_scale² + u_offset²)`, 4.3 ns for a 100 µs interval with the
+offset known to 1 ns, and 4.1 ns for short intervals with a negligible offset term. For `SAMPLE_READY` to `ACT_WRITE` (input
+to actuation): `u_c = √((T/√12)² + u_scale² + u_offset²)`. The witness records when an access reaches
+the fabric, not when the processor executes the instruction behind it.
+
 ## Stated limits
 
 These limits are part of every report:
@@ -152,7 +195,8 @@ These limits are part of every report:
 - The power monitor samples far more slowly than a control cycle. Energy per cycle is a window
   mean, not a per-cycle measurement.
 - Timestamps resolve 10 ns. Bus access inside the interconnect adds a fixed offset that is
-  calibrated and reported.
+  calibrated and reported. The [uncertainty budget](#uncertainty-budget) gives the standard
+  uncertainty of each interval kind.
 - The plant is emulated. Results describe controller timing and its effect on the emulated plant,
   not a physical machine.
 - A PREEMPT_RT comparison is included only if a matching kernel builds for the board support

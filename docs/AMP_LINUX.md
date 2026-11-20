@@ -76,6 +76,47 @@ firmware and Linux resource descriptions, the generated HSS payload and its embe
 configuration, and the actual reference design. Compiling a vendor Linux tree or assigning a
 hart in payload YAML alone does not establish exclusive ownership or coherent shared memory.
 
+## Board placement and isolation
+
+The design below states how a board deployment places the controller and how its isolation is
+measured. It follows the PolarFire SoC MSS Technical Reference Manual (DS60001702S, sections
+3.1.5 and 3.1.6, and the MSS memory map); nothing here has run on a board.
+
+**Firmware in L2-LIM.** The 2 MB L2 cache has four banks of 512 sets and 16 ways, so each way
+holds 128 KiB. A way that is not enabled as cache is addressable in the L2-LIM region,
+`0x0800_0000`–`0x081F_FFFF`, which harts 0–4 can reach: way 15 at `0x0800_0000`, way 14 at
+`0x0802_0000`, and so on to way 1 at `0x081C_0000`; way 0 is always cache. An access to L2-LIM
+behaves like an L2 hit, with no miss, and takes priority over cache accesses to the same bank.
+After reset only way 0 is enabled; the `WayEnable` register (L2 controller at `0x0201_0000`,
+offset `0x008`) enables more, and an enabled way cannot be disabled until the core complex resets.
+Placing the controller firmware's code and data in ways 15 and 14 (256 KiB at `0x0800_0000`)
+therefore requires the boot configuration to leave those ways disabled, and Linux must never
+enable them; it removes DDR and cache misses from the controller's own instructions and data, but
+not the fabric accesses through FIC0. The mailbox stays in reserved DDR, shared with the collector
+as described above. The vendor AMP templates place the payload in DDR at `0x91C00000` instead.
+
+**Way partitioning.** When the firmware or its data stay in cached memory, the `WayMaskX`
+registers (`0x0201_0800 + 8·X`) select the ways each L2 master may evict: master 0 is the DMA
+engine, masters 1–4 the AXI front port, and masters 5–14 the data and instruction caches of harts
+0–4 in that order, so the controller on hart 4 owns masters 13 and 14. Clearing a set of ways in
+every other master's mask and setting it only in masters 13 and 14 gives the controller those ways
+alone; masked ways can still be read, so this prevents eviction, not sharing. The manual
+recommends identical masks for the four front-port masters, because the AXI-to-TileLink bridge
+assigns their IDs unpredictably, and atomic updates of the mask registers. The masks belong in the
+boot configuration, before the Linux harts allocate.
+
+**Stress protocol.** An isolation result compares the same run configuration under load. The
+controller runs on hart 4 and the [host load profiles](HOST_ANALYSIS.md#linux-host-load-profiles)
+`idle`, `cpu`, `memory`, `network` and `storage` run on Linux harts 1–3, each as a repeat campaign
+of at least five runs long enough that p99.9 is reportable (10,000 cycles per run). For each
+profile the result gives the [tail intervals](HOST_ANALYSIS.md#tail-quantile-intervals) of the
+sample-to-actuation latency and the [weakly-hard metrics](HOST_ANALYSIS.md#weakly-hard-deadline-metrics).
+The placement is repeated in three memory arrangements: firmware in reserved DDR, firmware in DDR
+with its own L2 ways, and firmware in L2-LIM. A placement is reported as isolated from a load only
+when the p99.9 interval under that load overlaps the idle one and no deadline is missed; otherwise
+the report gives the difference of the interval bounds. These runs need a programmed board and
+the boot ownership above, and remain open.
+
 ## Original resource configuration
 
 Supply one complete whitespace file with these fourteen fields in order:

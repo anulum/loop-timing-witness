@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `docs/AMP_LINUX.md` describes the board placement of the dedicated-hart controller from the MSS
+  Technical Reference Manual: firmware in L2-LIM ways that stay disabled as cache, L2 way
+  partitioning with the per-master `WayMaskX` registers (hart 4's caches as masters 13 and 14,
+  identical front-port masks), and the stress protocol for isolation results (the five host load
+  profiles on harts 1–3, three memory arrangements, tail intervals and weakly-hard metrics per
+  profile, and the overlap rule for an isolation claim). The runs need a programmed board.
 - Kernel trace stop: `run_uio` and `run_simulation` accept `--trace-stop miss|safe --tracefs
   DIRECTORY` (with `--metadata`). They require active tracing, record the selected trace clock,
   and at the first interrupt that sees a missed deadline or the latched safe state write a cause

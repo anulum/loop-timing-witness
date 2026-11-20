@@ -198,7 +198,7 @@ changes this public table in the same commit, beside its reason in the list.
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/process_protocol.h` | 2 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/axi_simulator.cpp` | 3 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/run_simulation.cpp` | 13 |
-| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/simulation.h` | 6 |
+| [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/rtl/simulation.h` | 8 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_configuration.cpp` | 1 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_control.h` | 5 |
 | [`coverage-review.json`](../runtime/coverage-review.json) | `runtime/run_metadata.h` | 9 |
@@ -206,7 +206,7 @@ changes this public table in the same commit, beside its reason in the list.
 | [`plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) | `runtime/isa/spike_amp_transport.h` | 3 |
 | [`plugin-coverage-review.json`](../runtime/isa/plugin-coverage-review.json) | `runtime/isa/spike_axi_device.cpp` | 14 |
 
-The runtime list holds 75 outcomes and the plugin list 17.
+The runtime list holds 77 outcomes and the plugin list 17.
 
 ## Compile instrumented public interfaces
 
@@ -687,4 +687,9 @@ runs one configuration from zeros and from four seeds and requires byte-identica
 and result, so no output depends on a value the common reset leaves undefined. Its first run
 found that the simulation wrapper set only the reset input before the first evaluation: the bus
 handshake inputs then started from random values, which an AXI master must hold low during
-reset. The wrapper now starts every input idle.
+reset. The wrapper now starts every input idle. It also steps the reset period without sampling
+the bus: a local reset that starts low under random initial values has no falling edge, so its
+flops reset only at the domain's first clock edge, and until then a response flag can hold an
+initial value. With seed 3 a write response flag met the first sampled bus edge that way. Nothing
+before the reset has acted is a handshake, so the two response handshakes that only that state
+reached are reviewed outcomes.

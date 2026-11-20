@@ -59,17 +59,52 @@ class Simulation {
     /** Record that an input changed, so the next tick evaluates before it samples. */
     void changed() { settled = false; }
 
-    /** Settle changed inputs, sample the bus before its edge, then evaluate changed clocks.
+    /** The clocks that toggle at one simulated nanosecond. */
+    struct Due {
+        bool bus;     ///< Whether the 7 ns bus half-period ends.
+        bool capture; ///< Whether the 5 ns capture half-period ends.
+    };
+
+    /** Settle changed inputs and advance simulated time by one nanosecond.
      *
      * Between clock edges a model whose inputs did not change keeps its evaluated
      * state, so it is evaluated only after an input or clock change.
      */
-    Edge tick() {
+    Due step_time() {
         if (!settled)
             model.eval();
         context.timeInc(1);
-        const bool bus_edge = context.time() % 7 == 0;
-        const bool capture_edge = context.time() % 5 == 0;
+        return {context.time() % 7 == 0, context.time() % 5 == 0};
+    }
+
+    /** Toggle the due clocks and evaluate the model after a clock change. */
+    void toggle(const Due due) {
+        if (due.bus)
+            model.bus_clock = !model.bus_clock;
+        if (due.capture)
+            model.capture_clock = !model.capture_clock;
+        if (due.bus || due.capture)
+            model.eval();
+        settled = true;
+        if (context.gotFinish())
+            throw witness::RuntimeRefused("RTL ended during transaction");
+    }
+
+    /** Run both clocks under the asserted reset without sampling the bus.
+     *
+     * Until a domain's first clock edge under the reset, its flags can still hold initial values:
+     * a local reset that starts low has no falling edge to assert it asynchronously. Nothing that
+     * happens before the reset has acted is a bus handshake, so it is not sampled.
+     */
+    void hold_reset(std::uint64_t nanoseconds) {
+        for (std::uint64_t index = 0; index < nanoseconds; ++index)
+            toggle(step_time());
+    }
+
+    /** Settle changed inputs, sample the bus before its edge, then evaluate changed clocks. */
+    Edge tick() {
+        const Due due = step_time();
+        const bool bus_edge = due.bus;
         const bool rising = bus_edge && !model.bus_clock;
         const Edge edge{rising && model.awvalid && model.awready,
                         rising && model.wvalid && model.wready,
@@ -78,15 +113,7 @@ class Simulation {
                         rising && model.rvalid && model.rready,
                         model.rvalid ? model.rresp : model.bresp,
                         model.rdata};
-        if (bus_edge)
-            model.bus_clock = !model.bus_clock;
-        if (capture_edge)
-            model.capture_clock = !model.capture_clock;
-        if (bus_edge || capture_edge)
-            model.eval();
-        settled = true;
-        if (context.gotFinish())
-            throw witness::RuntimeRefused("RTL ended during transaction");
+        toggle(due);
         return edge;
     }
 
@@ -94,7 +121,8 @@ class Simulation {
     /** Assert the external common reset and release both actual clock domains.
      *
      * Every input starts idle, as an AXI master drives ARVALID, AWVALID and WVALID low during
-     * reset, so no transaction depends on the model's initial values.
+     * reset, so no transaction depends on the model's initial values. The reset period is held
+     * without sampling the bus, so no flag from before the reset meets a handshake.
      */
     explicit Simulation(const SimulationOptions &options = {}) : context(options) {
         model.bus_clock = 0;
@@ -110,7 +138,7 @@ class Simulation {
         model.rready = 0;
         model.run_reset_n = 0;
         model.eval();
-        advance(140);
+        hold_reset(140);
         model.run_reset_n = 1;
         changed();
         advance(140);
@@ -129,7 +157,7 @@ class Simulation {
     }
 
     /** Read through AR/R channels; return the actual destination AXI response. */
-    Edge read(std::uint8_t address) {
+    Edge read(std::uint16_t address) {
         model.araddr = address;
         model.arvalid = 1;
         model.rready = 1;
@@ -150,7 +178,7 @@ class Simulation {
     }
 
     /** Submit independent AW/W channels, then retain the actual B response. */
-    Edge write(std::uint8_t address, std::uint32_t data, std::uint8_t strobes) {
+    Edge write(std::uint16_t address, std::uint32_t data, std::uint8_t strobes) {
         model.awaddr = address;
         model.wdata = data;
         model.wstrb = strobes;

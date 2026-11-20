@@ -12,7 +12,7 @@ module axi_control_witness_tb #(
     parameter bit THERMAL = 0
 );
     logic bus_clock = 0, capture_clock = 0, run_reset_n = 0;
-    logic [7:0] awaddr = 0, araddr = 0;
+    logic [12:0] awaddr = 0, araddr = 0;
     logic awvalid = 0, awready, wvalid = 0, wready, arvalid = 0, arready;
     logic bvalid, bready = 0, rvalid, rready = 0;
     logic [31:0] wdata = 0, rdata;
@@ -48,7 +48,7 @@ module axi_control_witness_tb #(
     always @(posedge capture_clock) begin
         if (sample_read) read_ticks[cycle_number] = counter_ticks;
     end
-    task automatic read_register(input logic [7:0] address, output logic [31:0] result,
+    task automatic read_register(input logic [12:0] address, output logic [31:0] result,
         input logic [1:0] response = 0);
         @(negedge bus_clock);
         wait (arready);
@@ -67,7 +67,7 @@ module axi_control_witness_tb #(
         @(negedge bus_clock);
         rready = 0;
     endtask
-    task automatic write_register(input logic [7:0] address, input logic [31:0] data,
+    task automatic write_register(input logic [12:0] address, input logic [31:0] data,
         input logic [1:0] response = 0);
         @(negedge bus_clock);
         wait (awready && wready);
@@ -250,10 +250,26 @@ module axi_control_witness_tb #(
         read_register(8'h9c, value);
         if (value != 2) $fatal(1, "fresh run retained old IRQ generation");
         software_reset();
+        // Register map version 2: only the fault page reaches the fault schedule.
+        read_register(8'h7c, value);
+        if (value != 2) $fatal(1, "register map version is not 2");
+        write_register(8'h58, 0, 2);
+        write_register(8'h64, 1, 2);
+        read_register(8'h5c, value, 2);
+        read_register(13'h0100, value, 2);
+        read_register(13'h0fff, value, 2);
+        read_register(13'h1010, value, 2);
+        write_register(13'h1fff, 0, 2);
+        write_register(13'h1001, 0, 2);
+        read_register(13'h1004, value);
+        if (value != 0) $fatal(1, "fault page target cycle not readable");
+        read_register(8'h68, value);
+        if (value[0] != 1) $fatal(1, "injector status left the run page");
+        $display("PAGE_MAP_PASS version=2");
         // Actual dropped first IRQ and coincident final safe/finish coalesce.
         write_register(8'h3c, 2);
-        write_register(8'h60, 1);
-        write_register(8'h64, 1);
+        write_register(13'h1008, 1);
+        write_register(13'h100c, 1);
         write_register(8'h38, 1);
         wait (run_finished && capture_quiescent);
         repeat (4) @(negedge bus_clock);

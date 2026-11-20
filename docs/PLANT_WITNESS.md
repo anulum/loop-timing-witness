@@ -63,12 +63,12 @@ a physical oscillator or board rate.
 
 [`axi_control_witness.sv`](../rtl/axi_control_witness.sv) is the combined AXI peripheral:
 it connects the capture I/O and configuration registers to the actual plant and exposes its
-FIFO through the bus-domain record window. Its AXI addresses are offsets within an externally
-decoded 256-byte aperture. Plant coefficients and capture parameters retain the raw plant
+FIFO through the bus-domain record window. Its 13-bit AXI addresses are offsets within an
+externally decoded 8 KiB aperture of two [register pages](#register-pages). Plant coefficients and capture parameters retain the raw plant
 module's compile-time interface. Capture diagnostics and IRQ strobes belong to `capture_clock`;
 the record window, `run_drained` and retained `interrupt_line` belong to `bus_clock`.
 [`icicle_witness.sv`](../rtl/icicle_witness.sv) is the board-facing AXI4-Lite boundary: it
-accepts the interconnect's 38-bit address and forwards the selected low eight bits to this
+accepts the interconnect's 38-bit address and forwards the selected low thirteen bits to this
 peripheral. Its physical decode and retained interrupt route still require Libero validation.
 A low `capture_clock_locked`, the lock of the capture clock's PLL, acts as `run_reset_n`: the
 witness stays in reset until that PLL locks, and losing the lock resets both clock domains.
@@ -118,17 +118,30 @@ coefficients declare that interval.
 | `0x44` | Read/write | Reference mode: step 0, ramp 1 or sine 2. Other values are refused. |
 | `0x48`, `0x4c`, `0x50` | Read/write | Signed Q8.24 reference amplitude, offset and ramp increment. |
 | `0x54` | Read/write | Modulo-16 phase increment, restricted to 0–15. |
-| `0x58`, `0x5c`, `0x60` | Read/write | Fault kind 0–3, target cycle and duration in periods. |
-| `0x64` | Read/write | Read armed configuration state; write 1 before start to arm one fault. Duration must be positive and target no later than the final cycle. |
+| `0x1000`, `0x1004`, `0x1008` | Read/write | Fault page: fault kind 0–3, target cycle and duration in periods. |
+| `0x100c` | Read/write | Fault page: read armed configuration state; write 1 before start to arm one fault. Duration must be positive and target no later than the final cycle. |
 | `0x68` | Read | Bits 0–2: injector ready, actuator freeze and software overload request. |
 | `0x6c`, `0x70`, `0x74` | Read | Compiled thermal-model flag, miss limit and signed safe actuator value. |
-| `0x78`, `0x7c` | Read | Fixed-point fractional bits (24) and register ABI version (1). |
+| `0x78`, `0x7c` | Read | Fixed-point fractional bits (24) and register ABI version (2). |
 
 Arming copies the declared schedule into the actual injector on the accepted capture edge and
 locks configuration readback to that schedule. Start remains available after arming. Common
 reset clears enabled/armed state and restores the step reference with amplitude one, zero
 offset/ramp, phase increment one and final cycle zero. Runtime overload execution is separate
 from the hardware overload-request level.
+
+## Register pages
+
+Register map version 2 divides the aperture into two 4 KiB pages. The run page, offsets
+`0x000`–`0x0ff`, holds every register above except the fault schedule; the fault page holds the
+fault kind, target cycle, duration and arm registers at `0x1000`, `0x1004`, `0x1008` and
+`0x100c`. The run page refuses `0x58`–`0x64`, the schedule's offsets in version 1, and every
+other address of the aperture returns SLVERR. The injector status at `0x68` stays on the run
+page, because a controller under test must see the overload request. A system can therefore give
+a controller a mapping of the run page alone: on Linux the two pages are separate UIO devices,
+and the run programs map the fault page only to arm a fault before the start
+([UIO transport](#linux-uio-transport)). The schedule's write rules are unchanged: writes only
+before the start and no arm, and one arm per common reset.
 
 ## FIFO record window and completion
 
@@ -377,9 +390,10 @@ the tool does not bind devices, load drivers or choose an aperture automatically
 The selected map uses `map * page_size` as its mmap offset, then adds the sysfs
 `offset` to the returned pointer. For this driver, the declared physical register
 address must equal the page-aligned sysfs `addr` plus `offset`. The page-rounded
-map size must contain the entire 256-byte aperture. The tool verifies map
+map size must contain the entire 256-byte run-page window and must not reach past its 4 KiB
+register page, so the map never covers the fault page. The tool verifies map
 metadata again after mmap, requires ready run banks and reads register ABI version
-1 before serving requests. These rules follow the
+2 before serving requests. It serves the run page only. These rules follow the
 [Linux UIO HOWTO](https://docs.kernel.org/driver-api/uio-howto.html) and the
 [generic platform driver](https://github.com/torvalds/linux/blob/master/drivers/uio/uio_pdrv_genirq.c).
 
@@ -418,7 +432,12 @@ with `configuration events.bin tracking_raw.csv`. It links the actual C PID/LQR
 kernel directly into the production RTL model. `make run-uio` builds
 `build/run_uio`, which accepts the same first three arguments followed by
 `uioN name version map physical_address_decimal` and uses the same run lifecycle
-with direct in-process MMIO. Successful UIO operation is not yet board-qualified.
+with direct in-process MMIO. A run with a scheduled fault also needs
+`--fault-uio "uioN name version map physical_address_decimal"`, the fault page's own UIO
+device at the run page's address plus `0x1000`, and refuses it for a run without one. The
+program maps the fault page with the same identity checks, writes the schedule and unmaps it
+before it writes START, so the controlling loop never holds a fault mapping.
+Successful UIO operation is not yet board-qualified.
 `make run-amp-uio` builds the separate [Linux AMP logger](AMP_LINUX.md), which drains
 firmware telemetry and fabric events after the dedicated controller arms. Its resource
 configuration names both IRQ-free maps explicitly; Linux does not write controller commands

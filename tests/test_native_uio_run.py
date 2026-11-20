@@ -94,3 +94,52 @@ def test_native_uio_usage(native_uio: Path) -> None:
     result = subprocess.run([str(native_uio)], capture_output=True, text=True, check=False)
     assert result.returncode == 1
     assert "physical_address_decimal" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("fault", "option", "finding"),
+    [
+        ("drop", None, "a fault run needs --fault-uio, and only a fault run takes it"),
+        ("none", "uio1 faults devicetree 0 4096", "only a fault run takes it"),
+        ("drop", "uio1 faults", "fault-page UIO identity is incomplete"),
+        ("drop", "uio1 faults devicetree 0 4096 extra", "unexpected argument"),
+        (
+            "drop",
+            "uio1 faults devicetree 0 8192",
+            "fault-page UIO is not the page after the run page",
+        ),
+        ("drop", "uio4294967294 faults devicetree 0 4096", "cannot read sysfs attribute"),
+    ],
+)
+def test_fault_page_device_selection(
+    native_uio: Path, tmp_path: Path, fault: str, option: str | None, finding: str
+) -> None:
+    """A fault run names the fault page's UIO device, the page after the run page, and only it does.
+
+    Parameters
+    ----------
+    native_uio
+        Production in-process UIO controller.
+    tmp_path
+        Managed configuration and output paths.
+    fault
+        Scheduled fault, or none.
+    option
+        ``--fault-uio`` value, or ``None`` to omit it.
+    finding
+        Required refusal before any output.
+    """
+    config = tmp_path / "run.conf"
+    config.write_text(configuration("pid", fault), encoding="utf-8")
+    events, tracking = tmp_path / "events.bin", tmp_path / "tracking.csv"
+    arguments = [str(native_uio), str(config), str(events), str(tracking)]
+    arguments += ["uio4294967295", "loop-timing-witness", "devicetree", "0", "0"]
+    if option is not None:
+        arguments += ["--fault-uio", option]
+    result = subprocess.run(
+        arguments, capture_output=True, text=True, check=False, timeout=scaled(5)
+    )
+    assert result.returncode == 1
+    assert finding in result.stderr
+    assert not events.exists()
+    assert not tracking.exists()

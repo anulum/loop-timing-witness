@@ -223,7 +223,7 @@ module control_io_registers_tb #(
         expect_register(8'h70, MISS_LIMIT);
         expect_register(8'h74, 0);
         expect_register(8'h78, 24);
-        expect_register(8'h7c, 1);
+        expect_register(8'h7c, 2);
         write_register(8'h38, 0, 15, 2);
         write_register(8'h40, 1, 15, 2);
         write_register(8'h44, 3, 15, 2);

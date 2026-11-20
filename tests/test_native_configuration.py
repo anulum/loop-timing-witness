@@ -176,6 +176,14 @@ def test_absent_configuration_without_metadata(native_run: Path, tmp_path: Path)
             ["--power-config", "absent.conf", "--power-journal", "power.csv"],
             "power acquisition requires native metadata",
         ),
+        (
+            ["--fault-uio", "uio1 faults devicetree 0 4096"],
+            "the fault-page UIO device is run_uio-only",
+        ),
+        (
+            ["--fault-uio", "uio1 a b 0 4096", "--fault-uio", "uio2 a b 0 4096"],
+            "unknown or duplicate run option",
+        ),
     ],
 )
 def test_simulation_power_contract_refusal(

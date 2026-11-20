@@ -48,13 +48,13 @@ _MEMBERS_FAULT = """    witness::AmpLogger<witness::SpikeAmpTransport> logger;
     const std::string fault = diagnostic_fault();
     bool complete = false, injected = false;
     unsigned armed_status_reads = 0;"""
-_LOAD = """        const auto reply = fabric.read(static_cast<std::uint8_t>(address));
+_LOAD = """        const auto reply = fabric.read(static_cast<std::uint16_t>(address));
         synchronize();
         if (reply.response != 0)
             return false;
         for (unsigned index = 0; index < 4; ++index)
             bytes[index] = static_cast<std::uint8_t>(reply.data >> (index * 8));"""
-_LOAD_OBSERVED = """        const auto reply = fabric.read(static_cast<std::uint8_t>(address));
+_LOAD_OBSERVED = """        const auto reply = fabric.read(static_cast<std::uint16_t>(address));
         synchronize();
         if (reply.response != 0) return false;
         auto observed = reply.data;

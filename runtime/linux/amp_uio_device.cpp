@@ -67,7 +67,7 @@ void verify_map(const std::filesystem::path &sysfs, const AmpUioMap &selection) 
 } // namespace
 
 AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
-                           const AmpUioMap &mailbox) {
+                           const AmpUioMap &mailbox, const AmpUioMap *fault_map) {
     if (identity.device.size() < 4 || identity.device.substr(0, 3) != "uio" ||
         identity.device.substr(3).find_first_not_of("0123456789") != std::string::npos ||
         identity.name.empty() || identity.version.empty() || identity.map != fabric.index ||
@@ -77,7 +77,7 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
     if (system_page <= 0)
         throw witness::RuntimeRefused("cannot determine AMP mapping page size");
     const auto page = static_cast<std::uint64_t>(system_page);
-    for (const auto *map : {&fabric, &mailbox}) {
+    for (const auto *map : {&fabric, &mailbox, fault_map ? fault_map : &fabric}) {
         if (!map->address || map->address % page || !map->bytes || map->bytes % page ||
             map->bytes > std::numeric_limits<std::size_t>::max() ||
             map->address > UINT64_MAX - map->bytes ||
@@ -90,6 +90,13 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
          mailbox.address < fabric.address + fabric.bytes))
         throw witness::RuntimeRefused(
             "AMP UIO resources overlap or lack complete mailbox capacity");
+    if (fault_map &&
+        (page != fault_page || fault_map->bytes != page ||
+         fault_map->address != fabric.address + fault_page || fault_map->index == fabric.index ||
+         fault_map->index == mailbox.index || fault_map->name.empty() ||
+         (fault_map->address < mailbox.address + mailbox.bytes &&
+          mailbox.address < fault_map->address + fault_map->bytes)))
+        throw witness::RuntimeRefused("AMP fault page is not the page after the fabric's");
     const auto sysfs = std::filesystem::path("/sys/class/uio") / identity.device;
     const auto verify = [&]() {
         const auto node = sysfs / "device/of_node";
@@ -102,6 +109,8 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
                 "AMP UIO driver identity or dedicated IRQ ownership mismatch");
         verify_map(sysfs, fabric);
         verify_map(sysfs, mailbox);
+        if (fault_map)
+            verify_map(sysfs, *fault_map);
     };
     verify();
     register_bytes = static_cast<std::size_t>(fabric.bytes);
@@ -132,15 +141,30 @@ AmpUioDevice::AmpUioDevice(const UioIdentity &identity, const AmpUioMap &fabric,
             telemetry = nullptr;
             failure("map AMP mailbox");
         }
+        if (fault_map) {
+            fault_bytes = static_cast<std::size_t>(fault_map->bytes);
+            faults = mmap(nullptr, fault_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor,
+                          static_cast<off_t>(static_cast<std::uint64_t>(fault_map->index) * page));
+            if (faults == MAP_FAILED) {
+                faults = nullptr;
+                failure("map AMP fault page");
+            }
+        }
         verify();
-        if (read(0x7c).data != 1)
+        if (read(0x7c).data != 2)
             throw witness::RuntimeRefused("unsupported AMP fabric register ABI");
     } catch (...) {
         close();
         throw;
     }
 }
+void AmpUioDevice::close_fault_page() noexcept {
+    if (faults)
+        munmap(faults, fault_bytes);
+    faults = nullptr;
+}
 void AmpUioDevice::close() noexcept {
+    close_fault_page();
     if (telemetry)
         munmap(telemetry, telemetry_bytes);
     if (registers)
@@ -170,21 +194,31 @@ void AmpUioDevice::advance(std::uint64_t nanoseconds) {
         if (errno != EINTR)
             failure("AMP polling sleep");
 }
-ProtocolReply AmpUioDevice::read(std::uint8_t address) {
-    if (address % 4)
+ProtocolReply AmpUioDevice::read(std::uint16_t address) {
+    const bool fault = faults && address >= fault_page && address < fault_page + 0x10;
+    if (address % 4 || (address >= 0x100 && !fault))
         return {2, 0};
     fence();
-    const auto value = static_cast<volatile std::uint32_t *>(registers)[address / 4];
+    const auto value =
+        fault ? static_cast<volatile std::uint32_t *>(faults)[(address - fault_page) / 4]
+              : static_cast<volatile std::uint32_t *>(registers)[address / 4];
     fence();
     return {0, le32toh(value)};
 }
-ProtocolReply AmpUioDevice::write(std::uint8_t address, std::uint32_t value, std::uint8_t strobes) {
-    if (strobes != 15 ||
-        !(address == 0x38 || address == 0x3c || address == 0x94 || address == 0x98 ||
-          (address >= 0x44 && address <= 0x64 && address % 4 == 0)))
+ProtocolReply AmpUioDevice::write(std::uint16_t address, std::uint32_t value,
+                                  std::uint8_t strobes) {
+    const bool fault = faults && address >= fault_page && address < fault_page + 0x10;
+    if (strobes != 15 || address % 4 ||
+        !(fault || address == 0x38 || address == 0x3c || address == 0x94 || address == 0x98 ||
+          (address >= 0x44 && address <= 0x54)))
         return {2, 0};
+    if (address == 0x38)
+        close_fault_page();
     fence();
-    static_cast<volatile std::uint32_t *>(registers)[address / 4] = htole32(value);
+    if (fault)
+        static_cast<volatile std::uint32_t *>(faults)[(address - fault_page) / 4] = htole32(value);
+    else
+        static_cast<volatile std::uint32_t *>(registers)[address / 4] = htole32(value);
     fence();
     return {0, 0};
 }

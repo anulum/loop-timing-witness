@@ -111,7 +111,7 @@ def test_caller_return_reaps_waiting_axi_process(simulator: Path) -> None:
         Actual production AXI simulator linked to the selected plant.
     """
     with owned_streaming_process(simulator) as process:
-        assert exchange(process, "R 124")[1] == 1
+        assert exchange(process, "R 124")[1] == 2
         assert process.poll() is None
     assert process.returncode == -signal.SIGKILL
     assert process.stdin is not None
@@ -154,7 +154,7 @@ def test_register_reset_and_irq(simulator: Path) -> None:
         Compiled production top process.
     """
     with owned_streaming_process(simulator) as process:
-        assert exchange(process, "R 124")[1] == 1
+        assert exchange(process, "R 124")[1] == 2
         assert exchange(process, "R 125")[0] == 2
         assert exchange(process, "R 0")[0] == 2
         assert exchange(process, "W 152 0 15")[0] == 0
@@ -190,18 +190,23 @@ def test_configuration_write_refusals(simulator: Path) -> None:
         Actual production plant and configuration register bank.
     """
     with owned_streaming_process(simulator) as process:
-        registers = {60: 0, 68: 0, 84: 1, 88: 0}
+        registers = {60: 0, 68: 0, 84: 1, 4096: 0}
         for address, original in registers.items():
             response, value, _ = exchange(process, f"R {address}")
             assert (response, value) == (0, original)
-        for address, value in ((68, 3), (84, 16), (88, 4)):
+        # Register map version 2: the run page refuses the fault schedule, and every address
+        # outside the two pages' registers is refused.
+        for address in (88, 92, 96, 100, 256, 4080, 4112, 8188):
+            assert exchange(process, f"R {address}")[0] == 2
+            assert exchange(process, f"W {address} 0 15")[0] == 2
+        for address, value in ((68, 3), (84, 16), (4096, 4)):
             assert exchange(process, f"W {address} {value} 15")[0] == 2
             assert exchange(process, f"R {address}")[1] == registers[address]
         assert exchange(process, "W 60 2 15")[0] == 0
         assert exchange(process, "R 60")[1] == 2
         assert exchange(process, "W 56 1 15")[0] == 0
         assert exchange(process, "R 56")[1] == 1
-        for address, value in ((60, 3), (68, 2), (84, 15), (88, 3)):
+        for address, value in ((60, 3), (68, 2), (84, 15), (4096, 3)):
             assert exchange(process, f"W {address} {value} 15")[0] == 2
             assert exchange(process, f"R {address}")[1] == (
                 2 if address == 60 else registers[address]
@@ -479,7 +484,7 @@ def test_native_feedback_and_capture(
     "message",
     [
         "R -1",
-        "R 256",
+        "R 8192",
         "R 0 extra",
         "R",
         "W 0 4294967296 15",
@@ -515,7 +520,7 @@ def test_protocol_refusal(simulator: Path, message: str) -> None:
     assert result.stdout == ""
     expected = {
         "R -1": "invalid unsigned argument",
-        "R 256": "argument outside range",
+        "R 8192": "argument outside range",
         "R 0 extra": "unexpected argument",
         "R": "invalid unsigned argument",
         "W 0 4294967296 15": "argument outside range",
@@ -571,7 +576,7 @@ def test_end_of_input_ends_the_process(simulator: Path) -> None:
     assert result.returncode == 0
     assert result.stderr == ""
     response, data, _ = (int(field) for field in result.stdout.strip().split(","))
-    assert (response, data) == (0, 1)
+    assert (response, data) == (0, 2)
 
 
 def test_unreadable_input_refused(simulator: Path, tmp_path: Path) -> None:

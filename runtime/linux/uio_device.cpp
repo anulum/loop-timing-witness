@@ -61,9 +61,20 @@ void mmio_fence() {
 #error "UIO MMIO ordering is implemented only for RV64 and x86_64"
 #endif
 }
-} // namespace
 
-UioDevice::UioDevice(const UioIdentity &identity) {
+/** One verified, exclusively locked and mapped UIO aperture. */
+struct MappedAperture {
+    int descriptor = -1;
+    void *mapping = nullptr;
+    std::size_t size = 0;
+    std::size_t offset = 0;
+};
+
+/** Verify a UIO device's sysfs, driver and character-device identity, lock it, map its
+ * page-aligned map holding `window` register bytes at the identity's physical address, and verify
+ * the identity again after mapping; release everything on refusal. A map that reaches past its
+ * 4 KiB register page is refused, so the run page's map never covers the fault page. */
+MappedAperture map_aperture(const UioIdentity &identity, std::uint64_t window) {
     if (identity.device.size() < 4 || identity.device.substr(0, 3) != "uio" ||
         identity.device.substr(3).find_first_not_of("0123456789") != std::string::npos ||
         identity.name.empty() || identity.version.empty())
@@ -86,29 +97,33 @@ UioDevice::UioDevice(const UioIdentity &identity) {
     const auto physical = quantity(attribute(map / "addr"));
     if (offset >= page || physical > std::numeric_limits<std::uint64_t>::max() - offset ||
         physical + offset != identity.physical_address || physical % page != 0 || offset % 4 != 0 ||
-        size < offset + 256 || size % page != 0 || size > std::numeric_limits<std::size_t>::max() ||
+        size < offset + window || size > offset + fault_page || size % page != 0 ||
+        size > std::numeric_limits<std::size_t>::max() ||
         static_cast<std::uint64_t>(identity.map) >
             static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()) / page)
         throw witness::RuntimeRefused("UIO aperture identity, alignment or size mismatch");
-    mapping_size = static_cast<std::size_t>(size);
-    register_offset = static_cast<std::size_t>(offset);
+    MappedAperture aperture;
+    aperture.size = static_cast<std::size_t>(size);
+    aperture.offset = static_cast<std::size_t>(offset);
     try {
-        descriptor = open(("/dev/" + identity.device).c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW);
-        if (descriptor < 0)
+        aperture.descriptor =
+            open(("/dev/" + identity.device).c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW);
+        if (aperture.descriptor < 0)
             syscall_error("open UIO");
         struct stat status{};
-        if (fstat(descriptor, &status) < 0)
+        if (fstat(aperture.descriptor, &status) < 0)
             syscall_error("stat UIO");
         const auto device_number =
             std::to_string(major(status.st_rdev)) + ":" + std::to_string(minor(status.st_rdev));
         if (!S_ISCHR(status.st_mode) || device_number != attribute(sysfs / "dev"))
             throw witness::RuntimeRefused("UIO character device identity mismatch");
-        if (flock(descriptor, LOCK_EX | LOCK_NB) < 0)
+        if (flock(aperture.descriptor, LOCK_EX | LOCK_NB) < 0)
             syscall_error("lock UIO");
-        mapping = mmap(nullptr, mapping_size, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor,
-                       static_cast<off_t>(static_cast<std::uint64_t>(identity.map) * page));
-        if (mapping == MAP_FAILED) {
-            mapping = nullptr;
+        aperture.mapping =
+            mmap(nullptr, aperture.size, PROT_READ | PROT_WRITE, MAP_SHARED, aperture.descriptor,
+                 static_cast<off_t>(static_cast<std::uint64_t>(identity.map) * page));
+        if (aperture.mapping == MAP_FAILED) {
+            aperture.mapping = nullptr;
             syscall_error("map UIO");
         }
         verify_identity();
@@ -116,9 +131,34 @@ UioDevice::UioDevice(const UioIdentity &identity) {
             quantity(attribute(map / "size")) != size ||
             quantity(attribute(map / "offset")) != offset)
             throw witness::RuntimeRefused("UIO aperture changed during mapping");
+    } catch (...) {
+        if (aperture.mapping != nullptr)
+            munmap(aperture.mapping, aperture.size);
+        if (aperture.descriptor >= 0)
+            ::close(aperture.descriptor);
+        throw;
+    }
+    return aperture;
+}
+
+/** One aligned little-endian volatile 32-bit load or store at a register offset of a mapping. */
+volatile std::uint32_t *register_word(void *mapping, std::size_t offset, std::uint16_t address) {
+    return reinterpret_cast<volatile std::uint32_t *>(static_cast<unsigned char *>(mapping) +
+                                                      offset) +
+           address / 4;
+}
+} // namespace
+
+UioDevice::UioDevice(const UioIdentity &identity) {
+    const auto aperture = map_aperture(identity, 256);
+    descriptor = aperture.descriptor;
+    mapping = aperture.mapping;
+    mapping_size = aperture.size;
+    register_offset = aperture.offset;
+    try {
         if ((read(0x98).data & 7) != 7)
             throw witness::RuntimeRefused("witness banks are held or not ready");
-        if (read(0x7c).data != 1)
+        if (read(0x7c).data != 2)
             throw witness::RuntimeRefused("unsupported witness register ABI");
     } catch (...) {
         close();
@@ -126,7 +166,27 @@ UioDevice::UioDevice(const UioIdentity &identity) {
     }
 }
 
+void UioDevice::open_fault_page(const UioIdentity &identity) {
+    if (fault_mapping != nullptr)
+        throw witness::RuntimeRefused("fault page is already mapped");
+    const auto aperture = map_aperture(identity, 16);
+    fault_descriptor = aperture.descriptor;
+    fault_mapping = aperture.mapping;
+    fault_size = aperture.size;
+    fault_offset = aperture.offset;
+}
+
+void UioDevice::close_fault_page() noexcept {
+    if (fault_mapping != nullptr)
+        munmap(fault_mapping, fault_size);
+    if (fault_descriptor >= 0)
+        ::close(fault_descriptor);
+    fault_mapping = nullptr;
+    fault_descriptor = -1;
+}
+
 void UioDevice::close() noexcept {
+    close_fault_page();
     if (descriptor >= 0 && irq_managed) {
         const std::int32_t disabled = 0;
         const auto ignored = ::write(descriptor, &disabled, sizeof(disabled));
@@ -151,24 +211,34 @@ std::uint64_t UioDevice::time() const {
            static_cast<std::uint64_t>(stamp.tv_nsec);
 }
 
-ProtocolReply UioDevice::read(std::uint8_t address) {
-    if (address % 4 != 0)
+ProtocolReply UioDevice::read(std::uint16_t address) {
+    if (address % 4 != 0 ||
+        (address >= 0x100 &&
+         (fault_mapping == nullptr || address < fault_page || address >= fault_page + 0x10)))
         return {2, 0};
-    const auto registers = reinterpret_cast<volatile std::uint32_t *>(
-        static_cast<unsigned char *>(mapping) + register_offset);
+    const auto word = address < 0x100
+                          ? register_word(mapping, register_offset, address)
+                          : register_word(fault_mapping, fault_offset,
+                                          static_cast<std::uint16_t>(address - fault_page));
     mmio_fence();
-    const std::uint32_t value = registers[address / 4];
+    const std::uint32_t value = *word;
     mmio_fence();
     return {0, le32toh(value)};
 }
 
-ProtocolReply UioDevice::write(std::uint8_t address, std::uint32_t data, std::uint8_t strobes) {
-    if (address % 4 != 0 || strobes != 15)
+ProtocolReply UioDevice::write(std::uint16_t address, std::uint32_t data, std::uint8_t strobes) {
+    if (address % 4 != 0 || strobes != 15 ||
+        (address >= 0x100 &&
+         (fault_mapping == nullptr || address < fault_page || address >= fault_page + 0x10)))
         return {2, 0};
-    const auto registers = reinterpret_cast<volatile std::uint32_t *>(
-        static_cast<unsigned char *>(mapping) + register_offset);
+    if (address == 0x38)
+        close_fault_page();
+    const auto word = address < 0x100
+                          ? register_word(mapping, register_offset, address)
+                          : register_word(fault_mapping, fault_offset,
+                                          static_cast<std::uint16_t>(address - fault_page));
     mmio_fence();
-    registers[address / 4] = htole32(data);
+    *word = htole32(data);
     mmio_fence();
     return {0, 0};
 }

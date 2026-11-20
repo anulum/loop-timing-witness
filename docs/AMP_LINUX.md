@@ -42,10 +42,14 @@ The UIO adapter requires one actual `uio_pdrv_genirq` device with two explicitly
 maps and a device-tree node without `interrupts` or `interrupts-extended`. Linux must not own this
 controller's interrupt. It checks the character-device identity, holds an exclusive advisory
 lock and repeats map/driver identity checks after mapping. Resource names, addresses, sizes and
-zero offsets must match actual sysfs. Fabric mapping is exactly one host page; only its 256-byte
-register window is accessible through this adapter. The mailbox mapping is a separate disjoint,
-page-aligned reservation containing the entire ABI. Writes are restricted to fabric configuration,
-START/reset/drain and the two consumer-owned mailbox fields. There is no `/dev/mem` or file-backed
+zero offsets must match actual sysfs. Fabric mapping is exactly one host page, the run page of
+[register map version 2](PLANT_WITNESS.md#register-pages); only its 256-byte register window is
+accessible through this adapter. A run with a scheduled fault also needs the fault page as a third
+named map, the 4 KiB page after the fabric's on a kernel with 4 KiB pages; the collector writes
+the schedule there and unmaps it before it writes START. The mailbox mapping is a separate
+disjoint, page-aligned reservation containing the entire ABI. Writes are restricted to fabric
+configuration, the fault schedule before START, START/reset/drain and the two consumer-owned
+mailbox fields. There is no `/dev/mem` or file-backed
 hardware fallback.
 
 The selected BSP must prove that these mappings and the firmware's shared address refer to the
@@ -119,7 +123,8 @@ the boot ownership above, and remain open.
 
 ## Original resource configuration
 
-Supply one complete whitespace file with these fourteen fields in order:
+Supply one complete whitespace file with these fourteen fields in order, and for a run with a
+scheduled fault four more:
 
 | Field | Meaning |
 | --- | --- |
@@ -132,6 +137,8 @@ Supply one complete whitespace file with these fourteen fields in order:
 | `startup_ns` | Positive firmware-initialisation wait, at most 60 seconds |
 | `completion_ns` | Positive overall collector wait, at most 24 hours |
 | `poll_ns` | Positive nominal poll interval, at most 1 ms and no longer than a sample interval |
+| `fault_map`, `fault_name` | Optional: the fault page's map index, different from both others, and exact sysfs map name |
+| `fault_address`, `fault_bytes` | Optional: the fabric address plus `0x1000`, and one 4 KiB host page |
 
 Numbers are unsigned decimal; identities and names are single tokens. Extra or incomplete fields,
 overlapping extents, insufficient mailbox capacity and unaligned mappings are refused. Addresses

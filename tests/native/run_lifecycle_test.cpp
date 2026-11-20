@@ -264,13 +264,13 @@ int main(int argc, char **argv) {
         metadata_refusal(device, configuration, scenario, argv[2], argv[3], argv[4]);
     } else if (scenario == "read") {
         refusal([&] { witness::read_register(device, 0xfc); }, "register read refused at 252");
-        assert(witness::read_register(device, 0x7c) == 1);
+        assert(witness::read_register(device, 0x7c) == 2);
         refusal([&] { witness::read_register(device, 0x0c); }, "register read refused at 12");
         assert(witness::read_register(device, 0x08) > 0);
         assert(witness::read_register(device, 0x0c) == 0);
     } else if (scenario == "write") {
         refusal([&] { witness::write_register(device, 0x7c, 0); }, "register write refused at 124");
-        assert(witness::read_register(device, 0x7c) == 1);
+        assert(witness::read_register(device, 0x7c) == 2);
     } else if (scenario == "active" || scenario == "unread" || scenario == "recover") {
         witness::configure_run(device, configuration);
         witness::write_register(device, 0x38, 1);

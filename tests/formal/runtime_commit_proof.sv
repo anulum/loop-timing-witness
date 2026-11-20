@@ -63,7 +63,7 @@ module runtime_enabled_proof #(parameter bit NEGATIVE_CONTROL = 0) (
     logic observed = 0;
     run_configuration_registers dut (.*);
     always @* if (reset_n && !capture_write) begin
-        if (capture_address == 8'h7c) assert (capture_response == 0 && capture_read_data == 1);
+        if (capture_address == 8'h7c) assert (capture_response == 0 && capture_read_data == 2);
         if (capture_address == 8'h78) assert (capture_response == 0 && capture_read_data == 24);
     end
     always @(posedge capture_clock) begin

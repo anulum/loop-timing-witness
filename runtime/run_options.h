@@ -25,6 +25,7 @@ struct RunOptions {
     const char *power_journal = nullptr;
     const char *trace_stop = nullptr;
     const char *tracefs = nullptr;
+    const char *fault_uio = nullptr;
     int cpu = -1;
     int scheduler = -1;
     int priority = -1;
@@ -78,6 +79,8 @@ inline RunOptions read_run_options(int argc, char **argv, int first) {
             result.trace_stop = argv[index + 1];
         } else if (std::strcmp(argv[index], "--tracefs") == 0 && !result.tracefs) {
             result.tracefs = argv[index + 1];
+        } else if (std::strcmp(argv[index], "--fault-uio") == 0 && !result.fault_uio) {
+            result.fault_uio = argv[index + 1];
         } else if (std::strcmp(argv[index], "--cpu") == 0 && result.cpu == -1) {
             result.cpu = option_number(argv[index + 1]);
         } else if (std::strcmp(argv[index], "--scheduler") == 0 && result.scheduler == -1) {
@@ -110,6 +113,9 @@ inline RunOptions read_run_options(int argc, char **argv, int first) {
  */
 /** @var witness::RunOptions::tracefs
  * Tracefs directory of the trace stop, supplied together with trace_stop.
+ */
+/** @var witness::RunOptions::fault_uio
+ * Optional fault-page UIO identity of run_uio: "uioN name version map physical_address_decimal".
  */
 /** @var witness::RunOptions::cpu
  * Requested CPU, or minus one to preserve inherited affinity.

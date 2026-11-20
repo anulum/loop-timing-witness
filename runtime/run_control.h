@@ -13,6 +13,7 @@
 #ifndef WITNESS_RUN_CONTROL_H
 #define WITNESS_RUN_CONTROL_H
 #include "run_output.h"
+#include "process_protocol.h"
 #include "refusal.h"
 #include <cstring>
 #include <functional>
@@ -40,7 +41,7 @@ inline std::int32_t signed_word(std::uint32_t value) {
 }
 
 /** Use the actual decoder response; hardware UIO accesses may instead bus-fault. */
-template <class Device> std::uint32_t read_register(Device &device, std::uint8_t address) {
+template <class Device> std::uint32_t read_register(Device &device, std::uint16_t address) {
     const auto result = device.read(address);
     if (result.response != 0)
         throw witness::RuntimeRefused("register read refused at " + std::to_string(address));
@@ -49,7 +50,7 @@ template <class Device> std::uint32_t read_register(Device &device, std::uint8_t
 
 /** Full-word register submission through the selected in-process transport. */
 template <class Device>
-void write_register(Device &device, std::uint8_t address, std::uint32_t value) {
+void write_register(Device &device, std::uint16_t address, std::uint32_t value) {
     if (device.write(address, value, 15).response != 0)
         throw witness::RuntimeRefused("register write refused at " + std::to_string(address));
 }
@@ -67,7 +68,7 @@ template <class Device> void configure_run(Device &device, const RunConfiguratio
     while ((read_register(device, 0x98) & 7) != 7)
         if (device.time() - start > 1000000000)
             throw witness::RuntimeRefused("run bank release timed out");
-    if (read_register(device, 0x7c) != 1 || read_register(device, 0x78) != 24 ||
+    if (read_register(device, 0x7c) != 2 || read_register(device, 0x78) != 24 ||
         read_register(device, 0x40) != configuration.period_ticks)
         throw witness::RuntimeRefused("compiled register ABI, Q format or period mismatch");
     write_register(device, 0x3c, configuration.cycles - 1);
@@ -77,10 +78,10 @@ template <class Device> void configure_run(Device &device, const RunConfiguratio
     write_register(device, 0x50, static_cast<std::uint32_t>(configuration.ramp));
     write_register(device, 0x54, configuration.phase);
     if (configuration.fault_enabled) {
-        write_register(device, 0x58, configuration.fault_kind);
-        write_register(device, 0x5c, configuration.fault_cycle);
-        write_register(device, 0x60, configuration.fault_periods);
-        write_register(device, 0x64, 1);
+        write_register(device, fault_page + 0x0, configuration.fault_kind);
+        write_register(device, fault_page + 0x4, configuration.fault_cycle);
+        write_register(device, fault_page + 0x8, configuration.fault_periods);
+        write_register(device, fault_page + 0xc, 1);
     }
 }
 
@@ -89,7 +90,7 @@ template <class Device> void drain_available(Device &device, RunOutput &output, 
     for (unsigned batch = 0; batch < 8 && (read_register(device, 0x90) & 1); ++batch) {
         std::array<std::uint32_t, 4> words{};
         for (unsigned index = 0; index < 4; ++index)
-            words[index] = read_register(device, static_cast<std::uint8_t>(0x80 + index * 4));
+            words[index] = read_register(device, static_cast<std::uint16_t>(0x80 + index * 4));
         output.event(words);
         write_register(device, 0x94, 1);
         ++result.records;

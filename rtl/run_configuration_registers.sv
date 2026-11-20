@@ -76,7 +76,7 @@ module run_configuration_registers #(
                     8'h70: capture_read_data = MISS_LIMIT;
                     8'h74: capture_read_data = SAFE_VALUE;
                     8'h78: capture_read_data = 24;
-                    8'h7c: capture_read_data = 1;
+                    8'h7c: capture_read_data = 2;
                     default: begin capture_read_data = 0; capture_response = 2'b10; end
                 endcase
             end

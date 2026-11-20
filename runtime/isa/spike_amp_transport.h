@@ -84,9 +84,9 @@ class SpikeAmpTransport {
     }
 
     /** Read the production fabric through actual AXI AR/R channels. */
-    Edge read(std::uint8_t address) { return fabric.read(address); }
+    Edge read(std::uint16_t address) { return fabric.read(address); }
     /** Write the production fabric through actual AXI AW/W/B channels. */
-    Edge write(std::uint8_t address, std::uint32_t value, std::uint8_t strobes) {
+    Edge write(std::uint16_t address, std::uint32_t value, std::uint8_t strobes) {
         return fabric.write(address, value, strobes);
     }
     /** Observe the original fabric clock model, never host timing or a substituted counter. */

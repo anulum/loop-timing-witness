@@ -108,7 +108,7 @@ class witness_axi_t final : public abstract_device_t {
     bool load(reg_t address, size_t length, std::uint8_t *bytes) override {
         if (length != 4 || address > 252 || address % 4 != 0)
             return false;
-        const auto reply = fabric.read(static_cast<std::uint8_t>(address));
+        const auto reply = fabric.read(static_cast<std::uint16_t>(address));
         synchronize();
         if (reply.response != 0)
             return false;
@@ -124,7 +124,7 @@ class witness_axi_t final : public abstract_device_t {
         std::uint32_t value = 0;
         for (unsigned index = 0; index < 4; ++index)
             value |= static_cast<std::uint32_t>(bytes[index]) << (index * 8);
-        const auto reply = fabric.write(static_cast<std::uint8_t>(address), value, 15);
+        const auto reply = fabric.write(static_cast<std::uint16_t>(address), value, 15);
         synchronize();
         return reply.response == 0;
     }

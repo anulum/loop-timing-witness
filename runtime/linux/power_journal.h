@@ -59,7 +59,7 @@ class PowerJournal {
                  Device &fabric)
         : PowerJournal(
               path, config, device, [&fabric] { return fabric.time(); },
-              [&fabric](std::uint8_t address) { return read_register(fabric, address); }) {}
+              [&fabric](std::uint16_t address) { return read_register(fabric, address); }) {}
     /** Join before releasing UIO/IIO resources, retaining all partial evidence. */
     ~PowerJournal();
     PowerJournal(const PowerJournal &) = delete;

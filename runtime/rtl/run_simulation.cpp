@@ -24,6 +24,8 @@ int main(int argc, char **argv) {
         const auto options = witness::read_run_options(argc, argv, 4);
         if (options.power_configuration)
             throw witness::RuntimeRefused("PAC1934 acquisition is physical UIO-only");
+        if (options.fault_uio)
+            throw witness::RuntimeRefused("the fault-page UIO device is run_uio-only");
         const auto original =
             options.metadata ? witness::file_digest(argv[1]) : witness::FileDigest{};
         const auto configuration = witness::read_configuration(argv[1]);

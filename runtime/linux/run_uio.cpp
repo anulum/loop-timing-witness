@@ -17,7 +17,7 @@
 int main(int argc, char **argv) {
     if (argc < 9) {
         std::cerr
-            << "usage: run_uio configuration events.bin tracking_raw.csv uioN name version map physical_address_decimal [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--power-config file --power-journal file] [--trace-stop miss|safe --tracefs directory]\n";
+            << "usage: run_uio configuration events.bin tracking_raw.csv uioN name version map physical_address_decimal [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--power-config file --power-journal file] [--trace-stop miss|safe --tracefs directory] [--fault-uio \"uioN name version map physical_address_decimal\"]\n";
         return 1;
     }
     try {
@@ -29,10 +29,28 @@ int main(int argc, char **argv) {
             witness::verify_digest(argv[1], original);
         if (configuration.modeled_overload_ns)
             throw witness::RuntimeRefused("modeled overload delay is simulation-only");
+        if (configuration.fault_enabled != (options.fault_uio != nullptr))
+            throw witness::RuntimeRefused(
+                "a fault run needs --fault-uio, and only a fault run takes it");
+        witness::UioIdentity fault_identity{};
+        if (options.fault_uio) {
+            std::istringstream fault_fields(options.fault_uio);
+            if (!(fault_fields >> fault_identity.device >> fault_identity.name >>
+                  fault_identity.version))
+                throw witness::RuntimeRefused("fault-page UIO identity is incomplete");
+            fault_identity.map =
+                static_cast<std::uint32_t>(witness::number(fault_fields, UINT32_MAX));
+            fault_identity.physical_address = witness::number(fault_fields, UINT64_MAX);
+            witness::end_request(fault_fields);
+        }
         std::istringstream arguments(std::string(argv[7]) + " " + argv[8]);
         const auto map = witness::number(arguments, UINT32_MAX);
         const auto physical = witness::number(arguments, UINT64_MAX);
         witness::end_request(arguments);
+        if (options.fault_uio &&
+            (physical > UINT64_MAX - witness::fault_page ||
+             fault_identity.physical_address != physical + witness::fault_page))
+            throw witness::RuntimeRefused("fault-page UIO is not the page after the run page");
         std::unique_ptr<witness::Pac1934Device> sensor;
         witness::PowerConfiguration power{};
         witness::FileDigest power_original;
@@ -55,6 +73,8 @@ int main(int argc, char **argv) {
         const auto kernel = witness::read_kernel_context();
         witness::UioDevice device(
             {argv[4], argv[5], argv[6], static_cast<std::uint32_t>(map), physical});
+        if (options.fault_uio)
+            device.open_fault_page(fault_identity);
         std::unique_ptr<witness::TraceStop> trace;
         if (options.trace_stop)
             trace = std::make_unique<witness::TraceStop>(options.tracefs, options.trace_stop);

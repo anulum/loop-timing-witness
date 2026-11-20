@@ -31,6 +31,14 @@ AmpUioConfiguration read_amp_uio_configuration(const std::string &path) {
     result.startup_ns = number(input, UINT64_C(60000000000));
     result.completion_ns = number(input, UINT64_C(86400000000000));
     result.poll_ns = number(input, UINT64_C(1000000));
+    if (!(input >> std::ws).eof()) {
+        result.faults.index = static_cast<std::uint32_t>(number(input, UINT32_MAX));
+        if (!(input >> result.faults.name))
+            throw witness::RuntimeRefused("AMP fault-page map name is absent");
+        result.faults.address = number(input, UINT64_MAX);
+        result.faults.bytes = number(input, UINT64_MAX);
+        result.fault_page = true;
+    }
     end_request(input);
     if (!result.startup_ns || !result.completion_ns || !result.poll_ns ||
         result.poll_ns > result.startup_ns || result.poll_ns > result.completion_ns)

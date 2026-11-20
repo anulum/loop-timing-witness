@@ -24,6 +24,10 @@
 #include <string>
 
 namespace witness {
+/** First byte offset of the fault page of register map version 2: the fault kind, target
+ * cycle, duration and arm registers lie at offsets 0, 4, 8 and 12 of this page, and register
+ * addresses run to 0x1fff. */
+constexpr std::uint16_t fault_page = 0x1000;
 /** Maximum admitted simulated time advance in nanoseconds per protocol request. */
 constexpr std::uint64_t advance_limit = 10000000;
 /** Register response and raw word; UIO cannot expose AXI response signals. */
@@ -59,17 +63,17 @@ template <class Device> int serve(Device &device) {
         input >> operation;
         ProtocolReply result{};
         if (operation == "R") {
-            const auto address = number(input, 255);
+            const auto address = number(input, 0x1fff);
             end_request(input);
-            const auto reply = device.read(static_cast<std::uint8_t>(address));
+            const auto reply = device.read(static_cast<std::uint16_t>(address));
             result = {reply.response, reply.data};
         } else if (operation == "W") {
-            const auto address = number(input, 255);
+            const auto address = number(input, 0x1fff);
             const auto data = number(input, std::numeric_limits<std::uint32_t>::max());
             const auto strobes = number(input, 15);
             end_request(input);
             const auto reply =
-                device.write(static_cast<std::uint8_t>(address), static_cast<std::uint32_t>(data),
+                device.write(static_cast<std::uint16_t>(address), static_cast<std::uint32_t>(data),
                              static_cast<std::uint8_t>(strobes));
             result = {reply.response, reply.data};
             result.data = 0;

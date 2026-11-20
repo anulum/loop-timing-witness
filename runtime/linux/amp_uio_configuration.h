@@ -19,6 +19,8 @@ struct AmpUioConfiguration {
     UioIdentity identity;
     AmpUioMap fabric, mailbox;
     std::uint64_t startup_ns, completion_ns, poll_ns;
+    bool fault_page = false;
+    AmpUioMap faults{};
 };
 /** Read the complete resource configuration without inferred physical addresses or aliases. */
 AmpUioConfiguration read_amp_uio_configuration(const std::string &path);
@@ -34,6 +36,12 @@ AmpUioConfiguration read_amp_uio_configuration(const std::string &path);
  */
 /** @var witness::AmpUioConfiguration::startup_ns
  * Host polling timeout in monotonic nanoseconds for firmware readiness.
+ */
+/** @var witness::AmpUioConfiguration::fault_page
+ * Whether the resource configuration names the fault page's map.
+ */
+/** @var witness::AmpUioConfiguration::faults
+ * Original named fault-page UIO map, valid with fault_page.
  */
 /** @var witness::AmpUioConfiguration::completion_ns
  * Host polling timeout in monotonic nanoseconds for run completion.

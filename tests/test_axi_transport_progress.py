@@ -127,7 +127,10 @@ def _write_receipt(
 
 @pytest.mark.parametrize("state", ["idle", "held", "finished"])
 def test_aperture_response_progress(simulator: Path, tmp_path: Path, state: str) -> None:
-    """Complete every aperture read and refuse all partial writes without mutating configuration.
+    """Complete every read of both register pages and refuse all partial writes without change.
+
+    Register map version 2 has the run page at 0x000-0x0ff and the fault page at 0x1000-0x100f;
+    the configuration snapshot reads the fault registers through their own page.
 
     Parameters
     ----------
@@ -144,10 +147,11 @@ def test_aperture_response_progress(simulator: Path, tmp_path: Path, state: str)
         "finished": ["W 60 1 15", "W 56 1 15", "T 1000000"],
     }[state]
     # These registers hold configuration/staging; reads cannot acknowledge IRQs or pop FIFO data.
-    registers = [40, 44, 56, 60, 68, 72, 76, 80, 84, 88, 92, 96, 100, 152]
+    registers = [40, 44, 56, 60, 68, 72, 76, 80, 84, 4096, 4100, 4104, 4108, 152]
     snapshot = [f"R {address}" for address in registers]
-    reads = [f"R {address}" for address in range(256)]
-    writes = [f"W {address} 1 {strobes}" for address in range(256) for strobes in range(15)]
+    pages = [*range(256), *range(4096, 4112)]
+    reads = [f"R {address}" for address in pages]
+    writes = [f"W {address} 1 {strobes}" for address in pages for strobes in range(15)]
     requests = [*setup, *snapshot, "T 0", *reads, *writes, *snapshot, "R 4", "Q"]
     payload = "\n".join(requests) + "\n"
     (tmp_path / "requests.txt").write_text(payload, encoding="utf-8")

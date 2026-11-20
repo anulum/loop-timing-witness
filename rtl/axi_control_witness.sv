@@ -6,7 +6,10 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — production AXI control registers plant and event window
 
-// AXI addresses are offsets inside an externally decoded256-byte aperture.
+// AXI addresses are offsets inside an externally decoded 8 KiB aperture of two 4 KiB pages
+// (register map version 2): the run page holds every register at 0x000-0x0ff except the fault
+// schedule, which only the fault page reaches, at 0x1000-0x100c (kind, target cycle, duration,
+// arm). A system can therefore map the run page for a controller without the fault registers.
 // run_drained and drain stream belong to bus_clock; plant diagnostics belong
 // to capture_clock. Raw IRQ strobes belong to capture_clock; interrupt_line is
 // a retained bus-domain level. The three event mirrors belong to capture_clock and are
@@ -29,7 +32,7 @@ module axi_control_witness #(
     parameter logic signed [31:0] THERMAL_B = 32'sd16769
 ) (
     input logic bus_clock, capture_clock, run_reset_n,
-    input logic [7:0] awaddr,
+    input logic [12:0] awaddr,
     input logic awvalid,
     output logic awready,
     input logic [31:0] wdata,
@@ -39,7 +42,7 @@ module axi_control_witness #(
     output logic [1:0] bresp,
     output logic bvalid,
     input logic bready,
-    input logic [7:0] araddr,
+    input logic [12:0] araddr,
     input logic arvalid,
     output logic arready,
     output logic [31:0] rdata,
@@ -76,6 +79,19 @@ module axi_control_witness #(
     logic [1:0] window_response, reset_response;
     logic capture_bank_ready, capture_reset_allowed;
     logic irq_selected;
+    // The page decode maps the fault page onto the internal schedule offsets 0x58-0x64, and every
+    // other address, the schedule offsets of the run page included, onto the unassigned local
+    // offset 0xfc, which the record window refuses with SLVERR.
+    function automatic logic [7:0] register_offset(input logic [12:0] address);
+        if (address[12:8] == 5'd0 && (address[7:0] < 8'h58 || address[7:0] > 8'h67))
+            register_offset = address[7:0];
+        else if (address[12:4] == 9'h100)
+            register_offset = 8'h58 + {4'd0, address[3:0]};
+        else
+            register_offset = 8'hfc;
+    endfunction
+    wire [7:0] bus_write_offset = register_offset(awaddr);
+    wire [7:0] bus_read_offset = register_offset(araddr);
     logic [31:0] irq_read_data;
     logic [1:0] irq_response;
     clock_reset_release transport_reset (
@@ -121,9 +137,9 @@ module axi_control_witness #(
     );
     axi_lite_clock_bridge #(.ENABLE_LOCAL(1)) transport (
         .bus_clock(bus_clock), .capture_clock(capture_clock), .run_reset_n(run_reset_n),
-        .awaddr(awaddr), .awvalid(awvalid), .awready(awready), .wdata(wdata), .wstrb(wstrb),
+        .awaddr(bus_write_offset), .awvalid(awvalid), .awready(awready), .wdata(wdata), .wstrb(wstrb),
         .wvalid(wvalid), .wready(wready), .bresp(bresp), .bvalid(bvalid), .bready(bready),
-        .araddr(araddr), .arvalid(arvalid), .arready(arready), .rdata(rdata), .rresp(rresp),
+        .araddr(bus_read_offset), .arvalid(arvalid), .arready(arready), .rdata(rdata), .rresp(rresp),
         .rvalid(rvalid), .rready(rready), .capture_valid(capture_valid), .capture_write(capture_write),
         .capture_address(capture_address), .capture_write_data(capture_write_data),
         .capture_write_strobes(capture_write_strobes), .capture_read_data(capture_read_data),

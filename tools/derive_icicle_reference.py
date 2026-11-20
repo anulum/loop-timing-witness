@@ -39,7 +39,7 @@ DERIVED_HASHES = {
         "921f889ef648fc4e09b09789fe87385bf0857596a105f95b508b240531f7e1de"
     ),
     "script_support/components/FIC0_INITIATOR.tcl": (
-        "2ac5577bfdb84f1ec262011076fb20a9ed727de2d562f85bc0e2e8780ef0610d"
+        "22ddf609ae6cb2bd3f3bd485bfc309bd10863c33e1875dfccbeea197b73777f1"
     ),
     "script_support/constraints/fic_clocks.sdc": (
         "024f7782db1d5ad0735f1c3d6d52dab52e11e5d798818120687b0dd32c27b900"
@@ -204,7 +204,7 @@ def edits() -> dict[str, tuple[tuple[str, str], ...]]:
         ),
         "script_support/components/FIC0_INITIATOR.tcl": (
             ('"NUM_SLAVES:2"', '"NUM_SLAVES:3"'),
-            ('"SLAVE2_END_ADDR:0x60020470"', '"SLAVE2_END_ADDR:0x600200ff"'),
+            ('"SLAVE2_END_ADDR:0x60020470"', '"SLAVE2_END_ADDR:0x60021fff"'),
         ),
         "script_support/constraints/fic_clocks.sdc": (
             (f"{{ {FIC0_CLOCK} }}", f"{{ {FIC0_CLOCK} {WITNESS_CLOCK} }}"),

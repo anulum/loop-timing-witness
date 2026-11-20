@@ -204,7 +204,7 @@ void witness_amp_main(void) {
         fence();
     if (output->logger_status != WITNESS_AMP_LOGGER_READY)
         refuse(UINT64_C(0x108), output->logger_status);
-    if (load(platform->mmio + 0x7c) != 1 || load(platform->mmio + 0x78) != 24 ||
+    if (load(platform->mmio + 0x7c) != 2 || load(platform->mmio + 0x78) != 24 ||
         load(platform->mmio + 0x40) != witness_amp_run.period_ticks ||
         load(platform->mmio + 0x3c) != witness_amp_run.cycles - 1 ||
         (load(platform->mmio + 4) & 6) || load(platform->enable_word))

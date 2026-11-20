@@ -85,7 +85,7 @@ available for PAC1934 access. No I²C loopback variant is selected.
 
 The derivation changes two vendor Tcl files and the reference clock constraints. The
 reference script sources the witness script once the base design has generated, and FIC0's
-interconnect gains target slot 2, ending at `0x600200ff`. In
+interconnect gains target slot 2, ending at `0x60021fff`. In
 `script_support/constraints/fic_clocks.sdc`, the FIC0 clock group also holds the witness
 capture clock, so the paths between the two clocks are analysed instead of being cut as
 asynchronous, and two appended `set_max_delay 8` lines bound every path between them, in each
@@ -100,7 +100,9 @@ as before.
 The witness script adds the rest to the generated design:
 
 - the witness HDL core as an AXI4 target on FIC0 slot 2, with the reference FIC0's 38-bit
-  address and 32-bit data, covering the 256-byte AXI4-Lite aperture at `0x60020000`;
+  address and 32-bit data, covering the 8 KiB AXI4-Lite aperture of register map version 2:
+  the run page at `0x60020000` and the fault page at `0x60021000`
+  ([plant witness](../../docs/PLANT_WITNESS.md#register-pages));
 - MSS fabric-to-processor interrupt bit 11 for the retained witness interrupt, split out of
   the range 11–58 that the reference ties low;
 - a separate CCC, `WITNESS_CCC`, that derives the 100 MHz capture clock from the 50 MHz
@@ -188,8 +190,9 @@ timing of each crossing is bounded by the derived constraints above, and the rep
 them. The whole design uses 27 502 4LUT (10.8 %), 20 700 DFF (8.1 %), 104 uSRAM, 127 LSRAM
 and 20 math blocks.
 
-This run and the engineering-sample run below predate the [event mirror pins](#event-mirror-pins),
-which change the derived RTL, connection script and constraints.
+This run and the engineering-sample run below predate the [event mirror pins](#event-mirror-pins)
+and the two-page register map, which change the derived RTL, connection script, constraints and
+interconnect.
 
 The reports stay with the run; their SHA-256 values are:
 

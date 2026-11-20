@@ -114,7 +114,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 28,
+      "line": 30,
       "outcome": 6,
       "condition": "destruction of the default FileDigest arm's temporary under its cleared guard",
       "reason": "GCC sets the cleanup flag of the default FileDigest arm and clears its temporary's guard right after the noexcept construction, before the cleanup test, so the guarded destruction cannot run; the file_digest arm leaves the cleanup flag unset",
@@ -122,7 +122,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 28,
+      "line": 30,
       "outcome": 8,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
       "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
@@ -130,7 +130,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 28,
+      "line": 30,
       "outcome": 10,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
       "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
@@ -138,7 +138,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 28,
+      "line": 30,
       "outcome": 11,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
       "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
@@ -146,7 +146,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 51,
+      "line": 53,
       "outcome": 2,
       "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
       "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
@@ -154,7 +154,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 51,
+      "line": 53,
       "outcome": 3,
       "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
       "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
@@ -162,7 +162,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 74,
+      "line": 76,
       "outcome": 8,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -170,7 +170,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 74,
+      "line": 76,
       "outcome": 9,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -178,7 +178,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 74,
+      "line": 76,
       "outcome": 10,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -186,7 +186,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 74,
+      "line": 76,
       "outcome": 11,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -194,22 +194,22 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 64,
+      "line": 66,
       "outcome": 0,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
       "lines": [
-        68,
-        69,
         70,
         71,
         72,
-        73
+        73,
+        74,
+        75
       ]
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 64,
+      "line": 66,
       "outcome": 2,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
@@ -217,7 +217,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 64,
+      "line": 66,
       "outcome": 3,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
@@ -225,7 +225,7 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 74,
+      "line": 109,
       "outcome": 5,
       "condition": "AWVALID without AWREADY at a rising bus edge",
       "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds AWREADY high (rtl/axi_lite_clock_bridge.sv: awready = reset_n && !address_held && !write_outstanding), so the request is accepted at the first rising bus edge",
@@ -233,7 +233,7 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 75,
+      "line": 110,
       "outcome": 3,
       "condition": "WVALID without WREADY at a rising bus edge",
       "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds WREADY high (rtl/axi_lite_clock_bridge.sv: wready = reset_n && !data_held && !write_outstanding), so the request is accepted at the first rising bus edge",
@@ -241,7 +241,7 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 76,
+      "line": 111,
       "outcome": 3,
       "condition": "ARVALID without ARREADY at a rising bus edge",
       "reason": "the simulation presents one transaction at a time, after the previous response, and the AXI-Lite bridge then holds ARREADY high (rtl/axi_lite_clock_bridge.sv: arready = reset_n && !read_held && !read_outstanding), so the request is accepted at the first rising bus edge",
@@ -249,55 +249,71 @@
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 88,
+      "line": 112,
+      "outcome": 3,
+      "condition": "BVALID without BREADY at a rising bus edge",
+      "reason": "the simulation raises bready with each request and holds it until the response's handshake edge, and it steps the reset period without sampling the bus, so a bvalid that an initial value set before the reset acted never meets a sampled edge; after the reset the bridge raises bvalid only for an accepted request (rtl/axi_lite_clock_bridge.sv: bvalid <= 1 after an accepted request, bvalid <= 0 when bvalid && bready)",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 113,
+      "outcome": 3,
+      "condition": "RVALID without RREADY at a rising bus edge",
+      "reason": "the simulation raises rready with each request and holds it until the response's handshake edge, and it steps the reset period without sampling the bus, so a rvalid that an initial value set before the reset acted never meets a sampled edge; after the reset the bridge raises rvalid only for an accepted request (rtl/axi_lite_clock_bridge.sv: rvalid <= 1 after an accepted request, rvalid <= 0 when rvalid && rready)",
+      "lines": []
+    },
+    {
+      "file": "runtime/rtl/simulation.h",
+      "line": 89,
       "outcome": 0,
       "condition": "context.gotFinish() during a transaction",
       "reason": "no production RTL module calls $finish; the check guards a model that ends itself",
       "lines": [
-        89
+        90
       ]
     },
     {
       "file": "runtime/rtl/simulation.h",
-      "line": 137,
+      "line": 165,
       "outcome": 1,
       "condition": "AXI read not answered within the transaction limit",
       "reason": "the production bridge answers every read, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
-      "lines": [
-        149
-      ]
-    },
-    {
-      "file": "runtime/rtl/simulation.h",
-      "line": 161,
-      "outcome": 1,
-      "condition": "AXI write not answered within the transaction limit",
-      "reason": "the production bridge answers every write, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
       "lines": [
         177
       ]
     },
     {
-      "file": "runtime/run_control.h",
-      "line": 68,
-      "outcome": 0,
-      "condition": "run bank release not observed within one simulated second",
-      "reason": "the production RTL releases the run bank a few cycles after the request, and every measured run observes the release on the loop's second read; the bound guards an RTL that never releases it",
+      "file": "runtime/rtl/simulation.h",
+      "line": 189,
+      "outcome": 1,
+      "condition": "AXI write not answered within the transaction limit",
+      "reason": "the production bridge answers every write, including SLVERR for an invalid address, within a few bus cycles; the transaction limit guards an RTL that stops responding",
       "lines": [
-        69
+        205
       ]
     },
     {
       "file": "runtime/run_control.h",
-      "line": 70,
+      "line": 69,
+      "outcome": 0,
+      "condition": "run bank release not observed within one simulated second",
+      "reason": "the production RTL releases the run bank a few cycles after the request, and every measured run observes the release on the loop's second read; the bound guards an RTL that never releases it",
+      "lines": [
+        70
+      ]
+    },
+    {
+      "file": "runtime/run_control.h",
+      "line": 71,
       "outcome": 1,
-      "condition": "register ABI version (0x7c) other than 1",
+      "condition": "register ABI version (0x7c) other than 2",
       "reason": "the ABI version register 0x7c is a constant of the production RTL, so only another RTL build changes it, and this program is linked against this one; the period check beside it is covered",
       "lines": []
     },
     {
       "file": "runtime/run_control.h",
-      "line": 70,
+      "line": 71,
       "outcome": 3,
       "condition": "Q format (0x78) other than 24",
       "reason": "the Q-format register 0x78 is a constant of the production RTL, so only another RTL build changes it, and this program is linked against this one; the period check beside it is covered",
@@ -305,17 +321,17 @@
     },
     {
       "file": "runtime/run_control.h",
-      "line": 135,
+      "line": 136,
       "outcome": 4,
       "condition": "commit refused while the run is neither safe nor finished",
       "reason": "the RTL refuses the commit of a staged command only when the run is not enabled, finished or safe (rtl/control_io_registers.sv), and the loop commits only within an enabled run, so a refusal always reads back finished or safe, which the covered refusals show",
       "lines": [
-        136
+        137
       ]
     },
     {
       "file": "runtime/run_control.h",
-      "line": 135,
+      "line": 136,
       "outcome": 6,
       "condition": "commit refused while the run is neither safe nor finished",
       "reason": "the RTL refuses the commit of a staged command only when the run is not enabled, finished or safe (rtl/control_io_registers.sv), and the loop commits only within an enabled run, so a refusal always reads back finished or safe, which the covered refusals show",
@@ -530,7 +546,7 @@
     },
     {
       "file": "runtime/process_protocol.h",
-      "line": 42,
+      "line": 46,
       "outcome": 3,
       "condition": "from_chars stops before the end of an accepted token",
       "reason": "line 37 admits only tokens of decimal digits, which from_chars consumes completely; a value too large fails with result_out_of_range instead, which the refusal cases cover",
@@ -538,7 +554,7 @@
     },
     {
       "file": "runtime/process_protocol.h",
-      "line": 94,
+      "line": 98,
       "outcome": 4,
       "condition": "!std::cin.eof() after the request loop ends without a stdio error",
       "reason": "std::cin reads through stdio (synchronised by default), which reports every failed read as end of file and records the error for ferror, which the condition checks first; a directory as input shows it (ferror set, eof set)",

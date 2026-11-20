@@ -14,6 +14,22 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Register map version 2: the fault schedule (kind, target cycle, duration, arm) moves to its own
+  4 KiB fault page at `0x1000`–`0x100c`; the run page refuses its old offsets `0x58`–`0x64`, every
+  other address of the 8 KiB aperture returns SLVERR, the injector status stays at `0x68` and
+  `0x7c` reads 2. `axi_control_witness` takes 13-bit addresses and maps the fault page onto the
+  unchanged internal decoders; the Icicle FIC0 slot ends at `0x60021fff`. Register addresses are
+  16 bits in the native runtime and the AXI process protocol (up to `0x1fff`). `run_uio` maps the
+  fault page as its own UIO device (`--fault-uio`, required exactly for a fault run) and unmaps it
+  before it writes START; `run_amp_uio` takes it as an optional fourth map of its resource
+  configuration; both refuse a map that reaches past its 4 KiB register page. The firmware, the
+  Spike plugin and every reader of the version follow it. The threat model, architecture, plant
+  witness, AMP and Icicle documents describe the pages.
+  The native simulation steps its reset period without sampling the bus: under random initial
+  values a local reset that starts low has no falling edge, so a response flag could hold an
+  initial value until the domain's first clock edge and meet a sampled bus edge, depending on how
+  the values fell. The runtime gate reviews the two response handshakes that only that state could
+  reach (77 runtime outcomes), and the reviewed outcomes move with the shifted lines.
 - `docs/AMP_LINUX.md` describes the board placement of the dedicated-hart controller from the MSS
   Technical Reference Manual: firmware in L2-LIM ways that stay disabled as cache, L2 way
   partitioning with the per-master `WayMaskX` registers (hart 4's caches as masters 13 and 14,

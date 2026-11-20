@@ -32,6 +32,10 @@ class UioDevice {
     std::size_t register_offset = 0;
     std::uint32_t interrupt_count = 0;
     bool irq_managed = false;
+    int fault_descriptor = -1;
+    void *fault_mapping = nullptr;
+    std::size_t fault_size = 0;
+    std::size_t fault_offset = 0;
 
     /** Disable this owned IRQ, unmap and close; safe on failed construction. */
     void close() noexcept;
@@ -48,10 +52,15 @@ class UioDevice {
 
     /** Absolute CLOCK_MONOTONIC nanoseconds; never fabric capture ticks. */
     std::uint64_t time() const;
-    /** Perform exactly one ordered aligned little-endian volatile 32-bit load. */
-    ProtocolReply read(std::uint8_t address);
+    /** Map the fault page, a separate UIO device, to arm a fault; refuse a second mapping. */
+    void open_fault_page(const UioIdentity &identity);
+    /** Unmap the fault page; writing START does this before the store reaches the fabric. */
+    void close_fault_page() noexcept;
+    /** Perform exactly one ordered aligned little-endian volatile 32-bit load of the run page,
+     * or of the fault page at offsets 0x1000-0x100c while it is mapped. */
+    ProtocolReply read(std::uint16_t address);
     /** Full-word ordered store; refuse partial strobes before any MMIO access. */
-    ProtocolReply write(std::uint8_t address, std::uint32_t data, std::uint8_t strobes);
+    ProtocolReply write(std::uint16_t address, std::uint32_t data, std::uint8_t strobes);
     /** Sleep for a requested duration while physical fabric continues running. */
     void advance(std::uint64_t nanoseconds);
     /** Re-enable generic IRQ, wait with nanosecond timeout and read its 4-byte count. */

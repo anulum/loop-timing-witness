@@ -170,3 +170,65 @@ def test_amp_uio_actual_unavailable_device(amp_uio_program: Path, tmp_path: Path
     assert not events.exists()
     assert not tracking.exists()
     assert not metadata.exists()
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ("drop", "", [], "an AMP fault run needs the fault-page map in the resource configuration"),
+        ("none", " 2", [], "AMP fault-page map name is absent"),
+        (
+            "none",
+            " 2 faults 1073741824 4096",
+            [],
+            "AMP fault page is not the page after the fabric's",
+        ),
+        (
+            "none",
+            " 2 faults 1073745920 8192",
+            [],
+            "AMP fault page is not the page after the fabric's",
+        ),
+        (
+            "none",
+            " 0 faults 1073745920 4096",
+            [],
+            "AMP fault page is not the page after the fabric's",
+        ),
+        ("none", " 2 faults 1073745920 4096 extra", [], "unexpected argument"),
+        ("drop", " 2 faults 1073745920 4096", [], "cannot read AMP sysfs attribute"),
+        ("none", "", ["--fault-uio", "uio1 faults devicetree 0 4096"], "not --fault-uio"),
+    ],
+)
+def test_amp_uio_fault_page_map(
+    amp_uio_program: Path, tmp_path: Path, case: tuple[str, str, list[str], str]
+) -> None:
+    """A fault run needs the fault-page map, which must be the page after the fabric's.
+
+    Parameters
+    ----------
+    amp_uio_program
+        Actual public Linux AMP executable.
+    tmp_path
+        Owned configuration files and exclusive output paths.
+    case
+        Scheduled fault or none, fault-page map fields appended to the resource configuration,
+        additional command options and the required refusal before any output.
+    """
+    fault, suffix, extra, finding = case
+    run = tmp_path / "run.conf"
+    run.write_text(configuration("pid", fault), encoding="ascii")
+    resource = tmp_path / "resources.conf"
+    resource.write_text(RESOURCE.rstrip("\n") + suffix + "\n", encoding="ascii")
+    events, tracking = tmp_path / "events.bin", tmp_path / "tracking.csv"
+    result = subprocess.run(
+        [str(amp_uio_program), str(run), str(resource), str(events), str(tracking), *extra],
+        capture_output=True,
+        text=True,
+        timeout=scaled(5),
+        check=False,
+    )
+    assert result.returncode == 1
+    assert finding in result.stderr
+    assert not events.exists()
+    assert not tracking.exists()

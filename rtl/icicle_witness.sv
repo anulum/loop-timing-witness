@@ -6,8 +6,9 @@
 // Contact: www.anulum.li | protoscience@anulum.li
 // Loop Timing Witness — Icicle AXI4-Lite fabric boundary
 
-// The FIC0 interconnect must select this target at 0x60020000..0x600200ff.
-// The low eight address bits are the complete witness register aperture.
+// The FIC0 interconnect must select this target at 0x60020000..0x60021fff.
+// The low thirteen address bits are the complete witness register aperture: the run page at
+// 0x60020000 and the fault page at 0x60021000.
 // The witness stays in reset until the capture clock's PLL reports lock, and
 // returns to reset if the lock drops; both witness domains reset together.
 // The three event mirrors leave the fabric on board pins for an external time
@@ -37,8 +38,8 @@ module icicle_witness #(
     output logic interrupt_line,
     output logic sample_ready_mirror, actuator_write_mirror, safe_state_mirror
 );
-    wire [29:0] unused_awaddr_high = awaddr[37:8];
-    wire [29:0] unused_araddr_high = araddr[37:8];
+    wire [24:0] unused_awaddr_high = awaddr[37:13];
+    wire [24:0] unused_araddr_high = araddr[37:13];
     wire unused_run_drained, unused_run_enabled, unused_run_finished;
     wire unused_capture_quiescent, unused_sample_read, unused_actuator_write;
     wire unused_buffer_full, unused_capture_active, unused_sample_valid;
@@ -55,10 +56,10 @@ module icicle_witness #(
     wire [127:0] unused_drain_record;
     axi_control_witness #(.PERIOD_TICKS(PERIOD_TICKS), .THERMAL(THERMAL)) witness (
         .bus_clock(bus_clock), .capture_clock(capture_clock), .run_reset_n(witness_reset_n),
-        .awaddr(awaddr[7:0]), .awvalid(awvalid), .awready(awready),
+        .awaddr(awaddr[12:0]), .awvalid(awvalid), .awready(awready),
         .wdata(wdata), .wstrb(wstrb), .wvalid(wvalid), .wready(wready),
         .bresp(bresp), .bvalid(bvalid), .bready(bready),
-        .araddr(araddr[7:0]), .arvalid(arvalid), .arready(arready),
+        .araddr(araddr[12:0]), .arvalid(arvalid), .arready(arready),
         .rdata(rdata), .rresp(rresp), .rvalid(rvalid), .rready(rready),
         .interrupt_line(interrupt_line),
         .sample_ready_mirror(sample_ready_mirror), .actuator_write_mirror(actuator_write_mirror),

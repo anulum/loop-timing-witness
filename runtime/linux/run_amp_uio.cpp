@@ -25,6 +25,9 @@ int main(int argc, char **argv) {
         if (options.trace_stop)
             throw witness::RuntimeRefused(
                 "a trace stop needs the Linux controller of run_uio or run_simulation");
+        if (options.fault_uio)
+            throw witness::RuntimeRefused(
+                "the AMP fault page is a map of the resource configuration, not --fault-uio");
         const auto original = witness::file_digest(argv[1]);
         const auto resource_original = witness::file_digest(argv[2]);
         const auto configuration = witness::read_configuration(argv[1]);
@@ -53,7 +56,11 @@ int main(int argc, char **argv) {
         }
         const auto policy = witness::apply_host_policy(options);
         const auto kernel = witness::read_kernel_context();
-        witness::AmpUioDevice device(resources.identity, resources.fabric, resources.mailbox);
+        if (configuration.fault_enabled && !resources.fault_page)
+            throw witness::RuntimeRefused(
+                "an AMP fault run needs the fault-page map in the resource configuration");
+        witness::AmpUioDevice device(resources.identity, resources.fabric, resources.mailbox,
+                                     resources.fault_page ? &resources.faults : nullptr);
         const auto startup = device.time();
         std::uint32_t abi = 0;
         while (!(abi = device.read_memory32(resources.mailbox.address +

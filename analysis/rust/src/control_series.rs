@@ -283,6 +283,7 @@ pub(crate) fn energy_per_cycle(
     Ok(object(json!({
         "status": "available",
         "unit": "J/cycle",
+        "method": "window_mean",
         "sample_count": covered,
         "window_count": windows,
         "per_rail": per_rail,

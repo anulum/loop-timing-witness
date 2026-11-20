@@ -466,8 +466,10 @@ def energy_per_cycle(
     -------
     dict[str, Any]
         Mean joules per cycle for each rail and all rails combined, with
-        contributing window and cycle counts. No per-cycle instantaneous
-        measurement is inferred from the slower power sampler.
+        contributing window and cycle counts, and ``method`` ``window_mean``:
+        each value is a rail's energy over the sampler windows divided by the
+        cycles they hold. No per-cycle instantaneous measurement is inferred
+        from the slower power sampler.
 
     Raises
     ------
@@ -483,6 +485,7 @@ def energy_per_cycle(
     return {
         "status": "available",
         "unit": "J/cycle",
+        "method": "window_mean",
         "sample_count": covered,
         "window_count": windows,
         "per_rail": per_rail,

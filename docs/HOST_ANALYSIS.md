@@ -483,6 +483,24 @@ qualifies a physical instrument or a pooled repeat campaign.
 Each CSV row and SVG title carries the evidence status, so a detached simulation artefact retains
 its provenance. The SVG charts are visual summaries. The JSON and CSV carry numeric results.
 
+### Energy method and frequency sweep
+
+The report's `energy` block names its method, `window_mean`: per-rail and total joules per cycle
+are each rail's energy over the sampler windows holding analysed cycles, divided by those cycles,
+with the window and cycle counts. `python -m loop_timing_witness.energy_sweep DECLARATION` fits the
+marginal energy per cycle from several such reports, as the
+[measurement protocol](MEASUREMENT_PROTOCOL.md#energy) describes. The declaration is:
+
+```json
+{"schema": "loop-timing-witness.energy-sweep.v1", "temperature_tolerance_c": 1.0,
+ "runs": [{"report": "run-1000/report.json", "cycle_rate_hz": 1000, "temperature_c": 25.0}]}
+```
+
+Report paths are relative to the declaration. The result (`loop-timing-witness.energy-sweep-result.v1`)
+gives, per rail and for all rails together, `static_power_w`, `marginal_energy_j`, their standard
+errors and `r_squared` (null when the powers do not vary), with the run identifiers, the cycle
+rates and the temperature span.
+
 ## Repeat campaigns
 
 A run manifest describes one repeat; it has no repeat index or reboot record. A

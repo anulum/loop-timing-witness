@@ -14,6 +14,12 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `loop_timing_witness.energy_sweep` separates each rail's static power from the marginal energy
+  per cycle: from run reports of one placement at three or more cycle rates and one temperature,
+  a least-squares line `P = P0 + E_dyn·f` with standard errors and `r²`, refusing mixed placements,
+  invalid reports, too few rates and temperatures beyond a declared tolerance. The measurement
+  protocol gains an Energy section (the four PAC1934 rails, the recorded sample rate, the window
+  mean and the sweep method).
 - `docs/MEASUREMENT_PROTOCOL.md` has a GUM uncertainty budget: the timebase scale from the Icicle
   Kit's 50 MHz reference oscillator (±10 ppm with temperature and supply, ±5 ppm first-year aging,
   from its data sheet), the event phase behind the two-stage request synchroniser (`T/√12` per
@@ -72,6 +78,8 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The report's `energy` block names its method, `window_mean`, in the Python and Rust analyses and
+  the shared series corpus.
 - The README shows the OpenSSF Best Practices badge: the project's record (15127) reached the passing
   level on 2026-11-20 with every passing criterion answered from the repository.
 - The RTL, native runtime and plant timing proofs (`make rtl-invariants`,

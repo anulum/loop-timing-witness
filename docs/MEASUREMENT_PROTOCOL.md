@@ -84,7 +84,8 @@ records required below.
 - Deadline misses are reported as counts and rates from the hardware monitor.
 - Control quality is the tracking error of the emulated plant, RMS and peak.
 - Energy is reported as mean energy per control cycle over windows of many cycles, per rail and
-  for the four rails together.
+  for the four rails together; the report names the method `window_mean`. The marginal energy per
+  cycle comes from a loop-frequency sweep, described under [Energy](#energy).
 - Fault runs report detection latency and time to safe state per injected fault.
 - The instrument floor from the bus-offset calibration is reported with every latency table.
 - The host report retains the observation duration in timebase ticks and the contributing sample
@@ -142,6 +143,34 @@ energy-window alignment remain unverified. The journal cannot substitute for the
 required by the board procedure. Formats and validation are in
 [`HOST_ANALYSIS.md`](HOST_ANALYSIS.md); register snapshots, reset custody and final drain are in
 [`PLANT_WITNESS.md`](PLANT_WITNESS.md).
+
+## Energy
+
+The Icicle Kit's PAC1934T-I/JQ measures four rails: VDD, VDD25, VDDA25 and VDDA
+([Icicle Kit User Guide DS60001679E](https://www.microchip.com/en-us/development-tool/mpfs-icicle-kit-es),
+section 3.7). Its configured sample rate (8, 64, 256 or 1024 samples/s) is part of the
+hash-bound power configuration and of every row of the acquisition journal
+([host analysis](HOST_ANALYSIS.md#native-pac1934-acquisition-journal)).
+
+**Window mean.** A run's energy per cycle is each rail's cumulative-energy increase over the
+sampler windows that hold analysed cycles, divided by those cycles: `E = ΔE_rail / N`. It is a
+mean over many cycles at one cycle rate, not a per-cycle measurement, and it includes the rail's
+static power: at mean rail power `P` and cycle rate `f`, `E = P / f`.
+
+**Marginal energy per cycle.** Runs of one placement and one controller at three or more cycle
+rates, at one temperature, give the mean power `P(f) = E(f)·f` of each rail. The least-squares line
+`P = P0 + E_dyn·f` separates the static power `P0` from `E_dyn`, the energy each additional cycle
+costs. `loop_timing_witness.energy_sweep` fits it from the run reports and a declaration of each
+run's cycle rate and temperature, with standard errors and `r²`; it refuses runs of different
+placements, reports without a valid window-mean energy, fewer than three distinct rates and
+temperatures that spread beyond the declared tolerance, because static power depends on
+temperature. The line assumes static power independent of the cycle rate; its residual and `r²`
+show how well that holds. The core rail supplies both processors and fabric, so `E_dyn` belongs to
+the whole rail, not to a core.
+
+```bash
+.venv/bin/python -m loop_timing_witness.energy_sweep sweep.json
+```
 
 ## Uncertainty budget
 

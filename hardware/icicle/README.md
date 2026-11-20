@@ -188,8 +188,8 @@ timing of each crossing is bounded by the derived constraints above, and the rep
 them. The whole design uses 27 502 4LUT (10.8 %), 20 700 DFF (8.1 %), 104 uSRAM, 127 LSRAM
 and 20 math blocks.
 
-This run predates the [event mirror pins](#event-mirror-pins), which change the derived
-RTL, connection script and constraints.
+This run and the engineering-sample run below predate the [event mirror pins](#event-mirror-pins),
+which change the derived RTL, connection script and constraints.
 
 The reports stay with the run; their SHA-256 values are:
 
@@ -220,3 +220,36 @@ bridge, reset-release and retained-interrupt crossings. Review the generated clo
 constrain the actual implemented CDC paths and check
 placement-dependent skew on a programmed board before relying on them. The recorded run is
 static timing analysis of one placement; no physical timing has been validated yet.
+
+### Engineering-sample device
+
+On 2026-11-20, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T_ES on the same
+derived input: the tree derived at commit `fb2ca90`, whose RTL equals that of `0fea6ea`, has the
+same `witness_derivation.json` SHA-256,
+`1be0dd1e55531a404c3c76adbda41ff43d9538bf96a68faef1c5ea66d0ebb129`. The reports name the FCVG484
+package, STD speed grade and production timing data, as for MPFS250T. Synthesis gave the same
+resource counts and a byte-identical CDC report. The run exited 0 after 34 minutes and reports
+that the timing constraints are met in the three corners, with 99.97 % constraint coverage.
+
+| Clock | Period | Worst setup slack | Worst hold slack |
+| --- | --- | --- | --- |
+| FIC0 bus clock, reference CCC output 0 | 8 ns | +2.610 ns | +0.029 ns |
+| FIC1 clock, reference CCC output 1 | 8 ns | +2.152 ns | +0.067 ns |
+| FIC3 clock, reference CCC output 3 | 20 ns | +2.966 ns | +0.059 ns |
+| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +2.206 ns | +0.071 ns |
+
+The witness clock's worst setup path is the one of the MPFS250T run, from the cycle state to a
+plant velocity product. No path between the bus clock and the capture clock is among the 1000
+worst setup paths, which end at +2.972 ns. Setup slack is smaller than on MPFS250T for the three
+reference clocks and 0.054 ns larger for the capture clock; hold slack stays positive for every
+clock. Like the production run, this is static timing analysis of one placement: no
+engineering-sample board was programmed or measured.
+
+| Report | SHA-256 |
+| --- | --- |
+| `designer/…/BASE_DESIGN_ES_9C34320F91E8E8A_max_timing_multi_corner.xml` | `faf01e4d2ed8946c188dc9d57d3eebe53ab926580bd84db41c1b51e3156221d8` |
+| `designer/…/BASE_DESIGN_ES_9C34320F91E8E8A_min_timing_multi_corner.xml` | `de7f6bf6c89da3c51d7cadb626d05134f0ef585f9b7b8768ddbbbd12658a3039` |
+| `designer/…/BASE_DESIGN_ES_9C34320F91E8E8A_timing_constraints_coverage.xml` | `d1951b98f9893727d59fa6b035cb46a9418d55781da71dc189e0a0248caa1f18` |
+| `designer/…/max_report.json` | `5c4e5cb0d40e2c45f90e85a6e8fa4b0266690eba902aebc9eec02d59caaee293` |
+| `synthesis/BASE_DESIGN_ES_9C34320F91E8E8A_cdc.csv` | `dc98f763f79b40fb9a9f5c48dce57d39166177825e607b442bf87ec037124dff` |
+| `designer/…/BASE_DESIGN_ES_9C34320F91E8E8A_compile_netlist_resources.rpt` | `8052e2662106de2c432dd0bacd69d47964c115f6508f852ca608f37100913969` |

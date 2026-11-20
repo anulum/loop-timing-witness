@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `hardware/icicle/README.md` records a Libero SoC 2026.1.0.17 run for MPFS250T_ES beside the
+  MPFS250T run, on the same derived input: timing met in the three corners (smallest setup slack
+  +2.152 ns on the FIC1 clock, +2.206 ns on the witness capture clock), the same resource counts
+  and a byte-identical CDC report, with the report digests. It is static timing of one placement,
+  not board evidence.
 - Event mirror outputs for an external time tagger: `control_plant_witness`, the fabric controller
   wrapper, `axi_control_witness` and `icicle_witness` expose `sample_ready_mirror` and
   `actuator_write_mirror`, capture-clock registers that toggle on the edge recording each

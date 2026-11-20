@@ -114,7 +114,8 @@ the judged sources:
 `runtime/run_output.h`, `runtime/run_control.h`, `runtime/run_metadata.h`,
 `runtime/rtl/run_simulation.cpp`, `runtime/rtl/simulation.h`, `runtime/linux/file_digest.cpp`,
 `runtime/linux/run_policy.h`, `runtime/process_protocol.h`, `runtime/rtl/axi_simulator.cpp`,
-`runtime/linux/power_configuration.cpp` and `runtime/linux/kernel_context.h`.
+`runtime/linux/power_configuration.cpp`, `runtime/linux/kernel_context.h` and
+`runtime/linux/trace_stop.h`.
 More runtime sources join the list as their scenarios land.
 Every executable line and every branch outcome must have run, with two exceptions:
 

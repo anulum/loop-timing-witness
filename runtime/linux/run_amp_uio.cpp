@@ -22,6 +22,9 @@ int main(int argc, char **argv) {
     }
     try {
         const auto options = witness::read_run_options(argc, argv, 5);
+        if (options.trace_stop)
+            throw witness::RuntimeRefused(
+                "a trace stop needs the Linux controller of run_uio or run_simulation");
         const auto original = witness::file_digest(argv[1]);
         const auto resource_original = witness::file_digest(argv[2]);
         const auto configuration = witness::read_configuration(argv[1]);

@@ -23,6 +23,8 @@ struct RunOptions {
     const char *metadata = nullptr;
     const char *power_configuration = nullptr;
     const char *power_journal = nullptr;
+    const char *trace_stop = nullptr;
+    const char *tracefs = nullptr;
     int cpu = -1;
     int scheduler = -1;
     int priority = -1;
@@ -42,6 +44,13 @@ inline void validate_run_options(const RunOptions &options) {
         throw witness::RuntimeRefused("power configuration and journal must be supplied together");
     if (options.power_configuration && !options.metadata)
         throw witness::RuntimeRefused("power acquisition requires native metadata");
+    if ((options.trace_stop == nullptr) != (options.tracefs == nullptr))
+        throw witness::RuntimeRefused("trace stop condition and tracefs must be supplied together");
+    if (options.trace_stop && std::strcmp(options.trace_stop, "miss") != 0 &&
+        std::strcmp(options.trace_stop, "safe") != 0)
+        throw witness::RuntimeRefused("trace stop condition must be miss or safe");
+    if (options.trace_stop && !options.metadata)
+        throw witness::RuntimeRefused("a trace stop requires native metadata");
 }
 
 /** Read a full nonnegative decimal Linux CPU/priority argument without truncation. */
@@ -65,6 +74,10 @@ inline RunOptions read_run_options(int argc, char **argv, int first) {
             result.power_configuration = argv[index + 1];
         } else if (std::strcmp(argv[index], "--power-journal") == 0 && !result.power_journal) {
             result.power_journal = argv[index + 1];
+        } else if (std::strcmp(argv[index], "--trace-stop") == 0 && !result.trace_stop) {
+            result.trace_stop = argv[index + 1];
+        } else if (std::strcmp(argv[index], "--tracefs") == 0 && !result.tracefs) {
+            result.tracefs = argv[index + 1];
         } else if (std::strcmp(argv[index], "--cpu") == 0 && result.cpu == -1) {
             result.cpu = option_number(argv[index + 1]);
         } else if (std::strcmp(argv[index], "--scheduler") == 0 && result.scheduler == -1) {
@@ -91,6 +104,12 @@ inline RunOptions read_run_options(int argc, char **argv, int first) {
  */
 /** @var witness::RunOptions::power_journal
  * Optional exclusive power journal paired with power_configuration.
+ */
+/** @var witness::RunOptions::trace_stop
+ * Optional condition, miss or safe, that stops kernel tracing during the run.
+ */
+/** @var witness::RunOptions::tracefs
+ * Tracefs directory of the trace stop, supplied together with trace_stop.
  */
 /** @var witness::RunOptions::cpu
  * Requested CPU, or minus one to preserve inherited affinity.

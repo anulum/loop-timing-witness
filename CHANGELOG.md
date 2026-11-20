@@ -14,6 +14,13 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Kernel trace stop: `run_uio` and `run_simulation` accept `--trace-stop miss|safe --tracefs
+  DIRECTORY` (with `--metadata`). They require active tracing, record the selected trace clock,
+  and at the first interrupt that sees a missed deadline or the latched safe state write a cause
+  marker and switch tracing off, as `cyclictest -b` does, so the ring buffer ends at the cause.
+  The native metadata records `trace_stop` (schema, receipt corpus), the run manifest may bind
+  the extracted trace as `files.kernel_trace`, and `runtime/linux/trace_stop.h` joins the judged
+  sources of `make runtime-coverage`. `run_amp_uio` refuses a trace stop.
 - Tail statistics: `python -m loop_timing_witness.tail_intervals REPORT_DIRECTORY` bounds a published
   report's p95, p99 and p99.9 with 95 % moving-block-bootstrap intervals (1,000 resamples of
   blocks of `ceil(n^(1/4))` consecutive samples from a fixed-seed SplitMix64 sequence), checks the

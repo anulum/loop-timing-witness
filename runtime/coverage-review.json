@@ -114,7 +114,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 27,
+      "line": 28,
       "outcome": 6,
       "condition": "destruction of the default FileDigest arm's temporary under its cleared guard",
       "reason": "GCC sets the cleanup flag of the default FileDigest arm and clears its temporary's guard right after the noexcept construction, before the cleanup test, so the guarded destruction cannot run; the file_digest arm leaves the cleanup flag unset",
@@ -122,7 +122,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 27,
+      "line": 28,
       "outcome": 8,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
       "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
@@ -130,7 +130,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 27,
+      "line": 28,
       "outcome": 10,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
       "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
@@ -138,7 +138,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 27,
+      "line": 28,
       "outcome": 11,
       "condition": "cleanup of the conditional's FileDigest temporary on an exception path",
       "reason": "only the file_digest arm can throw, and its landing pad tests the cleanup flag that is still 0 from before the condition (GCC sets it only in the default arm, which cannot throw), so the temporary's cleanup never starts; the refusal tests cover the throwing arm",
@@ -146,7 +146,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 41,
+      "line": 51,
       "outcome": 2,
       "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
       "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
@@ -154,7 +154,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 41,
+      "line": 51,
       "outcome": 3,
       "condition": "destruction of the complete artifacts initialiser after the vector assignment throws",
       "reason": "artifacts = {...} copies the three digests into the vector; only an allocation failure for the vector's storage or for a copied 64-character SHA-256 string can throw there, and the real-surface test policy excludes allocator interposers",
@@ -162,7 +162,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 63,
+      "line": 74,
       "outcome": 8,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -170,7 +170,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 63,
+      "line": 74,
       "outcome": 9,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -178,7 +178,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 63,
+      "line": 74,
       "outcome": 10,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -186,7 +186,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 63,
+      "line": 74,
       "outcome": 11,
       "condition": "cleanup of a partially built artifacts initialiser after file_digest throws",
       "reason": "the artifacts initialiser is destroyed partially only when file_digest of the event or tracking file throws after the run closed them; this process created both exclusively, so only another process removing, replacing or rewriting them in the moment between close and hash could do that, which no deterministic real surface provides",
@@ -194,22 +194,22 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 53,
+      "line": 64,
       "outcome": 0,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
       "lines": [
-        57,
-        58,
-        59,
-        60,
-        61,
-        62
+        68,
+        69,
+        70,
+        71,
+        72,
+        73
       ]
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 53,
+      "line": 64,
       "outcome": 2,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
@@ -217,7 +217,7 @@
     },
     {
       "file": "runtime/rtl/run_simulation.cpp",
-      "line": 53,
+      "line": 64,
       "outcome": 3,
       "condition": "exception dispatch to a handler other than RuntimeRefused",
       "reason": "no code on the run command line's path throws ArgumentRefused (only the AMP, Spike and UIO paths do), and another std::exception arises only from allocation failure; the handlers keep the authored-refusal contract of every native entry point",
@@ -279,17 +279,17 @@
     },
     {
       "file": "runtime/run_control.h",
-      "line": 66,
+      "line": 68,
       "outcome": 0,
       "condition": "run bank release not observed within one simulated second",
       "reason": "the production RTL releases the run bank a few cycles after the request, and every measured run observes the release on the loop's second read; the bound guards an RTL that never releases it",
       "lines": [
-        67
+        69
       ]
     },
     {
       "file": "runtime/run_control.h",
-      "line": 68,
+      "line": 70,
       "outcome": 1,
       "condition": "register ABI version (0x7c) other than 1",
       "reason": "the ABI version register 0x7c is a constant of the production RTL, so only another RTL build changes it, and this program is linked against this one; the period check beside it is covered",
@@ -297,7 +297,7 @@
     },
     {
       "file": "runtime/run_control.h",
-      "line": 68,
+      "line": 70,
       "outcome": 3,
       "condition": "Q format (0x78) other than 24",
       "reason": "the Q-format register 0x78 is a constant of the production RTL, so only another RTL build changes it, and this program is linked against this one; the period check beside it is covered",
@@ -305,17 +305,17 @@
     },
     {
       "file": "runtime/run_control.h",
-      "line": 133,
+      "line": 135,
       "outcome": 4,
       "condition": "commit refused while the run is neither safe nor finished",
       "reason": "the RTL refuses the commit of a staged command only when the run is not enabled, finished or safe (rtl/control_io_registers.sv), and the loop commits only within an enabled run, so a refusal always reads back finished or safe, which the covered refusals show",
       "lines": [
-        134
+        136
       ]
     },
     {
       "file": "runtime/run_control.h",
-      "line": 133,
+      "line": 135,
       "outcome": 6,
       "condition": "commit refused while the run is neither safe nor finished",
       "reason": "the RTL refuses the commit of a staged command only when the run is not enabled, finished or safe (rtl/control_io_registers.sv), and the loop commits only within an enabled run, so a refusal always reads back finished or safe, which the covered refusals show",
@@ -323,17 +323,17 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 65,
+      "line": 68,
       "outcome": 0,
       "condition": "fprintf of one artifact < 0",
       "reason": "the metadata stream is buffered: this fprintf only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
       "lines": [
-        66
+        69
       ]
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 68,
+      "line": 71,
       "outcome": 3,
       "condition": "fputs closing the artifacts < 0",
       "reason": "the metadata stream is buffered: this fputs only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -341,7 +341,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 68,
+      "line": 71,
       "outcome": 4,
       "condition": "an artifact fprintf failed earlier",
       "reason": "the metadata stream is buffered: this fprintf only fills the buffer, because the receipt (about 1.4 KiB) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -349,7 +349,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 82,
+      "line": 87,
       "outcome": 1,
       "condition": "a buffered write of the first section failed before fclose",
       "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -357,7 +357,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 82,
+      "line": 87,
       "outcome": 3,
       "condition": "a buffered write of the artifacts failed before fclose",
       "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -365,7 +365,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 82,
+      "line": 87,
       "outcome": 5,
       "condition": "a buffered write of the crypto library failed before fclose",
       "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -373,7 +373,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 82,
+      "line": 87,
       "outcome": 7,
       "condition": "a buffered write of the kernel context failed before fclose",
       "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -381,7 +381,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 82,
+      "line": 87,
       "outcome": 9,
       "condition": "a buffered write of the host policy failed before fclose",
       "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",
@@ -389,7 +389,7 @@
     },
     {
       "file": "runtime/run_metadata.h",
-      "line": 82,
+      "line": 87,
       "outcome": 11,
       "condition": "a buffered write of the closing brace failed before fclose",
       "reason": "the metadata stream is buffered: this write only fills the buffer, because the receipt (about 1.4 KiB, plus a few hundred bytes of kernel context on the hosts that run this gate) is smaller than the 4 KiB stream buffer, so the write and its failure happen at the fclose whose status is checked, which the metadata write-limit scenario fails",

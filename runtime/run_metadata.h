@@ -16,16 +16,19 @@
 #include "refusal.h"
 #include "linux/kernel_context.h"
 #include "linux/run_policy.h"
+#include "linux/trace_stop.h"
 #include "linux/file_digest.h"
 #include <openssl/crypto.h>
 
 namespace witness {
-/** Validate configuration before creating exclusive JSON for actual completion counts. */
+/** Validate configuration before creating exclusive JSON for actual completion counts; a run
+ * with a trace stop also records it. */
 inline void write_run_metadata(const char *path, const RunConfiguration &config,
                                const RunResult &result, bool thermal, const char *kind,
                                const RunOptions &options, const HostPolicy &policy,
                                const KernelContext &kernel,
-                               const std::vector<ArtifactDigest> &artifacts) {
+                               const std::vector<ArtifactDigest> &artifacts,
+                               const TraceStopReport *trace_stop = nullptr) {
     validate_configuration(config);
     std::FILE *file = std::fopen(path, "wx");
     if (!file)
@@ -75,6 +78,8 @@ inline void write_run_metadata(const char *path, const RunConfiguration &config,
             static_cast<unsigned long long>(OpenSSL_version_num())) < 0;
     std::string kernel_member;
     append_kernel_context_json(kernel_member, kernel);
+    if (trace_stop)
+        append_trace_stop_json(kernel_member, *trace_stop);
     const bool kernel_failed = std::fputs(kernel_member.c_str(), file) < 0;
     const bool policy_failed = write_host_policy(file, options, policy);
     const bool end_failed = std::fprintf(file, "}\n") < 0;

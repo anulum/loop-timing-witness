@@ -57,7 +57,8 @@ _HOOKS = """    const std::string mode = std::getenv("WITNESS_LOGGER_API");
         [this] {
             ++finishes;
             if (mode == "finish-failure") throw std::runtime_error("API finish failure");
-        }
+        },
+        {}
     };
 """
 _INITIALISER = "logger(transport, run, output, configuration.shared)"

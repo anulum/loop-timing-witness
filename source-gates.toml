@@ -67,6 +67,7 @@ paths = [
     "tests/native/power_configuration_api_test.cpp",
     "tests/native/rtl_counter_saturation.cpp",
     "tests/native/run_lifecycle_test.cpp",
+    "tests/native/trace_stop_api_test.cpp",
 ]
 
 [profiles.device_tree]
@@ -93,6 +94,7 @@ paths = [
     "runtime/linux/power_configuration.h",
     "runtime/linux/power_journal.h",
     "runtime/linux/run_policy.h",
+    "runtime/linux/trace_stop.h",
     "runtime/linux/uio_device.h",
     "runtime/process_protocol.h",
     "runtime/refusal.h",

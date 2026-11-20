@@ -11,12 +11,13 @@
 #include "../run_control.h"
 #include "../run_metadata.h"
 #include <iostream>
+#include <memory>
 
 /** Execute the native controller and preserve actual RTL events and raw tracking. */
 int main(int argc, char **argv) {
     if (argc < 4) {
         std::cerr
-            << "usage: run_simulation configuration events.bin tracking_raw.csv [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N]\n";
+            << "usage: run_simulation configuration events.bin tracking_raw.csv [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--trace-stop miss|safe --tracefs directory]\n";
         return 1;
     }
     try {
@@ -31,8 +32,17 @@ int main(int argc, char **argv) {
         const auto policy = witness::apply_host_policy(options);
         const auto kernel = witness::read_kernel_context();
         witness::Simulation device;
+        std::unique_ptr<witness::TraceStop> trace;
+        witness::RunHooks hooks;
+        if (options.trace_stop) {
+            trace = std::make_unique<witness::TraceStop>(options.tracefs, options.trace_stop);
+            hooks.deadlines = [&trace](std::uint32_t misses, bool safe) {
+                trace->observe(misses, safe);
+            };
+        }
         witness::RunOutput output(argv[2], argv[3]);
-        const auto result = witness::execute_run(device, configuration, output);
+        const auto result =
+            witness::execute_run(device, configuration, output, trace ? &hooks : nullptr);
         std::vector<witness::ArtifactDigest> artifacts;
         if (options.metadata) {
             witness::verify_digest(argv[1], original);
@@ -43,7 +53,8 @@ int main(int argc, char **argv) {
         if (options.metadata)
             witness::write_run_metadata(options.metadata, configuration, result,
                                         witness::read_register(device, 0x6c) != 0, "rtl_simulation",
-                                        options, policy, kernel, artifacts);
+                                        options, policy, kernel, artifacts,
+                                        trace ? &trace->report() : nullptr);
         std::cout << "simulation_only samples=" << result.samples << " records=" << result.records
                   << " misses=" << result.misses << " overflow=" << result.overflow
                   << " safe=" << result.safe << std::endl;

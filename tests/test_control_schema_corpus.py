@@ -64,7 +64,7 @@ def _run_manifest() -> dict[str, Any]:
             "tracking_unit": "x",
         },
         "fault_schedule": [{"cycle": 2, "kind": "delay", "delay_periods": 1}],
-        "files": {"events": FILE, "tracking": FILE, "power": FILE},
+        "files": {"events": FILE, "tracking": FILE, "power": FILE, "kernel_trace": FILE},
         "hardware_artifacts": None,
         "instrument": {
             "fifo_overflow_count": 0,

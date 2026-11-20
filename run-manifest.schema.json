@@ -137,6 +137,9 @@
         },
         "power": {
           "anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]
+        },
+        "kernel_trace": {
+          "$ref": "#/$defs/file"
         }
       },
       "required": ["events", "tracking", "power"]

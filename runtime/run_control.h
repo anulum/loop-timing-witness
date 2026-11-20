@@ -18,9 +18,11 @@
 #include <functional>
 
 namespace witness {
-/** Optional real acquisition lifecycle, checked between controller iterations. */
+/** Optional real acquisition lifecycle, checked between controller iterations, and an
+ * optional observer of the fabric's miss count and safe state after each interrupt. */
 struct RunHooks {
     std::function<void()> start, check, finish;
+    std::function<void(std::uint32_t, bool)> deadlines;
 };
 
 /** Observed counts, independent of planned cycle count or controller output. */
@@ -151,18 +153,21 @@ RunResult execute_run(Device &device, const RunConfiguration &configuration, Run
     const auto run_limit =
         static_cast<std::uint64_t>(configuration.period_ticks) * 10 * configuration.cycles +
         1000000000;
-    if (hooks)
+    const bool checking = hooks && hooks->check;
+    if (hooks && hooks->start)
         hooks->start();
     write_register(device, 0x38, 1);
     const auto run_start = device.time();
     while (!finished) {
-        if (hooks)
+        if (checking)
             hooks->check();
         if (device.wait_interrupt(1000000)) {
             const std::uint64_t low = read_register(device, 0x9c);
             const auto generation =
                 low | (static_cast<std::uint64_t>(read_register(device, 0xa0)) << 32);
             const auto status = read_register(device, 4);
+            if (hooks && hooks->deadlines)
+                hooks->deadlines(read_register(device, 0x34), (status & 8) != 0);
             finished = (status & 4) != 0;
             if (!finished && !(status & 8))
                 control_sample(device, configuration, state, output, result, generation,
@@ -175,7 +180,7 @@ RunResult execute_run(Device &device, const RunConfiguration &configuration, Run
     }
     const auto drain_start = device.time();
     while (!(read_register(device, 0x90) & 8)) {
-        if (hooks)
+        if (checking)
             hooks->check();
         drain_available(device, output, result);
         if (device.time() - drain_start > 1000000000)
@@ -184,7 +189,7 @@ RunResult execute_run(Device &device, const RunConfiguration &configuration, Run
     result.misses = read_register(device, 0x34);
     result.overflow = read_register(device, 0x30);
     result.safe = (read_register(device, 4) & 8) != 0;
-    if (hooks)
+    if (hooks && hooks->finish)
         hooks->finish();
     output.finish();
     return result;
@@ -198,6 +203,9 @@ RunResult execute_run(Device &device, const RunConfiguration &configuration, Run
  */
 /** @var witness::RunHooks::finish
  * Optional acquisition completion callback after controller execution.
+ */
+/** @var witness::RunHooks::deadlines
+ * Optional observer of the miss count and safe-state flag, called after each interrupt.
  */
 /** @var witness::RunResult::samples
  * Actual number of completed controller samples.

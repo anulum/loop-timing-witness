@@ -81,7 +81,8 @@ void timed_out_run(witness::Simulation &device, const witness::RunConfiguration 
                                           device.advance(1000000001);
                                       }
                                   },
-                                  [&] { ++finishes; }};
+                                  [&] { ++finishes; },
+                                  {}};
     refusal([&] { witness::execute_run(device, configuration, output, &hooks); },
             scenario == "run_timeout" ? "configured run completion timed out"
                                       : "final record drain timed out");
@@ -320,7 +321,8 @@ int main(int argc, char **argv) {
                                           assert(starts == 1 && checks > 0);
                                           assert(witness::read_register(device, 0x90) & 8);
                                           ++finishes;
-                                      }};
+                                      },
+                                      {}};
         const auto result = witness::execute_run(
             device, configuration, output, scenario == "final_drain_no_hooks" ? nullptr : &hooks);
         if (scenario == "final_drain_no_hooks")

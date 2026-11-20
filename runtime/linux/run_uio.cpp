@@ -17,7 +17,7 @@
 int main(int argc, char **argv) {
     if (argc < 9) {
         std::cerr
-            << "usage: run_uio configuration events.bin tracking_raw.csv uioN name version map physical_address_decimal [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--power-config file --power-journal file]\n";
+            << "usage: run_uio configuration events.bin tracking_raw.csv uioN name version map physical_address_decimal [--metadata file] [--cpu N] [--scheduler normal|fifo] [--priority N] [--power-config file --power-journal file] [--trace-stop miss|safe --tracefs directory]\n";
         return 1;
     }
     try {
@@ -55,6 +55,9 @@ int main(int argc, char **argv) {
         const auto kernel = witness::read_kernel_context();
         witness::UioDevice device(
             {argv[4], argv[5], argv[6], static_cast<std::uint32_t>(map), physical});
+        std::unique_ptr<witness::TraceStop> trace;
+        if (options.trace_stop)
+            trace = std::make_unique<witness::TraceStop>(options.tracefs, options.trace_stop);
         witness::RunOutput output(argv[2], argv[3]);
         std::unique_ptr<witness::PowerJournal> journal;
         witness::RunHooks hooks;
@@ -63,8 +66,12 @@ int main(int argc, char **argv) {
                                                               device);
             hooks = journal->hooks();
         }
-        const auto result =
-            witness::execute_run(device, configuration, output, journal ? &hooks : nullptr);
+        if (trace)
+            hooks.deadlines = [&trace](std::uint32_t misses, bool safe) {
+                trace->observe(misses, safe);
+            };
+        const auto result = witness::execute_run(device, configuration, output,
+                                                 journal || trace ? &hooks : nullptr);
         std::vector<witness::ArtifactDigest> artifacts;
         if (options.metadata) {
             witness::verify_digest(argv[1], original);
@@ -80,7 +87,8 @@ int main(int argc, char **argv) {
         if (options.metadata)
             witness::write_run_metadata(options.metadata, configuration, result,
                                         witness::read_register(device, 0x6c) != 0,
-                                        "uio_unqualified", options, policy, kernel, artifacts);
+                                        "uio_unqualified", options, policy, kernel, artifacts,
+                                        trace ? &trace->report() : nullptr);
         std::cout << "uio_unqualified samples=" << result.samples << " records=" << result.records
                   << " misses=" << result.misses << " overflow=" << result.overflow
                   << " safe=" << result.safe << std::endl;

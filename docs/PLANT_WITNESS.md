@@ -552,6 +552,30 @@ See the Linux [`sched_setaffinity`](https://man7.org/linux/man-pages/man2/sched_
 and [`sched_setscheduler`](https://man7.org/linux/man-pages/man2/sched_setscheduler.2.html)
 interfaces. Hardware processor timing and physical acceptance remain unqualified.
 
+### Kernel trace stop
+
+`run_uio` and `run_simulation` accept `--trace-stop miss|safe --tracefs DIRECTORY`, together and
+only with `--metadata`. Before the run they require that kernel tracing is on in the tracefs
+directory (`tracing_on` reads `1`), record the trace clock that `trace_clock` selects and open
+`trace_marker` and `tracing_on` for writing. After each sample interrupt the run reads the
+fabric's miss counter (`0x34`) and safe-state flag; at the first observation with a missed
+deadline (`miss`) or with the safe state latched (`safe`) it writes the marker
+`loop-timing-witness trace stop: <condition> misses=<n> safe=<0|1>` and then `0` to `tracing_on`,
+as `cyclictest -b` does at its latency threshold, so the ring buffer ends at the cause instead of
+being overwritten after it. The observer adds one register read per interrupt. The stop follows
+the missed deadline by up to one sample period and the interrupt service, so the trace covers the
+cycle that missed it.
+
+The native metadata records `trace_stop`: the condition, tracefs directory, trace clock, whether
+the condition occurred, the miss count and safe flag at the stop and its `CLOCK_MONOTONIC` time.
+Read the trace afterwards, for example with `trace-cmd extract` or by copying `trace`, select
+`mono` as the trace clock beforehand to compare its timestamps with the recorded stop, and declare
+the file as the run manifest's `files.kernel_trace` with its SHA-256
+([host analysis](HOST_ANALYSIS.md#inputs)). `run_amp_uio` refuses a trace stop: its controller runs
+on another hart, outside the Linux trace. A tracefs write that fails during the run refuses the
+run. The simulation program accepts the options so that the path is tested; there the trace
+records the host, not fabric timing.
+
 ### Native FIFO loss qualification in simulation
 
 `make run-simulation SIMULATION_FIFO_ADDRESS_BITS=1` compiles a two-record FIFO.

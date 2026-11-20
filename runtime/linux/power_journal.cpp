@@ -159,6 +159,6 @@ void PowerJournal::finish() {
         throw witness::RuntimeRefused("cannot finish power journal");
 }
 RunHooks PowerJournal::hooks() {
-    return {[this] { start(); }, [this] { check(); }, [this] { finish(); }};
+    return {[this] { start(); }, [this] { check(); }, [this] { finish(); }, {}};
 }
 } // namespace witness

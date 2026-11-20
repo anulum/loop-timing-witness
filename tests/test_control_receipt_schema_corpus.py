@@ -49,7 +49,8 @@ NATIVE: Final[dict[str, Any]] = json.loads(
     '"reference":{"amplitude":-2147483648,"mode":0,"offset":-2147483648,"phase":0,"ramp":'
     '-2147483648},"result":{"misses":0,"overflow":0,"records":0,"safe":false,"samples":'
     '0},"schema":"loop-timing-witness.native-run.v1","source_kind":"rtl_simulation",'
-    '"thermal":false}'
+    '"thermal":false,"trace_stop":{"condition":"miss","misses":1,"monotonic_ns":1,"safe":'
+    'false,"trace_clock":"mono","tracefs":"/sys/kernel/tracing","triggered":true}}'
 )
 HOST_LOAD: Final[dict[str, Any]] = json.loads(
     '{"checksum":0,"counters":{"arithmetic_operations":0,"bytes_read":0,"bytes_received":'

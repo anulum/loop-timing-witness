@@ -215,7 +215,7 @@ RUNTIME_COVERAGE_SOURCES := runtime/exclusive_output.h runtime/run_configuration
 	runtime/run_control.h runtime/run_metadata.h runtime/rtl/run_simulation.cpp \
 	runtime/rtl/simulation.h runtime/linux/file_digest.cpp runtime/process_protocol.h \
 	runtime/rtl/axi_simulator.cpp runtime/linux/power_configuration.cpp \
-	runtime/linux/kernel_context.h
+	runtime/linux/kernel_context.h runtime/linux/trace_stop.h
 RUNTIME_COVERAGE_TESTS := tests/test_axi_simulator.py tests/test_axi_transport_progress.py \
 	tests/test_host_load_receipt.py tests/test_legacy_analysis_api.py tests/test_linux_load.py \
 	tests/test_linux_load_api.py tests/test_linux_load_readiness_launch.py \
@@ -228,7 +228,8 @@ RUNTIME_COVERAGE_TESTS := tests/test_axi_simulator.py tests/test_axi_transport_p
 	tests/test_native_metadata_api.py tests/test_native_policy_api.py tests/test_native_run.py \
 	tests/test_native_run_metadata.py tests/test_native_run_output.py \
 	tests/test_native_scheduling.py tests/test_native_simulation_manifest.py \
-	tests/test_native_tracking.py tests/test_power_configuration_api.py tests/test_power_journal.py
+	tests/test_native_trace_stop.py tests/test_native_tracking.py \
+	tests/test_power_configuration_api.py tests/test_power_journal.py
 
 .PHONY: runtime-coverage
 runtime-coverage:

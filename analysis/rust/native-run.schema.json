@@ -288,6 +288,51 @@
         "cpu_dma_latency_us"
       ]
     },
+    "trace_stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "enum": [
+            "miss",
+            "safe"
+          ]
+        },
+        "tracefs": {
+          "type": "string",
+          "pattern": "^/[ -!#-Z_-~]{0,255}$"
+        },
+        "trace_clock": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]{1,32}$"
+        },
+        "triggered": {
+          "type": "boolean"
+        },
+        "misses": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "safe": {
+          "type": "boolean"
+        },
+        "monotonic_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        }
+      },
+      "required": [
+        "condition",
+        "tracefs",
+        "trace_clock",
+        "triggered",
+        "misses",
+        "safe",
+        "monotonic_ns"
+      ]
+    },
     "host_policy": {
       "type": "object",
       "additionalProperties": false,

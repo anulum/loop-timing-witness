@@ -18,6 +18,7 @@
 
 use crate::control_events::{Event, Names};
 use crate::control_number::Num;
+use crate::control_tail::weakly_hard;
 use serde_json::{Map, Value, json};
 use std::cmp::Ordering;
 
@@ -199,6 +200,8 @@ struct Tally {
     open: Option<u64>,
     /// Tick of the first deadline missed since the last met one.
     missed: Option<u64>,
+    /// Whether each observed deadline was missed, in cycle order.
+    flags: Vec<bool>,
 }
 
 impl Tally {
@@ -230,7 +233,9 @@ impl Tally {
     fn deadlines(&mut self, number: u128, cycle: &Cycle) -> Result<(), String> {
         if let Some(deadline) = cycle.get("DEADLINE") {
             self.observed += 1;
-            if cycle.get("ACT_WRITE").is_none_or(|write| write >= deadline) {
+            let missed = cycle.get("ACT_WRITE").is_none_or(|write| write >= deadline);
+            self.flags.push(missed);
+            if missed {
                 self.misses += 1;
                 self.missed = self.missed.or(Some(deadline));
             } else {
@@ -265,6 +270,7 @@ impl Tally {
             "fault_detections": self.detected.len(),
             "undetected_faults": self.injections - self.detected.len() as u64,
             "safe_state_events": self.safe.len(),
+            "weakly_hard": weakly_hard(&self.flags),
         });
         (block, self.detected, self.safe)
     }

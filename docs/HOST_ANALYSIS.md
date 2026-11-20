@@ -483,6 +483,48 @@ qualifies a physical instrument or a pooled repeat campaign.
 Each CSV row and SVG title carries the evidence status, so a detached simulation artefact retains
 its provenance. The SVG charts are visual summaries. The JSON and CSV carry numeric results.
 
+### Tail quantile intervals
+
+`python -m loop_timing_witness.tail_intervals REPORT_DIRECTORY` gives, for every periodic interval
+of a published report, the p95, p99 and p99.9 estimates with 95 % confidence intervals
+([`tail_intervals.py`](../src/loop_timing_witness/tail_intervals.py),
+[`tail_statistics.py`](../src/loop_timing_witness/tail_statistics.py)). It reads the report's
+`cycle_intervals.csv` in cycle order, requires each interval's rows to give the report's sample
+count and quantiles exactly, and names both files by SHA-256 in its result
+(`loop-timing-witness.tail-intervals.v1`). The bootstrap sorts about a thousand resamples per
+interval, so it is a separate step rather than part of every analysis: about 10 s per interval of
+2·10⁵ cycles in Python. The native crate exposes the same computation as
+`witness_analysis::control_tail::tail_quantiles`. Successive cycles are not
+independent, so the intervals come from the moving-block bootstrap
+([Künsch, 1989](https://doi.org/10.1214/aos/1176347265)): each of 1,000 resamples joins blocks of
+`b` consecutive samples, drawn uniformly from the `n − b + 1` starting positions, and is cut to `n`
+samples; the interval runs from the 2.5th to the 97.5th Type-7 percentile of the resampled
+quantiles. `b` is the integer ceiling of `n^(1/4)`, the order that
+[Hall, Horowitz and Jing (1995)](https://doi.org/10.1093/biomet/82.3.561) derive for the optimal
+block length when the bootstrap estimates a one-sided distribution function. Block starts are the
+outputs of SplitMix64 from the fixed seed `0x4c54572d5441494c`, modulo `n − b + 1`, so the Python and
+Rust analyses report the same bounds bit for bit. The Python implementation sorts only each
+resample's samples above the series' 90th percentile, which hold the needed order statistics in
+all but rare cases, and sorts the whole resample otherwise; both give the result of a full sort.
+
+A quantile `p` is `reportable` only when ten samples are expected beyond it, `n·(1 − p) ≥ 10`:
+200 samples for p95, 1,000 for p99 and 10,000 for p99.9. A quantile below that keeps its estimate,
+which equals the distribution's, with null bounds; `resamples` is zero when no quantile of the
+interval is reportable. Each entry holds `sample_count`, `block_length`, `resamples`, `confidence`
+and, per quantile, `estimate`, `reportable`, `lower` and `upper`, in ticks. Tail claims in a
+published result are made with these intervals.
+
+### Weakly-hard deadline metrics
+
+`events.control.weakly_hard` describes how the missed deadlines cluster, in the `(m, K)` model of
+[Bernat, Burns and Llamosí (2001)](https://doi.org/10.1109/12.919277): a loop meets `(m, K)` when no
+`K` consecutive deadlines hold more than `m` misses. `maximum_misses_in_window` gives, for `K` of 2,
+3, 5, 10, 20, 50, 100 and 1,000 consecutive observed deadlines, the largest number of misses in any
+such window (null when the run has fewer deadlines), so the loop meets `(m, K)` exactly when that
+number is at most `m`. `longest_miss_run` is the longest run of consecutive misses and
+`observed_deadlines` the number of deadlines in cycle order. A deadline is missed as in the
+[calculations](#calculations).
+
 ### Energy method and frequency sweep
 
 The report's `energy` block names its method, `window_mean`: per-rail and total joules per cycle
@@ -862,8 +904,8 @@ findings with Python's number text, and `[Errno <n>] <message>: <path>` for an
 operating-system failure. `control_events_summary` builds the report's
 `events` block and the per-cycle interval rows, as the Python `events_block`
 does: the fault-schedule agreement, Type-7 interval distributions with Python's
-floating-point operations, deadline, fault-detection and safe-state counts, and
-adjacent-cycle jitter. Counts derived from an integral-float cycle declaration
+floating-point operations, deadline, fault-detection and safe-state counts with
+the weakly-hard miss metrics, and adjacent-cycle jitter. Counts derived from an integral-float cycle declaration
 stay floats, as in Python. `control_run_report` builds the complete report as
 the Python `build_report` does: the CSV series are read with CPython's `csv`
 reader rules and errors, decimal values are kept exact and each result is

@@ -14,6 +14,15 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- Tail statistics: `python -m loop_timing_witness.tail_intervals REPORT_DIRECTORY` bounds a published
+  report's p95, p99 and p99.9 with 95 % moving-block-bootstrap intervals (1,000 resamples of
+  blocks of `ceil(n^(1/4))` consecutive samples from a fixed-seed SplitMix64 sequence), checks the
+  report's `cycle_intervals.csv` against its own distributions and names both files by digest; a
+  quantile is reportable only with ten expected samples beyond it (200, 1,000 and 10,000 samples).
+  The native crate exposes the same computation (`witness_analysis::control_tail`), and the shared
+  corpus `control-tail-cases.json` holds Python's results, which Rust reproduces bit for bit.
+  Every report's `events.control.weakly_hard` gives the `(m, K)` metrics: the largest number of
+  misses in any 2 to 1,000 consecutive deadlines and the longest miss run, in both analyses.
 - `hardware/icicle/README.md` records a Libero SoC 2026.1.0.17 run for MPFS250T_ES beside the
   MPFS250T run, on the same derived input: timing met in the three corners (smallest setup slack
   +2.152 ns on the FIC1 clock, +2.206 ns on the witness capture clock), the same resource counts

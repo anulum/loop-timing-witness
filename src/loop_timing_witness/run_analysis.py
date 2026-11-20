@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any
 
+from .tail_statistics import weakly_hard
+
 if TYPE_CHECKING:
     from .event_stream import Event
 
@@ -178,6 +180,8 @@ class _ControlTally:
         Injection-to-detection and first-miss-to-safe-state intervals.
     open_injection, first_missed_deadline
         Pending injection tick, and the first deadline of the current run of misses.
+    missed
+        Whether each observed deadline was missed, in cycle order.
     """
 
     observed_deadlines: int = 0
@@ -187,6 +191,7 @@ class _ControlTally:
     safe: list[int] = field(default_factory=list)
     open_injection: int | None = None
     first_missed_deadline: int | None = None
+    missed: list[bool] = field(default_factory=list)
 
     def faults(self, observed: dict[str, int], cycle: int) -> None:
         """Pair one cycle's fault injection and detection.
@@ -234,6 +239,7 @@ class _ControlTally:
         if deadline is not None:
             self.observed_deadlines += 1
             write = observed.get("ACT_WRITE")
+            self.missed.append(write is None or write >= deadline)
             if write is None or write >= deadline:
                 self.misses += 1
                 if self.first_missed_deadline is None:
@@ -255,7 +261,7 @@ class _ControlTally:
         -------
         dict[str, Any]
             Observed deadlines, misses and miss rate, injections, detections,
-            undetected faults and safe-state events.
+            undetected faults, safe-state events and the weakly-hard miss metrics.
         """
         return {
             "observed_deadlines": self.observed_deadlines,
@@ -267,6 +273,7 @@ class _ControlTally:
             "fault_detections": len(self.detected),
             "undetected_faults": self.injections - len(self.detected),
             "safe_state_events": len(self.safe),
+            "weakly_hard": weakly_hard(self.missed),
         }
 
 

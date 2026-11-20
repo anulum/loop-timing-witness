@@ -82,6 +82,8 @@ mod control_receipts;
 mod control_report;
 mod control_schema;
 mod control_series;
+/// Tail quantile intervals and weakly-hard deadline metrics, as the Python `tail_statistics`.
+pub mod control_tail;
 mod control_text;
 /// Corpus changes shared by the crate tests.
 #[cfg(test)]

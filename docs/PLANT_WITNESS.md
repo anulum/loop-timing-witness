@@ -212,7 +212,8 @@ with same-cycle products, because consecutive samples are at least two capture c
 (`PERIOD_TICKS ≥ 2`), the state, phase and ramp change only at samples, the configuration
 registers accept mode and amplitude only while the run is disabled, and the safe latch holds
 until reset. `make plant-timing-invariants` proves these three invariants and the product
-identity at reduced width, each with a counterexample to its negation. Module ports carry the
+identity at reduced width by temporal induction, for every reachable state, each with a
+counterexample to its negation. Module ports carry the
 same rule: `sampled_plant` and `reference_generator` must never sample in consecutive cycles,
 and `reference_generator` must see mode and amplitude unchanged over the edge before a sample.
 
@@ -275,6 +276,13 @@ edge, latches `safe_interrupt` and captures `SAFE_STATE`. Safe application wins 
 writes, freeze and the simultaneous plant update. Only the common run reset clears the latch.
 `FAULT_DETECTED` is captured at this trip when an injection is pending. Ordinary misses do not
 invent an injected-fault detection. `SAFE_STATE` and `FAULT_DETECTED` share the trip timestamp.
+
+`make safe-state-invariants` proves the monitor's safe-state rules by temporal induction, from any
+state reached through a reset with every input free, for miss limits 1, 3 and 255: the
+consecutive miss count never exceeds the total, the latch sets only on a missed deadline that
+completes `MISS_LIMIT` consecutive misses, a latched monitor has counted at least `MISS_LIMIT`
+misses, and the latch holds until the next reset. Its negation, that the latch never sets, yields
+a counterexample (`tests/test_safe_state_proof.py`).
 
 One schedule can be armed per run. Arms while busy/used, zero-duration arms, past targets and
 targets beyond the last sample are refused. Arming must precede the sample edge; the data is

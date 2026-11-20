@@ -65,10 +65,7 @@ def test_plant_timing_proofs_and_counterexamples(tmp_path: Path) -> None:
         ("plant_configuration", "run_configuration_registers"),
         ("split_multiplier", "split_multiplier"),
     ):
-        assert (
-            "SAT proof finished - no model found: SUCCESS!"
-            in (tmp_path / f"{module}.log").read_text()
-        )
+        assert "Induction step proven: SUCCESS!" in (tmp_path / f"{module}.log").read_text()
         assert (
             "SAT proof finished - model found: FAIL!"
             in (tmp_path / f"{module}-negative.log").read_text()

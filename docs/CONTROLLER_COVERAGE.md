@@ -615,9 +615,12 @@ and 12 configuration variants. The `fixed_point_math` wrapper now checks the pla
 step binding (split multipliers feeding the sum) with zero coefficients; it no longer
 backs a coverage invariant. The recorded proof review also checked four
 intentionally false assertions and retained their concrete counterexamples.
-The accepted argument uses two-state, one-step SAT and exact source/parameter
-binding with unconstrained initial states. It makes no reset-reachability,
-four-state, signal-toggle, MC/DC, CDC-timing, synthesis or physical-board claim.
+Each check proves its assertions by temporal induction (Yosys `sat -tempinduct`): a base case
+from the design's initial state, with every register that has no initial value unconstrained, and
+an induction step from any state in which the assertions held on the preceding steps. Every check closes within two steps, so its assertions hold in every reachable
+state, not only to a bounded depth. The argument is two-state, with exact source and parameter
+binding. It makes no four-state, signal-toggle, MC/DC, CDC-timing, synthesis or physical-board
+claim.
 Native C++ compiler edges and hardware acquisition remain separate scopes.
 
 ## Native lifecycle guard proof
@@ -648,7 +651,8 @@ make native-runtime-invariants
 The Yosys wrappers elaborate the unchanged production `control_io_registers`,
 `run_configuration_registers`, `control_cycle`, `deadline_monitor` and
 `clock_reset_release` modules.
-Four-step proofs check full-word cycle/value staging followed by commit, and
+Proofs by temporal induction, each closing within two steps, check full-word cycle/value staging
+followed by commit, and
 preservation of enabled, finished and safe state across non-reset transitions,
 constant ABI/Q-format readback, and reset release after two running local edges.
 Each intentionally false variant must produce a counterexample; parser errors

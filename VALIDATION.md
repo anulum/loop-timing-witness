@@ -284,7 +284,7 @@ The CI test workflow runs these with the same pinned simulator as the capture te
 Local RTL review also runs Verilator 5.020 strict `--lint-only --Wall`, and Yosys 0.33 preparation,
 memory inference checks and post-optimisation equivalence at a four-record configuration. The
 plant integration additionally runs component optimization proofs with
-`rtl/check_control_equivalence.ys`, and `make plant-timing-invariants` proves the sample spacing,
+`rtl/check_control_equivalence.ys`, and `make plant-timing-invariants` proves by temporal induction the sample spacing,
 held actuator and configuration stability behind the one-edge plant and reference products and
 the product identity at reduced width, each with a counterexample to its negation (run by
 `tests/test_plant_timing.py`); the controller uses

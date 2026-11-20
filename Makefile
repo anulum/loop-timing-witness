@@ -450,7 +450,7 @@ native-runtime-invariants:
 	for module in runtime_commit runtime_enabled runtime_finished runtime_safe runtime_release; do \
 		yosys -Q -T -p "read_verilog -formal -sv $(NATIVE_INVARIANT_SOURCES); \
 		prep -top $${module}_proof; write_json $(NATIVE_INVARIANT_DIRECTORY)/$${module}.json; \
-		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
+		flatten; async2sync; opt; check -assert; sat -tempinduct -maxsteps 8 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 		> "$(NATIVE_INVARIANT_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
 		yosys -Q -T -p "read_verilog -formal -sv $(NATIVE_INVARIANT_SOURCES); \
 		chparam -set NEGATIVE_CONTROL 1 $${module}_proof; prep -top $${module}_proof; \
@@ -464,15 +464,15 @@ PLANT_TIMING_DIRECTORY ?= build/plant-timing-invariants
 PLANT_TIMING_SOURCES := rtl/control_cycle.sv rtl/deadline_monitor.sv rtl/run_configuration_registers.sv \
 	rtl/split_multiplier.sv tests/formal/plant_timing_proof.sv tests/formal/split_multiplier_proof.sv
 
-# The invariants behind the one-edge plant and reference products; each negative
-# control must yield a counterexample.
+# The invariants behind the one-edge plant and reference products, proven by temporal induction
+# for every reachable state; each negative control must yield a counterexample.
 .PHONY: plant-timing-invariants
 plant-timing-invariants:
 	mkdir -p "$(PLANT_TIMING_DIRECTORY)"
 	for module in plant_spacing plant_actuator plant_configuration split_multiplier; do \
 		yosys -Q -T -p "read_verilog -formal -sv $(PLANT_TIMING_SOURCES); \
 		prep -top $${module}_proof; write_json $(PLANT_TIMING_DIRECTORY)/$${module}.json; \
-		flatten; async2sync; opt; check -assert; sat -seq 4 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
+		flatten; async2sync; opt; check -assert; sat -tempinduct -maxsteps 8 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 		> "$(PLANT_TIMING_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
 		yosys -Q -T -p "read_verilog -formal -sv $(PLANT_TIMING_SOURCES); \
 		chparam -set NEGATIVE_CONTROL 1 $${module}_proof; prep -top $${module}_proof; \
@@ -482,13 +482,36 @@ plant-timing-invariants:
 		grep -Fq 'SAT proof finished - model found: FAIL!' "$(PLANT_TIMING_DIRECTORY)/$${module}-negative.log" || exit 1; \
 	done
 
+SAFE_STATE_DIRECTORY ?= build/safe-state-invariants
+SAFE_STATE_SOURCES := rtl/deadline_monitor.sv tests/formal/deadline_monitor_proof.sv
+
+# The deadline monitor's safe-state invariants for miss limits 1, 3 and 255, proven by temporal
+# induction from any state reached through a reset; each negative control, which asserts that the
+# latch never sets, must yield a counterexample within eight steps.
+.PHONY: safe-state-invariants
+safe-state-invariants:
+	mkdir -p "$(SAFE_STATE_DIRECTORY)"
+	for limit in 1 3 255; do \
+		yosys -Q -T -p "read_verilog -formal -sv $(SAFE_STATE_SOURCES); \
+		chparam -set MISS_LIMIT $$limit deadline_monitor_proof; prep -top deadline_monitor_proof; \
+		write_json $(SAFE_STATE_DIRECTORY)/limit-$$limit.json; flatten; async2sync; opt; check -assert; \
+		sat -tempinduct -maxsteps 8 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
+		> "$(SAFE_STATE_DIRECTORY)/limit-$$limit.log" 2>&1 || exit $$?; \
+	done
+	yosys -Q -T -p "read_verilog -formal -sv $(SAFE_STATE_SOURCES); \
+		chparam -set NEGATIVE_CONTROL 1 deadline_monitor_proof; prep -top deadline_monitor_proof; \
+		flatten; async2sync; opt; check -assert; sat -seq 8 -prove-asserts -timeout $(SAT_TIMEOUT) -show-ports \
+		-dump_json $(SAFE_STATE_DIRECTORY)/counterexample.json" \
+		> "$(SAFE_STATE_DIRECTORY)/negative.log" 2>&1 || exit $$?
+	grep -Fq 'SAT proof finished - model found: FAIL!' "$(SAFE_STATE_DIRECTORY)/negative.log"
+
 .PHONY: rtl-invariants
 rtl-invariants:
 	mkdir -p "$(RTL_INVARIANT_DIRECTORY)"
 	for module in run_configuration_registers control_io_registers axi_lite_clock_bridge fixed_point_math; do \
 		yosys -Q -T -p "read_verilog -formal -sv $(RTL_INVARIANT_SOURCES) tests/formal/$${module}_proof.sv; \
 		prep -top $${module}_proof; write_json $(RTL_INVARIANT_DIRECTORY)/$${module}.json; \
-		flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
+		flatten; async2sync; opt; check -assert; sat -tempinduct -maxsteps 8 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 		> "$(RTL_INVARIANT_DIRECTORY)/$${module}.log" 2>&1 || exit $$?; \
 	done
 	for period in 64 256 512 16384 32768 100000; do \
@@ -496,7 +519,7 @@ rtl-invariants:
 			yosys -Q -T -p "read_verilog -formal -sv rtl/run_configuration_registers.sv tests/formal/run_configuration_registers_proof.sv; \
 			chparam -set PERIOD_TICKS $$period -set THERMAL $$thermal run_configuration_registers_proof; \
 			prep -top run_configuration_registers_proof; write_json $(RTL_INVARIANT_DIRECTORY)/configuration-$${period}-$${thermal}.json; \
-			flatten; async2sync; opt; check -assert; sat -seq 1 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
+			flatten; async2sync; opt; check -assert; sat -tempinduct -maxsteps 8 -prove-asserts -verify -timeout $(SAT_TIMEOUT) -show-ports" \
 			> "$(RTL_INVARIANT_DIRECTORY)/configuration-$${period}-$${thermal}.log" 2>&1 || exit $$?; \
 		done; \
 	done

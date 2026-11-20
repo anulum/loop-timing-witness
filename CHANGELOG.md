@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Added
 
+- `make safe-state-invariants` proves the deadline monitor's safe-state rules by temporal induction
+  for miss limits 1, 3 and 255: the latch sets only on a missed deadline completing `MISS_LIMIT`
+  consecutive misses, a latched monitor has counted at least that many misses, the consecutive count
+  never exceeds the total, and the latch holds until reset; the never-latches negation yields a
+  counterexample. `tests/test_safe_state_proof.py` runs it.
 - Native run metadata records `host_kernel`, the Linux real-time context of the run: kernel release
   and build string, the PREEMPT_RT flag, isolated and full dynamic tick CPUs, the isolation, tick,
   RCU, interrupt, preemption, idle, watchdog, clock source and mitigation boot parameters, the
@@ -63,6 +68,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The RTL, native runtime and plant timing proofs (`make rtl-invariants`,
+  `make native-runtime-invariants`, `make plant-timing-invariants`) now prove their assertions by
+  temporal induction (`sat -tempinduct`) instead of bounded SAT to a depth of one or four steps.
+  Every one of the 25 positive checks closes within two steps, so its assertions hold in every
+  reachable state; each negative control still yields a counterexample.
 - The threat model covers the fault-injection registers in the controller's register window: the
   hardware accepts their writes only before start and before an arm, and refuses them afterwards;
   the UIO lock that keeps other processes out is advisory, now a stated residual risk. Its residual

@@ -50,10 +50,7 @@ def test_native_commit_and_state_proofs(tmp_path: Path) -> None:
         "runtime_safe",
         "runtime_release",
     ):
-        assert (
-            "SAT proof finished - no model found: SUCCESS!"
-            in (tmp_path / f"{module}.log").read_text()
-        )
+        assert "Induction step proven: SUCCESS!" in (tmp_path / f"{module}.log").read_text()
         assert (
             "SAT proof finished - model found: FAIL!"
             in (tmp_path / f"{module}-negative.log").read_text()

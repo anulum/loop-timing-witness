@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import stat
@@ -54,7 +55,7 @@ _TRACER_OPTIONS = (
     "-s",
     "8192",
     "-e",
-    "trace=openat,openat2,execve",
+    "trace=open,openat,openat2,creat,execve,execveat",
     "-o",
 )
 
@@ -292,14 +293,29 @@ def _wait_or_reap(process: subprocess.Popen[bytes], deadline_seconds: float) -> 
     try:
         process.wait(timeout=deadline_seconds)
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
+        _stop_group(process.pid)
         process.wait()
         return True
     except BaseException:
-        os.killpg(process.pid, signal.SIGKILL)
+        _stop_group(process.pid)
         process.wait()
         raise
+    # A child the leader left running, such as a launcher's background process, is stopped
+    # with the group too, so nothing of the invocation outlives it.
+    _stop_group(process.pid)
     return False
+
+
+def _stop_group(group: int) -> None:
+    """Kill every process left in one owned session group; an empty group is no failure.
+
+    Parameters
+    ----------
+    group
+        Process group of the leader started in its own session.
+    """
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(group, signal.SIGKILL)
 
 
 def run_owned_group(

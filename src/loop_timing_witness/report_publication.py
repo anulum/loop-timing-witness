@@ -142,7 +142,9 @@ def publish_report_directory(output_directory: Path, files: Mapping[str, bytes])
         raise FileNotFoundError(message)
     publication = DirectoryPublication(ctypes.CDLL(None, use_errno=True))
     publication.check(parent)
-    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=parent))
+    # A short fixed prefix: a destination name up to the file-system limit still leaves
+    # room for the staging directory's own name.
+    staging = Path(tempfile.mkdtemp(prefix=".report-staging.", dir=parent))
     try:
         for name, content in files.items():
             (staging / name).write_bytes(content)

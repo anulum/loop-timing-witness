@@ -20,8 +20,11 @@ if TYPE_CHECKING:
     from .neural_checker_execution import CheckerInvocation
     from .neural_checker_installation import NeuralCheckerInstallation
 
+# An openat or openat2 record names its directory descriptor; a legacy open or creat record
+# resolves against the working directory, as AT_FDCWD does.
 _OPEN = re.compile(
-    r'^(?:\d+\s+)?openat(?:2)?\(([^,]+), ("(?:[^"\\]|\\.)*"), (.*?)\)\s+=\s+(\d+)(?:<.*>)?\s*$',
+    r'^(?:\d+\s+)?(?:openat(?:2)?\(([^,]+), |open\(|creat\()("(?:[^"\\]|\\.)*"), (.*?)\)'
+    r"\s+=\s+(\d+)(?:<.*>)?\s*$",
     re.ASCII,
 )
 _BASE = re.compile(r"\d+<([^>]+)>", re.ASCII)
@@ -113,8 +116,10 @@ def checker_opened_files(raw: bytes, directory: Path) -> frozenset[Path]:
     """Decode complete successful openat/openat2 observations without executing trace data.
 
     Lines end only at a line feed. A record is
-    ``[PID ]openat[2](BASE, "NAME", FLAGS) = FD[<...>]`` with ASCII digits and
-    whitespace; any other line, including a failed open, is not an observation.
+    ``[PID ]openat[2](BASE, "NAME", FLAGS) = FD[<...>]``, or ``open("NAME", FLAGS)``
+    or ``creat("NAME", MODE)`` resolved against the working directory, with ASCII
+    digits and whitespace; any other line, including a failed open, is not an
+    observation.
     The name holds plain characters and hexadecimal byte escapes.
 
     Parameters
@@ -150,6 +155,7 @@ def checker_opened_files(raw: bytes, directory: Path) -> frozenset[Path]:
         if match is None:
             continue
         descriptor, encoded, flags, _ = match.groups()
+        descriptor = descriptor or "AT_FDCWD"
         name = _quoted_path(encoded)
         if name in _DYNAMIC_READS or _PROCESS_FILE.fullmatch(name) or "O_DIRECTORY" in flags:
             continue

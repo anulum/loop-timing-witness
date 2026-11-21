@@ -15,12 +15,13 @@ import platform
 import shutil
 import signal
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
-from loop_timing_witness.neural_checker_execution import invoke_source_checker
+from loop_timing_witness.neural_checker_execution import invoke_source_checker, run_owned_group
 from loop_timing_witness.neural_checker_installation import (
     CheckerInstalledFile,
     NeuralCheckerInstallation,
@@ -117,6 +118,34 @@ def test_deadline_kills_and_reaps_the_whole_group(tmp_path: Path) -> None:
     assert actual.interrupted is True
     assert actual.returncode == -signal.SIGKILL
     assert actual.observation is None
+
+
+def test_a_normal_exit_stops_what_the_leader_left_running(tmp_path: Path) -> None:
+    """Stop a background process the group leader left behind when the leader exits.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned working directory, logs and the background process number.
+    """
+    pid_file = tmp_path / "child.pid"
+    command = ("/bin/sh", "-c", f"sleep 60 & echo $! > '{pid_file}'; exit 0")
+    run = run_owned_group(
+        command, tmp_path, {"PATH": "/usr/bin:/bin"}, (tmp_path / "out", tmp_path / "err"), 30
+    )
+    assert run.returncode == 0
+    assert run.interrupted is False
+    child = int(pid_file.read_text(encoding="ascii"))
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            state = Path(f"/proc/{child}/stat").read_text(encoding="ascii").split()[2]
+        except FileNotFoundError:
+            return
+        if state == "Z":
+            return
+        time.sleep(0.05)
+    pytest.fail("the background process outlived its group")
 
 
 def test_interrupted_parent_reaps_the_group_and_reraises(tmp_path: Path) -> None:

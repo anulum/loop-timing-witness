@@ -199,7 +199,7 @@ fn checker_argv(
         "-s",
         "8192",
         "-e",
-        "trace=openat,openat2,execve",
+        "trace=open,openat,openat2,creat,execve,execveat",
         "-o",
         path_text(trace_path)?,
     ];
@@ -284,10 +284,13 @@ fn supervise(
     loop {
         if let Some(status) = running.child.try_wait()? {
             running.reaped = true;
+            // A child the leader left running, such as a launcher's background
+            // process, is stopped with the group; an empty group is no failure.
+            let _ = kill_process_group(running.group, Signal::KILL);
             return Ok((status, false));
         }
         if deadline.0.elapsed() >= deadline.1 {
-            kill_process_group(running.group, Signal::KILL)?;
+            let _ = kill_process_group(running.group, Signal::KILL);
             let status = running.child.wait()?;
             running.reaped = true;
             return Ok((status, true));
@@ -339,3 +342,7 @@ pub(crate) fn run_group(
         interrupted,
     })
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/public_execution.rs"]
+mod tests;

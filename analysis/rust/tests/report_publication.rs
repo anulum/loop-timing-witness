@@ -119,6 +119,16 @@ fn a_complete_report_is_published_whole_and_alone() {
 }
 
 #[test]
+fn a_destination_name_at_the_file_system_limit_publishes() {
+    let owned = Owned::create();
+    let name = "r".repeat(255);
+    let target = owned.root.join(&name);
+    assert_eq!(write_neural_report(&target, &report()), Ok(()));
+    assert!(target.join("report.json").is_file());
+    assert_eq!(owned.entries(), [name]);
+}
+
+#[test]
 fn unsafe_destinations_are_refused_before_staging() {
     let owned = Owned::create();
     std::fs::create_dir(owned.root.join("existing")).expect("existing directory");

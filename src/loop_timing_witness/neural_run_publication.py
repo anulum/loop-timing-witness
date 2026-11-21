@@ -52,7 +52,9 @@ def write_neural_report(directory: Path, report: dict[str, Any]) -> None:
         raise NeuralCaptureRefusalError(message)
     publisher = DirectoryPublication(ctypes.CDLL(None, use_errno=True))
     publisher.check(target.parent)
-    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+    # A short fixed prefix: a destination name up to the file-system limit still leaves
+    # room for the staging directory's own name.
+    staging = Path(tempfile.mkdtemp(prefix=".neural-report-staging.", dir=target.parent))
     try:
         (staging / "report.json").write_bytes(raw)
         publisher.publish(staging, target)

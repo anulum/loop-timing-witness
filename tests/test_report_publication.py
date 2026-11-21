@@ -129,3 +129,17 @@ def test_report_directory_refuses_existing_paths(tmp_path: Path) -> None:
         publish_report_directory(tmp_path / "absent" / "report", {"a.json": b"{}"})
     assert [item.name for item in tmp_path.iterdir()] == ["linked"]
     assert not (tmp_path / "absent-target").exists()
+
+
+def test_a_destination_name_at_the_file_system_limit_publishes(tmp_path: Path) -> None:
+    """Stage under a short fixed name, so a 255-byte destination name still publishes.
+
+    Parameters
+    ----------
+    tmp_path
+        Exclusive parent for the report and its staging directory.
+    """
+    report = tmp_path / ("r" * 255)
+    publish_report_directory(report, {"a.json": b"{}\n"})
+    assert (report / "a.json").read_bytes() == b"{}\n"
+    assert [item.name for item in tmp_path.iterdir()] == [report.name]

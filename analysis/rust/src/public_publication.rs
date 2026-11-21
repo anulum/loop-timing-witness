@@ -41,11 +41,10 @@ pub fn write_neural_report(directory: &Path, report: &Value) -> Result<(), Strin
     if raw.len() > 8 * 1024 * 1024 {
         return Err("Complete neural report exceeds its byte allocation.".into());
     }
-    let prefix = format!(
-        ".{}.",
-        name.to_str().ok_or("Invalid neural report destination.")?
-    );
-    let staging = OwnedDirectory::create(&parent, &prefix)?;
+    name.to_str().ok_or("Invalid neural report destination.")?;
+    // A short fixed prefix: a destination name up to the file-system limit still
+    // leaves room for the staging directory's own name.
+    let staging = OwnedDirectory::create(&parent, ".neural-report-staging.")?;
     std::fs::write(staging.path.join("report.json"), raw)
         .map_err(|_| "Cannot stage the complete neural report.".to_owned())?;
     renameat_with(CWD, &staging.path, CWD, &target, RenameFlags::NOREPLACE)

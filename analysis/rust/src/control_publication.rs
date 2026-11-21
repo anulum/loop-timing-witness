@@ -18,7 +18,6 @@
 use crate::control_paths::{parent_and_name, realpath};
 use crate::control_text::{os_error, os_error_without_path, python_display};
 use rustix::fs::{CWD, RenameFlags, renameat_with};
-use std::ffi::OsStr;
 use std::io::Write as _;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
@@ -88,10 +87,9 @@ pub(crate) fn publish_report_directory(
     std::fs::create_dir(&source).map_err(|error| os_error(&error, &source))?;
     rename(&source, &probe.0.join("destination"))?;
     drop(probe);
-    let mut prefix = OsStr::new(".").to_os_string();
-    prefix.push(name);
-    prefix.push(".");
-    let staging = Staging::create(parent, &prefix.to_string_lossy())?;
+    // A short fixed prefix: a destination name up to the file-system limit still
+    // leaves room for the staging directory's own name.
+    let staging = Staging::create(parent, ".report-staging.")?;
     for (file, content) in files {
         write_file(&staging.0.join(file), content)?;
     }

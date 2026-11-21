@@ -261,6 +261,31 @@
       ],
       "invalid_utf8": true,
       "refusal": "Checker file trace requires exact UTF-8."
+    },
+    {
+      "name": "legacy open record",
+      "lines": [
+        "123 open(\"{root}/absolute.py\", O_RDONLY|O_CLOEXEC) = 3</absolute.py>"
+      ],
+      "opened": [
+        "absolute.py"
+      ]
+    },
+    {
+      "name": "creat record relative to the working directory",
+      "lines": [
+        "creat(\"local.txt\", 0644) = 4"
+      ],
+      "opened": [
+        "local.txt"
+      ]
+    },
+    {
+      "name": "failed legacy open",
+      "lines": [
+        "open(\"{root}/absolute.py\", O_RDONLY) = -1 ENOENT (No such file or directory)"
+      ],
+      "opened": []
     }
   ]
 }

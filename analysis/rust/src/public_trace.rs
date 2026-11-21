@@ -47,15 +47,23 @@ fn closes(tail: &str) -> bool {
     rest.is_empty() || (rest.starts_with('<') && rest.ends_with('>'))
 }
 
-/// Match one successful open record: `[PID ]openat[2](BASE, "NAME", FLAGS) = FD[<...>]`.
+/// Match one successful open record: `[PID ]openat[2](BASE, "NAME", FLAGS) = FD[<...>]`,
+/// or a legacy `open("NAME", FLAGS)` or `creat("NAME", MODE)` record, whose base is the
+/// working directory, as `AT_FDCWD` is.
 ///
 /// Returns the base, the quoted name without its quotes and the flags.
 fn record(line: &str) -> Option<(&str, &str, &str)> {
     let start = after_digits(line).and_then(after_space).unwrap_or(line);
-    let call = start.strip_prefix("openat")?;
-    let call = call.strip_prefix('2').unwrap_or(call).strip_prefix('(')?;
-    let (base, rest) = call.split_once(',')?;
-    let quoted = rest.strip_prefix(" \"").filter(|_| !base.is_empty())?;
+    let (base, quoted) = if let Some(call) = start.strip_prefix("openat") {
+        let call = call.strip_prefix('2').unwrap_or(call).strip_prefix('(')?;
+        let (base, rest) = call.split_once(',')?;
+        (base, rest.strip_prefix(" \"").filter(|_| !base.is_empty())?)
+    } else {
+        let call = start
+            .strip_prefix("open(")
+            .or_else(|| start.strip_prefix("creat("))?;
+        ("AT_FDCWD", call.strip_prefix('"')?)
+    };
     let mut escaped = false;
     let end = quoted.char_indices().find_map(|(index, c)| {
         let closing = !escaped && c == '"';

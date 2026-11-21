@@ -105,6 +105,15 @@ Loop Timing Witness — changelog
   is refused as `open` refuses it, and any other file that is not regular, such as a FIFO placed
   among the capture files, is refused with `EINVAL` instead of stalling the analysis; the file
   read is the file checked.
+- The neural source-checker runner, in both analyses, stops every process the checker's group
+  leader left running when the leader exits (a launcher's background process outlived the run on
+  the executor-image path), and an already empty group at the deadline is no failure. Its tracer
+  also records legacy `open` and `creat` calls and `execveat`, and both trace readers take a legacy
+  `open` or `creat` record as relative to the working directory; the shared trace corpus gains
+  three cases.
+- Report and neural report publication stage under a short fixed name, so a destination name up
+  to the file-system limit publishes; both analyses had embedded the destination name in the
+  staging name and failed on names somewhat shorter than the limit, at different lengths.
 
 ## [0.4.0] - 2026-11-21
 

@@ -416,3 +416,65 @@ fn stacked_random_edits_decode_and_read_as_python() {
         }
     }
 }
+
+/// A blob whose root node holds `count` empty properties with distinct names,
+/// and with `repeat` a second copy of the last one, laid out as the Python
+/// corpus lays out its hand-built blobs (header, reservation map, structure,
+/// strings).
+fn wide_root(count: usize, repeat: bool) -> Vec<u8> {
+    let word = |value: u32| value.to_be_bytes();
+    let (mut structure, mut strings) = (Vec::new(), Vec::new());
+    structure.extend(word(1));
+    structure.extend([0_u8; 4]);
+    let mut last = 0_u32;
+    for index in 0..count {
+        last = u32::try_from(strings.len()).expect("offset");
+        strings.extend(format!("p{index}").as_bytes());
+        strings.push(0);
+        structure.extend(word(3));
+        structure.extend(word(0));
+        structure.extend(word(last));
+    }
+    if repeat {
+        structure.extend(word(3));
+        structure.extend(word(0));
+        structure.extend(word(last));
+    }
+    structure.extend(word(2));
+    structure.extend(word(9));
+    let length = |bytes: &Vec<u8>| u32::try_from(bytes.len()).expect("length");
+    let structure_offset = 40 + 16;
+    let strings_offset = structure_offset + length(&structure);
+    let mut blob = Vec::new();
+    for value in [
+        0xD00D_FEED,
+        strings_offset + length(&strings),
+        structure_offset,
+        strings_offset,
+        40,
+        17,
+        16,
+        0,
+        length(&strings),
+        length(&structure),
+    ] {
+        blob.extend(word(value));
+    }
+    blob.extend([0_u8; 16]);
+    blob.extend(structure);
+    blob.extend(strings);
+    blob
+}
+
+#[test]
+fn a_node_with_many_properties_decodes_in_linear_time() {
+    let tree = decode_device_tree(&wide_root(150_000, false)).expect("wide tree");
+    let root = tree.node("/").expect("root");
+    assert_eq!(root.properties().len(), 150_000);
+    assert_eq!(root.property("p149999"), Some(&[][..]));
+    assert_eq!(root.property("p150000"), None);
+    assert_eq!(
+        decode_device_tree(&wide_root(3, true)).err().as_deref(),
+        Some("invalid or duplicate device-tree property")
+    );
+}

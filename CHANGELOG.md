@@ -89,6 +89,10 @@ Loop Timing Witness — changelog
   2^53, the largest whole count a float holds exactly; the reported `seconds` therefore agree,
   where the native analysis had saturated a larger count to 2^64 − 1. The shared corpus gains two
   cases at a 1 Hz clock of their own.
+- Three native analysis paths no longer take quadratic time on large inputs within the size
+  limits: a device-tree node finds a property, and refuses a repeated one, by name in constant
+  time (Python uses a dictionary), schema failure locations are reported once each without
+  rescanning the list, and `uniqueItems` sorts scalars and compares neighbours.
 
 ## [0.4.0] - 2026-11-21
 

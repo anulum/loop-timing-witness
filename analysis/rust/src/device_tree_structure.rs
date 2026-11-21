@@ -35,6 +35,10 @@ const END: u32 = 9;
 pub struct Node {
     path: String,
     properties: Vec<(String, Vec<u8>)>,
+    /// Each property's position by name, so a lookup and the duplicate check
+    /// take constant time, as Python's dictionary does, however many properties
+    /// one node holds.
+    positions: HashMap<String, usize>,
 }
 
 impl Node {
@@ -53,10 +57,9 @@ impl Node {
     /// One property's exact bytes, when the node declares it.
     #[must_use]
     pub fn property(&self, name: &str) -> Option<&[u8]> {
-        self.properties
-            .iter()
-            .find(|(declared, _)| declared == name)
-            .map(|(_, value)| value.as_slice())
+        self.positions
+            .get(name)
+            .map(|&position| self.properties[position].1.as_slice())
     }
 }
 
@@ -121,6 +124,7 @@ fn property(data: &[u8], strings: &[u8], offset: usize, node: &mut Node) -> Resu
     {
         return Err("invalid or duplicate device-tree property".to_owned());
     }
+    node.positions.insert(name.clone(), node.properties.len());
     node.properties
         .push((name, data[start..start + size].to_vec()));
     aligned_offset(data, start + size)
@@ -161,6 +165,7 @@ fn begin_node(
     nodes.list.push(Node {
         path,
         properties: Vec::new(),
+        positions: HashMap::new(),
     });
     if let Some(parent) = top {
         parents.insert(parent);

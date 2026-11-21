@@ -26,7 +26,7 @@
 use crate::control_pattern::Pattern;
 use serde_json::{Map, Number, Value};
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 /// Keywords that only annotate and never fail.
 const ANNOTATIONS: &[&str] = &[
@@ -103,6 +103,9 @@ impl Schema {
         let mut errors = Vec::new();
         self.check(&self.root, instance, &mut Vec::new(), &mut errors);
         errors.sort();
+        // Two paths can join to the same text without being neighbours in path order,
+        // so the texts already given are remembered, in constant time each.
+        let mut seen: HashSet<String> = HashSet::new();
         let mut locations: Vec<String> = Vec::new();
         for path in errors {
             let location = if path.is_empty() {
@@ -110,7 +113,7 @@ impl Schema {
             } else {
                 path.join("/")
             };
-            if !locations.contains(&location) {
+            if seen.insert(location.clone()) {
                 locations.push(location);
             }
         }
@@ -332,11 +335,7 @@ impl Schema {
             "minLength" | "minItems" | "maxItems" | "minProperties" | "maxProperties"
             | "minimum" | "maximum" => bounded(keyword, value, instance),
             "uniqueItems" => match instance {
-                Value::Array(items) if value == &Value::Bool(true) => {
-                    items.iter().enumerate().all(|(index, item)| {
-                        items[..index].iter().all(|earlier| !equal(earlier, item))
-                    })
-                }
+                Value::Array(items) if value == &Value::Bool(true) => unique(items),
                 _ => true,
             },
             "required" => instance.as_object().is_none_or(|object| {
@@ -514,6 +513,45 @@ fn float_against(float: f64, integer: i128) -> Ordering {
         Ordering::Equal if float > floor => Ordering::Greater,
         ordering => ordering,
     }
+}
+
+/// `uniqueItems`: no two items are equal as `jsonschema` compares them. Scalars are
+/// sorted by an order that agrees with that equality and only neighbours are compared,
+/// so a long array costs n log n; an array holding an array or object is compared pairwise.
+fn unique(items: &[Value]) -> bool {
+    if items
+        .iter()
+        .any(|item| matches!(item, Value::Array(_) | Value::Object(_)))
+    {
+        return items
+            .iter()
+            .enumerate()
+            .all(|(index, item)| items[..index].iter().all(|earlier| !equal(earlier, item)));
+    }
+    let mut sorted: Vec<&Value> = items.iter().collect();
+    sorted.sort_by(|left, right| scalar_order(left, right));
+    sorted.windows(2).all(|pair| !equal(pair[0], pair[1]))
+}
+
+/// A total order of JSON scalars in which equal values are neighbours: by kind
+/// (null, boolean, number, string), then by value, numbers exactly.
+fn scalar_order(left: &Value, right: &Value) -> Ordering {
+    let rank = |value: &Value| match value {
+        Value::Null => 0,
+        Value::Bool(_) => 1,
+        Value::Number(_) => 2,
+        _ => 3,
+    };
+    rank(left)
+        .cmp(&rank(right))
+        .then_with(|| match (left, right) {
+            (Value::Bool(left), Value::Bool(right)) => left.cmp(right),
+            (Value::Number(left), Value::Number(right)) => {
+                compare(from_number(left), from_number(right))
+            }
+            (Value::String(left), Value::String(right)) => left.cmp(right),
+            _ => Ordering::Equal,
+        })
 }
 
 /// Compare two values as `jsonschema` does: `1 == 1.0`, but a boolean is never a number.

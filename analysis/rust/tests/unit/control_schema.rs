@@ -238,3 +238,33 @@ fn rarely_used_keywords_follow_jsonschema() {
     );
     assert!(has_type(&json!(u64::MAX), "integer"));
 }
+
+#[test]
+fn unique_items_compare_as_jsonschema_in_n_log_n() {
+    let schema =
+        Schema::load(r#"{"properties": {"items": {"uniqueItems": true}}}"#).expect("subset schema");
+    let refused = |items: Value| schema.locations(&json!({ "items": items })) == ["items"];
+    assert!(refused(json!([1, 2, 1.0])));
+    assert!(refused(json!([null, "a", null])));
+    assert!(refused(json!([[1], [1.0]])));
+    assert!(refused(json!([{"a": 1}, {"a": 1.0}])));
+    assert!(!refused(json!([true, 1, "1", null, 1.5, false])));
+    assert!(!refused(json!([[1], [2], {"a": 1}])));
+    // A long scalar array: sorted neighbours, not every pair, so this stays fast.
+    let long: Vec<Value> = (0..300_000_u64).map(Value::from).collect();
+    assert!(!refused(Value::from(long.clone())));
+    let mut repeated = long;
+    repeated.push(Value::from(150_000.0));
+    assert!(refused(Value::from(repeated)));
+}
+
+#[test]
+fn repeated_failure_locations_are_reported_once_in_path_order() {
+    let schema = Schema::load(r#"{"items": {"type": "string"}}"#).expect("subset schema");
+    let items: Vec<Value> = (0..200_000_u64).map(Value::from).collect();
+    let locations = schema.locations(&Value::from(items));
+    assert_eq!(locations.len(), 200_000);
+    assert_eq!(locations[0], "0");
+    assert_eq!(locations[1], "1");
+    assert_eq!(locations[2], "10");
+}

@@ -12,8 +12,9 @@ Loop Timing Witness — threat model
 
 The model separates implemented software and simulated RTL from physical instrument
 qualification. Current surfaces include validation and host analysis, C/Rust/RTL controllers,
-native Linux run control, UIO/IIO adapters, workload processes, contracts and workflow
-definitions. Hardware access code exists; successful board operation remains unverified.
+native Linux run control, UIO/IIO adapters, workload processes, the source-checker workers of the
+neural analysis, contracts and workflow definitions. Hardware access code exists; successful
+board operation remains unverified.
 The second part covers the controls needed for a qualified physical instrument.
 
 ## Part 1 — current repository
@@ -31,6 +32,7 @@ The second part covers the controls needed for a qualified physical instrument.
 | Native configuration, source snapshots and receipts | identify actual controller inputs, executable, loaded parent project context and completed observations |
 | Workload processes and pipes | affect host resources and admit a native run only after bounded, owned-worker readiness |
 | UIO/IIO adapters and raw power journal | contain physical access paths whose successful operation is unqualified |
+| Neural source registry, checker policies, runtime descriptors, the consumer installation descriptor, the executor image binding and the three worker sources | decide which source-owned checker code the [neural analysis](HOST_ANALYSIS.md#source-bound-neural-analysis) runs on the analysis host, under which interpreter, and which verdict it accepts |
 | Licensing and provenance metadata | legal integrity of the repository |
 
 ### Trust boundaries and actors
@@ -45,6 +47,9 @@ The second part covers the controls needed for a qualified physical instrument.
   CPU and workload bounds. The launcher owns its children and descriptors; it does not sandbox
   arbitrary executable code. Actual kernel policy and device identity are checked at their
   interfaces. A process with the same user privileges can interfere with owned artefacts.
+- **Source owner of a neural cohort**: its checker code runs on the analysis host during neural
+  analysis. It is trusted only for the exact bytes a reviewed registry entry pins, never for code
+  or paths that a run bundle names; the operator chooses the installation or executor image.
 - **Hosted CI** (after separately authorised publication): untrusted execution environment;
   workflows carry empty top-level permissions, per-job least privilege, commit-pinned actions,
   no persisted checkout credentials and bounded timeouts.
@@ -66,6 +71,9 @@ The second part covers the controls needed for a qualified physical instrument.
 | Claiming more load than was observed | actual operation counters and worker/native time brackets remain bound to the capture; loopback UDP is not NIC traffic and fsync is not proof of uncached storage |
 | Closing a reused descriptor or signalling an unrelated process | owned pipe endpoints close once; production cleanup retains process-group leader identity until reaping; tracing tests retain owned pidfds and verify live parent relationships |
 | Arming or changing a fault during a run from a process that holds the controller's registers | register map version 2 puts the fault schedule (kind, target cycle, duration, arm) on its own 4 KiB page at offset `0x1000`, and the run page refuses those registers, so a process given only the run page cannot reach them; the UIO run programs map the fault page, a separate UIO device, only to arm the fault before the start, and unmap it before the controlling loop; [`run_configuration_registers.sv`](../rtl/run_configuration_registers.sv) accepts schedule writes only while the run is not started and no fault is armed, and one arm per common reset; the Linux UIO adapters hold an exclusive non-blocking `flock` on each device while they map it |
+| Running unreviewed code through a neural run bundle | only a source contract named by a registry entry (schema digest, cohort, source-contract digest) runs; the registry comes from the package or from the caller's own reviewed entries, and a carrier, a copied policy or an acquisition cannot add one; acquired paths and historical argv never select an executable; every source body must match its digest, and the worker sources and runtime files are checked against theirs before and after each checker operation |
+| Substituting the interpreter, import roots or environment of a checker | the interpreter, tracer and import roots come from the installation descriptor or executor image binding that the operator selects by absolute path and whose digest the package pins; the worker runs as `python -I -B -S` with a private empty bytecode cache, a cleared environment holding only the fixed variables, and null standard input, under the selected tracer, which records every opened file for comparison with the admitted set (in an executor image, a read-only root, the worker's loaded-file observation replaces the trace) |
+| Exhausting the host or reaching the network from a checker | each operation runs in its own process group with a deadline that stops the whole group; the worker sets address-space, CPU-time and file-size limits, disables core files, sets `no_new_privs` and installs a seccomp filter that refuses network system calls on Linux x86-64; reports are bounded to 8 MiB and published without replacing a path |
 | Accepting a foreign device or writing over evidence | adapters check actual kernel device identity, ownership and ABI before use; native output files are created exclusively |
 | Substituting a development dependency | `pip install --require-hashes` refuses any file whose hash is not in the lock; the licence guard refuses a package or version without a reviewed record |
 | Tampering with a workflow towards write authority | top-level permissions must be empty, the only allowed write scope is code-scanning upload, write-authority workflows are refused, actions must be commit-pinned, privileged triggers are refused |
@@ -88,10 +96,16 @@ fails a gate whose tool is missing, cannot run or is not the pinned version.
 - Commits and run manifests are not signed. Release tags and the published source assets are
   ([source release signatures](SOURCE_RELEASE_SIGNATURES.md)). Elsewhere hashes establish byte
   identity, not authentication against an actor who can edit the artefact and its declaration.
-- The UIO lock is advisory. A process that opens the device without taking it, or root through
-  `/dev/mem`, can still write the register window: before start it can arm a fault or change the
-  run configuration, and during a run it can issue controller accesses. The fault registers
-  share the controller's page, so page protection cannot separate them.
+- The UIO lock is advisory. A process that opens a device without taking it, or root through
+  `/dev/mem`, can still write its registers: through the run device it can change the run
+  configuration before the start and issue controller accesses during a run, and through the
+  fault device it can arm a fault before the start. Register map version 2 keeps the fault
+  registers on their own page, so withholding the fault device from a process keeps faults out of
+  its reach; a bitstream with map version 1 has no such page and the run programs refuse it.
+- A neural checker runs with the analysis user's privileges. The limits, the network filter and
+  the opened-file comparison bound and expose what it does, but they are not a sandbox: code that
+  a reviewed registry entry and a reviewed installation admit is trusted code. The worker refuses
+  to start on any platform other than Linux x86-64, where the filter exists.
 - Workload and executable bounds do not reserve a CPU or exclude other host jobs. Processes with
   the same privileges can alter scheduling or files; actual refusal tests establish specific
   guards, not isolation from a compromised local user.

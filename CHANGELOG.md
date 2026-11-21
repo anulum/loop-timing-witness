@@ -42,6 +42,11 @@ Loop Timing Witness — changelog
   QEMU's Icicle Kit machine no longer runs the HSS and models no fabric.
 - The kernel trace stop's description states that time in machine-mode firmware (OpenSBI or the
   HSS) is not in the supervisor-mode trace.
+- The threat model covers the source-checker workers of the neural analysis: the files that decide
+  which checker code runs, the source owner as an actor, and the controls against unreviewed
+  code, a substituted interpreter or environment, and resource or network abuse, with the residual
+  risk that admitted checker code is trusted code. Its UIO residual risk now describes register
+  map version 2, whose fault registers have their own page and device.
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 

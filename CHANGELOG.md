@@ -12,6 +12,8 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21
+
 ### Added
 
 - Pulse-per-second reference input: `control_plant_witness` timestamps each rising edge of an
@@ -55,7 +57,7 @@ Loop Timing Witness — changelog
   values a local reset that starts low has no falling edge, so a response flag could hold an
   initial value until the domain's first clock edge and meet a sampled bus edge, depending on how
   the values fell. The runtime gate reviews the two response handshakes that only that state could
-  reach (77 runtime outcomes), and the reviewed outcomes move with the shifted lines.
+  reach, with that reason, and the reviewed outcomes move with the shifted lines.
 - `docs/AMP_LINUX.md` describes the board placement of the dedicated-hart controller from the MSS
   Technical Reference Manual: firmware in L2-LIM ways that stay disabled as cache, L2 way
   partitioning with the per-master `WayMaskX` registers (hart 4's caches as masters 13 and 14,
@@ -148,9 +150,10 @@ Loop Timing Witness — changelog
   in the native run schema, so earlier metadata stays valid; the shared receipt schema corpus and
   the native coverage gate cover it, and `docs/HOST_ANALYSIS.md` lists every field and source. The
   runtime's reviewed outcomes move with the shifted lines, and one is added: the buffered write of
-  the kernel context, whose failure happens at the checked `fclose` (77 runtime outcomes).
+  the kernel context, whose failure happens at the checked `fclose`.
 - The reviewed lists of unreachable C and C++ branch outcomes have a public count table in
-  `docs/CONTROLLER_COVERAGE.md`, per list and source (76 runtime and 17 plugin outcomes). A test reads
+  `docs/CONTROLLER_COVERAGE.md`, per list and source (77 runtime and 17 plugin outcomes at this
+  release). A test reads
   both lists with the coverage gate's own loader and requires the table and its totals to match, so an
   added entry changes the public table in the same commit and a malformed list fails in the Python
   tests as well as in the native gate.
@@ -349,9 +352,7 @@ Loop Timing Witness — changelog
 - The RTL simulation wrapper starts every model input idle before the first evaluation. It set
   only the reset input, so with random initial values the bus handshake inputs, which an AXI
   master must hold low during reset, started random and a spurious transaction was refused; the
-  random-initial-value test found it. Two reviewed outcomes of `runtime/rtl/simulation.h` (a write
-  or read response without the matching ready during reset) now run in that test and leave the
-  list (75 runtime outcomes).
+  random-initial-value test found it.
 - The Rust analysis matches schema patterns without recursion. The former matcher took a few stack
   frames per repeated character and aborted the native analysis with a stack overflow on a manifest
   string of about 5,000 characters, which Python refused or accepted normally; the differential

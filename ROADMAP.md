@@ -77,16 +77,17 @@ Software implementation does not qualify a board capability or advance measureme
 
 ## Planned — in implementation order, without dates
 
-Software publication includes the Python analysis package at version 0.2.0 and the standalone
-Rust controller crate at version 0.3.0, plus the public Python, C/C++ and Rust API references.
+Software publication includes the Python analysis package and the standalone Rust controller
+crate at version 0.4.0, plus the public Python, C/C++ and Rust API references.
 Source releases are recorded in [CHANGELOG.md](CHANGELOG.md); they do not alter those immutable
 registry artifacts. The versioned source archives
 ([0.1.0](https://doi.org/10.5281/zenodo.23092361), [0.2.0](https://doi.org/10.5281/zenodo.24222960),
-[0.3.0](https://doi.org/10.5281/zenodo.24263979))
+[0.3.0](https://doi.org/10.5281/zenodo.24263979), [0.4.0](https://doi.org/10.5281/zenodo.24405489))
 and GitHub releases
 ([v0.1.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.1.0),
 [v0.2.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.2.0),
-[v0.3.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.3.0))
+[v0.3.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.3.0),
+[v0.4.0](https://github.com/anulum/loop-timing-witness/releases/tag/v0.4.0))
 are published with verified hashes and explicit software-only evidence scope.
 
 The original-width RTL source-flow obligation is complete: 826 of 832 raw identities executed,

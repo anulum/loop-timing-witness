@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -161,6 +161,39 @@ def test_public_surfaces_carry_no_unearned_evidence_claims() -> None:
     _check_badges(readme, zenodo["doi"])
 
 
+CRATES: Final = {
+    "witness-analysis": "analysis/rust",
+    "witness-controller": "controllers/rust",
+    "witness-amp-rust-kernel": "runtime/bare_metal/rust_kernel",
+}
+"""Every Rust package of the repository and its directory."""
+
+
+def _check_version_parity(version: str) -> None:
+    """Require the Python package version in every crate manifest and every lock file entry.
+
+    Each crate declares the release version even when its registry is not updated, and each
+    lock file records that version for every repository crate it holds, so a release cannot
+    leave one declaration behind.
+
+    Parameters
+    ----------
+    version
+        The Python package version.
+    """
+    for name, directory in CRATES.items():
+        package = tomllib.loads(publishable_text(f"{directory}/Cargo.toml"))["package"]
+        assert (package["name"], package["version"]) == (name, version), directory
+        locked = tomllib.loads(publishable_text(f"{directory}/Cargo.lock"))["package"]
+        for entry in locked:
+            if entry["name"] in CRATES:
+                assert entry["version"] == version, (directory, entry["name"])
+        assert any(entry["name"] == name for entry in locked), directory
+    assert f"The source tree's version is `{version}`." in publishable_text("README.md")
+    publication = publishable_text(".github/workflows/publish-rust.yml")
+    assert set(re.findall(r"witness-controller-([0-9.]+)\.crate", publication)) == {version}
+
+
 def _check_release_metadata(readme: str, changelog: str) -> dict[str, Any]:
     """Require one version, release date and DOI across the package, crate and citation.
 
@@ -176,10 +209,8 @@ def _check_release_metadata(readme: str, changelog: str) -> dict[str, Any]:
     dict[str, Any]
         Zenodo metadata.
     """
-    project = tomllib.loads(publishable_text("pyproject.toml"))["project"]
-    crate = tomllib.loads(publishable_text("controllers/rust/Cargo.toml"))["package"]
-    version = project["version"]
-    assert crate["version"] == version
+    version = tomllib.loads(publishable_text("pyproject.toml"))["project"]["version"]
+    _check_version_parity(version)
     headings = re.findall(r"^## \[(.+?)\]", changelog, flags=re.MULTILINE)
     assert headings[:2] == ["Unreleased", version]
     releases = [tuple(map(int, heading.split("."))) for heading in headings[1:]]

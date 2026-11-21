@@ -96,10 +96,11 @@ is tracked separately in [the coverage guide](docs/CONTROLLER_COVERAGE.md). The 
 run the native SCHED_FIFO path at priority 1; physical UIO/PAC1934 operation, scheduling on the
 board and board timing require their actual resources.
 
-1. Vendor tool project generation scripts and constraints. The generation scripts produce a Libero
-   project for MPFS250T and a [recorded timing run](hardware/icicle/README.md#recorded-libero-run);
-   its static timing meets every clock there, including the 100 MHz witness capture clock, with
-   the witness clock-domain crossings constrained. Board timing belongs to item 3.
+1. Vendor tool project generation scripts and constraints. The generation scripts produce Libero
+   projects for MPFS250T and the engineering-sample MPFS250T_ES. The
+   [runs of the release derivation](hardware/icicle/README.md#release-derivation-on-both-devices)
+   meet every clock on both devices, including the 100 MHz witness capture clock, with the witness
+   clock-domain crossings constrained. Board timing belongs to item 3.
 2. Bare-metal controller on a dedicated application core. The C and Rust controller firmware
    runs on a dedicated hart in [ISA simulation](docs/AMP_SIMULATION.md) against the production
    RTL, and the [Linux AMP collector](docs/AMP_LINUX.md) builds. The deployment depends on the

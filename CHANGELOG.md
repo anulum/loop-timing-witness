@@ -19,6 +19,8 @@ Loop Timing Witness — changelog
   read back unchanged and in order hold in every reachable state at 2, 4, 8 and 16 records. The
   strengthening invariants relate the pointers, their Gray registers and both synchroniser stages
   of each domain; a buffer copy whose write port ignores the full flag is refused with a trace.
+- The roadmap's vendor-tool item and the validation record cite the Libero runs of the release
+  derivation on MPFS250T and MPFS250T_ES instead of the earlier MPFS250T run.
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 

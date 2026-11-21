@@ -311,9 +311,11 @@ combinational quiescence and permission.
 
 These checks establish source elaboration and obvious structural consistency. They do not
 replace the derived Libero project, device-specific DRC, physical CDC review or timing reports.
-The [recorded Libero run](hardware/icicle/README.md#recorded-libero-run) of the derived design
-for MPFS250T meets every clock, including the 100 MHz witness capture clock (setup +2.152 ns,
-hold +0.069 ns), with the witness clock-domain crossings bounded by derived constraints.
+The [runs of the release derivation](hardware/icicle/README.md#release-derivation-on-both-devices)
+for MPFS250T and MPFS250T_ES meet every clock, including the 100 MHz witness capture clock (setup
++2.531 ns and +2.655 ns, hold +0.035 ns and +0.053 ns), with the witness clock-domain crossings
+bounded by derived constraints. Earlier runs, before the two-page register map, the event mirror
+pins and the pulse-per-second input, are recorded beside them.
 
 ## Hooks
 

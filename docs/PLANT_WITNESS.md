@@ -603,7 +603,9 @@ deadline (`miss`) or with the safe state latched (`safe`) it writes the marker
 as `cyclictest -b` does at its latency threshold, so the ring buffer ends at the cause instead of
 being overwritten after it. The observer adds one register read per interrupt. The stop follows
 the missed deadline by up to one sample period and the interrupt service, so the trace covers the
-cycle that missed it.
+cycle that missed it. The trace is the supervisor-mode kernel's: time a hart spends in
+machine-mode firmware (OpenSBI or the HSS), for an SBI call or a machine-mode interrupt, is not
+traced and shows only as time passing between traced events.
 
 The native metadata records `trace_stop`: the condition, tracefs directory, trace clock, whether
 the condition occurred, the miss count and safe flag at the stop and its `CLOCK_MONOTONIC` time.

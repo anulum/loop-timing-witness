@@ -32,6 +32,8 @@ Loop Timing Witness — changelog
   derivation on MPFS250T and MPFS250T_ES instead of the earlier MPFS250T run.
 - The roadmap's bare-metal item states why an emulator cannot replace the board's boot artefacts:
   QEMU's Icicle Kit machine no longer runs the HSS and models no fabric.
+- The kernel trace stop's description states that time in machine-mode firmware (OpenSBI or the
+  HSS) is not in the supervisor-mode trace.
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 

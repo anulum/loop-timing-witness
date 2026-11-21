@@ -21,6 +21,17 @@ Loop Timing Witness — changelog
   immediate application and `empirical_delays` the distribution of measured latencies. A delay of
   almost one period raises the default loops' output variance by at most 0.35 %.
 
+- `make fault-interrupt-invariants` proves the fault injector's and the retained interrupt's rules
+  by temporal induction, as the other fabric units already are. The injector, at periods of 2 and
+  100,000 ticks: one fault per reset, arms with a zero duration or a past target refused, an armed
+  fault never behind the sample counter and injected exactly at its target tick, freeze and
+  overload for exactly the duration in ticks, the delayed interrupt exactly that many ticks later
+  with its origin cycle. The interrupt, with free capture and bus clocks and both resets released
+  from one bank reset: the bus count never ahead of the capture count, snapshots and acknowledges
+  never ahead of what they consume, the line high exactly while a seen generation is
+  unacknowledged, and an acknowledge only with a held snapshot, which it consumes. Negative
+  controls yield counterexamples; one-line faulty copies of either unit are refused with a trace
+  from reset. The RTL is unchanged.
 - ADR 0002 (proposed) records the boundary of the source-bound neural analysis: the host
   analysis owns a verifier that depends on no single consumer, a consumer enters only as data in
   a reviewed registry entry, and no consumer source, model, compiled artefact or adapter is

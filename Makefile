@@ -506,6 +506,65 @@ safe-state-invariants:
 		> "$(SAFE_STATE_DIRECTORY)/negative.log" 2>&1 || exit $$?
 	grep -Fq 'SAT proof finished - model found: FAIL!' "$(SAFE_STATE_DIRECTORY)/negative.log"
 
+FAULT_INTERRUPT_DIRECTORY ?= build/fault-interrupt-invariants
+# The units under proof; a test substitutes faulty copies to show that the proofs refuse them.
+FAULT_PROOF_INJECTOR ?= rtl/fault_injector.sv
+INTERRUPT_PROOF_SOURCE ?= rtl/retained_interrupt.sv
+FAULT_PROOF_PERIODS ?= 2 100000
+INTERRUPT_PROOF_DEPTH ?= 16
+# Registers the strengthening invariants read, connected after flatten because Yosys has no
+# hierarchical references.
+FAULT_OBSERVED := connect -set observed_armed dut.armed; connect -set observed_used dut.used; \
+	connect -set observed_saved_kind dut.saved_kind; connect -set observed_active_kind dut.active_kind; \
+	connect -set observed_saved_target dut.saved_target; \
+	connect -set observed_saved_duration dut.saved_duration; connect -set observed_origin dut.origin; \
+	connect -set observed_remaining dut.remaining;
+INTERRUPT_OBSERVED := connect -set generation dut.generation; \
+	connect -set generation_gray dut.generation_gray; connect -set gray_first dut.gray_first; \
+	connect -set gray_second dut.gray_second; connect -set bus_generation dut.bus_generation; \
+	connect -set observed_generation dut.observed_generation; \
+	connect -set acknowledged_generation dut.acknowledged_generation; \
+	connect -set observed_valid dut.observed_valid; \
+	connect -set capture_stage capture_reset.release_stage; \
+	connect -set bus_stage bus_reset.release_stage;
+
+# The fault injector's one-shot, arming, target and duration rules at the periods of
+# FAULT_PROOF_PERIODS, and the retained interrupt's generation, snapshot and acknowledge rules with
+# its capture and bus clocks free (clk2fflogic), each proven by temporal induction for every
+# reachable state. Each negative control must yield a counterexample: the injector's that no fault
+# is ever injected, the interrupt's that the line never rises.
+.PHONY: fault-interrupt-invariants
+fault-interrupt-invariants:
+	mkdir -p "$(FAULT_INTERRUPT_DIRECTORY)"
+	for period in $(FAULT_PROOF_PERIODS); do \
+		yosys -Q -T -p "read_verilog -formal -sv $(FAULT_PROOF_INJECTOR) tests/formal/fault_injector_proof.sv; \
+			chparam -set PERIOD_TICKS $$period fault_injector_proof; prep -top fault_injector_proof; \
+			write_json $(FAULT_INTERRUPT_DIRECTORY)/fault-$$period.json; flatten; $(FAULT_OBSERVED) \
+			opt; async2sync; opt; check -assert; \
+			sat -tempinduct -maxsteps 8 -set-assumes -prove-asserts -verify -timeout $(SAT_TIMEOUT) \
+			-show-ports" > "$(FAULT_INTERRUPT_DIRECTORY)/fault-$$period.log" 2>&1 || exit $$?; \
+	done
+	yosys -Q -T -p "read_verilog -formal -sv $(FAULT_PROOF_INJECTOR) tests/formal/fault_injector_proof.sv; \
+		chparam -set NEGATIVE_CONTROL 1 fault_injector_proof; prep -top fault_injector_proof; flatten; \
+		$(FAULT_OBSERVED) opt; async2sync; opt; check -assert; \
+		sat -seq 6 -set-assumes -prove-asserts -timeout $(SAT_TIMEOUT) \
+		-dump_json $(FAULT_INTERRUPT_DIRECTORY)/fault-counterexample.json" \
+		> "$(FAULT_INTERRUPT_DIRECTORY)/fault-negative.log" 2>&1
+	grep -Fq 'SAT proof finished - model found: FAIL!' "$(FAULT_INTERRUPT_DIRECTORY)/fault-negative.log"
+	yosys -Q -T -p "read_verilog -formal -sv rtl/clock_reset_release.sv $(INTERRUPT_PROOF_SOURCE) \
+		tests/formal/retained_interrupt_proof.sv; prep -top retained_interrupt_proof; \
+		write_json $(FAULT_INTERRUPT_DIRECTORY)/interrupt.json; flatten; $(INTERRUPT_OBSERVED) \
+		opt; clk2fflogic; opt; check -assert; \
+		sat -tempinduct -maxsteps 8 -set-assumes -prove-asserts -verify -timeout $(SAT_TIMEOUT) \
+		-show-ports" > "$(FAULT_INTERRUPT_DIRECTORY)/interrupt.log" 2>&1
+	yosys -Q -T -p "read_verilog -formal -sv rtl/clock_reset_release.sv $(INTERRUPT_PROOF_SOURCE) \
+		tests/formal/retained_interrupt_proof.sv; chparam -set NEGATIVE_CONTROL 1 retained_interrupt_proof; \
+		prep -top retained_interrupt_proof; flatten; $(INTERRUPT_OBSERVED) opt; clk2fflogic; opt; \
+		check -assert; sat -seq $(INTERRUPT_PROOF_DEPTH) -set-assumes -prove-asserts -timeout $(SAT_TIMEOUT) \
+		-dump_json $(FAULT_INTERRUPT_DIRECTORY)/interrupt-counterexample.json" \
+		> "$(FAULT_INTERRUPT_DIRECTORY)/interrupt-negative.log" 2>&1
+	grep -Fq 'SAT proof finished - model found: FAIL!' "$(FAULT_INTERRUPT_DIRECTORY)/interrupt-negative.log"
+
 FIFO_PROOF_DIRECTORY ?= build/fifo-invariants
 # The buffer under proof; a test substitutes a faulty copy to show that the proof refuses it.
 FIFO_PROOF_BUFFER ?= rtl/event_record_fifo.sv

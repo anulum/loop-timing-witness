@@ -298,6 +298,27 @@ completes `MISS_LIMIT` consecutive misses, a latched monitor has counted at leas
 misses, and the latch holds until the next reset. Its negation, that the latch never sets, yields
 a counterexample (`tests/test_safe_state_proof.py`).
 
+`make fault-interrupt-invariants` (run by `tests/test_fault_interrupt_proof.py`) proves the fault
+injector's and the retained interrupt's rules by temporal induction, from any state reached
+through a reset with every input free. For the injector, at periods of 2 and 100,000 ticks: at
+most one fault per reset; an accepted arm has a nonzero duration and a target that is not in the
+past; an armed fault never falls behind the sample counter and is injected at the tick of its
+target cycle, never at another; freeze and overload last exactly the duration in ticks from the
+injection edge, the delayed interrupt comes exactly that many ticks after it and carries the
+target cycle, and a dropped or delayed sample interrupt is withheld only at the injection tick.
+The proof's cycle counter advances with the injector's own tick, as the plant's does until the
+safe state latches; after that, ticks no longer reach the injector and no fault is injected. For
+the retained interrupt, with its capture and bus clocks free and both local resets released from
+one bank reset: the bus domain's count never runs ahead of the capture count, a 0x9c snapshot
+never runs ahead of the bus count and an acknowledge never runs ahead of its snapshot, the line is
+high exactly while a generation the bus domain has seen is unacknowledged, an acknowledge or a
+0xa0 read succeeds only with a held snapshot and 0xa0 returns its upper word, and an acknowledge
+consumes the snapshot. The Gray crossing is modelled without wire skew, which the
+[timing constraints](../hardware/icicle/README.md) bound on silicon, and the proof assumes fewer
+than 2^64 − 1 generations. Each negation (no fault is ever injected, the line never rises) yields
+a counterexample, and a copy of either unit that differs in one line (a delayed interrupt one
+tick early, an acknowledge accepted without a snapshot) is refused with a trace from reset.
+
 One schedule can be armed per run. Arms while busy/used, zero-duration arms, past targets and
 targets beyond the last sample are refused. Arming must precede the sample edge; the data is
 latched, so subsequent input changes cannot replace the schedule. A trip suppresses subsequent ordinary sample IRQs and prevents further
@@ -542,8 +563,9 @@ UIO qualification remain outstanding.
 
 ```bash
 .venv/bin/pytest -q tests/test_control_plant_witness.py tests/test_control_faults.py \
-  tests/test_plant_timing.py
+  tests/test_plant_timing.py tests/test_fault_interrupt_proof.py
 make plant-timing-invariants
+make fault-interrupt-invariants
 yosys -s rtl/check_control_equivalence.ys
 verilator --lint-only --Wall --top-module control_plant_witness rtl/*.sv
 ```

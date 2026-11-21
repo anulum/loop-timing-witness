@@ -382,34 +382,36 @@ artefact, measures with `--label ci` and uploads the result with a runner receip
 Recorded measurements, side by side:
 
 - hosted: [`control_run_analysis.json`](../benchmarks/control_run_analysis.json), workflow run
-  43729204606 at base commit `c87b3e3` (the local measurement's analysis code), on the GitHub-hosted
-  `ubuntu-24.04` runner (AMD EPYC 9V74, 4 logical CPUs, load average 1.0–2.2);
+  44889469582 at the release commit `5fc0873` (tag `v0.4.0`), on the GitHub-hosted `ubuntu-26.04`
+  runner (AMD EPYC 7763, 4 logical CPUs, load average 1.3–2.5);
 - local: [`control_run_analysis.local.json`](../benchmarks/control_run_analysis.local.json), base commit
   `30db584` (weakly-hard deadline metrics and the reference timebase in every report), on ML350:
   two Intel Xeon E5-2640 processors, 24 logical CPUs, `schedutil` governor, child pinned to CPU 16.
   Other jobs ran on the other CPUs, with a load average of 15.6 at the start and 13.0 at the end,
-  so the local evidence is non-isolated. The hosted record measures the analysis of its base
-  commit, before those report members.
+  so the local evidence is non-isolated. From `30db584` to the release commit the analysis code
+  changed only in the crate's version, so both records measure the same analysis.
 
 | Command | Cycles | Backend | Hosted P50 | Hosted P95 | Hosted mean | Hosted peak memory | Local P50 | Local P95 | Local mean | Local peak memory |
 |---|---|---|---|---|---|---|---|---|---|---|
-| run | 2·10⁵ | Python | 14.35 s | 14.50 s | 14.35 s | 766 MiB | 24.02 s | 29.37 s | 24.75 s | 764 MiB |
-| run | 2·10⁵ | native | 0.66 s | 0.67 s | 0.66 s | 237 MiB | 1.82 s | 2.18 s | 1.84 s | 201 MiB |
-| campaign | 10⁶ | Python | 50.61 s | 50.77 s | 50.58 s | 986 MiB | 61.85 s | 65.64 s | 62.07 s | 983 MiB |
-| campaign | 10⁶ | native | 2.02 s | 2.03 s | 2.02 s | 397 MiB | 5.48 s | 6.25 s | 5.60 s | 395 MiB |
+| run | 2·10⁵ | Python | 17.49 s | 17.87 s | 17.49 s | 766 MiB | 24.02 s | 29.37 s | 24.75 s | 764 MiB |
+| run | 2·10⁵ | native | 0.75 s | 0.76 s | 0.75 s | 201 MiB | 1.82 s | 2.18 s | 1.84 s | 201 MiB |
+| campaign | 10⁶ | Python | 59.55 s | 59.81 s | 59.44 s | 997 MiB | 61.85 s | 65.64 s | 62.07 s | 983 MiB |
+| campaign | 10⁶ | native | 2.35 s | 2.94 s | 2.50 s | 395 MiB | 5.48 s | 6.25 s | 5.60 s | 395 MiB |
 
-The native speed-up of the mean is 21.7× hosted and 13.5× local for a run, and 25.0× hosted and 11.1×
+The native speed-up of the mean is 23.3× hosted and 13.5× local for a run, and 23.8× hosted and 11.1×
 local for a campaign. Hosted runners are assigned per job and their processors differ between runs.
-Earlier dispatches measured the in-memory tables before `14f67b8`: an AMD EPYC 9V45 runner at
-`c0936da` (3.9× and 25.9×, native run peak memory 1.60 GiB), an AMD EPYC 9V74 runner at `2d5cd26`
-(4.0× and 24.5×) and an Intel Xeon 6975P-C runner at `5d67140` (4.2× and 20.8×). Compare figures
-only with the host each artefact records.
+The previous hosted record measured `c87b3e3`, before this release's analysis changes, on an
+`ubuntu-24.04` AMD EPYC 9V74 runner: 21.7× and 25.0×, native run peak memory 237 MiB. Earlier
+dispatches measured the in-memory tables before `14f67b8`: an AMD EPYC 9V45 runner at `c0936da`
+(3.9× and 25.9×, native run peak memory 1.60 GiB), an AMD EPYC 9V74 runner at `2d5cd26` (4.0× and
+24.5×) and an Intel Xeon 6975P-C runner at `5d67140` (4.2× and 20.8×). Compare figures only with
+the host each artefact records.
 
 The run command publishes per-cycle interval and jitter tables, 37.7 MB and 75.2 MB for one
-repeat. The native run command writes them row by row, as they are formed, and peaks at about 0.31
-times Python's memory on the hosted runner and 0.26 times on ML350; until `14f67b8` it built them in memory first and peaked at about 2.1 times
-Python's. The numbers time host analysis of RTL simulation data. They are not controller,
-processor or hardware timing.
+repeat. The native run command writes them row by row, as they are formed, and peaks at about 0.26
+times Python's memory on the hosted runner and on ML350; until `14f67b8` it built them in memory
+first and peaked at about 2.1 times Python's. The numbers time host analysis of RTL simulation
+data. They are not controller, processor or hardware timing.
 
 ## Calculations
 

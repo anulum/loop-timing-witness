@@ -15,7 +15,7 @@
 use super::{admit_elf, read_symbols};
 use crate::device_tree_resources::Region;
 use crate::files::digest;
-use crate::unit_files::hex_bytes;
+use crate::unit_files::{hex_bytes, mutation_bases, mutation_corpus, stacked_edits, with_table};
 use serde_json::{Map, Value, json};
 
 /// The shared corpus, holding two real images and Python's outcomes.
@@ -223,6 +223,22 @@ fn every_field_change_admits_and_reads_as_python() {
                 "image {which} at {offset}: {}",
                 row[2]
             );
+        }
+    }
+}
+
+#[test]
+fn stacked_random_edits_admit_and_read_as_python() {
+    let corpus = Corpus::load();
+    let (document, texts, seed) = mutation_corpus();
+    let ram = reservation(&document["reservation"]);
+    let bases = mutation_bases(&document, seed, "elf");
+    assert_eq!(bases.len(), IMAGES.len());
+    for (name, mut random, outcomes) in bases {
+        for (case, expected) in outcomes.iter().enumerate() {
+            let content = stacked_edits(corpus.image(name), &mut random);
+            let found = json!([admission(&content, ram), symbols(&content, false)]);
+            assert_eq!(found, with_table(expected, &texts), "{name} case {case}");
         }
     }
 }

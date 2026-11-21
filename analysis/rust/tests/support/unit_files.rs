@@ -7,7 +7,8 @@
 // Loop Timing Witness — corpus bytes and owned folders of the crate tests
 
 //! Decode the hexadecimal bytes the shared corpora hold, own a folder for
-//! corpus file trees, write those trees and their edits, and patch documents.
+//! corpus file trees, write those trees and their edits, patch documents, and
+//! rebuild the stacked random edits of the firmware reader mutation corpus.
 
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
@@ -109,4 +110,119 @@ pub(crate) fn patched(base: &Value, patch: &Value) -> Value {
         }
     }
     document
+}
+
+/// The SplitMix64 generator of Steele, Lea and Flood, from which the firmware
+/// reader mutation corpus draws its edits.
+pub(crate) struct SplitMix64(u64);
+
+impl SplitMix64 {
+    /// Start a sequence at a seed.
+    pub(crate) fn new(seed: u64) -> Self {
+        Self(seed)
+    }
+
+    /// The next 64-bit output.
+    pub(crate) fn draw(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut mixed = self.0;
+        mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        mixed ^ (mixed >> 31)
+    }
+
+    /// The next output reduced modulo a positive bound.
+    fn below(&mut self, bound: usize) -> usize {
+        let bound = u64::try_from(bound).expect("bound");
+        usize::try_from(self.draw() % bound).expect("index")
+    }
+}
+
+/// One stacked random edit of a nonempty base, as the mutation corpus defines
+/// it: one to eight runs of one to eight bytes overwritten at random offsets,
+/// then, in one case of eight, a cut at a random length.
+pub(crate) fn stacked_edits(base: &[u8], random: &mut SplitMix64) -> Vec<u8> {
+    let mut data = base.to_vec();
+    for _ in 0..1 + random.below(8) {
+        let offset = random.below(data.len());
+        let end = data.len().min(offset + 1 + random.below(8));
+        for byte in &mut data[offset..end] {
+            *byte = random.draw().to_le_bytes()[0];
+        }
+    }
+    if random.below(8) == 0 {
+        let length = random.below(data.len());
+        data.truncate(length);
+    }
+    data
+}
+
+/// A corpus value with every refusal index replaced by its text.
+pub(crate) fn with_table(value: &Value, texts: &[String]) -> Value {
+    match value {
+        Value::Object(members) => Value::Object(
+            members
+                .iter()
+                .map(|(key, item)| {
+                    let item = match item.as_u64().filter(|_| key == "refusal") {
+                        Some(number) => {
+                            Value::from(texts[usize::try_from(number).expect("index")].as_str())
+                        }
+                        None => with_table(item, texts),
+                    };
+                    (key.clone(), item)
+                })
+                .collect(),
+        ),
+        Value::Array(items) => {
+            Value::Array(items.iter().map(|item| with_table(item, texts)).collect())
+        }
+        other => other.clone(),
+    }
+}
+
+/// The committed firmware reader mutation corpus, its refusal texts and seed.
+pub(crate) fn mutation_corpus() -> (Value, Vec<String>, u64) {
+    let document: Value =
+        serde_json::from_str(include_str!("../data/firmware-reader-mutations.json"))
+            .expect("mutation corpus");
+    assert_eq!(
+        document["schema"],
+        "loop-timing-witness.firmware-reader-mutations.v1"
+    );
+    let texts = document["texts"]
+        .as_array()
+        .expect("texts")
+        .iter()
+        .map(|text| text.as_str().expect("text").to_owned())
+        .collect();
+    let seed = document["seed"].as_u64().expect("seed");
+    (document, texts, seed)
+}
+
+/// Each base of one reader in the mutation corpus: its name, its own sequence
+/// and its expected outcomes, with the corpus's case count checked.
+pub(crate) fn mutation_bases<'a>(
+    document: &'a Value,
+    seed: u64,
+    reader: &str,
+) -> Vec<(&'a str, SplitMix64, &'a [Value])> {
+    let cases = usize::try_from(document["cases"].as_u64().expect("cases")).expect("cases");
+    document["bases"]
+        .as_array()
+        .expect("bases")
+        .iter()
+        .enumerate()
+        .filter(|(_, base)| base["reader"] == reader)
+        .map(|(position, base)| {
+            let outcomes = base["outcomes"].as_array().expect("outcomes");
+            assert_eq!(outcomes.len(), cases);
+            let position = u64::try_from(position).expect("position");
+            (
+                base["name"].as_str().expect("name"),
+                SplitMix64::new(seed + position),
+                outcomes.as_slice(),
+            )
+        })
+        .collect()
 }

@@ -169,6 +169,14 @@ It covers cut, padded and changed images, other reservations, and one-field
 changes of the ELF header and of every program header, section header and
 global symbol.
 
+A third corpus, `firmware-reader-mutations.json`, stacks random edits on the
+same real inputs: each of 200 cases per image and per compiled tree overwrites
+one to eight runs of one to eight bytes at random offsets and, in one case of
+eight, cuts the result. The edits come from SplitMix64 with a fixed seed per
+base, so the unit tests rebuild every input and require the Python readers'
+outcomes: the admitted segments and symbol digest of an image, or the decoded
+tree's digest and reader changes, or the same refusal text.
+
 ## Rust dependency record reading
 
 The `amp_rust_dependencies` module reads rustc's dependency records of an AMP

@@ -32,6 +32,11 @@ Loop Timing Witness — changelog
   unacknowledged, and an acknowledge only with a held snapshot, which it consumes. Negative
   controls yield counterexamples; one-line faulty copies of either unit are refused with a trace
   from reset. The RTL is unchanged.
+- A shared corpus of stacked random edits holds the firmware ELF and device-tree readers of both
+  analyses to the same outcomes beyond their one-field corpora: 200 cases per real image and per
+  compiled tree, each overwriting one to eight runs of one to eight bytes and, in one case of
+  eight, cutting the input, with SplitMix64 and a fixed seed, so the Rust unit tests rebuild every
+  input. Both readers refuse or return on every case, with the same text or the same result.
 - ADR 0002 (proposed) records the boundary of the source-bound neural analysis: the host
   analysis owns a verifier that depends on no single consumer, a consumer enters only as data in
   a reviewed registry entry, and no consumer source, model, compiled artefact or adapter is

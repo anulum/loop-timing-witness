@@ -17,7 +17,7 @@ use super::{
     register_regions, single_cell, string_list,
 };
 use crate::files::{digest, hex};
-use crate::unit_files::hex_bytes;
+use crate::unit_files::{hex_bytes, mutation_bases, mutation_corpus, stacked_edits, with_table};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap};
 
@@ -392,4 +392,27 @@ fn the_only_number_beyond_64_bits_is_the_end_of_the_address_space() {
         .count();
     assert!(written > 0);
     assert_eq!(floats(&Corpus::load().document), written);
+}
+
+#[test]
+fn stacked_random_edits_decode_and_read_as_python() {
+    let corpus = Corpus::load();
+    let (document, texts, seed) = mutation_corpus();
+    let bases = mutation_bases(&document, seed, "device tree");
+    assert_eq!(bases.len(), 3);
+    for (name, mut random, outcomes) in bases {
+        let base = &corpus.chunks[name];
+        let reference = readers(&decode_device_tree(base).expect("base tree"));
+        for (case, expected) in outcomes.iter().enumerate() {
+            let blob = stacked_edits(base, &mut random);
+            let found = match decode_device_tree(&blob) {
+                Ok(tree) => json!({
+                    "tree_sha256": tree_digest(&tree),
+                    "readers": changes(&reference, &readers(&tree)),
+                }),
+                Err(refusal) => json!({"refusal": refusal}),
+            };
+            assert_eq!(found, with_table(expected, &texts), "{name} case {case}");
+        }
+    }
 }

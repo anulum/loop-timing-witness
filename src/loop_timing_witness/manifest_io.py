@@ -494,8 +494,9 @@ def open_input(path: Path) -> BinaryIO:
 
     The file is opened non-blocking and the opened descriptor, not the name, is judged, so a
     FIFO cannot stall the reader and the file read is the file checked. A directory is refused
-    as ``open`` refuses it; a FIFO or a socket is refused with ``EINVAL`` naming the path. A
-    device such as ``/dev/null`` reads as before. The native analysis opens and refuses alike.
+    as ``open`` refuses it; a FIFO is refused with ``EINVAL`` naming the path. A device such as
+    ``/dev/null`` reads as before, and a socket cannot be opened at all (``ENXIO``). The native
+    analysis opens and refuses alike.
 
     Parameters
     ----------
@@ -510,7 +511,7 @@ def open_input(path: Path) -> BinaryIO:
     Raises
     ------
     OSError
-        If the file cannot be opened or inspected, or is a directory, FIFO or socket.
+        If the file cannot be opened or inspected, or is a directory or a FIFO.
     """
     descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
     try:
@@ -524,7 +525,7 @@ def open_input(path: Path) -> BinaryIO:
 
 
 def _refuse_kind(mode: int, path: Path) -> None:
-    """Refuse a directory as ``open`` does, and a FIFO or a socket, which would block or never end.
+    """Refuse a directory as ``open`` does, and a FIFO, which could block the reader.
 
     Parameters
     ----------
@@ -536,11 +537,11 @@ def _refuse_kind(mode: int, path: Path) -> None:
     Raises
     ------
     OSError
-        ``EISDIR`` for a directory, ``EINVAL`` for a FIFO or a socket.
+        ``EISDIR`` for a directory, ``EINVAL`` for a FIFO.
     """
     if stat.S_ISDIR(mode):
         raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), str(path))
-    if stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode):
+    if stat.S_ISFIFO(mode):
         raise OSError(errno.EINVAL, os.strerror(errno.EINVAL), str(path))
 
 
@@ -560,7 +561,7 @@ def read_input_bytes(path: Path) -> bytes:
     Raises
     ------
     OSError
-        If the file cannot be opened, inspected or read, or is a directory, FIFO or socket.
+        If the file cannot be opened, inspected or read, or is a directory or a FIFO.
     """
     with open_input(path) as stream:
         return stream.read()

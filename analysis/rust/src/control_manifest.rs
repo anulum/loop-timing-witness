@@ -376,22 +376,20 @@ fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
 
 /// Open one input file for reading as Python's `manifest_io.open_input` does:
 /// non-blocking, so a FIFO cannot stall the reader, and judged on the opened
-/// descriptor. A directory is refused as `open` refuses it, a FIFO or a socket
-/// with `EINVAL`, both naming the path; a device such as `/dev/null` reads as
-/// before. An opening error names the path, an inspection error does not.
+/// descriptor. A directory is refused as `open` refuses it, a FIFO with
+/// `EINVAL`, both naming the path; a device such as `/dev/null` reads as
+/// before; a socket cannot be opened at all (`ENXIO`). An opening error names
+/// the path, an inspection error does not.
 pub(crate) fn open_input(path: &Path) -> Result<std::fs::File, Failure> {
     let stream = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(crate::files::O_NONBLOCK | crate::files::O_CLOEXEC)
         .open(path)
         .map_err(|error| Failure::Os(os_error(&error, path)))?;
-    let status = stream
-        .metadata()
-        .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
-    let kind = status.file_type();
+    let kind = stream.metadata().map_err(unnamed_failure)?.file_type();
     let refused = if kind.is_dir() {
         Some(rustix::io::Errno::ISDIR)
-    } else if kind.is_fifo() || kind.is_socket() {
+    } else if kind.is_fifo() {
         Some(rustix::io::Errno::INVAL)
     } else {
         None
@@ -403,15 +401,18 @@ pub(crate) fn open_input(path: &Path) -> Result<std::fs::File, Failure> {
     Ok(stream)
 }
 
+/// An inspection or reading error, reported without the path as Python's is.
+fn unnamed_failure(error: std::io::Error) -> Failure {
+    Failure::Os(os_error_without_path(&error))
+}
+
 /// Read a whole input file as Python's `manifest_io.read_input_bytes`
 /// reports failures: opening and refusal errors name the path, a reading error
 /// does not.
 pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, Failure> {
     let mut stream = open_input(path)?;
     let mut content = Vec::new();
-    stream
-        .read_to_end(&mut content)
-        .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
+    stream.read_to_end(&mut content).map_err(unnamed_failure)?;
     Ok(content)
 }
 
@@ -432,9 +433,7 @@ fn verify_artifact(directory: &Path, item: &Value) -> Result<(), Failure> {
     let mut hasher = Sha256::new();
     let mut block = vec![0; 1 << 20];
     loop {
-        let count = stream
-            .read(&mut block)
-            .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
+        let count = stream.read(&mut block).map_err(unnamed_failure)?;
         if count == 0 {
             break;
         }

@@ -63,8 +63,8 @@ produce a report: `valid: false` and `invalid_reasons` retain the reason. Malfor
 without a report. The source and hardware artefacts are checked as files, not accepted merely as
 hash strings. The tool accepts relative paths within the run directory only. Every run input is
 opened non-blocking and judged on the opened descriptor: a directory is refused as `open` refuses
-it, and a FIFO or a socket is refused with `EINVAL` instead of stalling the reader; a device such
-as `/dev/null` reads as a file does. Inputs have no size limit beyond the memory of the analysing host.
+it, and a FIFO is refused with `EINVAL` instead of stalling the reader; a device such as
+`/dev/null` reads as a file does. Inputs have no size limit beyond the memory of the analysing host.
 
 ## Inputs
 

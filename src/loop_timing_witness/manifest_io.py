@@ -436,7 +436,7 @@ def load_json_object(path: Path) -> dict[str, Any]:
     ValueError
         If the bytes violate the strict JSON contract.
     """
-    return parse_json_object(read_regular_bytes(path), str(path))
+    return parse_json_object(read_input_bytes(path), str(path))
 
 
 def load_bounded_json_object(path: Path) -> dict[str, Any]:
@@ -463,7 +463,7 @@ def load_bounded_json_object(path: Path) -> dict[str, Any]:
     ValueError
         If the bytes violate the bounded strict JSON contract.
     """
-    return parse_bounded_json_object(read_regular_bytes(path), str(path))
+    return parse_bounded_json_object(read_input_bytes(path), str(path))
 
 
 def canonical_json_bytes(value: dict[str, Any]) -> bytes:
@@ -489,13 +489,13 @@ def canonical_json_bytes(value: dict[str, Any]) -> bytes:
     return (text + "\n").encode("utf-8")
 
 
-def open_regular(path: Path) -> BinaryIO:
-    """Open one regular file for reading, failing as ``open(path, "rb")`` does, without blocking.
+def open_input(path: Path) -> BinaryIO:
+    """Open one input file for reading, failing as ``open(path, "rb")`` does, without blocking.
 
     The file is opened non-blocking and the opened descriptor, not the name, is judged, so a
     FIFO cannot stall the reader and the file read is the file checked. A directory is refused
-    as ``open`` refuses it; any other file that is not regular is refused with ``EINVAL``
-    naming the path. The native analysis opens and refuses alike.
+    as ``open`` refuses it; a FIFO or a socket is refused with ``EINVAL`` naming the path. A
+    device such as ``/dev/null`` reads as before. The native analysis opens and refuses alike.
 
     Parameters
     ----------
@@ -510,21 +510,21 @@ def open_regular(path: Path) -> BinaryIO:
     Raises
     ------
     OSError
-        If the file cannot be opened or inspected, or is not a regular file.
+        If the file cannot be opened or inspected, or is a directory, FIFO or socket.
     """
     descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
     try:
         # Judged before a stream wraps the descriptor, which would refuse a directory
         # naming the descriptor number instead of the path.
-        _require_regular(os.fstat(descriptor).st_mode, path)
+        _refuse_kind(os.fstat(descriptor).st_mode, path)
     except BaseException:
         os.close(descriptor)
         raise
     return os.fdopen(descriptor, "rb")
 
 
-def _require_regular(mode: int, path: Path) -> None:
-    """Refuse a directory as ``open`` does, and any other file that is not regular.
+def _refuse_kind(mode: int, path: Path) -> None:
+    """Refuse a directory as ``open`` does, and a FIFO or a socket, which would block or never end.
 
     Parameters
     ----------
@@ -536,16 +536,16 @@ def _require_regular(mode: int, path: Path) -> None:
     Raises
     ------
     OSError
-        ``EISDIR`` for a directory, ``EINVAL`` for any other file that is not regular.
+        ``EISDIR`` for a directory, ``EINVAL`` for a FIFO or a socket.
     """
     if stat.S_ISDIR(mode):
         raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), str(path))
-    if not stat.S_ISREG(mode):
+    if stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode):
         raise OSError(errno.EINVAL, os.strerror(errno.EINVAL), str(path))
 
 
-def read_regular_bytes(path: Path) -> bytes:
-    """Read one whole regular file as :func:`open_regular` admits it.
+def read_input_bytes(path: Path) -> bytes:
+    """Read one whole input file as :func:`open_input` admits it.
 
     Parameters
     ----------
@@ -560,9 +560,9 @@ def read_regular_bytes(path: Path) -> bytes:
     Raises
     ------
     OSError
-        If the file cannot be opened, inspected or read, or is not a regular file.
+        If the file cannot be opened, inspected or read, or is a directory, FIFO or socket.
     """
-    with open_regular(path) as stream:
+    with open_input(path) as stream:
         return stream.read()
 
 
@@ -584,7 +584,7 @@ def sha256_of_file(path: Path) -> str:
     OSError
         If the file cannot be read.
     """
-    return hashlib.sha256(read_regular_bytes(path)).hexdigest()
+    return hashlib.sha256(read_input_bytes(path)).hexdigest()
 
 
 def write_bytes_atomic(path: Path, data: bytes) -> None:

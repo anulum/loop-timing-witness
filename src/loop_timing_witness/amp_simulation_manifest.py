@@ -30,7 +30,7 @@ from .manifest_io import (
     load_bounded_json_object,
     load_json_object,
     parse_bounded_json_object,
-    read_regular_bytes,
+    read_input_bytes,
     sha256_of_file,
 )
 from .run_manifest import load_run, utc_timestamp
@@ -304,18 +304,18 @@ def _check_logged_run(
     validate_runtime_snapshot(output / "image", libraries)
     validate_image_dependency_snapshot(output / "image", preparation.get("compiler_dependencies"))
     validate_image_receipt(output / "image", image, preparation)
-    completion = completion_receipt(read_regular_bytes(output / "spike.log"))
+    completion = completion_receipt(read_input_bytes(output / "spike.log"))
     declared = decode_completion(canonical_json_bytes(capture["completion"]))
     if completion != declared:
         message = "AMP capture completion differs from the actual logger"
         raise ValueError(message)
     validate_plugin_snapshot(output, capture["tools"]["plugin"], thermal=completion.thermal)
-    run = read_amp_run(read_regular_bytes(output / "image/configuration.txt"))
+    run = read_amp_run(read_input_bytes(output / "image/configuration.txt"))
     validate_capture(
         completion,
-        read_regular_bytes(output / "events.bin"),
-        read_regular_bytes(output / "tracking_raw.csv"),
-        read_regular_bytes(output / "measurement-domain.json"),
+        read_input_bytes(output / "events.bin"),
+        read_input_bytes(output / "tracking_raw.csv"),
+        read_input_bytes(output / "measurement-domain.json"),
         run.cycles,
     )
 
@@ -467,12 +467,12 @@ def write_amp_manifest(output: Path) -> Path:
     ValueError
         If actual receipt, input configuration or resulting run declaration contradicts admission.
     """
-    capture = admitted_capture(output, read_regular_bytes(output / "capture.json"))
-    completion = completion_receipt(read_regular_bytes(output / "spike.log"))
-    configuration = read_regular_bytes(output / "image/configuration.txt")
+    capture = admitted_capture(output, read_input_bytes(output / "capture.json"))
+    completion = completion_receipt(read_input_bytes(output / "spike.log"))
+    configuration = read_input_bytes(output / "image/configuration.txt")
     run = read_amp_run(configuration)
     observations = tracking_csv(
-        read_regular_bytes(output / "tracking_raw.csv"), run.cycles, completion.samples
+        read_input_bytes(output / "tracking_raw.csv"), run.cycles, completion.samples
     )
     with (output / "tracking.csv").open("xb") as stream:
         stream.write(observations)

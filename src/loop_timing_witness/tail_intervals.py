@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 from typing import Any, Final
 
-from loop_timing_witness.manifest_io import parse_bounded_json_object, read_regular_bytes
+from loop_timing_witness.manifest_io import parse_bounded_json_object, read_input_bytes
 from loop_timing_witness.tail_statistics import CONFIDENCE, RESAMPLES, SEED, tail_quantiles
 
 RESULT_SCHEMA: Final = "loop-timing-witness.tail-intervals.v1"
@@ -91,8 +91,8 @@ def tail_intervals(directory: Path) -> dict[str, Any]:
         If the report or table is malformed, or the samples differ from the report's
         distributions.
     """
-    report_bytes = read_regular_bytes(directory / "report.json")
-    table = read_regular_bytes(directory / "cycle_intervals.csv")
+    report_bytes = read_input_bytes(directory / "report.json")
+    table = read_input_bytes(directory / "cycle_intervals.csv")
     report = parse_bounded_json_object(report_bytes, str(directory / "report.json"))
     distributions = report.get("events", {}).get("intervals")
     if not isinstance(distributions, dict) or not isinstance(report.get("run_id"), str):

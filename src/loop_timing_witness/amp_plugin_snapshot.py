@@ -17,7 +17,7 @@ from .amp_plugin_receipt import decode_plugin_receipt
 from .manifest_io import (
     canonical_json_bytes,
     load_bounded_json_object,
-    read_regular_bytes,
+    read_input_bytes,
     sha256_of_file,
 )
 
@@ -94,7 +94,7 @@ def validate_plugin_snapshot(output: Path, plugin_digest: str, *, thermal: bool)
     ValueError
         If source closure, library or actual plant parameter contradicts captured identities.
     """
-    data = decode_plugin_receipt(read_regular_bytes(output / "plugin_build.json"))
+    data = decode_plugin_receipt(read_input_bytes(output / "plugin_build.json"))
     index = load_bounded_json_object(output / "plugin_source_index.json")
     if (
         data["plugin_sha256"] != plugin_digest

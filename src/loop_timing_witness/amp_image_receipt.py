@@ -24,7 +24,7 @@ from .amp_run_input import read_amp_run
 from .amp_rust_receipt import validate_rust_image_receipt
 from .device_tree_blob import decode_device_tree
 from .device_tree_interrupts import PlicSelection
-from .manifest_io import load_bounded_json_object, read_regular_bytes
+from .manifest_io import load_bounded_json_object, read_input_bytes
 
 OPTIONS = (
     "--dtb",
@@ -206,13 +206,13 @@ def validate_image_receipt(
     validate_rust_image_receipt(directory, image, preparation)
     request = recorded_request(directory)
     platform = bind_platform(
-        decode_device_tree(read_regular_bytes(directory / "platform.dtb")),
+        decode_device_tree(read_input_bytes(directory / "platform.dtb")),
         request.memory,
         request.device_path,
         request.plic,
     )
-    run = read_amp_run(read_regular_bytes(directory / "configuration.txt"))
-    content = read_regular_bytes(directory / "firmware.elf")
+    run = read_amp_run(read_input_bytes(directory / "configuration.txt"))
+    content = read_input_bytes(directory / "firmware.elf")
     segments = admit_image_contract(content, platform, run, request.memory.stack_bytes)
     admit_exit_channel(content, segments, isa=True)
     if (

@@ -52,7 +52,7 @@ fn utc_timestamps_follow_the_python_rule() {
 }
 
 #[test]
-fn run_inputs_are_read_only_as_regular_files_without_blocking() {
+fn run_inputs_are_read_without_blocking_on_a_fifo() {
     let root = std::env::temp_dir().join(format!("witness-regular-{}", std::process::id()));
     std::fs::create_dir(&root).expect("owned directory");
     let regular = root.join("regular.bin");
@@ -63,6 +63,11 @@ fn run_inputs_are_read_only_as_regular_files_without_blocking() {
     std::fs::create_dir(&directory).expect("directory");
     let text = |path: &std::path::Path| path.to_str().expect("UTF-8 path").to_owned();
     assert_eq!(read_file(&regular).ok(), Some(b"bytes".to_vec()));
+    // A device reads as before; only what would block or never end is refused.
+    assert_eq!(
+        read_file(std::path::Path::new("/dev/null")).ok(),
+        Some(Vec::new())
+    );
     // A FIFO without a writer is refused at once instead of blocking the reader.
     assert_eq!(
         read_file(&fifo).err().map(|failure| failure.text()),

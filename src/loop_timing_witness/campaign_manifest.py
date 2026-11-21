@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from .manifest_io import load_json_object, parse_bounded_json_object, read_regular_bytes
+from .manifest_io import load_json_object, parse_bounded_json_object, read_input_bytes
 from .run_manifest import RunInputs, load_run
 from .validate_measurement_domain import schema_locations
 
@@ -199,7 +199,7 @@ def _load_repeat(campaign_directory: Path, item: dict[str, Any]) -> CampaignRepe
     """
     reference = item["run_manifest"]
     path = _run_manifest_path(campaign_directory, reference["path"])
-    raw = read_regular_bytes(path)
+    raw = read_input_bytes(path)
     if hashlib.sha256(raw).hexdigest() != reference["sha256"]:
         message = f"run manifest SHA-256 mismatch: {reference['path']}"
         raise ValueError(message)
@@ -279,7 +279,7 @@ def load_campaign(manifest_path: Path) -> CampaignInputs:
         order, path containment, digest, run identity or configuration
         agreement fails.
     """
-    raw = read_regular_bytes(manifest_path)
+    raw = read_input_bytes(manifest_path)
     manifest = parse_bounded_json_object(raw, str(manifest_path))
     _validate_campaign_schema(manifest)
     directory = manifest_path.resolve().parent

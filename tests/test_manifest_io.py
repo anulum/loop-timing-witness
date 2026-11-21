@@ -15,14 +15,14 @@ import json
 import math
 import os
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
 from loop_timing_witness.manifest_io import (
     load_bounded_json_object,
-    open_regular,
-    read_regular_bytes,
+    open_input,
+    read_input_bytes,
 )
 from manifest_io import (
     JsonInputRefusalError,
@@ -31,9 +31,6 @@ from manifest_io import (
     sha256_of_file,
     write_bytes_atomic,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_load_returns_the_decoded_object(tmp_path: Path) -> None:
@@ -258,8 +255,8 @@ def test_atomic_write_into_a_missing_directory_raises(tmp_path: Path) -> None:
     assert list(tmp_path.iterdir()) == []
 
 
-def test_run_inputs_are_read_only_as_regular_files_without_blocking(tmp_path: Path) -> None:
-    """Read a regular file; refuse a FIFO at once and a directory as ``open`` does.
+def test_run_inputs_are_read_without_blocking_on_a_fifo(tmp_path: Path) -> None:
+    """Read a regular file and a device; refuse a FIFO at once and a directory as ``open`` does.
 
     Parameters
     ----------
@@ -272,12 +269,13 @@ def test_run_inputs_are_read_only_as_regular_files_without_blocking(tmp_path: Pa
     os.mkfifo(fifo)
     directory = tmp_path / "directory"
     directory.mkdir()
-    assert read_regular_bytes(regular) == b"bytes"
+    assert read_input_bytes(regular) == b"bytes"
+    assert read_input_bytes(Path("/dev/null")) == b""
     with pytest.raises(OSError, match=r"^\[Errno 22\] Invalid argument: ") as refused:
-        read_regular_bytes(fifo)
+        read_input_bytes(fifo)
     assert str(refused.value) == f"[Errno 22] Invalid argument: {str(fifo)!r}"
     with pytest.raises(IsADirectoryError) as directory_refused:
-        read_regular_bytes(directory)
+        read_input_bytes(directory)
     assert str(directory_refused.value) == f"[Errno 21] Is a directory: {str(directory)!r}"
-    with open_regular(regular) as stream:
+    with open_input(regular) as stream:
         assert stream.read() == b"bytes"

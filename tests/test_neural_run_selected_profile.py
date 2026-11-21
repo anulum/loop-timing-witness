@@ -225,7 +225,7 @@ def test_selected_asset_damage_refuses_the_actual_public_acquisition(
     assert "Selected neural profile" in result.stderr
     assert "Traceback" not in result.stderr
     assert not output.exists()
-    assert not list(tmp_path.glob(".report.*"))
+    assert not list(tmp_path.glob(".neural-report-staging.*"))
 
 
 @pytest.mark.parametrize(

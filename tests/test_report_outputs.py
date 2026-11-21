@@ -91,7 +91,7 @@ def test_existing_symlink_is_preserved(
     assert target.lstat().st_ino == inode
     assert target.readlink() == referent
     assert referent.exists() == referent_exists
-    assert not list(tmp_path.glob(".existing-link.*"))
+    assert not list(tmp_path.glob(".report-staging.*"))
     assert not list(tmp_path.glob(".report-publication-probe.*"))
 
 
@@ -129,7 +129,7 @@ def test_concurrent_destination_is_preserved(
             _check_published(process, staging, target)
         else:
             _check_preserved(process, target, kind)
-        assert not list(tmp_path.glob(".racing-report.*"))
+        assert not list(tmp_path.glob(".report-staging.*"))
         assert "(DELAYED)" in log.read_text()
     finally:
         owned.close()
@@ -193,7 +193,7 @@ def _await_staging(owned: OwnedTrace, process: subprocess.Popen[str], parent: Pa
         assert time.monotonic() < deadline, "actual completed staging was not observed in 10s"
         owned.observe()
         candidates = [
-            path for path in parent.glob(".racing-report.*") if str(path) in log.read_text()
+            path for path in parent.glob(".report-staging.*") if str(path) in log.read_text()
         ]
         if candidates:
             return candidates[0]
@@ -300,7 +300,7 @@ def test_interrupted_staging_is_removed(
     with pytest.raises(TypeError):
         write_report(target, report, [])
     assert not target.exists()
-    assert not list(tmp_path.glob(".interrupted.*"))
+    assert not list(tmp_path.glob(".report-staging.*"))
 
 
 def test_empty_interval_plot_is_still_labelled(

@@ -182,4 +182,4 @@ def test_existing_report_directory_is_preserved(
     with pytest.raises(FileExistsError, match="report directory already exists"):
         write_campaign_report(output, report)
     assert [item.name for item in output.iterdir()] == ["kept.txt"]
-    assert not [item for item in tmp_path.iterdir() if item.name.startswith(".existing.")]
+    assert not [item for item in tmp_path.iterdir() if item.name.startswith(".report-staging.")]

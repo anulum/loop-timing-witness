@@ -25,9 +25,9 @@ from typing import Any, Final
 
 from .manifest_io import (
     load_json_object,
-    open_regular,
+    open_input,
     parse_bounded_json_object,
-    read_regular_bytes,
+    read_input_bytes,
 )
 from .validate_measurement_domain import schema_locations, semantic_findings
 
@@ -250,7 +250,7 @@ def _read_bound_file(run_directory: Path, item: dict[str, str]) -> bytes:
         content does not match the declared SHA-256.
     """
     path = _bound_path(run_directory, item)
-    content = read_regular_bytes(path)
+    content = read_input_bytes(path)
     digest = hashlib.sha256(content).hexdigest()
     if digest != item["sha256"]:
         message = f"input SHA-256 mismatch: {item['path']}"
@@ -305,7 +305,7 @@ def _verify_artifact(run_directory: Path, item: dict[str, str]) -> None:
         If the complete file does not match the declared SHA-256.
     """
     digest = hashlib.sha256()
-    with open_regular(_bound_path(run_directory, item)) as stream:
+    with open_input(_bound_path(run_directory, item)) as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     if digest.hexdigest() != item["sha256"]:
@@ -336,7 +336,7 @@ def load_run(manifest_path: Path, *, manifest_bytes: bytes | None = None) -> Run
     ValueError
         If JSON, schema, semantic or digest validation fails.
     """
-    raw = read_regular_bytes(manifest_path) if manifest_bytes is None else manifest_bytes
+    raw = read_input_bytes(manifest_path) if manifest_bytes is None else manifest_bytes
     manifest = parse_bounded_json_object(raw, str(manifest_path))
     _validate_run_schema(manifest)
     directory = manifest_path.resolve().parent

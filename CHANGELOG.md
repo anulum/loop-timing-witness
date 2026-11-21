@@ -102,9 +102,9 @@ Loop Timing Witness — changelog
   integral float of 1e40, exhausted memory in Python and saturated, then hung or panicked, in the
   native analysis.
 - Both analyses open every run input non-blocking and judge the opened descriptor: a directory
-  is refused as `open` refuses it, and any other file that is not regular, such as a FIFO placed
-  among the capture files, is refused with `EINVAL` instead of stalling the analysis; the file
-  read is the file checked.
+  is refused as `open` refuses it, and a FIFO or a socket, such as a FIFO placed among the
+  capture files, is refused with `EINVAL` instead of stalling the analysis; a device such as
+  `/dev/null` reads as before, and the file read is the file checked.
 - The neural source-checker runner, in both analyses, stops every process the checker's group
   leader left running when the leader exits (a launcher's background process outlived the run on
   the executor-image path), and an already empty group at the deadline is no failure. Its tracer

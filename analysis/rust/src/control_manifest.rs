@@ -27,7 +27,7 @@ use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::io::Read;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -374,12 +374,12 @@ fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("input is not a regular file inside the run directory: {declared}"))
 }
 
-/// Open one regular file for reading as Python's `manifest_io.open_regular`
-/// does: non-blocking, so a FIFO cannot stall the reader, and judged on the
-/// opened descriptor. A directory is refused as `open` refuses it, any other
-/// file that is not regular with `EINVAL`, both naming the path; an opening
-/// error names the path, an inspection error does not.
-pub(crate) fn open_regular(path: &Path) -> Result<std::fs::File, Failure> {
+/// Open one input file for reading as Python's `manifest_io.open_input` does:
+/// non-blocking, so a FIFO cannot stall the reader, and judged on the opened
+/// descriptor. A directory is refused as `open` refuses it, a FIFO or a socket
+/// with `EINVAL`, both naming the path; a device such as `/dev/null` reads as
+/// before. An opening error names the path, an inspection error does not.
+pub(crate) fn open_input(path: &Path) -> Result<std::fs::File, Failure> {
     let stream = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(crate::files::O_NONBLOCK | crate::files::O_CLOEXEC)
@@ -388,12 +388,13 @@ pub(crate) fn open_regular(path: &Path) -> Result<std::fs::File, Failure> {
     let status = stream
         .metadata()
         .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
-    let refused = if status.is_dir() {
+    let kind = status.file_type();
+    let refused = if kind.is_dir() {
         Some(rustix::io::Errno::ISDIR)
-    } else if status.is_file() {
-        None
-    } else {
+    } else if kind.is_fifo() || kind.is_socket() {
         Some(rustix::io::Errno::INVAL)
+    } else {
+        None
     };
     if let Some(number) = refused {
         let error = std::io::Error::from_raw_os_error(number.raw_os_error());
@@ -402,11 +403,11 @@ pub(crate) fn open_regular(path: &Path) -> Result<std::fs::File, Failure> {
     Ok(stream)
 }
 
-/// Read a whole regular file as Python's `manifest_io.read_regular_bytes`
+/// Read a whole input file as Python's `manifest_io.read_input_bytes`
 /// reports failures: opening and refusal errors name the path, a reading error
 /// does not.
 pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, Failure> {
-    let mut stream = open_regular(path)?;
+    let mut stream = open_input(path)?;
     let mut content = Vec::new();
     stream
         .read_to_end(&mut content)
@@ -427,7 +428,7 @@ fn read_bound(directory: &Path, item: &Value) -> Result<Vec<u8>, Failure> {
 /// Stream-check one source or hardware artefact in 1 MiB blocks.
 fn verify_artifact(directory: &Path, item: &Value) -> Result<(), Failure> {
     let path = bound_path(directory, item)?;
-    let mut stream = open_regular(&path)?;
+    let mut stream = open_input(&path)?;
     let mut hasher = Sha256::new();
     let mut block = vec![0; 1 << 20];
     loop {

@@ -27,6 +27,8 @@ fn no_pulse_gives_no_block_and_one_pulse_no_fit() {
     assert_eq!(block["edges"], 1);
     assert_eq!(block["first_sequence"], 3);
     assert_eq!(block["missing_edges"], 0);
+    assert_eq!(block["rejected_edges"], 0);
+    assert_eq!(block["seconds"], 0);
     assert_eq!(block["ticks_per_second"], Value::Null);
     assert_eq!(block["max_abs_residual_ticks"], Value::Null);
 }
@@ -39,8 +41,33 @@ fn an_exact_fast_counter_is_half_a_part_per_million_fast() {
     let block = reference_timebase(&pulses, 1e8);
     assert_eq!(block["ticks_per_second"], 100_000_050.0);
     assert_eq!(block["scale_error_ppm"], 0.5);
-    assert_eq!(block["scale_standard_error_ppm"], 0.0);
+    let spread: f64 = (0..60)
+        .map(|second| (f64::from(second) - 29.5).powi(2))
+        .sum();
+    let floor = (1.0 / 12.0 / spread).sqrt() / 1e8 * 1e6;
+    let reported = block["scale_standard_error_ppm"]
+        .as_f64()
+        .expect("uncertainty");
+    assert!((reported - floor).abs() <= floor * 1e-12);
     assert_eq!(block["residual_rms_ticks"], 0.0);
+    assert_eq!(block["seconds"], 59);
+}
+
+#[test]
+fn a_ringing_edge_and_a_counter_that_does_not_advance_are_rejected() {
+    let block = reference_timebase(
+        &[
+            pulse(0, 1000),
+            pulse(1, 1000 + 100_000_000),
+            pulse(2, 1300 + 100_000_000),
+            pulse(3, 900 + 100_000_000),
+            pulse(4, 1000 + 200_000_000),
+        ],
+        1e8,
+    );
+    assert_eq!(block["rejected_edges"], 2);
+    assert_eq!(block["seconds"], 2);
+    assert_eq!(block["ticks_per_second"], 100_000_000.0);
 }
 
 #[test]
@@ -49,7 +76,7 @@ fn every_corpus_case_has_the_python_result() {
         crate::control_json::decode_object(CORPUS.as_bytes(), "corpus").expect("corpus");
     let clock = corpus["clock_hz"].as_f64().expect("clock");
     let cases = corpus["cases"].as_array().expect("cases");
-    assert_eq!(cases.len(), 7);
+    assert_eq!(cases.len(), 10);
     for case in cases {
         let pulses: Vec<Edge> = case["edges"]
             .as_array()

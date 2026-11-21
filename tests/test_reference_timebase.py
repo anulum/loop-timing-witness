@@ -73,7 +73,45 @@ def _cases() -> dict[str, list[ReferenceEdge]]:
         "skipped edge": _pulses(10, CLOCK_HZ, skip=4),
         "jitter": _pulses(3600, CLOCK_HZ - 1234, jitter=40),
         "other reference": [ReferenceEdge("OTHER", 0, 5), *_pulses(3, CLOCK_HZ)],
+        "ringing edge": _ringing(),
+        "skipped reference pulse": _skipped_pulse(),
+        "slow edge off a second": [
+            *_pulses(3, CLOCK_HZ),
+            ReferenceEdge("PPS", 3, 1000 + 3 * CLOCK_HZ + 200_000),
+        ],
     }
+
+
+def _ringing() -> list[ReferenceEdge]:
+    """Return five reference seconds with a second rising edge 300 ticks after the third.
+
+    The fabric counts every synchronised rising edge, so the extra edge takes a sequence number.
+
+    Returns
+    -------
+    list[ReferenceEdge]
+        Edges at seconds 0, 1, 2, the ringing edge, then seconds 3 and 4.
+    """
+    edges = _pulses(3, CLOCK_HZ)
+    edges.append(ReferenceEdge("PPS", 3, edges[-1].ticks + 300))
+    edges.extend(
+        ReferenceEdge("PPS", 4 + second, 1000 + (3 + second) * CLOCK_HZ) for second in range(2)
+    )
+    return edges
+
+
+def _skipped_pulse() -> list[ReferenceEdge]:
+    """Return a reference that sends no pulse at second 3: contiguous sequence numbers, a 2 s step.
+
+    Returns
+    -------
+    list[ReferenceEdge]
+        Edges at seconds 0, 1, 2, 4 and 5 with sequence numbers 0 to 4.
+    """
+    return [
+        ReferenceEdge("PPS", sequence, 1000 + second * (CLOCK_HZ + 20))
+        for sequence, second in enumerate((0, 1, 2, 4, 5))
+    ]
 
 
 def corpus() -> dict[str, Any]:
@@ -120,6 +158,8 @@ def test_one_edge_counts_without_a_fit() -> None:
         "first_sequence": 3,
         "last_sequence": 3,
         "missing_edges": 0,
+        "rejected_edges": 0,
+        "seconds": 0,
         "ticks_per_second": None,
         "scale_error_ppm": None,
         "scale_standard_error_ppm": None,
@@ -128,26 +168,85 @@ def test_one_edge_counts_without_a_fit() -> None:
     }
 
 
-def test_two_edges_give_a_slope_without_a_standard_error() -> None:
-    """Two edges determine the slope exactly and leave no degree of freedom."""
+def test_two_edges_give_a_slope_with_the_quantization_uncertainty() -> None:
+    """Two edges determine the slope exactly; its uncertainty is the counter's resolution.
+
+    With one tick of uniform error per edge, variance 1/12, and seconds 0 and 1 (spread 1/2), the
+    slope's standard uncertainty is sqrt(1/6) tick per second.
+    """
     block = reference_timebase(_pulses(2, CLOCK_HZ + 7), CLOCK_HZ)
     assert block is not None
     assert block["ticks_per_second"] == CLOCK_HZ + 7
     assert block["scale_error_ppm"] == pytest.approx(0.07)
     assert block["max_abs_residual_ticks"] == 0.0
-    assert block["scale_standard_error_ppm"] is None
+    assert block["scale_standard_error_ppm"] == pytest.approx(math.sqrt(1 / 6) / CLOCK_HZ * 1e6)
     assert block["residual_rms_ticks"] is None
+    assert block["seconds"] == 1
 
 
-def test_an_exact_fast_counter_has_zero_residuals() -> None:
-    """A counter 50 ticks per second fast is half a part per million fast, without scatter."""
+def test_an_exact_fast_counter_keeps_the_quantization_floor() -> None:
+    """A counter 50 ticks per second fast is half a part per million fast, without scatter.
+
+    The residuals are zero, so the standard uncertainty is the quantization floor, not zero:
+    sqrt((1/12) / S) with S the spread of seconds 0 to 59.
+    """
     block = reference_timebase(_pulses(60, CLOCK_HZ + 50), CLOCK_HZ)
     assert block is not None
     assert block["ticks_per_second"] == CLOCK_HZ + 50
     assert block["scale_error_ppm"] == pytest.approx(0.5)
-    assert block["scale_standard_error_ppm"] == 0.0
+    spread = sum((second - 29.5) ** 2 for second in range(60))
+    assert block["scale_standard_error_ppm"] == pytest.approx(
+        math.sqrt(1 / 12 / spread) / CLOCK_HZ * 1e6
+    )
     assert block["residual_rms_ticks"] == 0.0
-    assert block["missing_edges"] == 0
+    assert (block["missing_edges"], block["rejected_edges"], block["seconds"]) == (0, 0, 59)
+
+
+def test_a_ringing_edge_is_rejected_and_the_seconds_stay_whole() -> None:
+    """A second rising edge 3 microseconds after a pulse takes a sequence number but no second."""
+    block = reference_timebase(_ringing(), CLOCK_HZ)
+    assert block is not None
+    assert (block["edges"], block["rejected_edges"], block["seconds"]) == (6, 1, 4)
+    assert (block["first_sequence"], block["last_sequence"], block["missing_edges"]) == (0, 5, 0)
+    assert block["ticks_per_second"] == CLOCK_HZ
+    assert block["max_abs_residual_ticks"] == 0.0
+
+
+def test_a_pulse_the_reference_skipped_spans_two_seconds() -> None:
+    """Without a pulse at second 3 the sequence is contiguous but the counter spans 5 seconds.
+
+    Seconds from the sequence would put 2 s of ticks at 1 s and give a scale error near 20 %;
+    seconds from the counter keep the 0.2 ppm the edges carry.
+    """
+    block = reference_timebase(_skipped_pulse(), CLOCK_HZ)
+    assert block is not None
+    assert block["seconds"] == 5
+    assert block["last_sequence"] - block["first_sequence"] == 4
+    assert (block["missing_edges"], block["rejected_edges"]) == (0, 0)
+    assert block["ticks_per_second"] == pytest.approx(CLOCK_HZ + 20)
+    assert block["scale_error_ppm"] == pytest.approx(0.2)
+
+
+def test_an_edge_off_a_whole_second_is_rejected() -> None:
+    """An edge 2 ms past a whole second, beyond one part in a thousand, is left out of the fit."""
+    edges = [*_pulses(3, CLOCK_HZ), ReferenceEdge("PPS", 3, 1000 + 3 * CLOCK_HZ + 200_000)]
+    block = reference_timebase(edges, CLOCK_HZ)
+    assert block is not None
+    assert (block["rejected_edges"], block["seconds"]) == (1, 2)
+    assert block["ticks_per_second"] == CLOCK_HZ
+
+
+def test_an_edge_at_or_before_its_predecessor_is_rejected() -> None:
+    """A counter value that does not advance cannot be a later second."""
+    edges = [
+        ReferenceEdge("PPS", 0, 5_000),
+        ReferenceEdge("PPS", 1, 5_000),
+        ReferenceEdge("PPS", 2, 4_000),
+    ]
+    block = reference_timebase(edges, CLOCK_HZ)
+    assert block is not None
+    assert (block["rejected_edges"], block["seconds"]) == (2, 0)
+    assert block["ticks_per_second"] is None
 
 
 def test_a_skipped_edge_is_counted_and_spans_its_second() -> None:

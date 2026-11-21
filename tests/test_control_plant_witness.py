@@ -85,8 +85,9 @@ def test_pps_reference_reaches_the_report(
 
     Every rise of the testbench pulse becomes one PPS record with the counter value two captures
     after the rise and consecutive sequence numbers; the control records equal those of the same
-    run without the pulse, so the reference never displaces or delays them. The public analysis
-    fits the simulated period exactly, which only checks the arithmetic: a simulated pulse has no
+    run without the pulse, so the reference never displaces or delays them. The simulated pulses
+    are 110,000 ticks apart, not whole seconds at the declared 100 MHz, so the public analysis
+    anchors the first edge, rejects the other four and fits nothing: a simulated pulse has no
     physical second.
 
     Parameters
@@ -150,11 +151,13 @@ def test_pps_reference_reaches_the_report(
         "first_sequence": 0,
         "last_sequence": 4,
         "missing_edges": 0,
-        "ticks_per_second": float(period),
-        "scale_error_ppm": (period - 100_000_000) / 100_000_000 * 1_000_000.0,
-        "scale_standard_error_ppm": 0.0,
-        "residual_rms_ticks": 0.0,
-        "max_abs_residual_ticks": 0.0,
+        "rejected_edges": 4,
+        "seconds": 0,
+        "ticks_per_second": None,
+        "scale_error_ppm": None,
+        "scale_standard_error_ppm": None,
+        "residual_rms_ticks": None,
+        "max_abs_residual_ticks": None,
     }
 
 

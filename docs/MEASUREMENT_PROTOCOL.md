@@ -221,10 +221,12 @@ A pulse-per-second source on the [reference input](../hardware/icicle/README.md#
 measures the timebase scale instead of bounding it. The witness timestamps each rising edge on the
 64-bit counter after two synchroniser stages, a fixed latency of two capture periods plus the
 edge's phase to the next capture edge, and the host analysis fits the counter against the edges'
-sequence numbers ([`reference_timebase`](HOST_ANALYSIS.md#pulse-per-second-reference-timebase)).
+whole seconds, taken from the counter so that a pulse the source skipped is not one second, with
+edges off a whole second rejected ([`reference_timebase`](HOST_ANALYSIS.md#pulse-per-second-reference-timebase)).
 The fixed latency cancels in the slope; the phase, between 0 and `T` for each edge and independent
-between edges, enters the residuals and so the fit's standard error `u_fit` (in ppm), together with
-the source's own edge jitter. The scale error `δ` that the fit reports then corrects intervals,
+between edges, enters the residuals and so the fit's standard uncertainty `u_fit` (in ppm), together
+with the source's own edge jitter; `u_fit` never falls below that phase's quantization variance of
+`T²/12` per edge. The scale error `δ` that the fit reports then corrects intervals,
 `L = n·T / (1 + δ·10⁻⁶)`, and the scale term becomes `u_scale = L·10⁻⁶·√(u_fit² + u_ref²)`, where
 `u_ref` is the standard uncertainty of the source's frequency over the run, in ppm, taken from its
 declaration: a disciplined source with a stated bound `a` gives `a/√3`. Nothing in the witness

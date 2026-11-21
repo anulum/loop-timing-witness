@@ -8,10 +8,18 @@
 
 """Fit the fabric counter against the edges of a pulse-per-second reference.
 
-Each recorded edge pairs the reference's sequence number, one per second, with the counter value
-the fabric captured. An ordinary least-squares line through these pairs gives the counter's ticks
-per second; its scale error against the declared clock frequency is in parts per million, with the
-standard error of the slope from the fit residuals. The result describes the counter relative to the
+The first recorded edge anchors the reference. Each later edge is accepted when its counter
+distance to the previous accepted edge is a whole, positive number of seconds at the declared
+clock frequency, within one part in ``GLITCH_TOLERANCE`` of that distance; an edge that is not, such
+as a second rising edge from a ringing input, is counted as rejected and left out. Each accepted
+edge's second is the sum of those whole numbers, so a pulse the reference did not send leaves a
+two-second step instead of shifting every later second, and the run's ``seconds`` exceed its
+sequence span by the pulses the reference skipped. An ordinary least-squares line through the
+accepted (second, counter value) pairs gives the counter's ticks per second; its scale error
+against the declared clock is in parts per million. The slope's standard uncertainty uses the
+residual variance, but never less than the counter's own quantization, a uniform error within one
+tick, variance ``1/12`` tick squared, per edge, so two edges, or edges that fall on whole ticks,
+still report the resolution the counter allows. The result describes the counter relative to the
 reference: the reference's own error is not inferred and has to be added from the reference's
 declaration. Every sum runs left to right in plain float arithmetic, the operation order of the Rust
 analysis, so both give the same bits.
@@ -34,7 +42,13 @@ PARTS_PER_MILLION: Final = 1_000_000.0
 """Scale of a relative error in parts per million."""
 
 LINE_POINTS: Final = 2
-"""Edges that determine a line; a standard error needs one more."""
+"""Edges that determine a line; a residual variance needs one more."""
+
+GLITCH_TOLERANCE: Final = 1000.0
+"""An accepted edge lies within one part in this many of a whole number of seconds."""
+
+QUANTIZATION_VARIANCE: Final = 1.0 / 12.0
+"""Variance of one edge's counter value in ticks squared: a uniform error within one tick."""
 
 
 def _total(values: Sequence[float]) -> float:
@@ -56,6 +70,35 @@ def _total(values: Sequence[float]) -> float:
     return total
 
 
+def _accepted(pulses: Sequence[ReferenceEdge], clock: float) -> tuple[list[float], list[float]]:
+    """Return the seconds and counter offsets of the edges a whole second apart.
+
+    Parameters
+    ----------
+    pulses
+        Pulse-per-second edges in capture order, at least one.
+    clock
+        Declared counter frequency.
+
+    Returns
+    -------
+    tuple[list[float], list[float]]
+        Whole seconds and counter values of the accepted edges, both from the first edge.
+    """
+    first = pulses[0]
+    seconds, ticks = [0.0], [0.0]
+    previous = first.ticks
+    for edge in pulses[1:]:
+        elapsed = float(edge.ticks - previous)
+        whole = math.floor(elapsed / clock + 0.5)
+        if whole < 1 or abs(elapsed - whole * clock) * GLITCH_TOLERANCE > whole * clock:
+            continue
+        seconds.append(seconds[-1] + whole)
+        ticks.append(float(edge.ticks - first.ticks))
+        previous = edge.ticks
+    return seconds, ticks
+
+
 def reference_timebase(edges: Sequence[ReferenceEdge], clock_hz: int) -> dict[str, Any] | None:
     """Summarise the pulse-per-second edges of one run and fit the counter against them.
 
@@ -70,34 +113,37 @@ def reference_timebase(edges: Sequence[ReferenceEdge], clock_hz: int) -> dict[st
     -------
     dict[str, Any] | None
         ``None`` without pulse-per-second edges. Otherwise the edge count, first and last sequence
-        numbers and the number of edges the sequence skips; with two or more edges the fitted ticks
-        per second, the scale error in parts per million and the largest absolute residual; with
-        three or more the standard error of the scale error and the root-mean-square residual, which
-        are ``None`` below that, as are the fit values with one edge.
+        numbers, the sequence numbers missing from the records, the edges rejected as off a whole
+        second and the whole seconds the accepted edges span; with two or more accepted edges the
+        fitted ticks per second, the scale error in parts per million with its standard
+        uncertainty and the largest absolute residual; with three or more the root-mean-square
+        residual. Fit values are ``None`` when they cannot be formed.
     """
     pulses = [edge for edge in edges if edge.name == REFERENCE_EVENT]
     if not pulses:
         return None
     count = len(pulses)
     first, last = pulses[0], pulses[-1]
+    seconds, ticks = _accepted(pulses, float(clock_hz))
+    accepted = len(seconds)
     block: dict[str, Any] = {
         "event": REFERENCE_EVENT,
         "edges": count,
         "first_sequence": first.sequence,
         "last_sequence": last.sequence,
         "missing_edges": last.sequence - first.sequence + 1 - count,
+        "rejected_edges": count - accepted,
+        "seconds": int(seconds[-1]),
         "ticks_per_second": None,
         "scale_error_ppm": None,
         "scale_standard_error_ppm": None,
         "residual_rms_ticks": None,
         "max_abs_residual_ticks": None,
     }
-    if count < LINE_POINTS:
+    if accepted < LINE_POINTS:
         return block
-    seconds = [float(edge.sequence - first.sequence) for edge in pulses]
-    ticks = [float(edge.ticks - first.ticks) for edge in pulses]
-    mean_seconds = _total(seconds) / count
-    mean_ticks = _total(ticks) / count
+    mean_seconds = _total(seconds) / accepted
+    mean_ticks = _total(ticks) / accepted
     spread = _total([(x - mean_seconds) * (x - mean_seconds) for x in seconds])
     covariance = _total(
         [(x - mean_seconds) * (y - mean_ticks) for x, y in zip(seconds, ticks, strict=True)]
@@ -107,12 +153,12 @@ def reference_timebase(edges: Sequence[ReferenceEdge], clock_hz: int) -> dict[st
         (y - mean_ticks) - slope * (x - mean_seconds) for x, y in zip(seconds, ticks, strict=True)
     ]
     squares = _total([residual * residual for residual in residuals])
+    variance = QUANTIZATION_VARIANCE
+    if accepted > LINE_POINTS:
+        variance = max(squares / (accepted - LINE_POINTS), QUANTIZATION_VARIANCE)
+        block["residual_rms_ticks"] = math.sqrt(squares / accepted)
     block["ticks_per_second"] = slope
     block["scale_error_ppm"] = (slope - clock_hz) / clock_hz * PARTS_PER_MILLION
+    block["scale_standard_error_ppm"] = math.sqrt(variance / spread) / clock_hz * PARTS_PER_MILLION
     block["max_abs_residual_ticks"] = max(abs(residual) for residual in residuals)
-    if count > LINE_POINTS:
-        block["scale_standard_error_ppm"] = (
-            math.sqrt(squares / (count - LINE_POINTS) / spread) / clock_hz * PARTS_PER_MILLION
-        )
-        block["residual_rms_ticks"] = math.sqrt(squares / count)
     return block

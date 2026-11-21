@@ -546,18 +546,29 @@ number is at most `m`. `longest_miss_run` is the longest run of consecutive miss
 
 `reference_timebase` describes the run's [pulse-per-second edges](PLANT_WITNESS.md#pulse-per-second-reference),
 or is null when the run has none. It counts the `edges`, names the `first_sequence` and
-`last_sequence` and gives the `missing_edges` the sequence skips. With two or more edges an ordinary
-least-squares line through (sequence number, counter value) gives `ticks_per_second` and
-`scale_error_ppm`, the counter's rate against the domain's `clock_hz` in parts per million, with the
-`max_abs_residual_ticks`; with three or more, `scale_standard_error_ppm` is the slope's standard
-error from the residuals (`n − 2` degrees of freedom) and `residual_rms_ticks` their root mean
-square. The sums run left to right in plain double-precision arithmetic, in the same order in Python
+`last_sequence` and gives the `missing_edges` the sequence skips, the edges the buffer could not
+record. The first edge anchors the reference. A later edge is accepted when its counter distance to
+the previous accepted edge, at the domain's `clock_hz`, is a whole, positive number of seconds
+within one part in a thousand of that distance; any other edge, such as a second rising edge from a
+ringing input, is counted in `rejected_edges` and left out. The accepted edges' seconds are the
+sums of those whole numbers, and `seconds` is the span from the first to the last: a pulse the
+reference did not send leaves a two-second step instead of shifting every later second, and
+`seconds` then exceeds `last_sequence − first_sequence` by the pulses the reference skipped. With
+two or more accepted edges an ordinary least-squares line through (second, counter value) gives
+`ticks_per_second` and `scale_error_ppm`, the counter's rate against `clock_hz` in parts per
+million, with the `max_abs_residual_ticks` and `scale_standard_error_ppm`, the slope's standard
+uncertainty. That uses the residual variance (`n − 2` degrees of freedom), but never less than the
+counter's own quantization, a uniform error within one tick (variance `1/12` tick squared) per
+edge, so two edges, or edges that all fall on whole ticks, still report the resolution the counter
+allows instead of zero; with three or more accepted edges `residual_rms_ticks` is the residuals'
+root mean square. The sums run left to right in plain double-precision arithmetic, in the same order in Python
 and Rust, so both analyses give the same bits; the shared corpus
 `analysis/rust/tests/data/control-reference-cases.json` holds the cases. The numbers describe the
 counter relative to the reference: the reference's own frequency error is not inferred and is added
 from its declaration, as the [measurement protocol](MEASUREMENT_PROTOCOL.md#pulse-per-second-reference)
-states. A simulated pulse has no physical second, so a simulation's scale error only checks the
-arithmetic.
+states. A simulated pulse has no physical second: the plant test's pulses, 110,000 ticks apart at
+the declared 100 MHz, are not whole seconds, so their later edges are rejected and that run checks
+the decoding and the rejection; the fit's arithmetic is checked on the shared corpus.
 
 ### Energy method and frequency sweep
 

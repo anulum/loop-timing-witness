@@ -23,6 +23,14 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The pulse-per-second fit takes each edge's second from the counter: the first edge anchors the
+  reference, a later edge counts only at a whole, positive number of seconds after the previous
+  accepted one (within one part in a thousand), and `rejected_edges` counts the others, such as a
+  ringing second edge. A pulse the reference skipped now spans two seconds instead of shifting
+  every later second, and the new `seconds` shows it against the sequence span. The slope's
+  standard uncertainty never falls below the counter's quantization (1/12 tick squared per
+  edge), so two edges, or edges on whole ticks, no longer report zero. Python and Rust, with the
+  shared corpus extended by a ringing edge, a skipped pulse and an edge off a whole second.
 - `make fifo-invariants` proves the dual-clock event buffer's rules by temporal induction instead of
   a bounded check of 30 steps: no write when full, no read when empty, and a freely chosen record
   read back unchanged and in order hold in every reachable state at 2, 4, 8 and 16 records. The

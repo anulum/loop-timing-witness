@@ -80,6 +80,15 @@ Loop Timing Witness — changelog
 - The native analysis takes every `open(2)` flag from the target through rustix instead of
   writing out the x86-64 values: on arm64 Linux those numbers mean `O_LARGEFILE` and `O_DIRECT`,
   so its no-follow refusals were silently off there and its directory opens failed.
+- The native analysis no longer panics where Python reports a finding or computes exactly: an
+  AMP image symbol in a segment near the top of the 64-bit space is sliced without overflow (and
+  a caller's segment past the image gives Python's clamped slice), a runtime receipt claiming 64
+  or more FIFO address bits is a configuration finding instead of a shift overflow, and a float
+  between 3.4e38 and 2^128 compares exactly with a 128-bit integer.
+- The pulse-per-second fit, in both analyses, rejects an edge whose cumulative seconds would pass
+  2^53, the largest whole count a float holds exactly; the reported `seconds` therefore agree,
+  where the native analysis had saturated a larger count to 2^64 − 1. The shared corpus gains two
+  cases at a 1 Hz clock of their own.
 
 ## [0.4.0] - 2026-11-21
 

@@ -166,3 +166,33 @@ fn image_contracts_equal_python() {
         assert_eq!(outcome, expected, "{name}");
     }
 }
+
+#[test]
+fn a_symbol_near_the_top_of_the_address_space_slices_as_python_does() {
+    use super::file_bytes;
+    use crate::amp_elf_symbols::ElfSymbol;
+    let content: Vec<u8> = (0..=255_u8).cycle().take(0x10900).collect();
+    let owner = LoadSegment {
+        offset: 0x10000,
+        address: 0xFFFF_FFFF_FFFF_0000,
+        file_bytes: 0x900,
+        memory_bytes: 0x900,
+        flags: 5,
+    };
+    let symbol = ElfSymbol {
+        address: 0xFFFF_FFFF_FFFF_0800,
+        size: 8,
+        kind: 1,
+        section: 1,
+    };
+    assert_eq!(
+        file_bytes(&content, &owner, &symbol),
+        &content[0x10800..0x10808]
+    );
+    // A caller's segment past the image gives Python's clamped, here empty, slice.
+    let beyond = LoadSegment {
+        offset: 0x20000,
+        ..owner
+    };
+    assert!(file_bytes(&content, &beyond, &symbol).is_empty());
+}

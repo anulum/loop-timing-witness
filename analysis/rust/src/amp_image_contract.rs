@@ -61,14 +61,22 @@ pub(crate) fn symbol_map(content: &[u8]) -> Result<HashMap<String, ElfSymbol>, S
     Ok(read_symbols(content)?.into_iter().collect())
 }
 
-/// The file bytes a symbol inside `owner`'s file extent names.
+/// The file bytes a symbol inside `owner`'s file extent names, sliced as
+/// Python slices them: computed without fixed-width overflow (a segment may
+/// lie near the top of the 64-bit space) and clamped to the image. The caller
+/// passes an owner whose address does not exceed the symbol's.
 pub(crate) fn file_bytes<'a>(
     content: &'a [u8],
     owner: &LoadSegment,
     symbol: &ElfSymbol,
 ) -> &'a [u8] {
-    let start = owner.offset + symbol.address - owner.address;
-    &content[start as usize..(start + symbol.size) as usize]
+    let start = u128::from(owner.offset) + u128::from(symbol.address) - u128::from(owner.address);
+    let end = start + u128::from(symbol.size);
+    let clamp = |value: u128| {
+        usize::try_from(value).map_or(content.len(), |value| value.min(content.len()))
+    };
+    let (start, end) = (clamp(start), clamp(end));
+    &content[start..end.max(start)]
 }
 
 /// Python's `_constant`: one read-only object, wholly in one executable

@@ -52,10 +52,7 @@ pub fn admit_exit_channel(content: &[u8], segments: &[LoadSegment]) -> Result<()
         {
             return Err("ISA completion channel must be one aligned writable original word".into());
         }
-        if file_bytes(content, owner, &symbol)
-            .iter()
-            .any(|byte| *byte != 0)
-        {
+        if file_bytes(content, owner, &symbol) != [0_u8; CHANNEL_BYTES as usize] {
             return Err(
                 "ISA completion channel cannot be preloaded before target execution".into(),
             );

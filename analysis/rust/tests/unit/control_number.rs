@@ -90,4 +90,25 @@ fn comparisons_are_exact_between_kinds() {
         Num::Int(9_007_199_254_740_993).compare(Num::Float(9_007_199_254_740_992.0)),
         Ordering::Greater
     );
+    // Between 3.4e38 and 2^128 a float still converts exactly: the largest u128
+    // exceeds 3.4e38, as Python's exact comparison says, and 2^128 exceeds it.
+    assert_eq!(
+        Num::Int(u128::MAX).compare(Num::Float(3.4e38)),
+        Ordering::Greater
+    );
+    assert_eq!(
+        Num::Float(3.4e38).compare(Num::Int(
+            339_999_999_999_999_996_123_846_586_046_231_871_488
+        )),
+        Ordering::Equal
+    );
+    assert_eq!(
+        Num::Float(2f64.powi(128)).compare(Num::Int(u128::MAX)),
+        Ordering::Greater
+    );
+    let below = f64::from_bits(2f64.powi(128).to_bits() - 1);
+    assert_eq!(
+        Num::Float(below).compare(Num::Int(u128::MAX)),
+        Ordering::Less
+    );
 }

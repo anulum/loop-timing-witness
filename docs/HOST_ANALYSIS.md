@@ -549,7 +549,8 @@ or is null when the run has none. It counts the `edges`, names the `first_sequen
 `last_sequence` and gives the `missing_edges` the sequence skips, the edges the buffer could not
 record. The first edge anchors the reference. A later edge is accepted when its counter distance to
 the previous accepted edge, at the domain's `clock_hz`, is a whole, positive number of seconds
-within one part in a thousand of that distance; any other edge, such as a second rising edge from a
+within one part in a thousand of that distance, and the accepted seconds stay within 2^53, the
+largest whole count a float holds exactly; any other edge, such as a second rising edge from a
 ringing input, is counted in `rejected_edges` and left out. The accepted edges' seconds are the
 sums of those whole numbers, and `seconds` is the span from the first to the last: a pulse the
 reference did not send leaves a two-second step instead of shifting every later second, and

@@ -105,6 +105,17 @@ const CPP_OPTIONS: [&str; 6] = [
     "-Wshadow",
 ];
 
+/// Whether a FIFO of `records` records has `address_bits` address bits, as
+/// Python's `records == 1 << address_bits` decides: a receipt may claim 64 or
+/// more bits, whose capacity no 32-bit record count equals, without a
+/// fixed-width shift overflowing.
+fn capacity_matches(records: u32, address_bits: u64) -> bool {
+    u32::try_from(address_bits)
+        .ok()
+        .and_then(|bits| 1_u64.checked_shl(bits))
+        == Some(u64::from(records))
+}
+
 /// Bind every native artifact/log and reconcile recorded compiler and run semantics.
 pub(crate) fn analyze(
     run: &mut BoundRun,
@@ -272,7 +283,7 @@ fn findings(
     // The backend and dialect were refused above; the identity covers the remaining fields.
     if r.epoch != u64::from(run.manifest.epoch)
         || r.steps != 1000
-        || u64::from(run.manifest.fifo_capacity_records) != 1_u64 << params[3]
+        || !capacity_matches(run.manifest.fifo_capacity_records, params[3])
     {
         findings.push("Actual native runtime identity/configuration differs.".into());
     }
@@ -327,3 +338,7 @@ fn export_complete(run: &BoundRun) -> bool {
     run.files["native_job_4_stdout"] == b"NATIVE_JOINT_EXPORT_COMPLETE\n"
         && run.files["native_job_4_stderr"].is_empty()
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/native_runtime.rs"]
+mod tests;

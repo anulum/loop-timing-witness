@@ -37,6 +37,9 @@ const GLITCH_TOLERANCE: f64 = 1000.0;
 /// Variance of one edge's counter value in ticks squared: a uniform error within one tick.
 const QUANTIZATION_VARIANCE: f64 = 1.0 / 12.0;
 
+/// Largest cumulative second count a float holds exactly (2^53); an edge beyond it is rejected.
+const MAX_SECONDS: f64 = 9_007_199_254_740_992.0;
+
 /// Sum floats left to right.
 fn total(values: impl Iterator<Item = f64>) -> f64 {
     let mut sum = 0.0;
@@ -57,13 +60,14 @@ fn accepted(pulses: &[Edge], clock_hz: f64) -> (Vec<f64>, Vec<f64>) {
     for edge in &pulses[1..] {
         let elapsed = edge.ticks.wrapping_sub(previous) as f64;
         let whole = (elapsed / clock_hz + 0.5).floor();
+        let last = seconds[seconds.len() - 1];
         if edge.ticks <= previous
             || whole < 1.0
+            || last + whole > MAX_SECONDS
             || (elapsed - whole * clock_hz).abs() * GLITCH_TOLERANCE > whole * clock_hz
         {
             continue;
         }
-        let last = seconds[seconds.len() - 1];
         seconds.push(last + whole);
         ticks.push((edge.ticks - first) as f64);
         previous = edge.ticks;

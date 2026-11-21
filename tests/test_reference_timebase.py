@@ -9,8 +9,9 @@
 """Check the pulse-per-second fit and keep the corpus that the Rust analysis must reproduce.
 
 The corpus holds edge series with no, one, two and many edges, a skipped edge, a counter that
-runs fast with deterministic jitter, and an edge of another reference kind, each with Python's
-result. The native crate's unit tests read the same committed file.
+runs fast with deterministic jitter, an edge of another reference kind, and two cases at a 1 Hz
+clock of their own around the largest whole second count a float holds exactly, each with
+Python's result. The native crate's unit tests read the same committed file.
 """
 
 from __future__ import annotations
@@ -82,6 +83,19 @@ def _cases() -> dict[str, list[ReferenceEdge]]:
     }
 
 
+SLOW_CASES: Final = {
+    "beyond exact float seconds at 1 Hz": (
+        1,
+        [ReferenceEdge("PPS", 0, 0), ReferenceEdge("PPS", 1, 2**64 - 1)],
+    ),
+    "last exact float second at 1 Hz": (
+        1,
+        [ReferenceEdge("PPS", 0, 0), ReferenceEdge("PPS", 1, 2**53)],
+    ),
+}
+"""Cases at their own clock, where a span of whole seconds can pass what a float holds exactly."""
+
+
 def _ringing() -> list[ReferenceEdge]:
     """Return five reference seconds with a second rising edge 300 ticks after the third.
 
@@ -132,6 +146,15 @@ def corpus() -> dict[str, Any]:
                 "result": reference_timebase(edges, CLOCK_HZ),
             }
             for name, edges in _cases().items()
+        ]
+        + [
+            {
+                "name": name,
+                "clock_hz": clock,
+                "edges": [[edge.name, edge.sequence, edge.ticks] for edge in edges],
+                "result": reference_timebase(edges, clock),
+            }
+            for name, (clock, edges) in SLOW_CASES.items()
         ],
     }
 

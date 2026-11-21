@@ -122,7 +122,9 @@ impl Num {
 /// Compare a finite non-negative float with an integer without rounding the integer.
 fn float_against(float: f64, integer: u128) -> Ordering {
     let floor = float.floor();
-    if floor >= 3.4e38 {
+    // 2^128 exactly (`u128::MAX` rounds up to it); every float below it is at most
+    // 2^128 - 2^75, so its floor converts to u128 exactly.
+    if floor >= u128::MAX as f64 {
         return Ordering::Greater;
     }
     match (floor as u128).cmp(&integer) {

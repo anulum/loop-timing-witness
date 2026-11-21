@@ -50,6 +50,9 @@ GLITCH_TOLERANCE: Final = 1000.0
 QUANTIZATION_VARIANCE: Final = 1.0 / 12.0
 """Variance of one edge's counter value in ticks squared: a uniform error within one tick."""
 
+MAX_SECONDS: Final = float(2**53)
+"""Largest cumulative second count a float holds exactly; an edge beyond it is rejected."""
+
 
 def _total(values: Sequence[float]) -> float:
     """Sum floats left to right, without the compensated summation of :func:`sum`.
@@ -91,7 +94,11 @@ def _accepted(pulses: Sequence[ReferenceEdge], clock: float) -> tuple[list[float
     for edge in pulses[1:]:
         elapsed = float(edge.ticks - previous)
         whole = math.floor(elapsed / clock + 0.5)
-        if whole < 1 or abs(elapsed - whole * clock) * GLITCH_TOLERANCE > whole * clock:
+        if (
+            whole < 1
+            or seconds[-1] + whole > MAX_SECONDS
+            or abs(elapsed - whole * clock) * GLITCH_TOLERANCE > whole * clock
+        ):
             continue
         seconds.append(seconds[-1] + whole)
         ticks.append(float(edge.ticks - first.ticks))

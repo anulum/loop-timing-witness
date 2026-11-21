@@ -76,8 +76,13 @@ fn every_corpus_case_has_the_python_result() {
         crate::control_json::decode_object(CORPUS.as_bytes(), "corpus").expect("corpus");
     let clock = corpus["clock_hz"].as_f64().expect("clock");
     let cases = corpus["cases"].as_array().expect("cases");
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 12);
     for case in cases {
+        // A case may carry its own clock, as the slow ones beyond exact float seconds do.
+        let clock = case
+            .get("clock_hz")
+            .and_then(Value::as_f64)
+            .unwrap_or(clock);
         let pulses: Vec<Edge> = case["edges"]
             .as_array()
             .expect("edges")

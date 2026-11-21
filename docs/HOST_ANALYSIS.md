@@ -854,6 +854,8 @@ kept, because the chosen analysis applies its own bounds to the same bytes. A
 root with a `schema_id` member is neural. Neural carriers additionally have the
 65,536-byte limit above. Unknown or private neural identities and
 unadmitted source contracts are refused with status 1 and no report output.
+[ADR 0002](adr/0002-source-bound-neural-analysis.md) records why this verifier
+belongs to the host analysis and what a consumer may contribute to it.
 
 Public neural source admission requires an exact consumer-owned registry entry
 binding schema identity, schema digest, cohort and source-contract digest.

@@ -21,6 +21,11 @@ Loop Timing Witness — changelog
   immediate application and `empirical_delays` the distribution of measured latencies. A delay of
   almost one period raises the default loops' output variance by at most 0.35 %.
 
+- ADR 0002 (proposed) records the boundary of the source-bound neural analysis: the host
+  analysis owns a verifier that depends on no single consumer, a consumer enters only as data in
+  a reviewed registry entry, and no consumer source, model, compiled artefact or adapter is
+  committed.
+
 ### Changed
 
 - The pulse-per-second fit takes each edge's second from the counter: the first edge anchors the

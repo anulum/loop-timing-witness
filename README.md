@@ -112,6 +112,34 @@ place computation in FPGA fabric and need its end-to-end latency on real hardwar
   <https://doi.org/10.1016/j.fusengdes.2026.115769> — bare-metal, FreeRTOS, Linux and FPGA
   placements of one acquisition loop, timed by server-side packet timestamps and an oscilloscope.
 
+The instrument complements these classes of tools rather than replacing them:
+
+- Processor-side latency tools, such as
+  [`cyclictest`](https://manpages.debian.org/unstable/rt-tests/cyclictest.8.en.html) from rt-tests
+  and the kernel's [timerlat tracer](https://docs.kernel.org/trace/timerlat-tracer.html) with
+  [`rtla timerlat`](https://docs.kernel.org/tools/rtla/rtla-timerlat.html), wake a thread from a
+  periodic timer and report its wake-up latency on the processor's own clock. They characterise
+  the operating system under test, not the path from a sample to an actuator command, and do not
+  run in a bare-metal or fabric placement.
+- Embedded logic analysers make internal fabric signals visible: SmartDebug's
+  [live probes](https://onlinedocs.microchip.com/oxy/GUID-7A1C7D25-908D-4003-9212-0CE8E7EF5F1C-en-US-3/GUID-8AEA01DA-9A2B-4E15-94CB-5283D8AA2C8F.html)
+  route two internal signals of a PolarFire device to dedicated pins for an oscilloscope, and
+  [LiteScope](https://github.com/enjoy-digital/litescope) records triggered sample windows in
+  on-chip memory. They show waveforms around a trigger, not a timestamped record of every cycle of
+  a run.
+- Processor trace, such as the
+  [RISC-V processor trace specification](https://github.com/riscv-non-isa/riscv-trace-spec),
+  streams a core's instruction flow to a trace sink. It shows where software spends its time, but
+  not the fabric side of an access or a controller that runs in fabric.
+- Time references such as [IEEE 1588](https://standards.ieee.org/ieee/1588/6825/) and
+  [White Rabbit](https://white-rabbit.web.cern.ch/) distribute traceable time. The instrument takes
+  such a reference through its pulse-per-second input, and its mirror pins show its own events to
+  an external time tagger.
+- Control-timing analysis, such as Jitterbug and TrueTime
+  ([Cervin, Henriksson, Lincoln, Eker and Årzén, 2003](https://doi.org/10.1109/MCS.2003.1200240)),
+  computes the cost of a delay distribution. The instrument measures that distribution, and
+  `loop_timing_witness.control_cost` evaluates its cost.
+
 ## Relation to SC-NeuroCore
 
 Loop Timing Witness is developed as hardware-validation tooling for

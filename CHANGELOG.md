@@ -47,6 +47,10 @@ Loop Timing Witness — changelog
   code, a substituted interpreter or environment, and resource or network abuse, with the residual
   risk that admitted checker code is trusted code. Its UIO residual risk now describes register
   map version 2, whose fault registers have their own page and device.
+- The README's related work places the instrument against the tool classes it complements:
+  processor-side latency tools (`cyclictest`, the timerlat tracer and `rtla timerlat`), embedded
+  logic analysers (SmartDebug live probes, LiteScope), processor trace, time references
+  (IEEE 1588, White Rabbit) and control-timing analysis (Jitterbug and TrueTime).
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 

@@ -12,6 +12,15 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Added
+
+- `control_cost` computes the stationary quadratic cost of a benchmark loop whose command is applied
+  after a random delay inside the period, as Jitterbug does: unit-intensity noise at the plant
+  input, exact integration between events by Van Loan's block exponentials, and the second-moment
+  equation solved after a proof of mean-square stability. `cost_increase` gives the increase over
+  immediate application and `empirical_delays` the distribution of measured latencies. A delay of
+  almost one period raises the default loops' output variance by at most 0.35 %.
+
 ### Changed
 
 - `make fifo-invariants` proves the dual-clock event buffer's rules by temporal induction instead of

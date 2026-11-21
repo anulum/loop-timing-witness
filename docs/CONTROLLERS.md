@@ -157,6 +157,50 @@ latency. They exercise the instrument's timing paths, but with these coefficient
 separate the controller placements by control quality. That needs a loop whose crossover is a
 sizable fraction of the sample rate.
 
+## Quadratic cost under latency
+
+[`control_cost.py`](../src/loop_timing_witness/control_cost.py) computes what latency costs in
+control quality, not only whether the loop stays stable. As in Jitterbug
+([Lincoln and Cervin, 2002](https://lup.lub.lu.se/record/537612);
+[Cervin, Henriksson, Lincoln, Eker and Årzén, 2003](https://doi.org/10.1109/MCS.2003.1200240)),
+unit-intensity white noise enters the continuous plant with the command.
+The loop samples every period; the command computed from a sample is applied after a delay drawn
+independently each period from a discrete distribution on `[0, h)`, and held until the next
+command is applied.
+
+- `quadratic_cost` returns the stationary time average of the output squared, plus an optional
+  weight times the applied command squared.
+- `cost_increase` divides it by the cost with immediate application, which removes the noise
+  intensity.
+- `empirical_delays` turns measured input-output latencies into the delay distribution.
+
+Between events the plant integrates exactly: the block exponentials of
+[Van Loan (1978)](https://doi.org/10.1109/TAC.1978.1101743) give each
+interval's transition, integrated cost weight, noise covariance and noise cost. The loop state
+holds the plant state, the applied command, the PID's integral, derivative and previous output,
+and the command waiting to be applied. Its second moment at a sample solves a linear equation
+once a power of the period map with norm below one proves the loop mean-square stable; a delay
+distribution that destabilises the loop is refused. As for the margins, saturation, conditional
+integration and quantization are left out. `tests/test_control_cost.py` checks the cost against
+two independent computations: closed-form exponentials for the thermal state-feedback loop, with
+constant and random delays, and a fine grid with the closed-form mechanical transition, Simpson
+integrals and the doubling algorithm for the mechanical PID.
+
+The default loops, sampled every millisecond: the output variance with immediate application, and
+its increase for a constant delay of part of a period.
+
+| Plant | Controller | Cost with immediate application | 0.1 period | 0.5 period | 0.99 period |
+|---|---|---:|---:|---:|---:|
+| Mechanical | PID | 0.2502 | +0.035 % | +0.175 % | +0.348 % |
+| Mechanical | LQR | 0.05863 | +0.009 % | +0.045 % | +0.089 % |
+| Thermal | PID | 0.1668 | +0.023 % | +0.117 % | +0.231 % |
+| Thermal | LQR | 0.3537 | +0.004 % | +0.021 % | +0.041 % |
+
+A delay of almost a whole period raises no default loop's output variance by more than 0.35 %,
+which confirms the margins' conclusion. The same mechanical plant sampled once per second, with an
+LQR designed for that period, shows what a timing-sensitive loop looks like: a delay of 0.1, 0.5
+and 0.9 periods raises its cost by 10 %, 73 % and 261 %.
+
 ## Fabric integration
 
 The controller accepts one valid sample per clock edge and registers its command plus

@@ -30,6 +30,8 @@ Loop Timing Witness — changelog
   of each domain; a buffer copy whose write port ignores the full flag is refused with a trace.
 - The roadmap's vendor-tool item and the validation record cite the Libero runs of the release
   derivation on MPFS250T and MPFS250T_ES instead of the earlier MPFS250T run.
+- The roadmap's bare-metal item states why an emulator cannot replace the board's boot artefacts:
+  QEMU's Icicle Kit machine no longer runs the HSS and models no fabric.
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 

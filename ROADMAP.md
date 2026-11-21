@@ -105,7 +105,10 @@ board and board timing require their actual resources.
    runs on a dedicated hart in [ISA simulation](docs/AMP_SIMULATION.md) against the production
    RTL, and the [Linux AMP collector](docs/AMP_LINUX.md) builds. The deployment depends on the
    board: its silicon selects the device trees, and the HSS payload, OpenSBI, PMP isolation and
-   shared-memory coherence must be shown on its boot artefacts.
+   shared-memory coherence must be shown on its boot artefacts. An emulator cannot stand in for
+   that step: QEMU's `microchip-icicle-kit` machine
+   [no longer runs the HSS](https://www.qemu.org/docs/master/system/riscv/microchip-icicle-kit.html#running-hss),
+   and it models no fabric.
    Blocked: no physical board is available.
 3. Instrument acceptance on the board (known period, injected delay, overflow, bus-offset floor),
    then measured runs with manifests; evidence maturity advances only at this step.

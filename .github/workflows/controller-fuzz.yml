@@ -83,10 +83,11 @@ jobs:
           sudo apt-get install --no-install-recommends --yes iverilog=12.0-3
           iverilog -V 2>&1 | head -1
       - name: Install the pinned Rust toolchain
-        # Runners can carry a partial 1.100.0 that conflicts with a component install.
+        # Runners can carry a partial 1.100.0 that conflicts with a component install. The
+        # components are those of rust-toolchain.toml, so no later cargo call installs one.
         run: |
           rustup toolchain uninstall 1.100.0
-          rustup toolchain install 1.100.0 --profile minimal
+          rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
           rustup default 1.100.0
       - name: Install the hashed development lock
         run: |

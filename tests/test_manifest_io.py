@@ -13,12 +13,17 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
-from loop_timing_witness.manifest_io import load_bounded_json_object
+from loop_timing_witness.manifest_io import (
+    load_bounded_json_object,
+    open_regular,
+    read_regular_bytes,
+)
 from manifest_io import (
     JsonInputRefusalError,
     canonical_json_bytes,
@@ -251,3 +256,28 @@ def test_atomic_write_into_a_missing_directory_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         write_bytes_atomic(tmp_path / "absent" / "file.json", b"{}")
     assert list(tmp_path.iterdir()) == []
+
+
+def test_run_inputs_are_read_only_as_regular_files_without_blocking(tmp_path: Path) -> None:
+    """Read a regular file; refuse a FIFO at once and a directory as ``open`` does.
+
+    Parameters
+    ----------
+    tmp_path
+        Owned directory for the regular file, the FIFO and the directory.
+    """
+    regular = tmp_path / "regular.bin"
+    regular.write_bytes(b"bytes")
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo)
+    directory = tmp_path / "directory"
+    directory.mkdir()
+    assert read_regular_bytes(regular) == b"bytes"
+    with pytest.raises(OSError, match=r"^\[Errno 22\] Invalid argument: ") as refused:
+        read_regular_bytes(fifo)
+    assert str(refused.value) == f"[Errno 22] Invalid argument: {str(fifo)!r}"
+    with pytest.raises(IsADirectoryError) as directory_refused:
+        read_regular_bytes(directory)
+    assert str(directory_refused.value) == f"[Errno 21] Is a directory: {str(directory)!r}"
+    with open_regular(regular) as stream:
+        assert stream.read() == b"bytes"

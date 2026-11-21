@@ -27,6 +27,7 @@ use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -46,6 +47,8 @@ const WIRE_FIELDS: [(&str, &str); 5] = [
     ("cycle", "u32"),
     ("timebase_ticks", "u64"),
 ];
+/// Cycles a run can number in the wire record's unsigned 32-bit `cycle` field.
+const CYCLE_FIELD_LIMIT: u128 = 1 << 32;
 /// Hardware artefacts every board declaration binds.
 const HARDWARE: [&str; 4] = ["bitstream", "firmware", "linux_image", "controller_binary"];
 /// Optional receipts, read before the declared files.
@@ -330,6 +333,9 @@ fn agree(manifest: &Value, domain: &Value) -> Result<(), String> {
     if Num::of(&manifest["warmup_cycles"]).compare(cycles) != Ordering::Less {
         return Err("warmup_cycles must leave at least one analysed cycle".to_owned());
     }
+    if cycles.compare(Num::Int(CYCLE_FIELD_LIMIT)) == Ordering::Greater {
+        return Err("cycle_count exceeds the cycles the 32-bit cycle field can number".to_owned());
+    }
     for fault in items(&manifest["fault_schedule"]) {
         if Num::of(&fault["cycle"]).compare(cycles) != Ordering::Less {
             return Err("fault schedule cycle is outside the run".to_owned());
@@ -368,16 +374,39 @@ fn bound_path(directory: &Path, item: &Value) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("input is not a regular file inside the run directory: {declared}"))
 }
 
-/// Read a whole file as Python's `Path.read_bytes` reports failures: an
-/// opening error names the path, a reading error does not. Python's `open`
-/// refuses a directory once it is open, naming the path, as here.
-pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, Failure> {
-    let mut stream =
-        std::fs::File::open(path).map_err(|error| Failure::Os(os_error(&error, path)))?;
-    if stream.metadata().is_ok_and(|status| status.is_dir()) {
-        let error = std::io::Error::from_raw_os_error(rustix::io::Errno::ISDIR.raw_os_error());
+/// Open one regular file for reading as Python's `manifest_io.open_regular`
+/// does: non-blocking, so a FIFO cannot stall the reader, and judged on the
+/// opened descriptor. A directory is refused as `open` refuses it, any other
+/// file that is not regular with `EINVAL`, both naming the path; an opening
+/// error names the path, an inspection error does not.
+pub(crate) fn open_regular(path: &Path) -> Result<std::fs::File, Failure> {
+    let stream = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(crate::files::O_NONBLOCK | crate::files::O_CLOEXEC)
+        .open(path)
+        .map_err(|error| Failure::Os(os_error(&error, path)))?;
+    let status = stream
+        .metadata()
+        .map_err(|error| Failure::Os(os_error_without_path(&error)))?;
+    let refused = if status.is_dir() {
+        Some(rustix::io::Errno::ISDIR)
+    } else if status.is_file() {
+        None
+    } else {
+        Some(rustix::io::Errno::INVAL)
+    };
+    if let Some(number) = refused {
+        let error = std::io::Error::from_raw_os_error(number.raw_os_error());
         return Err(Failure::Os(os_error(&error, path)));
     }
+    Ok(stream)
+}
+
+/// Read a whole regular file as Python's `manifest_io.read_regular_bytes`
+/// reports failures: opening and refusal errors name the path, a reading error
+/// does not.
+pub(crate) fn read_file(path: &Path) -> Result<Vec<u8>, Failure> {
+    let mut stream = open_regular(path)?;
     let mut content = Vec::new();
     stream
         .read_to_end(&mut content)
@@ -398,8 +427,7 @@ fn read_bound(directory: &Path, item: &Value) -> Result<Vec<u8>, Failure> {
 /// Stream-check one source or hardware artefact in 1 MiB blocks.
 fn verify_artifact(directory: &Path, item: &Value) -> Result<(), Failure> {
     let path = bound_path(directory, item)?;
-    let mut stream =
-        std::fs::File::open(&path).map_err(|error| Failure::Os(os_error(&error, &path)))?;
+    let mut stream = open_regular(&path)?;
     let mut hasher = Sha256::new();
     let mut block = vec![0; 1 << 20];
     loop {

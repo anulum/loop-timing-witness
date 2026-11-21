@@ -668,6 +668,27 @@ def test_events_blocks_keep_python_number_types(
     assert outcome["summary"]["block"]["cycle_count"] == cycles - warmup
 
 
+@pytest.mark.parametrize("cycles", [2**32 + 1, 4294967297.0, 1e40])
+def test_cycle_counts_beyond_the_cycle_field_are_refused_alike(
+    cycles: float, make_rtl_run: MakeRtlRun, tmp_path: Path
+) -> None:
+    """Refuse a declared cycle count the 32-bit cycle field cannot number, before any analysis.
+
+    Parameters
+    ----------
+    cycles
+        Declared cycle count, integral float or integer.
+    make_rtl_run
+        Real Icarus capture with its manifest.
+    tmp_path
+        Owned outcome directory.
+    """
+    run, manifest = make_rtl_run()
+    manifest["cycle_count"] = cycles
+    outcome = _same(_write(run, manifest), tmp_path)
+    assert outcome["refusal"] == "cycle_count exceeds the cycles the 32-bit cycle field can number"
+
+
 @pytest.mark.parametrize("variant", SERIES_VARIANTS)
 def test_series_refusals_are_identical(
     variant: str, make_rtl_run: MakeRtlRun, tmp_path: Path

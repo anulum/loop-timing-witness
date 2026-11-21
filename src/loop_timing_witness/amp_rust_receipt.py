@@ -18,7 +18,7 @@ from jsonschema import Draft202012Validator
 from .amp_runtime_snapshot import validate_runtime_snapshot
 from .amp_rust_dependencies import rust_dependency_hashes
 from .amp_rust_vectors import ADAPTER, CORE, LIBRARY, TARGET, rust_vectors
-from .manifest_io import load_bounded_json_object, sha256_of_file
+from .manifest_io import load_bounded_json_object, read_regular_bytes, sha256_of_file
 
 HASHES = {
     "type": "object",
@@ -218,7 +218,7 @@ def validate_rust_image_receipt(
         message = "Rust captured final source closure differs from original metadata"
         raise ValueError(message)
     library = directory / LIBRARY
-    if not library.read_bytes().startswith(b"!<arch>\n"):
+    if not read_regular_bytes(library).startswith(b"!<arch>\n"):
         message = "Rust captured compiler output is not a static archive"
         raise ValueError(message)
     paths = [*records, library, directory / "objects/rust/libwitness_controller.rlib"]

@@ -26,7 +26,7 @@ from math import isfinite, sqrt
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from loop_timing_witness.manifest_io import parse_bounded_json_object
+from loop_timing_witness.manifest_io import parse_bounded_json_object, read_regular_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -194,7 +194,7 @@ def _report_point(run: dict[str, Any], base: Path) -> tuple[SweepPoint, str]:
         message = "energy sweep run needs exactly report, cycle_rate_hz and temperature_c"
         raise ValueError(message)
     path = base / run["report"]
-    report = parse_bounded_json_object(path.read_bytes(), str(path))
+    report = parse_bounded_json_object(read_regular_bytes(path), str(path))
     energy = report.get("energy", {})
     if report.get("valid") is not True or energy.get("method") != "window_mean":
         message = f"{path}: energy sweep needs a valid report with window-mean energy"
@@ -235,7 +235,7 @@ def load_sweep(path: Path) -> tuple[list[SweepPoint], float]:
         If the declaration is malformed, a report is unusable, a run appears twice or the runs come
         from different placements.
     """
-    declaration = parse_bounded_json_object(path.read_bytes(), str(path))
+    declaration = parse_bounded_json_object(read_regular_bytes(path), str(path))
     tolerance = declaration.get("temperature_tolerance_c")
     runs = declaration.get("runs")
     if (

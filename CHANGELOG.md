@@ -97,6 +97,14 @@ Loop Timing Witness — changelog
   both attach its completion as Python does. `read_symbols` documents that it expects an image
   `admit_elf` admitted, and `admit_elf` no longer overflows on a caller's reservation at the top
   of the 128-bit range.
+- Both analyses refuse a run manifest whose `cycle_count` exceeds 2^32, the most cycles the event
+  record's 32-bit `cycle` field can number, with one text. Without it an absurd count, such as an
+  integral float of 1e40, exhausted memory in Python and saturated, then hung or panicked, in the
+  native analysis.
+- Both analyses open every run input non-blocking and judge the opened descriptor: a directory
+  is refused as `open` refuses it, and any other file that is not regular, such as a FIFO placed
+  among the capture files, is refused with `EINVAL` instead of stalling the analysis; the file
+  read is the file checked.
 
 ## [0.4.0] - 2026-11-21
 

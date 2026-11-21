@@ -23,7 +23,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from .manifest_io import load_json_object, parse_bounded_json_object
+from .manifest_io import (
+    load_json_object,
+    open_regular,
+    parse_bounded_json_object,
+    read_regular_bytes,
+)
 from .validate_measurement_domain import schema_locations, semantic_findings
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parent / "data"
@@ -38,6 +43,8 @@ WIRE_FIELDS: Final = (
     ("timebase_ticks", 8, "u64"),
 )
 WIRE_RECORD_BYTES: Final = 16
+CYCLE_FIELD_LIMIT: Final = 2**32
+"""Cycles a run can number in the wire record's unsigned 32-bit ``cycle`` field."""
 UTC_TIMESTAMP: Final = re.compile(
     r"(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|[+-]00:00)", re.ASCII
 )
@@ -212,6 +219,9 @@ def _validate_run_domain(manifest: dict[str, Any], domain: dict[str, Any]) -> No
     if manifest["warmup_cycles"] >= manifest["cycle_count"]:
         message = "warmup_cycles must leave at least one analysed cycle"
         raise ValueError(message)
+    if manifest["cycle_count"] > CYCLE_FIELD_LIMIT:
+        message = "cycle_count exceeds the cycles the 32-bit cycle field can number"
+        raise ValueError(message)
     _validate_fault_schedule(manifest)
     if manifest["source"]["kind"] == "board" and manifest["instrument"]["fifo_overflow_count"]:
         message = "board run with FIFO overflow is invalid measurement evidence"
@@ -240,7 +250,7 @@ def _read_bound_file(run_directory: Path, item: dict[str, str]) -> bytes:
         content does not match the declared SHA-256.
     """
     path = _bound_path(run_directory, item)
-    content = path.read_bytes()
+    content = read_regular_bytes(path)
     digest = hashlib.sha256(content).hexdigest()
     if digest != item["sha256"]:
         message = f"input SHA-256 mismatch: {item['path']}"
@@ -295,7 +305,7 @@ def _verify_artifact(run_directory: Path, item: dict[str, str]) -> None:
         If the complete file does not match the declared SHA-256.
     """
     digest = hashlib.sha256()
-    with _bound_path(run_directory, item).open("rb") as stream:
+    with open_regular(_bound_path(run_directory, item)) as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     if digest.hexdigest() != item["sha256"]:
@@ -326,7 +336,7 @@ def load_run(manifest_path: Path, *, manifest_bytes: bytes | None = None) -> Run
     ValueError
         If JSON, schema, semantic or digest validation fails.
     """
-    raw = manifest_path.read_bytes() if manifest_bytes is None else manifest_bytes
+    raw = read_regular_bytes(manifest_path) if manifest_bytes is None else manifest_bytes
     manifest = parse_bounded_json_object(raw, str(manifest_path))
     _validate_run_schema(manifest)
     directory = manifest_path.resolve().parent

@@ -18,13 +18,15 @@ leaves a truncated artefact behind.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import math
 import os
+import stat
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -434,7 +436,7 @@ def load_json_object(path: Path) -> dict[str, Any]:
     ValueError
         If the bytes violate the strict JSON contract.
     """
-    return parse_json_object(path.read_bytes(), str(path))
+    return parse_json_object(read_regular_bytes(path), str(path))
 
 
 def load_bounded_json_object(path: Path) -> dict[str, Any]:
@@ -461,7 +463,7 @@ def load_bounded_json_object(path: Path) -> dict[str, Any]:
     ValueError
         If the bytes violate the bounded strict JSON contract.
     """
-    return parse_bounded_json_object(path.read_bytes(), str(path))
+    return parse_bounded_json_object(read_regular_bytes(path), str(path))
 
 
 def canonical_json_bytes(value: dict[str, Any]) -> bytes:
@@ -487,6 +489,83 @@ def canonical_json_bytes(value: dict[str, Any]) -> bytes:
     return (text + "\n").encode("utf-8")
 
 
+def open_regular(path: Path) -> BinaryIO:
+    """Open one regular file for reading, failing as ``open(path, "rb")`` does, without blocking.
+
+    The file is opened non-blocking and the opened descriptor, not the name, is judged, so a
+    FIFO cannot stall the reader and the file read is the file checked. A directory is refused
+    as ``open`` refuses it; any other file that is not regular is refused with ``EINVAL``
+    naming the path. The native analysis opens and refuses alike.
+
+    Parameters
+    ----------
+    path
+        File to open.
+
+    Returns
+    -------
+    BinaryIO
+        Open binary stream positioned at the start.
+
+    Raises
+    ------
+    OSError
+        If the file cannot be opened or inspected, or is not a regular file.
+    """
+    descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        # Judged before a stream wraps the descriptor, which would refuse a directory
+        # naming the descriptor number instead of the path.
+        _require_regular(os.fstat(descriptor).st_mode, path)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return os.fdopen(descriptor, "rb")
+
+
+def _require_regular(mode: int, path: Path) -> None:
+    """Refuse a directory as ``open`` does, and any other file that is not regular.
+
+    Parameters
+    ----------
+    mode
+        File mode of the opened descriptor.
+    path
+        Name the refusal states.
+
+    Raises
+    ------
+    OSError
+        ``EISDIR`` for a directory, ``EINVAL`` for any other file that is not regular.
+    """
+    if stat.S_ISDIR(mode):
+        raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), str(path))
+    if not stat.S_ISREG(mode):
+        raise OSError(errno.EINVAL, os.strerror(errno.EINVAL), str(path))
+
+
+def read_regular_bytes(path: Path) -> bytes:
+    """Read one whole regular file as :func:`open_regular` admits it.
+
+    Parameters
+    ----------
+    path
+        File to read.
+
+    Returns
+    -------
+    bytes
+        Complete file content.
+
+    Raises
+    ------
+    OSError
+        If the file cannot be opened, inspected or read, or is not a regular file.
+    """
+    with open_regular(path) as stream:
+        return stream.read()
+
+
 def sha256_of_file(path: Path) -> str:
     """Return the lowercase hexadecimal SHA-256 digest of one file.
 
@@ -505,7 +584,7 @@ def sha256_of_file(path: Path) -> str:
     OSError
         If the file cannot be read.
     """
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(read_regular_bytes(path)).hexdigest()
 
 
 def write_bytes_atomic(path: Path, data: bytes) -> None:

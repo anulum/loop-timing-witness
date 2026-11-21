@@ -16,6 +16,7 @@ from .amp_capture_observations import fault_schedule, tracking_csv
 from .amp_completion import completion_receipt
 from .amp_run_input import read_amp_run
 from .amp_simulation_manifest import COEFFICIENT_NAMES, admitted_capture
+from .manifest_io import read_regular_bytes
 from .run_analysis import analyse_events
 
 if TYPE_CHECKING:
@@ -89,7 +90,7 @@ def _outputs_match(
     return not (
         inputs.files["tracking"]
         != tracking_csv(
-            (directory / "tracking_raw.csv").read_bytes(), run.cycles, completion.samples
+            read_regular_bytes(directory / "tracking_raw.csv"), run.cycles, completion.samples
         )
         or manifest["measurement_domain"]["sha256"] != capture["files"]["measurement-domain.json"]
         or manifest["plant"]["fixed_point_format"] != "Q8.24"
@@ -166,8 +167,8 @@ def attach_amp_completion(
         message = "AMP analysis requires the original hash-bound manifest directory"
         raise ValueError(message)
     capture = admitted_capture(directory, inputs.files["amp_capture"])
-    completion = completion_receipt((directory / "spike.log").read_bytes())
-    configuration = (directory / "image/configuration.txt").read_bytes()
+    completion = completion_receipt(read_regular_bytes(directory / "spike.log"))
+    configuration = read_regular_bytes(directory / "image/configuration.txt")
     run = read_amp_run(configuration)
     manifest = inputs.manifest
     if not (

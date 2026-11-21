@@ -8,7 +8,8 @@
 
 //! Accept and refuse the same `started_utc` spellings as the Python rule.
 
-use super::utc_timestamp;
+use super::{read_file, utc_timestamp};
+use rustix::fs::{CWD, FileType, Mode, mknodat};
 
 #[test]
 fn utc_timestamps_follow_the_python_rule() {
@@ -48,4 +49,28 @@ fn utc_timestamps_follow_the_python_rule() {
     ] {
         assert!(!utc_timestamp(refused), "{refused}");
     }
+}
+
+#[test]
+fn run_inputs_are_read_only_as_regular_files_without_blocking() {
+    let root = std::env::temp_dir().join(format!("witness-regular-{}", std::process::id()));
+    std::fs::create_dir(&root).expect("owned directory");
+    let regular = root.join("regular.bin");
+    std::fs::write(&regular, b"bytes").expect("regular file");
+    let fifo = root.join("pipe");
+    mknodat(CWD, &fifo, FileType::Fifo, Mode::RUSR | Mode::WUSR, 0).expect("FIFO");
+    let directory = root.join("directory");
+    std::fs::create_dir(&directory).expect("directory");
+    let text = |path: &std::path::Path| path.to_str().expect("UTF-8 path").to_owned();
+    assert_eq!(read_file(&regular).ok(), Some(b"bytes".to_vec()));
+    // A FIFO without a writer is refused at once instead of blocking the reader.
+    assert_eq!(
+        read_file(&fifo).err().map(|failure| failure.text()),
+        Some(format!("[Errno 22] Invalid argument: '{}'", text(&fifo)))
+    );
+    assert_eq!(
+        read_file(&directory).err().map(|failure| failure.text()),
+        Some(format!("[Errno 21] Is a directory: '{}'", text(&directory)))
+    );
+    std::fs::remove_dir_all(&root).expect("remove the owned directory");
 }

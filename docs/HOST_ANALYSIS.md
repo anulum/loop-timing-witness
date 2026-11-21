@@ -61,14 +61,18 @@ The native no-replacement operation refuses a destination created during staging
 the competing path and removing the staged report. An invalid run can still
 produce a report: `valid: false` and `invalid_reasons` retain the reason. Malformed inputs fail
 without a report. The source and hardware artefacts are checked as files, not accepted merely as
-hash strings. The tool accepts relative paths within the run directory only.
+hash strings. The tool accepts relative paths within the run directory only. Every run input is
+opened non-blocking and judged on the opened descriptor: a directory is refused as `open` refuses
+it and any other file that is not regular, such as a FIFO, is refused with `EINVAL` instead of
+stalling the reader. Inputs have no size limit beyond the memory of the analysing host.
 
 ## Inputs
 
 [`run-manifest.schema.json`](../run-manifest.schema.json) is the Draft 2020-12 schema for
 `loop-timing-witness.run-manifest.v1`. The manifest declares the UTC start, source kind and tool,
 profile, placement, controller coefficients, plant and fixed-point format, sample period, run
-length and warm-up, load case, fault schedule, file paths and SHA-256 values, instrument state and
+length and warm-up (the run length at most 2^32 cycles, the most the event record's 32-bit `cycle`
+field can number), load case, fault schedule, file paths and SHA-256 values, instrument state and
 operator notes. It includes a hash-bound copy of `measurement-domain.json` in the run directory;
 the host interprets event codes, rails and interval definitions from that verified copy. A board
 declaration additionally requires the hashed bitstream, firmware, Linux image and controller

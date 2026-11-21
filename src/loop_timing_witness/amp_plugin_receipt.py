@@ -19,6 +19,7 @@ from .manifest_io import (
     canonical_json_bytes,
     load_json_object,
     parse_bounded_json_object,
+    read_regular_bytes,
     sha256_of_file,
 )
 from .validate_measurement_domain import schema_locations
@@ -82,7 +83,7 @@ def library_instrumented(plugin: Path) -> bool:
     bool
         Whether the library names the libgcov registration entry point.
     """
-    return _COUNTER_SYMBOL in plugin.read_bytes()
+    return _COUNTER_SYMBOL in read_regular_bytes(plugin)
 
 
 def _identities_agree(data: dict[str, Any]) -> bool:
@@ -221,7 +222,7 @@ def admit_plugin(plugin: Path, *, instrumented: bool = False) -> tuple[bytes, di
         receipt's instrumentation record disagrees with the selection, or the library's own
         counters disagree with the record.
     """
-    content = plugin.with_name("plugin.json").read_bytes()
+    content = read_regular_bytes(plugin.with_name("plugin.json"))
     data = decode_plugin_receipt(content, instrumented=instrumented)
     if sha256_of_file(plugin) != data["plugin_sha256"]:
         message = "AMP plugin library differs from the original build receipt"

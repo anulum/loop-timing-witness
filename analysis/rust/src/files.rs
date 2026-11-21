@@ -26,6 +26,8 @@ pub(crate) const O_NOFOLLOW: i32 = OFlags::NOFOLLOW.bits().cast_signed();
 pub(crate) const O_NONBLOCK: i32 = OFlags::NONBLOCK.bits().cast_signed();
 /// Directory-only open.
 pub(crate) const O_DIRECTORY: i32 = OFlags::DIRECTORY.bits().cast_signed();
+/// Close-on-exec, so a descriptor never reaches a started process.
+pub(crate) const O_CLOEXEC: i32 = OFlags::CLOEXEC.bits().cast_signed();
 
 /// Complete closed original file reference.
 #[derive(Clone, Deserialize, Serialize)]

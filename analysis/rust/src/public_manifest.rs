@@ -32,8 +32,6 @@ pub const SCHEMA_SHA256: &str = "846d131e51cff0dee88d8c9484e435eb02444e0f0a18b58
 const JSON_LIMIT: usize = 65536;
 const SOURCE_LIMIT: u64 = 1048576;
 const PATH_LIMIT: usize = 4096;
-const LINUX_O_NOFOLLOW: i32 = 0o400000;
-const LINUX_O_NONBLOCK: i32 = 0o4000;
 /// The refusal of a manifest descriptor that cannot be opened, inspected or read.
 const UNREADABLE: &str = "Cannot read neural manifest as a regular file without symlinks.";
 /// The refusal of bytes that are not one bounded strict JSON object.
@@ -94,7 +92,7 @@ fn root_bytes(path: &Path) -> Result<Vec<u8>, String> {
     }
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_NONBLOCK)
+        .custom_flags(crate::files::O_NOFOLLOW | crate::files::O_NONBLOCK)
         .open(path)
         .map_err(|_| UNREADABLE.to_owned())?;
     let kind = file

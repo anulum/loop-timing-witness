@@ -8,6 +8,7 @@
 
 //! Finite complete file acquisition and SHA-256 binding before interpretation.
 
+use rustix::fs::OFlags;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
@@ -17,9 +18,14 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 const PATH_LIMIT: usize = 4096;
-const LINUX_O_NOFOLLOW: i32 = 0o400000;
-const LINUX_O_NONBLOCK: i32 = 0o4000;
-const LINUX_O_DIRECTORY: i32 = 0o200000;
+/// The target's own `open(2)` flag values, from rustix: they differ between
+/// architectures (arm64 numbers `O_NOFOLLOW` and `O_DIRECTORY` differently from
+/// x86-64 and riscv64), so no value is written out here.
+pub(crate) const O_NOFOLLOW: i32 = OFlags::NOFOLLOW.bits().cast_signed();
+/// Non-blocking open, so a FIFO cannot stall the reader.
+pub(crate) const O_NONBLOCK: i32 = OFlags::NONBLOCK.bits().cast_signed();
+/// Directory-only open.
+pub(crate) const O_DIRECTORY: i32 = OFlags::DIRECTORY.bits().cast_signed();
 
 /// Complete closed original file reference.
 #[derive(Clone, Deserialize, Serialize)]
@@ -67,7 +73,7 @@ fn regular_descriptor(root: &Path, name: &str) -> Result<File, String> {
         .map_err(|_| "Run directory unavailable.".to_owned())?;
     let mut directory = OpenOptions::new()
         .read(true)
-        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_DIRECTORY)
+        .custom_flags(O_NOFOLLOW | O_DIRECTORY)
         .open(resolved)
         .map_err(|_| "Run directory descriptor unavailable.".to_owned())?;
     let (parents, final_name) = name.rsplit_once('/').unwrap_or(("", name));
@@ -75,14 +81,14 @@ fn regular_descriptor(root: &Path, name: &str) -> Result<File, String> {
         let anchored = format!("/proc/self/fd/{}/{part}", directory.as_raw_fd());
         directory = OpenOptions::new()
             .read(true)
-            .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_DIRECTORY)
+            .custom_flags(O_NOFOLLOW | O_DIRECTORY)
             .open(anchored)
             .map_err(|_| format!("Cannot open original parent without symlinks: {name}."))?;
     }
     let anchored = format!("/proc/self/fd/{}/{final_name}", directory.as_raw_fd());
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_NONBLOCK)
+        .custom_flags(O_NOFOLLOW | O_NONBLOCK)
         .open(anchored)
         .map_err(|_| format!("Cannot open original file without symlinks: {name}."))?;
     if !file

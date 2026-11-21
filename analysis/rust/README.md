@@ -17,6 +17,8 @@ verify complete simulated neural acquisitions. They implement the same
 analysis package. The command also analyses CONTROL and COMPUTE runs, as the
 Python command does, and publishes a byte-equal report directory.
 
+The crate runs on Linux. Every `open(2)` flag it passes comes from the target through
+rustix, because architectures number them differently (arm64 against x86-64 and riscv64).
 Build and install locally with Rust 1.100.0 or later:
 
 ```sh

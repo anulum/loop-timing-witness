@@ -75,6 +75,12 @@ Loop Timing Witness — changelog
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 
+### Fixed
+
+- The native analysis takes every `open(2)` flag from the target through rustix instead of
+  writing out the x86-64 values: on arm64 Linux those numbers mean `O_LARGEFILE` and `O_DIRECT`,
+  so its no-follow refusals were silently off there and its directory opens failed.
+
 ## [0.4.0] - 2026-11-21
 
 ### Added

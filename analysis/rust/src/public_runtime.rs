@@ -46,7 +46,7 @@ impl InstalledFile {
         }
         let file = OpenOptions::new()
             .read(true)
-            .custom_flags(0o400000 | 0o4000)
+            .custom_flags(crate::files::O_NOFOLLOW | crate::files::O_NONBLOCK)
             .open(&self.path)
             .map_err(|_| "Selected checker runtime file is unavailable.".to_owned())?;
         if !file

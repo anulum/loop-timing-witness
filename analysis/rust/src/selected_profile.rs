@@ -58,7 +58,7 @@ fn operator_file(variable: &str, expected: &str, missing: &str) -> Result<Vec<u8
         .ok_or_else(|| missing.to_owned())?;
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(0o400000 | 0o4000)
+        .custom_flags(crate::files::O_NOFOLLOW | crate::files::O_NONBLOCK)
         .open(selected)
         .map_err(|_| UNAVAILABLE.to_owned())?;
     let metadata = file.metadata().map_err(|_| UNAVAILABLE.to_owned())?;

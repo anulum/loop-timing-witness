@@ -126,7 +126,7 @@ fn timestamp() -> u64 {
 fn regular_output(path: &Path, limit: u64) -> std::io::Result<Option<Vec<u8>>> {
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(0o400000 | 0o4000)
+        .custom_flags(crate::files::O_NOFOLLOW | crate::files::O_NONBLOCK)
         .open(path)?;
     if !file.metadata()?.is_file() {
         return Ok(None);

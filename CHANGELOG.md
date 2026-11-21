@@ -167,6 +167,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- The local control-run analysis timing in `docs/HOST_ANALYSIS.md` is measured again at the
+  analysis code of this release (`30db584`, with the weakly-hard metrics and the reference
+  timebase in every report) on ML350, pinned to CPU 16 under a load average of 13 to 16: run P50
+  24.02 s in Python and 1.82 s native, campaign P50 61.85 s and 5.48 s. The deterministic events
+  and tracking inputs are unchanged; the manifests differ by the new measurement-domain digest.
 - The report's `energy` block names its method, `window_mean`, in the Python and Rust analyses and
   the shared series corpus.
 - The README shows the OpenSSF Best Practices badge: the project's record (15127) reached the passing

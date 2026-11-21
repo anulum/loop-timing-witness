@@ -238,6 +238,9 @@ jobs:
         run: |
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Fetch exact native analysis dependencies
+        # Before the runtime coverage gate: its tests build the native analysis consumer offline.
+        run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
       - name: Native controller public API tests
         if: matrix.shard == 2
         run: make controller-tests
@@ -252,8 +255,6 @@ jobs:
         run: make plugin-coverage
       - name: Native Linux UIO adapter build
         run: make run-uio
-      - name: Fetch exact native analysis dependencies
-        run: cargo fetch --locked --manifest-path analysis/rust/Cargo.toml
       - name: Build strict documentation references used by website tests
         run: make documentation-toolchain native-api
       - name: Download the run's shard plan

@@ -10,11 +10,20 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 from typing import TYPE_CHECKING
 
 import pytest
 
-from check_commit_trailers import REQUIRED_AUTHORSHIP_LINE, main, message_findings
+import check_commit_trailers
+from check_commit_trailers import (
+    REQUIRED_AUTHORSHIP_LINE,
+    REVIEWER_DIGESTS,
+    SEAT_PREFIX_DIGESTS,
+    main,
+    message_findings,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -108,6 +117,138 @@ def test_git_comment_lines_are_ignored() -> None:
 def test_each_violation_is_reported_exactly(message: str, expected: list[str]) -> None:
     """Every rule produces its own finding and nothing else."""
     assert message_findings(message) == expected
+
+
+def _with_body(text: str) -> str:
+    """Return a compliant message whose body is ``text``.
+
+    Parameters
+    ----------
+    text
+        Body paragraph placed between the subject and the closing block.
+
+    Returns
+    -------
+    str
+        Full commit-message text.
+    """
+    return f"feat(tools): add the validator\n\n{text}\n\nSeat: ab12\n{REQUIRED_AUTHORSHIP_LINE}\n"
+
+
+def _digest(word: str) -> str:
+    """Return the SHA-256 digest of ``word`` as the guard keeps it.
+
+    Parameters
+    ----------
+    word
+        Fictitious seat prefix or reviewer name.
+
+    Returns
+    -------
+    str
+        Lowercase hexadecimal digest.
+    """
+    return hashlib.sha256(word.encode("utf-8")).hexdigest()
+
+
+@pytest.fixture
+def fictitious_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse the fictitious seat prefix ``acme`` and reviewer ``AUDITOR`` instead of the real ones.
+
+    Parameters
+    ----------
+    monkeypatch
+        Replaces the two digest sets for one test.
+    """
+    monkeypatch.setattr(check_commit_trailers, "SEAT_PREFIX_DIGESTS", frozenset({_digest("acme")}))
+    monkeypatch.setattr(check_commit_trailers, "REVIEWER_DIGESTS", frozenset({_digest("AUDITOR")}))
+
+
+def test_the_refused_words_are_kept_only_as_digests() -> None:
+    """Seven seat prefixes and one reviewer name are held as SHA-256 digests, not as words."""
+    assert len(SEAT_PREFIX_DIGESTS) == 7
+    assert len(REVIEWER_DIGESTS) == 1
+    assert all(
+        re.fullmatch(r"[0-9a-f]{64}", item) for item in SEAT_PREFIX_DIGESTS | REVIEWER_DIGESTS
+    )
+
+
+@pytest.mark.usefixtures("fictitious_names")
+@pytest.mark.parametrize(
+    ("text", "kind", "name"),
+    [
+        ("Found while gating for acme-f636.", "agent seat identifier", "acme-f636"),
+        ("Routed by ACME-157251.", "agent seat identifier", "ACME-157251"),
+        (
+            "See HANDOVER_20261118T181923Z.",
+            "coordination record name",
+            "HANDOVER_20261118T181923Z",
+        ),
+        ("See REVIEW_2026-11-20 for the verdict.", "coordination record name", "REVIEW_2026-11-20"),
+        ("Per LANDING_2026-11-21T1342Z.", "coordination record name", "LANDING_2026-11-21T1342Z"),
+        (
+            "As NOTE_FROM_PEER_20261120T212421Z says.",
+            "coordination record name",
+            "NOTE_FROM_PEER_20261120T212421Z",
+        ),
+        ("Approved by AUDITOR.", "internal reviewer name", "AUDITOR"),
+        ("Asked on hub 399765.", "hub event citation", "hub 399765"),
+        ("Answered in seq #401897.", "hub event citation", "seq #401897"),
+        ("Recorded as event 12345.", "hub event citation", "event 12345"),
+    ],
+)
+def test_an_internal_identifier_in_the_body_is_rejected(text: str, kind: str, name: str) -> None:
+    """Each identifier form is reported under its own kind with the name it matched."""
+    assert message_findings(_with_body(text)) == [f"{kind} in the message: {name}"]
+
+
+@pytest.mark.usefixtures("fictitious_names")
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Runs on Python 3.12 and keeps PEP_8 names.",
+        "Reads the snapshot_2026-11-20 fixture and the UTF_8 codec.",
+        "Retries seq 4321 and event 999, below the citation width.",
+        "An auditor's check, the acme-code integration and a cafe-beef label.",
+        "Pins the wheel digest 9e4e4d08 of HANDOVER and REVIEW forms.",
+    ],
+)
+def test_text_that_only_resembles_an_identifier_is_allowed(text: str) -> None:
+    """Version numbers, lowercase names, short numbers and unlisted prefixes pass."""
+    assert message_findings(_with_body(text)) == []
+
+
+def test_an_identifier_in_the_subject_is_rejected() -> None:
+    """The subject line is checked like the body."""
+    message = _with_body("Body.").replace("add the validator", "land REVIEW_20261121T133713Z")
+    assert message_findings(message) == [
+        "coordination record name in the message: REVIEW_20261121T133713Z"
+    ]
+
+
+@pytest.mark.usefixtures("fictitious_names")
+def test_each_identifier_is_reported_once_in_first_order() -> None:
+    """A repeated name is listed once, and the kinds keep their fixed order."""
+    message = _with_body("hub 400312, then acme-b0f9, hub 400312 again and acme-b0f9.")
+    assert message_findings(message) == [
+        "agent seat identifier in the message: acme-b0f9",
+        "hub event citation in the message: hub 400312",
+    ]
+
+
+def test_an_identifier_in_a_git_comment_line_is_ignored() -> None:
+    """Comment lines are removed before the identifier rule, as before every rule."""
+    message = VALID + "# Drafted from HANDOVER_20261118T181923Z on hub 399765\n"
+    assert message_findings(message) == []
+
+
+@pytest.mark.usefixtures("fictitious_names")
+def test_the_seat_trailer_is_judged_by_its_own_rule_only() -> None:
+    """A seat-shaped trailer is refused once, by the trailer rule, not again as an identifier."""
+    message = f"feat: x\n\nSeat: acme-f636\n{REQUIRED_AUTHORSHIP_LINE}\n"
+    assert message_findings(message) == [
+        "`Seat:` needs one lowercase alphanumeric identifier of 2-16 characters"
+    ]
 
 
 def test_hook_accepts_a_valid_message_file_in_a_subprocess(

@@ -74,6 +74,12 @@ Loop Timing Witness — changelog
   (IEEE 1588, White Rabbit) and control-timing analysis (Jitterbug and TrueTime).
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
+- The commit-message hook also refuses internal coordination identifiers anywhere outside the
+  `Seat:` trailer: an agent seat identifier, a coordination record name, the internal reviewer's
+  name and a hub event citation. A record name is matched by its shape (a capitalised prefix of
+  one or more segments, then `_` and a dashed date or a compact UTC stamp); seat prefixes and the
+  reviewer's name are compared by their SHA-256 digests, so the hook's source names neither. The
+  hook judges each new message, not earlier history.
 
 ### Fixed
 

@@ -120,6 +120,11 @@ foreach witness_pin {WITNESS_SAMPLE_READY WITNESS_ACT_WRITE WITNESS_SAFE_STATE W
 }
 generate_component -component_name ${top_level_name} -recursive 0
 
+# Balls C15 and C14, the safe-state mirror and the pulse-per-second input, are the device's live
+# probe pins LPRB_B and LPRB_A on the single-pin connectors J12 and J13. The reference reserves
+# them for SmartDebug live probes (RESTRICTPROBEPINS:1); the witness releases them for user I/O,
+# so this design offers no live probe.
+set_device -adv_options {RESTRICTPROBEPINS:0}
 # The reference has already associated its own I/O constraints with place-and-route; the
 # association is replaced by the same list, of the baseline configuration the witness
 # requires, with the witness pins added.

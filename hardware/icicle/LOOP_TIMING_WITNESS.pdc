@@ -10,8 +10,10 @@
 # ICICLE_RPi.pdc fixes bank 1 at 3.3 V. Board nets from the Icicle Kit schematic:
 # A6 is RPi_GPIO4_GCLK on Raspberry Pi connector J26 pin 7, D8 is RPI_GPIO6 on J26
 # pin 31, C15 is PF_C15 on the single-pin connector J12 and C14 is PF_C14 on the
-# single-pin connector J13. The pulse-per-second input has a weak pull-down, as the
-# reference's mikroBUS interrupt input does, so an open connector records no edge.
+# single-pin connector J13. C15 and C14 are the live probe pins LPRB_B and LPRB_A,
+# which LOOP_TIMING_WITNESS.tcl releases for user I/O. The pulse-per-second input has
+# a weak pull-down, as the reference's mikroBUS interrupt input does, so an open
+# connector records no edge.
 
 set_io -port_name WITNESS_SAMPLE_READY \
     -pin_name A6                      \

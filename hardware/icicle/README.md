@@ -150,13 +150,18 @@ The balls and nets come from the Icicle Kit schematic (bank 1 and Raspberry Pi c
 of the engineering-sample board). Its bank 1 ball assignments agree with every ball that the
 reference's `ICICLE_RPi.pdc` and `ICICLE_MIKROBUS.pdc` place on the same nets. No constraint
 of the reference's baseline configuration uses the four balls; J26 is the Raspberry Pi
-connector, and J12 and J13 are single-pin connectors on nets `PF_C15` and `PF_C14`. The mirrors
+connector, and J12 and J13 are single-pin connectors on nets `PF_C15` and `PF_C14`, which the
+schematic routes as a pair. These two balls are the device's live probe pins `LPRB_B` and
+`LPRB_A`: the reference reserves them for SmartDebug live probes, and the first Libero run of
+the derivation refused both as user-reserved pins, so the witness script releases them
+(`RESTRICTPROBEPINS:0`) and the derived design offers no live probe. On the Raspberry Pi
+connector every other GPIO is already constrained by the reference. The mirrors
 are LVCMOS33 outputs and the reference input an LVCMOS33 input with a weak pull-down, as the
 reference's mikroBUS interrupt input has, so an open connector records no edge; all four are in
 bank 1, which the reference fixes at 3.3 V, and a source with another output level needs a level
 translator. The reference input has no I/O timing constraint: it is asynchronous by design and
-enters two capture-clock synchroniser stages. Only the I²C loopback variant, which the witness refuses, uses D8. The output delay of
-each pin is in the timing report; the pins are not a board result until a programmed board has
+enters two capture-clock synchroniser stages. Only the I²C loopback variant, which the witness
+refuses, uses D8. The output delay of each pin is in the timing report; the pins are not a board result until a programmed board has
 passed the cross-check.
 
 ## Recorded Libero run

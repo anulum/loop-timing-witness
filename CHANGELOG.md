@@ -24,7 +24,10 @@ Loop Timing Witness — changelog
   resets high, so a pulse already high at the release is not an edge, and the run is quiescent only
   when no reference record waits. The fabric wrapper, `axi_control_witness` and `icicle_witness`
   pass the input through; the Icicle derivation places `WITNESS_PPS` on ball C14 (J13, `PF_C14`),
-  LVCMOS33 with a weak pull-down.
+  LVCMOS33 with a weak pull-down. J12 and J13 carry the device's live probe pins (C15 and C14),
+  which the reference reserves for SmartDebug: the first Libero run of the derivation refused both
+  as user-reserved, so the connection script releases them (`RESTRICTPROBEPINS:0`) and the derived
+  design offers no live probe.
   - The Python and Rust decoders check reference records on their own (zero reserved bits,
     increasing sequence number and counter value) and keep them out of the cycle checks; both
     domain validators count reference events among the coded names and in the buffer-sizing rule.

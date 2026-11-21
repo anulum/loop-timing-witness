@@ -275,7 +275,8 @@ def test_witness_pins_are_free_and_join_the_baseline_placement(derived_tree: Pat
     The reference's own place-and-route association, for the baseline configuration that the
     witness requires, is the witness script's association without the witness pins; none of the
     three mirror outputs or the pulse-per-second input, which has a weak pull-down, appears in
-    any of the reference's I/O constraint files.
+    any of the reference's I/O constraint files. Two of them are the device's live probe pins,
+    which the reference reserves, so the witness script releases them before importing its pins.
 
     Parameters
     ----------
@@ -305,6 +306,10 @@ def test_witness_pins_are_free_and_join_the_baseline_placement(derived_tree: Pat
     }
     assert pins.count("-DIRECTION OUTPUT") == 3
     assert pins.count("-DIRECTION INPUT") == pins.count("-RES_PULL Down") == 1
+    # C15 and C14 are the live probe pins, which the reference reserves and the witness releases.
+    assert "-adv_options {RESTRICTPROBEPINS:1}" in reference
+    assert witness.count("set_device -adv_options {RESTRICTPROBEPINS:0}") == 1
+    assert witness.index("RESTRICTPROBEPINS:0") < witness.index("-io_pdc $witness_pins")
     for name in baseline.split():
         if name.startswith("io/"):
             constraint = derived_tree / "script_support/constraints" / name.removeprefix("io/")

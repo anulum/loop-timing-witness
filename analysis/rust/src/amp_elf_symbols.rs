@@ -154,6 +154,10 @@ fn symbol(
 
 /// Read the one symbol table's defined global and weak symbols, in table order.
 ///
+/// The image must already be admitted by [`crate::amp_elf::admit_elf`], as
+/// Python's reader requires: this reader checks the section and symbol tables,
+/// not the ELF identity or header.
+///
 /// # Errors
 ///
 /// Returns Python's refusal text when the section table, the symbol table, its

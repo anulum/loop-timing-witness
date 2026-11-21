@@ -169,7 +169,7 @@ fn load_segment(
         || offset % alignment != physical % alignment
         || memory_end > ADDRESS_LIMIT
         || u128::from(physical) < reservation.address
-        || memory_end > reservation.address + reservation.size
+        || memory_end > reservation.address.saturating_add(reservation.size)
     {
         return Err(
             "firmware ELF load segment violates permissions, geometry or reserved RAM".to_owned(),

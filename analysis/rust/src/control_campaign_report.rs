@@ -15,8 +15,8 @@
 //! concatenated and summarised with Type-7 quantiles, never averaged. Counts
 //! keep Python's integer or float type, minima and maxima keep the first of
 //! equal values, and the run plan is compared as Python compares it. A
-//! campaign binding an AMP capture is refused: the native analysis does not
-//! complete AMP captures.
+//! repeat that binds an AMP capture is analysed as a single AMP run is: a
+//! refused capture refuses the repeat.
 
 use crate::control_analysis::{JITTER_METHOD, Row, distribution};
 use crate::control_campaign::{Campaign, Repeat, configuration};

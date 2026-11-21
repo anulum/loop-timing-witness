@@ -93,6 +93,10 @@ Loop Timing Witness — changelog
   limits: a device-tree node finds a property, and refuses a repeated one, by name in constant
   time (Python uses a dictionary), schema failure locations are reported once each without
   rescanning the list, and `uniqueItems` sorts scalars and compares neighbours.
+- Two native module descriptions said that a run or campaign binding an AMP capture is refused;
+  both attach its completion as Python does. `read_symbols` documents that it expects an image
+  `admit_elf` admitted, and `admit_elf` no longer overflows on a caller's reservation at the top
+  of the 128-bit range.
 
 ## [0.4.0] - 2026-11-21
 

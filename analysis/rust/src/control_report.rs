@@ -11,8 +11,9 @@
 //! The events block, the tracking and energy series, validity, the input
 //! digests and the stated limits are assembled in Python's order, so the first
 //! refusal is Python's too. The native completion counters and the host load
-//! receipt are attached when the run binds them. A run that binds an AMP
-//! capture is refused first, until the native analysis implements AMP completion.
+//! receipt are attached when the run binds them, and so is the logger
+//! completion of a bound AMP capture, as Python's `attach_amp_completion`
+//! attaches it.
 
 use crate::amp_report_completion::attach_amp_completion;
 use crate::control_analysis::{Row, events_block, full_control, whole};

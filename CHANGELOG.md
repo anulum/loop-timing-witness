@@ -12,6 +12,11 @@ Loop Timing Witness — changelog
 
 ## [Unreleased]
 
+### Changed
+
+- Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
+  provenance fixture and the exact public digest lines the secret scanner recognises in it.
+
 ## [0.4.0] - 2026-11-21
 
 ### Added

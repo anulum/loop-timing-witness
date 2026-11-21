@@ -59,6 +59,11 @@ RELEASES: Final = {
         archive_sha256="fbfb991b0f972bd9076eb7a94c30bd1ddc304f90295f65b4f81182c866e814a6",
         provenance_sha256="f270fe9fc72545b52328635303d0df1983e2aa15e4c4fbeaa825e98a9670dfa0",
     ),
+    "0.4.0": Release(
+        source="5fc0873b9d76298a379ef1586fc694bd9484f0dc",
+        archive_sha256="54838d4a043a79505f64745e73946a166e46fe4383ecb1cbd5e49961606540d6",
+        provenance_sha256="5c593e2ca331945a42eb2220780edffde3a47fadccf0b49eb1b090f85d5787f5",
+    ),
 }
 
 

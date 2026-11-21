@@ -16,6 +16,7 @@ path = [
     "tests/data/source-release-v0.1.0-provenance.json",
     "tests/data/source-release-v0.2.0-provenance.json",
     "tests/data/source-release-v0.3.0-provenance.json",
+    "tests/data/source-release-v0.4.0-provenance.json",
     "fuzz/corpus/zero.bin",
     "fuzz/corpus/extremes-reset.bin",
     "fuzz/corpus/invalid-coefficients.bin",

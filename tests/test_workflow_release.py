@@ -132,4 +132,5 @@ def test_signature_dispatch_registry_is_the_committed_workflow_input() -> None:
         "0.1.0",
         "0.2.0",
         "0.3.0",
+        "0.4.0",
     ]

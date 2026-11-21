@@ -507,26 +507,53 @@ safe-state-invariants:
 	grep -Fq 'SAT proof finished - model found: FAIL!' "$(SAFE_STATE_DIRECTORY)/negative.log"
 
 FIFO_PROOF_DIRECTORY ?= build/fifo-invariants
-FIFO_PROOF_SOURCES := rtl/event_record_fifo.sv tests/formal/event_record_fifo_proof.sv
+# The buffer under proof; a test substitutes a faulty copy to show that the proof refuses it.
+FIFO_PROOF_BUFFER ?= rtl/event_record_fifo.sv
+FIFO_PROOF_SOURCES := $(FIFO_PROOF_BUFFER) tests/formal/event_record_fifo_proof.sv
+FIFO_INDUCTION_SOURCES := $(FIFO_PROOF_SOURCES) tests/formal/event_record_fifo_induction.sv
 FIFO_PROOF_FLOW := prep -top event_record_fifo_proof; flatten; memory_map; opt; clk2fflogic; opt; check -assert
+# Registers of the checker and the buffer that the strengthening invariants read, connected after
+# flatten because Yosys has no hierarchical references; the record bits follow per capacity.
+FIFO_OBSERVED := connect -set writes proof.writes; connect -set reads proof.reads; \
+	connect -set last_read proof.last_read; connect -set watch_index proof.watch_index; \
+	connect -set pending proof.pending; connect -set watched_bit proof.watched[0]; \
+	connect -set reset_seen proof.reset_seen; connect -set write_binary proof.dut.write_binary; \
+	connect -set write_gray proof.dut.write_gray; connect -set read_binary proof.dut.read_binary; \
+	connect -set read_gray proof.dut.read_gray; \
+	connect -set read_gray_stage proof.dut.read_gray_stage; \
+	connect -set read_gray_sync proof.dut.read_gray_sync; \
+	connect -set write_gray_stage proof.dut.write_gray_stage; \
+	connect -set write_gray_sync proof.dut.write_gray_sync; \
+	connect -set write_full proof.dut.write_full; connect -set read_empty proof.dut.read_empty; \
+	connect -set read_valid proof.dut.read_valid; connect -set read_data_bit proof.dut.read_data[0];
 
-# The dual-clock event buffer at two records, with the write and read clocks free (clk2fflogic),
-# checked from reset over every interleaving of FIFO_PROOF_DEPTH steps of clock events: its
-# occupancy rules, and the watched record's data and order. Thirty steps hold four writes and four
-# reads, so both two-bit pointers complete one wrap; a fifth read needs more steps.
-# The negative control, which asserts that the buffer never fills, must yield a counterexample.
+# The dual-clock event buffer with the write and read clocks free (clk2fflogic), so every
+# interleaving of their edges is explored. Temporal induction with the strengthening invariants of
+# event_record_fifo_induction.sv proves the occupancy rules and the watched record's data and
+# order for every reachable state, at each capacity of FIFO_PROOF_ADDRESS_BITS (2, 4, 8 and 16
+# records). The default capacity of 16,384 records is the same parameterised RTL; it is not proved
+# here, because the solver's time grows quickly with the pointer width: with Yosys 0.52 this target
+# took 19 s at 32 records and 85 s at 64.
+# The negative control, which asserts that the buffer never fills, must yield a counterexample
+# within FIFO_PROOF_DEPTH steps from reset.
+FIFO_PROOF_ADDRESS_BITS ?= 1 2 3 4
 FIFO_PROOF_DEPTH ?= 30
 .PHONY: fifo-invariants
 fifo-invariants:
 	mkdir -p "$(FIFO_PROOF_DIRECTORY)"
-	yosys -Q -T -p "read_verilog -formal -sv $(FIFO_PROOF_SOURCES); \
-		chparam -set ADDRESS_BITS 1 -set CHECK_DATA 0 event_record_fifo_proof; $(FIFO_PROOF_FLOW); \
-		sat -seq $(FIFO_PROOF_DEPTH) -prove-asserts -verify -timeout $(SAT_TIMEOUT)" \
-		> "$(FIFO_PROOF_DIRECTORY)/occupancy.log" 2>&1
-	yosys -Q -T -p "read_verilog -formal -sv $(FIFO_PROOF_SOURCES); \
-		chparam -set ADDRESS_BITS 1 -set CHECK_DATA 1 event_record_fifo_proof; $(FIFO_PROOF_FLOW); \
-		sat -seq $(FIFO_PROOF_DEPTH) -prove-asserts -verify -timeout $(SAT_TIMEOUT)" \
-		> "$(FIFO_PROOF_DIRECTORY)/data.log" 2>&1
+	for bits in $(FIFO_PROOF_ADDRESS_BITS); do \
+		records=""; slot=0; \
+		while [ "$$slot" -lt "$$((1 << bits))" ]; do \
+			records="$$records connect -set record_bits[$$slot] proof.dut.records[$$slot][0];"; \
+			slot=$$((slot + 1)); \
+		done; \
+		yosys -Q -T -p "read_verilog -formal -sv $(FIFO_INDUCTION_SOURCES); \
+			chparam -set ADDRESS_BITS $$bits event_record_fifo_induction; \
+			prep -top event_record_fifo_induction; flatten; memory_map; $(FIFO_OBSERVED)$$records \
+			opt; clk2fflogic; opt; check -assert; \
+			sat -tempinduct -maxsteps 8 -prove-asserts -verify -timeout $(SAT_TIMEOUT)" \
+			> "$(FIFO_PROOF_DIRECTORY)/induction-$$bits.log" 2>&1 || exit $$?; \
+	done
 	yosys -Q -T -p "read_verilog -formal -sv $(FIFO_PROOF_SOURCES); \
 		chparam -set ADDRESS_BITS 1 -set CHECK_DATA 0 -set NEGATIVE_CONTROL 1 event_record_fifo_proof; \
 		$(FIFO_PROOF_FLOW); sat -seq $(FIFO_PROOF_DEPTH) -prove-asserts -timeout $(SAT_TIMEOUT) \

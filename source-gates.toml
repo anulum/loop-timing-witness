@@ -150,6 +150,7 @@ paths = [
     "tests/formal/axi_lite_clock_bridge_proof.sv",
     "tests/formal/control_io_registers_proof.sv",
     "tests/formal/deadline_monitor_proof.sv",
+    "tests/formal/event_record_fifo_induction.sv",
     "tests/formal/event_record_fifo_proof.sv",
     "tests/formal/fixed_point_math_proof.sv",
     "tests/formal/plant_timing_proof.sv",

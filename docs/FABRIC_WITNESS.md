@@ -201,15 +201,33 @@ host tests bind the sources, compiled simulation and binary stream by SHA-256, c
 periods and 20-tick loop latency, and mark an actual overflow stream invalid. Those values are
 test schedules, not board performance claims.
 
-`make fifo-invariants` (run by `tests/test_fifo_proof.py`) checks the buffer at two records with
-Yosys, the write and read clocks free so that `clk2fflogic` explores every interleaving of their
-edges, from one asynchronous reset of both domains. Shadow counts of accepted writes and reads
-give the true occupancy: the buffer never accepts a write when full and never accepts a read when
-empty, and a record chosen freely by its write index is read back unchanged and in order. The
-check is bounded: it covers every trace of 30 steps from reset, which hold four writes and four
-reads, so both pointers complete one wrap. The data check follows data bit 0, which stands for
-every bit because the memory writes and reads whole words at one address. Its negation, that the
-buffer never fills, yields a counterexample.
+`make fifo-invariants` (run by `tests/test_fifo_proof.py`) proves the buffer's rules with Yosys,
+the write and read clocks free so that `clk2fflogic` explores every interleaving of their edges,
+after one asynchronous reset of both domains. Shadow counts of accepted writes and reads give the
+true occupancy: the buffer never accepts a write when full and never accepts a read when empty,
+and a record chosen freely by its write index is read back unchanged and in order. The data check
+follows data bit 0, which stands for every bit because the memory writes and reads whole words at
+one address.
+
+The proof is by temporal induction, so it holds in every reachable state, not only on traces of
+a fixed length. Those rules alone are not inductive: from an arbitrary state the pointers, their
+Gray copies and the two synchroniser stages of each domain can disagree.
+`tests/formal/event_record_fifo_induction.sv` adds the invariants that hold in every reachable
+state, all modulo twice the capacity: each pointer's Gray register encodes it; the read pointer's
+stage and synchronised copy in the write domain lag the read pointer in that order, and the write
+pointer's copies in the read domain lag the write pointer, none of them by more than the
+capacity; a clear full flag leaves room for one more record; a clear empty flag means a record is
+visible to the reader; the watched record stays in its slot while unread, and a read of its index
+returns it. Yosys has no hierarchical references, so the proof flow connects the invariants'
+observed wires to the registers of the flattened buffer and checker. The proof covers capacities
+of 2, 4, 8 and 16 records and closes at induction length one. The default capacity of 16,384
+records is the same parameterised RTL but is not proved, because the solver's time grows quickly
+with the pointer width: with Yosys 0.52 the target took 19 s at 32 records and 85 s at 64. As in
+simulation, a synchroniser stage takes its sampled value exactly; metastability is not modelled.
+
+Two controls show that the proof can fail: the assertion that the buffer never fills yields a
+counterexample within 30 steps from reset, and a copy of the buffer whose write port ignores the
+full flag is refused with a counterexample that overfills it.
 
 Generic synthesis must retain one 128-bit by 16,384 dual-clock memory at default capacity.
 Post-optimisation equivalence uses a small FIFO configuration with memory mapping and

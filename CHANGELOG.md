@@ -14,6 +14,11 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `make fifo-invariants` proves the dual-clock event buffer's rules by temporal induction instead of
+  a bounded check of 30 steps: no write when full, no read when empty, and a freely chosen record
+  read back unchanged and in order hold in every reachable state at 2, 4, 8 and 16 records. The
+  strengthening invariants relate the pointers, their Gray registers and both synchroniser stages
+  of each domain; a buffer copy whose write port ignores the full flag is refused with a trace.
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
 

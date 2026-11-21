@@ -201,9 +201,10 @@ timing of each crossing is bounded by the derived constraints above, and the rep
 them. The whole design uses 27 502 4LUT (10.8 %), 20 700 DFF (8.1 %), 104 uSRAM, 127 LSRAM
 and 20 math blocks.
 
-This run and the engineering-sample run below predate the [event mirror pins](#event-mirror-pins)
-and the two-page register map, which change the derived RTL, connection script, constraints and
-interconnect.
+This run and the engineering-sample run below predate the [event mirror pins](#event-mirror-pins),
+the two-page register map and the pulse-per-second input, which change the derived RTL,
+connection script, constraints and interconnect; the [runs of the release derivation](#release-derivation-on-both-devices)
+include them.
 
 The reports stay with the run; their SHA-256 values are:
 
@@ -267,3 +268,41 @@ engineering-sample board was programmed or measured.
 | `designer/…/max_report.json` | `5c4e5cb0d40e2c45f90e85a6e8fa4b0266690eba902aebc9eec02d59caaee293` |
 | `synthesis/BASE_DESIGN_ES_9C34320F91E8E8A_cdc.csv` | `dc98f763f79b40fb9a9f5c48dce57d39166177825e607b442bf87ec037124dff` |
 | `designer/…/BASE_DESIGN_ES_9C34320F91E8E8A_compile_netlist_resources.rpt` | `8052e2662106de2c432dd0bacd69d47964c115f6508f852ca608f37100913969` |
+
+### Release derivation on both devices
+
+On 2026-11-21, Libero SoC 2026.1.0.17 ran `run_reference.sh` for MPFS250T and for MPFS250T_ES
+on the tree derived at commit `4fca029`, whose `witness_derivation.json` has SHA-256
+`3af3a2daed8268531e79c019f06fa012ca18b0b04086e176aa808a85af521d63`: register map 2 with the
+8 KiB FIC0 slot, the three event mirror pins and the pulse-per-second input, with the live probe
+pins released. Both runs exited 0, after 41 and 39 minutes, and report that the timing
+constraints are met in the three corners with 99.96 % constraint coverage. An earlier run of
+the derivation at `30db584` stopped at place-and-route because C15 and C14 were reserved for
+live probes.
+
+| Clock | Period | MPFS250T setup | MPFS250T hold | MPFS250T_ES setup | MPFS250T_ES hold |
+| --- | --- | --- | --- | --- | --- |
+| FIC0 bus clock, reference CCC output 0 | 8 ns | +3.217 ns | +0.043 ns | +3.346 ns | +0.033 ns |
+| FIC1 clock, reference CCC output 1 | 8 ns | +3.058 ns | +0.065 ns | +2.791 ns | +0.074 ns |
+| FIC3 clock, reference CCC output 3 | 20 ns | +3.505 ns | +0.062 ns | +3.348 ns | +0.067 ns |
+| Witness capture clock, `WITNESS_CCC` output 0 | 10 ns | +2.531 ns | +0.035 ns | +2.655 ns | +0.053 ns |
+
+On MPFS250T the capture clock's worst setup path runs from the capture queue's head register
+through the record selection, which now also chooses a waiting pulse-per-second record, to the
+event FIFO's RAM write data; on MPFS250T_ES it is the earlier path from the cycle state to a plant
+velocity product. No path between the bus clock and the capture clock is among the 1000 worst
+setup paths of either run, which end at +3.266 ns and +3.333 ns. Synthesis lists the same 12
+witness crossings with the same classification as before (three safe, two FIFO RAM reads not
+analysed, seven structural flags), and both devices give a byte-identical CDC report. MPFS250T
+uses 27 447 4LUT (10.8 %), 20 868 DFF (8.2 %), 104 uSRAM, 128 LSRAM and 20 math blocks, and
+MPFS250T_ES five 4LUT more. These are static timing analyses of one placement each: no board was
+programmed or measured.
+
+| Report | MPFS250T SHA-256 | MPFS250T_ES SHA-256 |
+| --- | --- | --- |
+| max timing, multi-corner | `e664e3d5abd9d9d04972734fb6467dfeff90f7e26d429f0d75c295224b212961` | `afa2436493f3d436b0ed4b5fc4fd04d4353344e8ba5a8a4e16a70737375e44e7` |
+| min timing, multi-corner | `688c7928a6fa506c521e94c331f2659a91f47af76162d95d62719b7ee1b914d2` | `f9ae0923f9e934f5dcd023c7c306757c22973ecba984417f53cea6cdd231ae9d` |
+| timing constraint coverage | `0ed72b772aa23a8e4825d20077094297032845ac4dd0d324c8a2f6d1da9f99b1` | `fbc05bca902058ed9783bb1f7714a6540406dc06dddec4939c35645ff1724f31` |
+| `max_report.json` | `9975732c49cc329a11dd613791bf0f74d9d3744fdba4497a3b6edd514d68c2ba` | `7083829a09c70e34161c8ef0d4cb0e3ff88631248c6afb42c797ad9a98216b1a` |
+| synthesis CDC report | `05fffa47018327aa98495a11bbbb4039447d5d80e3188e394089ca485b733e00` | `05fffa47018327aa98495a11bbbb4039447d5d80e3188e394089ca485b733e00` |
+| netlist resources | `33bf5d673b82c43e201a2731d78e2bacb83be48bff2f3c9216762205a9bc5218` | `76f1c0a7f026bd0d069c4d429ecbbf20329136bcd9d25c4dabe617ba2f79d4db` |

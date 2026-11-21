@@ -167,6 +167,10 @@ Loop Timing Witness — changelog
 
 ### Changed
 
+- `hardware/icicle/README.md` records Libero SoC 2026.1.0.17 runs of this release's derivation
+  (`4fca029`) for MPFS250T and MPFS250T_ES: timing met in the three corners with 99.96 % constraint
+  coverage, capture clock worst setup slack +2.531 ns and +2.655 ns, no bus-to-capture path among
+  the 1000 worst setup paths, the same 12 witness crossings and a byte-identical CDC report.
 - The local control-run analysis timing in `docs/HOST_ANALYSIS.md` is measured again at the
   analysis code of this release (`30db584`, with the weakly-hard metrics and the reference
   timebase in every report) on ML350, pinned to CPU 16 under a load average of 13 to 16: run P50

@@ -248,7 +248,8 @@ These limits are part of every report:
   calibrated and reported. The [uncertainty budget](#uncertainty-budget) gives the standard
   uncertainty of each interval kind.
 - The plant is emulated. Results describe controller timing and its effect on the emulated plant,
-  not a physical machine.
+  not a physical machine. The events mark the digital boundary of the loop: sensor conversion,
+  analog conditioning and actuator delays of a physical plant are outside every measured interval.
 - A PREEMPT_RT comparison is included only if a matching kernel builds for the board support
   package.
 

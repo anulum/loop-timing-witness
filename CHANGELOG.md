@@ -74,6 +74,12 @@ Loop Timing Witness — changelog
   (IEEE 1588, White Rabbit) and control-timing analysis (Jitterbug and TrueTime).
 - Source release signatures cover 0.4.0: the registry, the workflow's release choice, the byte-exact
   provenance fixture and the exact public digest lines the secret scanner recognises in it.
+- The README's related work cites a fabric trace core that records a loop's latency with the
+  power of at least nine rails in one run (RTAS 2020), a microcontroller-against-FPGA study of one
+  protection loop's latency and fault energy, a study of the Linux, FreeRTOS and fabric paths of
+  one Zynq, and runtime monitors synthesised into fabric. The planned contribution now says that
+  recording latency with energy is prior work and that the three placements share one device. The
+  measurement protocol states that the events mark the loop's digital boundary.
 - The commit-message hook also refuses internal coordination identifiers anywhere outside the
   `Seat:` trailer: an agent seat identifier, a coordination record name, the internal reviewer's
   name and a hub event citation. A record name is matched by its shape (a capitalised prefix of

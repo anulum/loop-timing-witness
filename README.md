@@ -92,10 +92,11 @@ place computation in FPGA fabric and need its end-to-end latency on real hardwar
 - No comparison with other vendors or platforms is part of the project.
 - The target board has not been used yet; the platform facts in the manifest come from the board
   user guide and are marked `verified_on_hardware: false`.
-- Hardware timing measurement from FPGA fabric is established prior work (see below). The
-  planned contribution is its application to complete control-loop events across three
-  placements with control quality, energy and fault response in the same run, published as
-  reproducible run records — not the idea of measuring from fabric.
+- Hardware timing measurement from FPGA fabric is established prior work (see below), and so is
+  recording a loop's latency together with its energy. The planned contribution is the
+  application to complete control-loop events across three placements on one device with control
+  quality, energy and fault response in the same run, published as reproducible run records —
+  not the idea of measuring from fabric.
 
 ## Related work
 
@@ -111,6 +112,22 @@ place computation in FPGA fabric and need its end-to-end latency on real hardwar
   plasma control and data acquisition systems", *Fusion Engineering and Design* 228, 115769, 2026,
   <https://doi.org/10.1016/j.fusengdes.2026.115769> — bare-metal, FreeRTOS, Linux and FPGA
   placements of one acquisition loop, timed by server-side packet timestamps and an oscilloscope.
+- Geier, Brändle, Faller and Chakraborty, "Debugging FPGA-accelerated Real-time Systems", IEEE
+  RTAS 2020, 350–363, <https://doi.org/10.1109/RTAS48715.2020.00010> — a trace core in the fabric
+  of a Zynq board and an external measurement board record a visual-servoing loop's input-to-output
+  latency, its processing phases and the power of at least nine supply rails in one run. It traces
+  one implementation of the loop; a bare-metal against Linux comparison is named as future work,
+  and no fault is injected.
+- Ayad, Saci and Khezzar, "Impact of Digital Control Architecture on IGBT Short-Circuit Protection
+  Performance: A Comparative Study of FPGA and Microcontroller Implementations", *Journal Européen
+  des Systèmes Automatisés* 59(8), 2139–2148, 2026, <https://doi.org/10.18280/jesa.590802> — one
+  protection loop on a microcontroller and on an FPGA with the same analog front end: digital
+  latency, peak fault current and dissipated fault energy, on two devices.
+- Cuccagna et al., "Dynamic Deployment of Real Time Services in Edge Computing Systems", *IEEE
+  Open Journal of the Communications Society* 7, 1163–1185, 2026,
+  <https://doi.org/10.1109/OJCOMS.2026.3658832> — latency and throughput of the paths between
+  Linux, FreeRTOS and programmable logic on one Zynq-7030; the paths are measured, not a control
+  loop.
 
 The instrument complements these classes of tools rather than replacing them:
 
@@ -139,6 +156,11 @@ The instrument complements these classes of tools rather than replacing them:
   ([Cervin, Henriksson, Lincoln, Eker and Årzén, 2003](https://doi.org/10.1109/MCS.2003.1200240)),
   computes the cost of a delay distribution. The instrument measures that distribution, and
   `loop_timing_witness.control_cost` evaluates its cost.
+- Runtime monitors synthesised into fabric, such as R2U2
+  ([Schumann, Moosbrugger and Rozier, 2015](https://doi.org/10.1007/978-3-319-23820-3_15)) and
+  RTLola ([Baumeister, Finkbeiner, Schwenger and Torfah, 2019](https://doi.org/10.1145/3358220)),
+  check temporal specifications of signal streams while a system runs. They decide whether a
+  property holds; the instrument records each event's time, from which distributions are formed.
 
 ## Relation to SC-NeuroCore
 

@@ -36,29 +36,38 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from math import ceil, isfinite, log2
+from math import isfinite
 from typing import TYPE_CHECKING, Final
 
 from loop_timing_witness.control_reference import Lqr, Pid
+from loop_timing_witness.dense_matrix import (
+    add,
+    blocks,
+    embed,
+    expm,
+    identity_matrix,
+    mul,
+    part,
+    product,
+    scaled,
+    solve,
+    symmetric,
+    trace_product,
+    transpose,
+    zero_matrix,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from loop_timing_witness.control_timing import ContinuousPlant
-
-type Matrix = list[list[float]]
+    from loop_timing_witness.dense_matrix import Matrix
 
 PROBABILITY_TOLERANCE: Final = 1e-9
 """Largest accepted difference between the sum of the delay probabilities and one."""
 
 SQUARINGS: Final = 40
 """Squarings of the period map tried to prove mean-square stability, up to ``2**40`` periods."""
-
-_SCALED_NORM: Final = 0.25
-"""Largest norm of the scaled matrix whose exponential the Taylor series sums."""
-
-_TAYLOR_TERMS: Final = 30
-"""Upper bound on the Taylor terms; at a norm of 0.25 twenty terms reach rounding."""
 
 _DIVERGED: Final = 1e150
 """Norm of a power of the period map beyond which the loop is not mean-square stable."""
@@ -153,9 +162,9 @@ def quadratic_cost(
     a, b = _state_space(plant)
     states = len(b)
     dynamics = [[*a[i], b[i]] for i in range(states)] + [[0.0] * (states + 1)]
-    weights = _zeros(states + 1, states + 1)
+    weights = zero_matrix(states + 1, states + 1)
     weights[0][0], weights[states][states] = 1.0, input_weight
-    noise = _zeros(states + 1, states + 1)
+    noise = zero_matrix(states + 1, states + 1)
     for i in range(states):
         for j in range(states):
             noise[i][j] = b[i] * b[j]
@@ -171,7 +180,7 @@ def quadratic_cost(
     periods = [
         (
             delay.probability,
-            _product(
+            product(
                 segment(period - delay.seconds).transition,
                 apply,
                 segment(delay.seconds).transition,
@@ -181,22 +190,22 @@ def quadratic_cost(
         for delay in delays
     ]
     moment = _stationary_moment(periods, segment(period).covariance)
-    sampled = _product(sample, moment, _transpose(sample))
+    sampled = product(sample, moment, transpose(sample))
     total = 0.0
     for delay in delays:
         before, after = segment(delay.seconds), segment(period - delay.seconds)
-        applied = _product(
+        applied = product(
             apply,
-            _add(
-                _product(before.transition, sampled, _transpose(before.transition)),
+            add(
+                product(before.transition, sampled, transpose(before.transition)),
                 before.covariance,
             ),
-            _transpose(apply),
+            transpose(apply),
         )
         total += delay.probability * (
-            _trace_product(before.weight, sampled)
+            trace_product(before.weight, sampled)
             + before.noise_cost
-            + _trace_product(after.weight, applied)
+            + trace_product(after.weight, applied)
             + after.noise_cost
         )
     return total / period
@@ -362,12 +371,12 @@ def _event_maps(controller: Pid | Lqr, states: int) -> tuple[Matrix, Matrix]:
         command_reads = [-(controller.kp + ki + gain), *rest]
     memory = len(dynamics)
     size = states + memory + 2
-    sample = _identity(size)
+    sample = identity_matrix(size)
     for i in range(memory):
         row = states + 1 + i
         sample[row] = [*reads[i], 0.0, *dynamics[i], 0.0]
     sample[size - 1] = [*command_reads, 0.0, *command_state, 0.0]
-    apply = _identity(size)
+    apply = identity_matrix(size)
     apply[states] = [0.0] * (size - 1) + [1.0]
     return sample, apply
 
@@ -403,25 +412,23 @@ def _segment(
     """
     order = len(dynamics)
     minus = [[-dynamics[j][i] for j in range(order)] for i in range(order)]
-    zero, one = _zeros(order, order), _identity(order)
-    cost = _expm(
-        _scaled(
-            _blocks([[minus, one, zero], [zero, minus, weights], [zero, zero, dynamics]]), length
-        )
+    zero, one = zero_matrix(order, order), identity_matrix(order)
+    cost = expm(
+        scaled(blocks([[minus, one, zero], [zero, minus, weights], [zero, zero, dynamics]]), length)
     )
-    covariance = _expm(
-        _scaled(_blocks([[_scaled(dynamics, -1.0), noise], [zero, _transpose(dynamics)]]), length)
+    covariance = expm(
+        scaled(blocks([[scaled(dynamics, -1.0), noise], [zero, transpose(dynamics)]]), length)
     )
-    transition = _part(cost, 2, 2, order)
-    back = _transpose(transition)
-    integral = _mul(back, _part(cost, 1, 2, order))
-    double = _mul(back, _part(cost, 0, 2, order))
-    accumulated = _mul(_transpose(_part(covariance, 1, 1, order)), _part(covariance, 0, 1, order))
+    transition = part(cost, 2, 2, order)
+    back = transpose(transition)
+    integral = mul(back, part(cost, 1, 2, order))
+    double = mul(back, part(cost, 0, 2, order))
+    accumulated = mul(transpose(part(covariance, 1, 1, order)), part(covariance, 0, 1, order))
     return _Segment(
-        _embed(transition, size, identity=True),
-        _embed(_symmetric(integral), size, identity=False),
-        _embed(_symmetric(accumulated), size, identity=False),
-        _trace_product(double, noise),
+        embed(transition, size, identity=True),
+        embed(symmetric(integral), size, identity=False),
+        embed(symmetric(accumulated), size, identity=False),
+        trace_product(double, noise),
     )
 
 
@@ -446,7 +453,7 @@ def _stationary_moment(periods: Sequence[tuple[float, Matrix]], noise: Matrix) -
         If no power of the period map up to ``2**SQUARINGS`` has an infinity norm below one.
     """
     size = len(noise)
-    operator = _zeros(size * size, size * size)
+    operator = zero_matrix(size * size, size * size)
     for probability, period in periods:
         for i in range(size):
             for k in range(size):
@@ -461,8 +468,8 @@ def _stationary_moment(periods: Sequence[tuple[float, Matrix]], noise: Matrix) -
         [(1.0 if i == j else 0.0) - operator[i][j] for j in range(size * size)]
         for i in range(size * size)
     ]
-    flat = _solve(system, [noise[i][k] for i in range(size) for k in range(size)])
-    return _symmetric([flat[i * size : (i + 1) * size] for i in range(size)])
+    flat = solve(system, [noise[i][k] for i in range(size) for k in range(size)])
+    return symmetric([flat[i * size : (i + 1) * size] for i in range(size)])
 
 
 def _require_mean_square_stable(operator: Matrix) -> None:
@@ -489,148 +496,6 @@ def _require_mean_square_stable(operator: Matrix) -> None:
             return
         if norm > _DIVERGED:
             break
-        power = _mul(power, power)
+        power = mul(power, power)
     message = "the loop is not shown to be mean-square stable under this delay distribution"
     raise ValueError(message)
-
-
-def _expm(matrix: Matrix) -> Matrix:
-    """Return the matrix exponential by scaling, a Taylor series and repeated squaring.
-
-    Parameters
-    ----------
-    matrix
-        Square matrix.
-
-    Returns
-    -------
-    Matrix
-        ``e^matrix``.
-    """
-    norm = max(sum(abs(value) for value in row) for row in matrix)
-    squarings = max(0, ceil(log2(norm / _SCALED_NORM))) if norm > _SCALED_NORM else 0
-    scaled = _scaled(matrix, 2.0**-squarings)
-    result = _identity(len(matrix))
-    term = _identity(len(matrix))
-    for order in range(1, _TAYLOR_TERMS + 1):
-        term = _scaled(_mul(term, scaled), 1.0 / order)
-        result = _add(result, term)
-        if max(abs(value) for row in term for value in row) == 0:
-            break
-    for _ in range(squarings):
-        result = _mul(result, result)
-    return result
-
-
-def _solve(matrix: Matrix, right: list[float]) -> list[float]:
-    """Solve a linear system by Gaussian elimination with partial pivoting.
-
-    Parameters
-    ----------
-    matrix
-        Square, non-singular coefficient matrix; it is not modified.
-    right
-        Right-hand side.
-
-    Returns
-    -------
-    list[float]
-        Solution.
-    """
-    size = len(matrix)
-    rows = [[*matrix[i], right[i]] for i in range(size)]
-    for column in range(size):
-        pivot = column
-        for row in range(column + 1, size):
-            if abs(rows[row][column]) > abs(rows[pivot][column]):
-                pivot = row
-        rows[column], rows[pivot] = rows[pivot], rows[column]
-        lead = rows[column]
-        for row in range(column + 1, size):
-            factor = rows[row][column] / lead[column]
-            if factor:
-                target = rows[row]
-                for index in range(column, size + 1):
-                    target[index] -= factor * lead[index]
-    solution = [0.0] * size
-    for row in range(size - 1, -1, -1):
-        known = sum(rows[row][index] * solution[index] for index in range(row + 1, size))
-        solution[row] = (rows[row][size] - known) / rows[row][row]
-    return solution
-
-
-def _identity(size: int) -> Matrix:
-    """Return the identity matrix of ``size``."""
-    return [[1.0 if i == j else 0.0 for j in range(size)] for i in range(size)]
-
-
-def _zeros(rows: int, columns: int) -> Matrix:
-    """Return a zero matrix."""
-    return [[0.0] * columns for _ in range(rows)]
-
-
-def _transpose(matrix: Matrix) -> Matrix:
-    """Return the transpose."""
-    return [list(column) for column in zip(*matrix, strict=True)]
-
-
-def _mul(left: Matrix, right: Matrix) -> Matrix:
-    """Return the matrix product."""
-    columns = _transpose(right)
-    return [
-        [sum(x * y for x, y in zip(row, column, strict=True)) for column in columns] for row in left
-    ]
-
-
-def _product(*factors: Matrix) -> Matrix:
-    """Return the product of the factors from left to right."""
-    result = factors[0]
-    for factor in factors[1:]:
-        result = _mul(result, factor)
-    return result
-
-
-def _add(left: Matrix, right: Matrix) -> Matrix:
-    """Return the matrix sum."""
-    return [[x + y for x, y in zip(a, b, strict=True)] for a, b in zip(left, right, strict=True)]
-
-
-def _scaled(matrix: Matrix, factor: float) -> Matrix:
-    """Return the matrix times a scalar."""
-    return [[factor * value for value in row] for row in matrix]
-
-
-def _symmetric(matrix: Matrix) -> Matrix:
-    """Return the symmetric part, which removes rounding asymmetry."""
-    size = len(matrix)
-    return [[(matrix[i][j] + matrix[j][i]) / 2 for j in range(size)] for i in range(size)]
-
-
-def _trace_product(left: Matrix, right: Matrix) -> float:
-    """Return ``tr(left right)``."""
-    return sum(left[i][j] * right[j][i] for i in range(len(left)) for j in range(len(right)))
-
-
-def _blocks(grid: Sequence[Sequence[Matrix]]) -> Matrix:
-    """Assemble a block matrix from rows of equally sized square blocks."""
-    return [
-        [value for block in row for value in block[line]]
-        for row in grid
-        for line in range(len(row[0]))
-    ]
-
-
-def _part(matrix: Matrix, row: int, column: int, order: int) -> Matrix:
-    """Return block ``(row, column)`` of a matrix of ``order``-sized square blocks."""
-    return [
-        line[column * order : (column + 1) * order]
-        for line in matrix[row * order : (row + 1) * order]
-    ]
-
-
-def _embed(block: Matrix, size: int, *, identity: bool) -> Matrix:
-    """Place a block in the top-left corner of the identity or the zero matrix of ``size``."""
-    result = _identity(size) if identity else _zeros(size, size)
-    for i, line in enumerate(block):
-        result[i][: len(line)] = line
-    return result

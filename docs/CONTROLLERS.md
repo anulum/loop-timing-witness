@@ -181,10 +181,12 @@ holds the plant state, the applied command, the PID's integral, derivative and p
 and the command waiting to be applied. Its second moment at a sample solves a linear equation
 once a power of the period map with norm below one proves the loop mean-square stable; a delay
 distribution that destabilises the loop is refused. As for the margins, saturation, conditional
-integration and quantization are left out. `tests/test_control_cost.py` checks the cost against
-two independent computations: closed-form exponentials for the thermal state-feedback loop, with
-constant and random delays, and a fine grid with the closed-form mechanical transition, Simpson
-integrals and the doubling algorithm for the mechanical PID.
+integration and quantization are left out. The matrix arithmetic, the exponential included, is
+[`dense_matrix.py`](../src/loop_timing_witness/dense_matrix.py), checked on its own against
+closed-form values in `tests/test_dense_matrix.py`. `tests/test_control_cost.py` checks the cost
+against two independent computations: closed-form exponentials for the thermal state-feedback
+loop, with constant and random delays, and a fine grid with the closed-form mechanical
+transition, Simpson integrals and the doubling algorithm for the mechanical PID.
 
 The default loops, sampled every millisecond: the output variance with immediate application, and
 its increase for a constant delay of part of a period.

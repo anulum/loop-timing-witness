@@ -80,6 +80,9 @@ Loop Timing Witness — changelog
   one Zynq, and runtime monitors synthesised into fabric. The planned contribution now says that
   recording latency with energy is prior work and that the three placements share one device. The
   measurement protocol states that the events mark the loop's digital boundary.
+- The dense-matrix arithmetic of the control cost (exponential, linear solve, products and block
+  assembly) is its own module, `loop_timing_witness.dense_matrix`, with its own closed-form
+  tests; `control_cost` keeps the cost model alone. The results are bit-for-bit those of before.
 - The commit-message hook also refuses internal coordination identifiers anywhere outside the
   `Seat:` trailer: an agent seat identifier, a coordination record name, the internal reviewer's
   name and a hub event citation. A record name is matched by its shape (a capitalised prefix of

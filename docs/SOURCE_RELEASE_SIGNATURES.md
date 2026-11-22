@@ -110,7 +110,7 @@ person declares: the version, the version DOI, the boundary text, the
 physical evidence maturity, the unqualified items, the registry artifacts and
 the software verification. `collect` fills the PyPI distributions of the
 version, the listed crate publications and the hosted workflow runs of the
-commit from the public APIs. A source release that builds no distribution lists
+commit from the public APIs; `tools/release_registry.py` reads them. A source release that builds no distribution lists
 the earlier registry artifacts it keeps, complete and with their `registry`
 member; `collect` keeps them unchanged and does not read PyPI for the version.
 `collect` refuses while any hosted run of the commit is unfinished:

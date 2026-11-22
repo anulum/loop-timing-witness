@@ -83,6 +83,10 @@ Loop Timing Witness — changelog
 - The dense-matrix arithmetic of the control cost (exponential, linear solve, products and block
   assembly) is its own module, `loop_timing_witness.dense_matrix`, with its own closed-form
   tests; `control_cost` keeps the cost model alone. The results are bit-for-bit those of before.
+- Reading a release's registry artifacts and hosted workflow runs from PyPI, crates.io and GitHub
+  is its own tool module, `tools/release_registry.py`, with its own tests;
+  `tools/release_provenance.py` keeps the source ZIP and the provenance record and its
+  `collect` and `build` commands are unchanged.
 - The commit-message hook also refuses internal coordination identifiers anywhere outside the
   `Seat:` trailer: an agent seat identifier, a coordination record name, the internal reviewer's
   name and a hub event citation. A record name is matched by its shape (a capitalised prefix of

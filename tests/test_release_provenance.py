@@ -308,29 +308,6 @@ def test_collect_refuses_unfinished_hosted_runs(
     assert not output.exists()
 
 
-@pytest.mark.parametrize("body", [None, b'{"version": {"checksum": "0"}}'])
-def test_fetch_json_refuses_an_unavailable_document(
-    monkeypatch: pytest.MonkeyPatch, body: bytes | None
-) -> None:
-    """Decode an available document and refuse a missing or unavailable one.
-
-    Parameters
-    ----------
-    monkeypatch
-        Replaces the bounded network reader.
-    body
-        Reader result.
-    """
-    monkeypatch.setattr(release_provenance, "fetch", lambda _url: body)
-    if body is None:
-        with pytest.raises(ValueError, match="public document unavailable"):
-            release_provenance.fetch_json("https://crates.io/api/v1/crates/x/1")
-    else:
-        assert release_provenance.fetch_json("https://crates.io/api/v1/crates/x/1") == json.loads(
-            body
-        )
-
-
 @pytest.mark.parametrize("change", ["schema", "member"])
 def test_specification_refuses_another_schema_or_member_set(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], change: str

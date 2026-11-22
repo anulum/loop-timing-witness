@@ -40,9 +40,8 @@ def test_json_consumer_preserves_manifest_without_analysis(make_rtl_run: MakeRtl
 import json, sys
 from pathlib import Path
 import loop_timing_witness as package
-from loop_timing_witness.manifest_io import (
-    canonical_json_bytes, load_json_object, write_bytes_atomic,
-)
+from loop_timing_witness.manifest_io import load_json_object, write_bytes_atomic
+from loop_timing_witness.strict_json import canonical_json_bytes
 source = Path(sys.argv[1])
 value = load_json_object(source)
 destination = source.with_name("json-consumer-manifest.json")

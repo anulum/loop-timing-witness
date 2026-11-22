@@ -18,7 +18,8 @@ mod support;
 use serde_json::{Value, json};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::sync::{PoisonError, RwLock};
 use support::Declaration;
 
 const INSTALLATION_PIN: &str = "7e0e98ba8c02f8a5cf6d9ae58d9146d2106b1211ae0739f0945f2eeb093a611d";
@@ -35,6 +36,28 @@ const RUNTIME: &[u8] = include_bytes!("../public-data/neural-selected-checker-ru
 const POLICY: &[u8] = include_bytes!("../public-data/neural-selected-checker-policy.json");
 const INITIALISER: &[u8] = include_bytes!("../checker_worker/loop_timing_witness/__init__.py");
 const UNAVAILABLE: &str = "Selected neural profile installation asset is unavailable.";
+
+/// Orders writing a command copy against starting any child of this test binary.
+///
+/// The tests run on parallel threads. A child forked while another thread still
+/// holds a copy open for writing keeps that descriptor until it executes, and
+/// running the copy in that window fails with `ETXTBSY`. A copy is written under
+/// the exclusive hold; a child is started under a shared hold, which `spawn` keeps
+/// until the child has executed and closed the inherited descriptors.
+static CHILDREN: RwLock<()> = RwLock::new(());
+
+/// Start one child under the shared hold and collect its status and output.
+fn run_child(command: &mut Command) -> std::io::Result<Output> {
+    let child = {
+        let _shared = CHILDREN.read().unwrap_or_else(PoisonError::into_inner);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?
+    };
+    child.wait_with_output()
+}
 
 /// Return the lowercase SHA-256 of whole bytes.
 fn sha(raw: &[u8]) -> String {
@@ -70,6 +93,7 @@ fn patched_all(fixture: &Declaration, name: &str, changes: &[(&[u8], &[u8])]) ->
         assert_eq!(offsets.len(), 1, "{name}: the replaced bytes occur once");
         image[offsets[0]..offsets[0] + old.len()].copy_from_slice(new);
     }
+    let _exclusive = CHILDREN.write().unwrap_or_else(PoisonError::into_inner);
     let path = fixture.write(name, &image);
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).expect("executable");
     path
@@ -109,7 +133,7 @@ fn refusal(binary: &Path, manifest: &Path, environment: &[(&str, &Path)]) -> Str
     for (name, value) in environment {
         command.env(name, value);
     }
-    let result = command.output().expect("installed command copy");
+    let result = run_child(&mut command).expect("installed command copy");
     assert_eq!(result.status.code(), Some(1));
     assert!(result.stdout.is_empty());
     assert!(!output.exists());
@@ -378,20 +402,21 @@ fn reviewed_runtime_refusal() -> &'static str {
 fn injected(manifest: &Path, selected: &Path, syscalls: &str) -> String {
     let trace = manifest.with_file_name(format!("{syscalls}.trace"));
     let output = manifest.with_file_name("report");
-    let result = Command::new("strace")
-        .args(["-f", "-P"])
-        .arg(selected)
-        .args(["-e", &format!("trace={syscalls}")])
-        .args(["-e", &format!("inject={syscalls}:error=EIO")])
-        .arg("-o")
-        .arg(&trace)
-        .arg(env!("CARGO_BIN_EXE_loop-timing-witness-analyze-native"))
-        .arg(manifest)
-        .arg("--output-dir")
-        .arg(&output)
-        .env(INSTALLATION, selected)
-        .output()
-        .expect("traced installed command");
+    let result = run_child(
+        Command::new("strace")
+            .args(["-f", "-P"])
+            .arg(selected)
+            .args(["-e", &format!("trace={syscalls}")])
+            .args(["-e", &format!("inject={syscalls}:error=EIO")])
+            .arg("-o")
+            .arg(&trace)
+            .arg(env!("CARGO_BIN_EXE_loop-timing-witness-analyze-native"))
+            .arg(manifest)
+            .arg("--output-dir")
+            .arg(&output)
+            .env(INSTALLATION, selected),
+    )
+    .expect("traced installed command");
     assert_eq!(result.status.code(), Some(1));
     let recorded = std::fs::read_to_string(&trace).expect("trace");
     assert!(recorded.contains("INJECTED"), "{recorded}");

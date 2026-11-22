@@ -126,6 +126,10 @@ Loop Timing Witness — changelog
 - Report and neural report publication stage under a short fixed name, so a destination name up
   to the file-system limit publishes; both analyses had embedded the destination name in the
   staging name and failed on names somewhat shorter than the limit, at different lengths.
+- The native tests that run edited copies of the installed command could fail with `Text file
+  busy` (ETXTBSY): a child that a parallel test started kept a fresh copy's write descriptor until
+  it executed. Writing a copy and starting a child are now ordered by one lock in that test
+  binary, as the closed-loop runner prepares every copy before any run.
 
 ## [0.4.0] - 2026-11-21
 

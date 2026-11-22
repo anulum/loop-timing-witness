@@ -14,7 +14,6 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import JsonInputRefusalError, canonical_json_bytes, parse_json_object
 from .neural_capture_report import neural_capture_report
 from .neural_checker import verify_source_checker
 from .neural_event_stream import NeuralCaptureRefusalError
@@ -23,6 +22,7 @@ from .neural_run_policy import REVIEWED_REGISTRY
 from .neural_run_receipts import analyze_receipt_dimensions
 from .neural_run_reset import analyze_actual_reset
 from .neural_run_traces import analyze_original_traces
+from .strict_json import JsonInputRefusalError, canonical_json_bytes, parse_json_object
 
 if TYPE_CHECKING:
     from pathlib import Path

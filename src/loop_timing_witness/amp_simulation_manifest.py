@@ -26,14 +26,13 @@ from .amp_plugin_snapshot import validate_plugin_snapshot
 from .amp_run_input import read_amp_run
 from .amp_runtime_snapshot import validate_runtime_snapshot
 from .manifest_io import (
-    canonical_json_bytes,
     load_bounded_json_object,
     load_json_object,
-    parse_bounded_json_object,
     read_input_bytes,
     sha256_of_file,
 )
 from .run_manifest import load_run, utc_timestamp
+from .strict_json import canonical_json_bytes, parse_bounded_json_object
 from .validate_measurement_domain import schema_locations
 
 if TYPE_CHECKING:

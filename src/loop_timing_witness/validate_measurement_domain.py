@@ -49,7 +49,8 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from referencing.exceptions import Unresolvable
 
-from .manifest_io import JsonInputRefusalError, load_json_object
+from .manifest_io import load_json_object
+from .strict_json import JsonInputRefusalError
 
 PROJECT: Final = "LOOP-TIMING-WITNESS"
 GROUP: Final = "SC-NEUROMORPHIC-COMPUTING-SYSTEMS"

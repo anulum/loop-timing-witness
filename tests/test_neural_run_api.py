@@ -24,9 +24,9 @@ import pytest
 
 import loop_timing_witness as package
 from loop_timing_witness.host_profile import scaled
-from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import NeuralRunInputs
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from conftest import MakeRtlRun

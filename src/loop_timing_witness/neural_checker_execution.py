@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import JsonInputRefusalError, parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_json_shapes import REFERENCE_FIELDS, records, texts, typed
+from .strict_json import JsonInputRefusalError, parse_json_object
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

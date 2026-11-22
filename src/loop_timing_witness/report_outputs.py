@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Any, Final
 from xml.sax.saxutils import escape
 
 from .latency_jitter import jitter_pairs
-from .manifest_io import canonical_json_bytes
 from .report_publication import publish_report_directory
+from .strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path

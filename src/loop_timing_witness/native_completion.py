@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .event_stream import EVENT_RECORD
-from .manifest_io import load_json_object, parse_bounded_json_object
+from .manifest_io import load_json_object
 from .run_analysis import analyse_events
+from .strict_json import parse_bounded_json_object
 from .validate_measurement_domain import schema_locations
 
 if TYPE_CHECKING:

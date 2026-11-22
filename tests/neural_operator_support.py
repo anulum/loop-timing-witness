@@ -21,7 +21,6 @@ import json
 import os
 from typing import TYPE_CHECKING
 
-from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_checker_image import IMAGE_EXECUTOR_SCHEMA
 from loop_timing_witness.neural_run_selected_profile import (
     IMAGE_BINDING_SHA256,
@@ -29,6 +28,7 @@ from loop_timing_witness.neural_run_selected_profile import (
     INSTALLATION_SHA256,
     INSTALLATION_VARIABLE,
 )
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path

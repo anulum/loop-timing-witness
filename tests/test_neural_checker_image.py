@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_checker_execution import CheckerInvocation
 from loop_timing_witness.neural_checker_image import IMAGE_EXECUTOR_SCHEMA, ImageCheckerExecutor
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
@@ -30,6 +29,7 @@ from loop_timing_witness.neural_run_selected_profile import (
     IMAGE_ROOT_VARIABLE,
     image_neural_profile,
 )
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Callable

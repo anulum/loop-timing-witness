@@ -13,12 +13,12 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from .manifest_io import JsonInputRefusalError, parse_dispatch_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_run_api import NeuralRunError, build_neural_run_report, load_neural_run
 from .neural_run_files import read_run_dispatch_bytes
 from .neural_run_policy import REVIEWED_REGISTRY
 from .neural_run_publication import write_neural_report
+from .strict_json import JsonInputRefusalError, parse_dispatch_json_object
 
 if TYPE_CHECKING:
     from pathlib import Path

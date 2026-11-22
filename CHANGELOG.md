@@ -90,6 +90,12 @@ Loop Timing Witness — changelog
 - The tests' RTL capture pipeline (simulated events, series, run manifest) and repeat-campaign
   assembly are their own root module, `rtl_capture_support.py`; `conftest.py` keeps the fixture
   registrations, whose factories and results are unchanged.
+- Strict and bounded JSON decoding and canonical serialisation are their own module,
+  `loop_timing_witness.strict_json`, which reads no file; `loop_timing_witness.manifest_io`
+  keeps input reading, JSON loading from a path, file digests and atomic writes. Code that
+  imported a decoder, `JsonInputRefusalError`, `canonical_json_bytes`, `nesting_depth` or the
+  bounds from `manifest_io` imports them from `strict_json`; `tools/manifest_io.py` still
+  offers the names the tools use. Each module has its own tests.
 - The commit-message hook also refuses internal coordination identifiers anywhere outside the
   `Seat:` trailer: an agent seat identifier, a coordination record name, the internal reviewer's
   name and a hub event citation. A record name is matched by its shape (a capitalised prefix of

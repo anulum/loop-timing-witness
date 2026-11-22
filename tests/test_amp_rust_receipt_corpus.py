@@ -39,7 +39,7 @@ from conftest import REPOSITORY_ROOT
 from loop_timing_witness.amp_runtime_snapshot import runtime_index
 from loop_timing_witness.amp_rust_receipt import TOOLCHAIN, validate_rust_image_receipt
 from loop_timing_witness.amp_rust_vectors import ADAPTER, CORE, LIBRARY, TARGET, rust_vectors
-from loop_timing_witness.manifest_io import canonical_json_bytes
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -23,12 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from .manifest_io import (
-    load_json_object,
-    open_input,
-    parse_bounded_json_object,
-    read_input_bytes,
-)
+from .manifest_io import load_json_object, open_input, read_input_bytes
+from .strict_json import parse_bounded_json_object
 from .validate_measurement_domain import schema_locations, semantic_findings
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parent / "data"

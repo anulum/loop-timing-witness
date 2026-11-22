@@ -13,8 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from .manifest_io import JsonInputRefusalError, parse_json_object
 from .neural_event_stream import NEURAL_RECORD, NeuralCaptureRefusalError, NeuralChannel
+from .strict_json import JsonInputRefusalError, parse_json_object
 
 COUNTS_SCHEMA_ID: Final = "loop-timing-witness.neural-capture-counts.v1"
 MAX_RUN_COUNT: Final = (1 << 64) - 1

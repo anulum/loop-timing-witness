@@ -44,7 +44,7 @@ from test_amp_snapshot_corpus import _document, _edited, _link, _text, _tree, _u
 from conftest import REPOSITORY_ROOT
 from loop_timing_witness.amp_plugin_receipt import decode_plugin_receipt
 from loop_timing_witness.amp_plugin_snapshot import source_index, validate_plugin_snapshot
-from loop_timing_witness.manifest_io import canonical_json_bytes
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Callable

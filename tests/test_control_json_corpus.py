@@ -23,7 +23,7 @@ import json
 from typing import Any, Final
 
 from conftest import REPOSITORY_ROOT
-from loop_timing_witness.manifest_io import (
+from loop_timing_witness.strict_json import (
     MAX_BOUNDED_DEPTH,
     JsonInputRefusalError,
     nesting_depth,

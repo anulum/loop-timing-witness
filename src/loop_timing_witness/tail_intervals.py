@@ -26,7 +26,8 @@ import sys
 from pathlib import Path
 from typing import Any, Final
 
-from loop_timing_witness.manifest_io import parse_bounded_json_object, read_input_bytes
+from loop_timing_witness.manifest_io import read_input_bytes
+from loop_timing_witness.strict_json import parse_bounded_json_object
 from loop_timing_witness.tail_statistics import CONFIDENCE, RESAMPLES, SEED, tail_quantiles
 
 RESULT_SCHEMA: Final = "loop-timing-witness.tail-intervals.v1"

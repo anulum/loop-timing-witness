@@ -15,7 +15,6 @@ import json
 
 import pytest
 
-from loop_timing_witness.manifest_io import JsonInputRefusalError
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_receipt_io import (
     FLAG,
@@ -23,6 +22,7 @@ from loop_timing_witness.neural_run_receipt_io import (
     UNSIGNED,
     decode_actual_receipt,
 )
+from loop_timing_witness.strict_json import JsonInputRefusalError
 
 _COMPLETION = (
     b'{"requested_steps":1000,"observed_states":1000,"raw_spike_rows":1000,'

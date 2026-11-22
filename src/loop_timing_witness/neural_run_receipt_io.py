@@ -14,8 +14,8 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from .manifest_io import parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
+from .strict_json import parse_json_object
 
 UNSIGNED = {"type": "integer", "minimum": 0, "maximum": 65535}
 TEXT = {"type": "string"}

@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING, Any, Final
 
 from jsonschema import Draft202012Validator
 
-from .manifest_io import JsonInputRefusalError, parse_bounded_json_object, parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
+from .strict_json import JsonInputRefusalError, parse_bounded_json_object, parse_json_object
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import JsonInputRefusalError, canonical_json_bytes, parse_json_object
 from .neural_checker_execution import (
     CheckerInvocation,
     bounded_output,
@@ -45,6 +44,7 @@ from .neural_json_shapes import (
     texts,
     typed,
 )
+from .strict_json import JsonInputRefusalError, canonical_json_bytes, parse_json_object
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

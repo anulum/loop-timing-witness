@@ -13,9 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .event_stream import EVENT_RECORD, decode_events
-from .manifest_io import parse_bounded_json_object
 from .native_tracking import decode_tracking
 from .run_manifest import load_domain
+from .strict_json import parse_bounded_json_object
 
 PREFIX = b"WITNESS_AMP_COMPLETION "
 FIELDS = frozenset({"samples", "events", "misses", "overflow", "safe", "thermal"})

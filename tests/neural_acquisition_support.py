@@ -28,7 +28,6 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_checker_execution import checker_environment, invoke_source_checker
 from loop_timing_witness.neural_checker_image import IMAGE_EXECUTOR_SCHEMA, ImageCheckerExecutor
 from loop_timing_witness.neural_checker_installation import (
@@ -38,6 +37,7 @@ from loop_timing_witness.neural_checker_installation import (
 from loop_timing_witness.neural_checker_trace import checker_opened_files
 from loop_timing_witness.neural_run_manifest import NEURAL_SCHEMA_ID, NEURAL_SCHEMA_SHA256
 from loop_timing_witness.neural_run_policy import PUBLIC_COHORT
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Callable

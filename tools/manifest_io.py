@@ -6,15 +6,17 @@
 # Contact: www.anulum.li | protoscience@anulum.li
 # Loop Timing Witness — strict JSON input and atomic output primitives
 
-"""Preserve the repository manifest_io entry point using the installed package."""
+"""Preserve the repository manifest_io entry point using the installed package.
 
-from loop_timing_witness.manifest_io import (
+The strict JSON primitives come from ``loop_timing_witness.strict_json`` and the file
+primitives from ``loop_timing_witness.manifest_io``; the tools import both here by one name.
+"""
+
+from loop_timing_witness.manifest_io import load_json_object, sha256_of_file, write_bytes_atomic
+from loop_timing_witness.strict_json import (
     JsonInputRefusalError,
     canonical_json_bytes,
-    load_json_object,
     parse_json_object,
-    sha256_of_file,
-    write_bytes_atomic,
 )
 
 __all__ = [

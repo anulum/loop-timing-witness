@@ -15,12 +15,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .manifest_io import canonical_json_bytes
 from .neural_checker_contract import bind_checker_contract
 from .neural_checker_execution import bounded_output, invoke_source_checker
 from .neural_checker_image import ImageCheckerExecutor
 from .neural_checker_receipts import checker_receipt_findings
 from .neural_checker_trace import checker_trace_findings
+from .strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from typing import Any

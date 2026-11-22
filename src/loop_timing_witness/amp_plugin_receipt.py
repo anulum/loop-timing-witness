@@ -15,13 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from .amp_build_dependencies import dependency_hashes
-from .manifest_io import (
-    canonical_json_bytes,
-    load_json_object,
-    parse_bounded_json_object,
-    read_input_bytes,
-    sha256_of_file,
-)
+from .manifest_io import load_json_object, read_input_bytes, sha256_of_file
+from .strict_json import canonical_json_bytes, parse_bounded_json_object
 from .validate_measurement_domain import schema_locations
 
 ROOT = Path(__file__).resolve().parent / "data"

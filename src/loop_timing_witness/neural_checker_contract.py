@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_json_shapes import checker_policy_closed
 from .neural_run_files import read_neural_run_file
+from .strict_json import parse_json_object
 
 if TYPE_CHECKING:
     from .neural_run_binding import BoundNeuralRun

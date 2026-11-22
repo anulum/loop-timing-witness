@@ -4,33 +4,28 @@
 # © Code 2020–2026 Miroslav Šotek. All rights reserved.
 # ORCID: 0009-0009-3560-0851
 # Contact: www.anulum.li | protoscience@anulum.li
-# Loop Timing Witness — tests of the JSON input and atomic output primitives
+# Loop Timing Witness — input reading, file digests and atomic output
 
-"""Contract tests for strict JSON reading, canonical serialisation and atomic writes."""
+"""Contract tests for input reading, JSON loading from files, file digests and atomic writes."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
 from loop_timing_witness.manifest_io import (
     load_bounded_json_object,
+    load_json_object,
     open_input,
     read_input_bytes,
-)
-from manifest_io import (
-    JsonInputRefusalError,
-    canonical_json_bytes,
-    load_json_object,
     sha256_of_file,
     write_bytes_atomic,
 )
+from loop_timing_witness.strict_json import JsonInputRefusalError, canonical_json_bytes
 
 
 def test_load_returns_the_decoded_object(tmp_path: Path) -> None:
@@ -38,14 +33,6 @@ def test_load_returns_the_decoded_object(tmp_path: Path) -> None:
     path = tmp_path / "manifest.json"
     path.write_text('{"alpha": 1, "beta": [true, null], "gamma": {"delta": "ε"}}', encoding="utf-8")
     assert load_json_object(path) == {"alpha": 1, "beta": [True, None], "gamma": {"delta": "ε"}}
-
-
-def test_load_rejects_a_repeated_top_level_key(tmp_path: Path) -> None:
-    """A repeated member name fails instead of silently keeping the last value."""
-    path = tmp_path / "manifest.json"
-    path.write_text('{"alpha": 1, "alpha": 2}', encoding="utf-8")
-    with pytest.raises(ValueError, match="duplicate JSON key: alpha"):
-        load_json_object(path)
 
 
 def test_load_rejects_a_repeated_nested_key(tmp_path: Path) -> None:
@@ -56,14 +43,6 @@ def test_load_rejects_a_repeated_nested_key(tmp_path: Path) -> None:
         load_json_object(path)
 
 
-def test_load_rejects_a_non_object_top_level(tmp_path: Path) -> None:
-    """A valid JSON array is still refused as a manifest."""
-    path = tmp_path / "manifest.json"
-    path.write_text("[1, 2]", encoding="utf-8")
-    with pytest.raises(ValueError, match="top-level JSON value must be an object"):
-        load_json_object(path)
-
-
 def test_load_rejects_invalid_json(tmp_path: Path) -> None:
     """A syntax error surfaces as ValueError with the file name."""
     path = tmp_path / "broken.json"
@@ -71,43 +50,6 @@ def test_load_rejects_invalid_json(tmp_path: Path) -> None:
     with pytest.raises(JsonInputRefusalError) as refusal:
         load_json_object(path)
     assert str(refusal.value) == f"{path}: invalid JSON"
-
-
-def test_load_rejects_bytes_that_are_not_utf8(tmp_path: Path) -> None:
-    """A Windows-1250 encoded file is refused rather than decoded wrongly."""
-    path = tmp_path / "latin1.json"
-    path.write_bytes('{"name": "Šotek"}'.encode("cp1250"))
-    with pytest.raises(JsonInputRefusalError) as refusal:
-        load_json_object(path)
-    assert str(refusal.value) == f"{path}: not UTF-8"
-
-
-@pytest.mark.parametrize("limit", ["integer", "nesting"])
-def test_real_decoder_limits_have_an_authored_refusal(tmp_path: Path, limit: str) -> None:
-    """Actual integer and recursion limits refuse input without decoder diagnostics.
-
-    Parameters
-    ----------
-    tmp_path
-        Real JSON input outside the running interpreter's admitted decoding limits.
-    limit
-        Decimal integer conversion or deeply nested input, with no interpreter setting changed.
-    """
-    if limit == "integer":
-        maximum = sys.get_int_max_str_digits()
-        assert maximum > 0
-        content = '{"value":' + "9" * (maximum + 1) + "}"
-    else:
-        # CPython 3.14 and later bound decoding by the actual C stack rather than the
-        # recursion limit; a million levels exceed it on every supported stack size.
-        depth = 1_000_000
-        content = '{"value":' + "[" * depth + "0" + "]" * depth + "}"
-    path = tmp_path / "limits.json"
-    path.write_text(content, encoding="utf-8")
-    with pytest.raises(JsonInputRefusalError) as refusal:
-        load_json_object(path)
-    assert str(refusal.value) == f"{path}: JSON input exceeds decoder limits"
-    assert isinstance(refusal.value.__cause__, RecursionError if limit == "nesting" else ValueError)
 
 
 def test_load_of_a_missing_file_raises_oserror(tmp_path: Path) -> None:
@@ -157,67 +99,6 @@ def test_bounded_load_of_a_missing_file_raises_oserror(tmp_path: Path) -> None:
     """A missing file is an OSError, never an empty object."""
     with pytest.raises(FileNotFoundError):
         load_bounded_json_object(tmp_path / "absent.json")
-
-
-@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"])
-@pytest.mark.parametrize("shape", ['{"value":%s}', '{"nested":{"value":%s}}', '{"values":[%s]}'])
-def test_load_refuses_nonfinite_numbers(tmp_path: Path, token: str, shape: str) -> None:
-    """Refuse actual nonfinite input bytes at every JSON object or array depth.
-
-    Parameters
-    ----------
-    tmp_path
-        Exclusive real input file.
-    token
-        Nonfinite extension or an exponent that overflows on decoding.
-    shape
-        Top-level field, nested object or nested array containing the number.
-    """
-    path = tmp_path / "nonfinite.json"
-    path.write_text(shape % token, encoding="utf-8")
-    with pytest.raises(ValueError, match=r"nonfinite\.json: non-finite JSON number"):
-        load_json_object(path)
-
-
-@pytest.mark.parametrize(
-    "token", ["1.25", "1.7976931348623157e308", "-1.7976931348623157e308", "1e-999"]
-)
-def test_load_preserves_finite_numbers_and_literal_strings(tmp_path: Path, token: str) -> None:
-    """Retain finite numeric boundaries and ordinary strings naming rejected tokens.
-
-    Parameters
-    ----------
-    tmp_path
-        Exclusive actual JSON file.
-    token
-        Representable finite decimal, maximal signed magnitude or underflow to zero.
-    """
-    path = tmp_path / "finite.json"
-    path.write_text('{"value":' + token + ',"labels":["NaN","Infinity","-Infinity"]}')
-    result = load_json_object(path)
-    assert math.isfinite(result["value"])
-    assert result["value"] == float(token)
-    assert result["labels"] == ["NaN", "Infinity", "-Infinity"]
-
-
-def test_canonical_bytes_are_independent_of_key_order() -> None:
-    """Insertion order does not change the serialised bytes; keys are sorted."""
-    first = canonical_json_bytes({"beta": 2, "alpha": {"z": 1, "a": 2}})
-    second = canonical_json_bytes({"alpha": {"a": 2, "z": 1}, "beta": 2})
-    assert first == second
-    assert first == b'{\n  "alpha": {\n    "a": 2,\n    "z": 1\n  },\n  "beta": 2\n}\n'
-
-
-def test_canonical_bytes_keep_non_ascii_text() -> None:
-    """Non-ASCII text is written as UTF-8, not as escape sequences."""
-    assert "Šotek".encode() in canonical_json_bytes({"name": "Šotek"})
-
-
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
-def test_canonical_bytes_refuse_non_finite_numbers(value: float) -> None:
-    """Non-finite numbers cannot enter a drift-checked artefact."""
-    with pytest.raises(ValueError, match="Out of range float values"):
-        canonical_json_bytes({"value": value})
 
 
 def test_sha256_matches_a_direct_digest(tmp_path: Path) -> None:

@@ -26,7 +26,8 @@ from math import isfinite, sqrt
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-from loop_timing_witness.manifest_io import parse_bounded_json_object, read_input_bytes
+from loop_timing_witness.manifest_io import read_input_bytes
+from loop_timing_witness.strict_json import parse_bounded_json_object
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

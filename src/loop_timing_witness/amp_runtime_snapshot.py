@@ -15,7 +15,8 @@ from typing import cast
 
 from jsonschema import Draft202012Validator
 
-from .manifest_io import canonical_json_bytes, load_bounded_json_object, sha256_of_file
+from .manifest_io import load_bounded_json_object, sha256_of_file
+from .strict_json import canonical_json_bytes
 
 HASH_SCHEMA = {
     "type": "object",

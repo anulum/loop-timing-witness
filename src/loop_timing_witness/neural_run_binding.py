@@ -14,13 +14,13 @@ import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_run_capture_binding import bind_neural_capture
 from .neural_run_files import read_neural_manifest_root
 from .neural_run_files import read_neural_run_file as read_neural_bound_file
 from .neural_run_manifest import decode_neural_manifest
 from .neural_run_policy import REVIEWED_REGISTRY, admitted_neural_contract
+from .strict_json import parse_json_object
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -15,8 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from .manifest_io import load_json_object, parse_bounded_json_object, read_input_bytes
+from .manifest_io import load_json_object, read_input_bytes
 from .run_manifest import RunInputs, load_run
+from .strict_json import parse_bounded_json_object
 from .validate_measurement_domain import schema_locations
 
 CAMPAIGN_SCHEMA_PATH: Final = (

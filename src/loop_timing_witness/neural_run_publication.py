@@ -17,9 +17,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .manifest_io import canonical_json_bytes
 from .neural_event_stream import NeuralCaptureRefusalError
 from .report_publication import DirectoryPublication
+from .strict_json import canonical_json_bytes
 
 
 def write_neural_report(directory: Path, report: dict[str, Any]) -> None:

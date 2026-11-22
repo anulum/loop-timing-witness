@@ -14,12 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from .amp_plugin_receipt import decode_plugin_receipt
-from .manifest_io import (
-    canonical_json_bytes,
-    load_bounded_json_object,
-    read_input_bytes,
-    sha256_of_file,
-)
+from .manifest_io import load_bounded_json_object, read_input_bytes, sha256_of_file
+from .strict_json import canonical_json_bytes
 
 
 def source_index(data: dict[str, Any]) -> dict[str, dict[str, str]]:

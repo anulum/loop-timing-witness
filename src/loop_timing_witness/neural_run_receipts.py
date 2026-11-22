@@ -13,10 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from .manifest_io import parse_json_object
 from .neural_event_stream import NEURAL_RECORD
 from .neural_run_clock import FLAG, UNSIGNED, analyze_source_clock, decode_actual_receipt
 from .neural_run_source_receipts import analyze_source_receipts
+from .strict_json import parse_json_object
 
 if TYPE_CHECKING:
     from .neural_run_binding import BoundNeuralRun

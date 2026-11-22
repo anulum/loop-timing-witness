@@ -16,7 +16,8 @@ from typing import Any, cast
 from jsonschema import Draft202012Validator
 
 from .amp_build_dependencies import dependency_hashes
-from .manifest_io import canonical_json_bytes, load_bounded_json_object, sha256_of_file
+from .manifest_io import load_bounded_json_object, sha256_of_file
+from .strict_json import canonical_json_bytes
 
 RECORD_COUNT = 5
 HASH_SCHEMA = {

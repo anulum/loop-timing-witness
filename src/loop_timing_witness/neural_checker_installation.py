@@ -18,8 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .manifest_io import canonical_json_bytes
 from .neural_event_stream import NeuralCaptureRefusalError
+from .strict_json import canonical_json_bytes
 
 _RUNTIME_FILE_LIMIT = 256 * 1024 * 1024
 _RUNTIME_FILE_COUNT_LIMIT = 4096

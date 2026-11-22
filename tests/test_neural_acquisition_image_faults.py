@@ -36,10 +36,10 @@ from neural_acquisition_support import (
 )
 from neural_rust_support import assert_same_outcome, python_outcome, rust_outcome
 
-from loop_timing_witness.manifest_io import canonical_json_bytes
 from loop_timing_witness.neural_checker_image import ImageCheckerExecutor
 from loop_timing_witness.neural_event_stream import NeuralCaptureRefusalError
 from loop_timing_witness.neural_run_api import build_neural_run_report, load_neural_run
+from loop_timing_witness.strict_json import canonical_json_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

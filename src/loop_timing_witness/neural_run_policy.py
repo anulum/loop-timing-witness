@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from .manifest_io import JsonInputRefusalError, parse_json_object
 from .neural_event_stream import NeuralCaptureRefusalError
 from .neural_run_files import read_neural_run_file as read_neural_bound_file
 from .neural_run_manifest import NEURAL_SCHEMA_ID, NEURAL_SCHEMA_SHA256
@@ -25,6 +24,7 @@ from .neural_run_selected_profile import (
     image_neural_profile,
     selected_neural_profile,
 )
+from .strict_json import JsonInputRefusalError, parse_json_object
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

@@ -16,10 +16,10 @@ import stat
 from pathlib import Path
 from typing import Final
 
-from .manifest_io import parse_json_object
 from .neural_checker_image import ImageCheckerExecutor
 from .neural_checker_installation import CheckerInstalledFile, NeuralCheckerInstallation
 from .neural_event_stream import NeuralCaptureRefusalError
+from .strict_json import parse_json_object
 
 SOURCE_CONTRACT_SHA256: Final = "ec1236a69fc9e16a4eff1dfa7bdad8aa8b6088fc4ebceb8d8c43d33517199304"
 IMAGE_SOURCE_CONTRACT_SHA256: Final = (

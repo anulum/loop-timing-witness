@@ -9,7 +9,7 @@
 //! Decode a run-bound JSON object with the refusals and precedence of the Python analysis.
 //!
 //! The Python analysis decodes every run-bound document through
-//! `manifest_io.parse_bounded_json_object`, which drives CPython's JSON scanner
+//! `strict_json.parse_bounded_json_object`, which drives CPython's JSON scanner
 //! with hooks. This decoder follows the same recursive descent, so a document
 //! with several defects is refused for the same first one:
 //!

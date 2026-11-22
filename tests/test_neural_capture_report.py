@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from loop_timing_witness.manifest_io import canonical_json_bytes, parse_json_object
 from loop_timing_witness.neural_capture import NeuralCaptureConfiguration, load_neural_capture
 from loop_timing_witness.neural_capture_report import neural_capture_report
+from loop_timing_witness.strict_json import canonical_json_bytes, parse_json_object
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

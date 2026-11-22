@@ -211,7 +211,7 @@ their original explicit positive and negative signs.
 |---|---|---|
 | `ruff-check` | `ruff check .` | every Python file; all rule groups enabled, exclusions listed with reasons in `pyproject.toml` |
 | `ruff-format` | `ruff format --check .` | every Python file |
-| `mypy` | `mypy` | `src/`, `tools/`, `tests/`, `conftest.py` and native build support in strict mode |
+| `mypy` | `mypy` | `src/`, `tools/`, `tests/`, `conftest.py`, the RTL capture support and native build support in strict mode |
 | `analysis-build` | `make analysis-build` | exact packaged Python worker/schema/profile correspondence, reviewed Cargo archives/notices, strict worker typing, native analysis rustfmt/Clippy/build and rustdoc |
 | `analysis-tests` | `make analysis-tests` | actual recorded neural declarations, malformed input, unsupported source refusal and command output integrity; selected complete-acquisition mode additionally verifies real checker execution, report parity and immutable snapshots |
 | `controller-build` | `make controller-build` | strict C build, Rust format/Clippy, dependency-free release build and native API documentation |

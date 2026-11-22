@@ -87,6 +87,9 @@ Loop Timing Witness — changelog
   is its own tool module, `tools/release_registry.py`, with its own tests;
   `tools/release_provenance.py` keeps the source ZIP and the provenance record and its
   `collect` and `build` commands are unchanged.
+- The tests' RTL capture pipeline (simulated events, series, run manifest) and repeat-campaign
+  assembly are their own root module, `rtl_capture_support.py`; `conftest.py` keeps the fixture
+  registrations, whose factories and results are unchanged.
 - The commit-message hook also refuses internal coordination identifiers anywhere outside the
   `Seat:` trailer: an agent seat identifier, a coordination record name, the internal reviewer's
   name and a hub event citation. A record name is matched by its shape (a capitalised prefix of

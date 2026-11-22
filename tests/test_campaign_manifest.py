@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from conftest import write_bound_json
 from loop_timing_witness.campaign_manifest import load_campaign, run_configuration
 from loop_timing_witness.run_manifest import load_run
+from rtl_capture_support import write_bound_json
 
 if TYPE_CHECKING:
     from collections.abc import Callable

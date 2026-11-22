@@ -11,7 +11,7 @@ schema_version = 1
 [profiles.python]
 checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]
 roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]
-paths = ["conftest.py", "controller_test_support.py"]
+paths = ["conftest.py", "controller_test_support.py", "rtl_capture_support.py"]
 
 [profiles.assembly]
 checks = ["tests"]

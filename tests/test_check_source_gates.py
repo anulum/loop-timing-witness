@@ -211,7 +211,10 @@ def test_new_python_inside_the_existing_gate_scopes_is_admitted(
             'roots = ["src/loop_timing_witness", "tools", "tests", "analysis/rust/checker_worker"]',
             "roots = []",
         ),
-        ('paths = ["conftest.py", "controller_test_support.py"]', "paths = []"),
+        (
+            'paths = ["conftest.py", "controller_test_support.py", "rtl_capture_support.py"]',
+            "paths = []",
+        ),
         (
             'checks = ["ruff-check", "ruff-format", "mypy", "analysis-build", "tests"]',
             "unexpected = true",

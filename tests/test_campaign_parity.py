@@ -30,7 +30,7 @@ from test_campaign_analysis import (
 )
 from test_control_run_parity import _board
 
-from conftest import write_bound_json
+from rtl_capture_support import write_bound_json
 
 if TYPE_CHECKING:
     from collections.abc import Callable

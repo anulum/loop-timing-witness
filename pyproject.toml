@@ -98,6 +98,9 @@ ignore = [
 # The shared fixtures start the repository's tools and `git init` with fixed
 # argument vectors and no shell.
 "conftest.py" = ["S603", "S607"]
+# The RTL capture support runs Icarus Verilog (`iverilog`, `vvp`) on copied repository RTL
+# with fixed argument vectors and no shell.
+"rtl_capture_support.py" = ["S603", "S607"]
 # Native test builds use trusted compiler/Cargo argument vectors without a shell.
 "controller_test_support.py" = ["S603", "S607"]
 # The gate runner and the publishable-file listing execute fixed argument
@@ -154,6 +157,7 @@ known-first-party = [
     "preflight",
     "pytest_shards",
     "repository_files",
+    "rtl_capture_support",
     "rust_coverage_gate",
     "validate_measurement_domain",
 ]
@@ -174,7 +178,7 @@ enable_error_code = [
     "unused-awaitable",
 ]
 mypy_path = ["tools"]
-files = ["src", "tools", "tests", "conftest.py", "controller_test_support.py"]
+files = ["src", "tools", "tests", "conftest.py", "controller_test_support.py", "rtl_capture_support.py"]
 pretty = true
 
 [tool.pytest.ini_options]

@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from conftest import write_bound_json
 from loop_timing_witness import build_campaign_report, build_report, load_campaign, load_run
 from loop_timing_witness.campaign_outputs import write_campaign_report
 from loop_timing_witness.latency_jitter import jitter_pairs
 from loop_timing_witness.run_analysis import distribution
+from rtl_capture_support import write_bound_json
 
 if TYPE_CHECKING:
     from collections.abc import Callable

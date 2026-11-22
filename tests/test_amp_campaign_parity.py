@@ -28,7 +28,7 @@ from test_amp_run_parity import Change, _absent_first, _bind, _receipt
 from test_campaign_parity import _same
 from test_capture_amp_simulation import capture_arguments
 
-from conftest import write_bound_json
+from rtl_capture_support import write_bound_json
 
 if TYPE_CHECKING:
     from pathlib import Path
